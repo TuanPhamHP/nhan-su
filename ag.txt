@@ -1,0 +1,34 @@
+Template prompt chuẩn cho từng loại task:
+Tạo module mới:
+Tạo module [tên] theo đúng architecture trong CLAUDE.md.
+Bao gồm: controller, service, repository, dto/, transformers/
+Refer: docs/modules/[xx-tên].md để biết endpoints và transformer output cần tạo.
+Thêm endpoint:
+Thêm endpoint [METHOD] [/path] vào [module].
+- Input DTO: [mô tả fields]
+- Business logic: [mô tả ngắn]
+- Transformer output: xem docs/modules/[xx].md phần "Transformer output"
+Đảm bảo đúng layer: controller không gọi Prisma, transformer chỉ ở controller.
+Thay đổi schema:
+Thêm field [tên] kiểu [type] vào model [Model] trong schema.prisma.
+Sau khi sửa schema, tạo migration file với tên mô tả rõ thay đổi.
+KHÔNG dùng prisma db push.
+Fix bug:
+[Mô tả bug + error message + file liên quan]
+Không thay đổi architecture. Không sửa file ngoài phạm vi bug này.
+Những điều KHÔNG nên để Claude tự quyết:
+
+Không để Claude tự chọn thêm package mới — hỏi bạn trước
+Không để Claude refactor code ngoài phạm vi task
+Không để Claude tự tạo migration mà không review SQL trước
+
+
+
+Thứ tự bắt đầu code theo Sprint S1
+1. PrismaModule + PrismaService
+2. Common: ResponseInterceptor, HttpExceptionFilter, Guards
+3. Module Auth (login, JWT, refresh token)
+4. Module Employee (CRUD cơ bản)
+5. Module Attendance (check-in/out)
+6. Module Leave (submit + approve flow)
+7. Module Notification (email queue)

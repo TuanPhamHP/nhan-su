@@ -4,6 +4,9 @@ export default defineNuxtConfig({
 	app: {
 		baseURL: '/',
 	},
+	devServer: {
+		port: 4000,
+	},
 	runtimeConfig: {
 		// Private keys (chỉ có ở Server-side)
 		apiSecret: '',

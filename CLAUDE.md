@@ -1,6 +1,6 @@
-# xc-booking
+# hr-system-fe
 
-Trang đăng ký dịch vụ logistics cho khách hàng.
+Đây là Web Admin cho HR System. Đọc toàn bộ file này trước khi sinh code. Web Admin dashboard cho HR System, dành cho HR, Admin, Manager. Consume API từ repo hr-system-api (/v1/...).
 
 ## Tech Stack
 
@@ -11,6 +11,8 @@ Trang đăng ký dịch vụ logistics cho khách hàng.
 - **Package Manager:** Yarn
 
 ## Project Structure
+
+1/ structure tổng quan
 
 ```
 app/
@@ -37,6 +39,77 @@ app/
 utils/               # Pure utility functions (non-Vue)
 docs/                # Project documentation
 ```
+
+2/ structure chi tiết
+
+```
+app/
+├── assets/
+├── components/
+│   ├── common/               ← AppButton, AppInput, AppModal, AppTable, AppBadge
+│   └── modules/
+│       ├── employee/         ← EmployeeCard, EmployeeForm, EmployeeTable
+│       ├── attendance/       ← AttendanceTable, CheckInStatus
+│       ├── leave/            ← LeaveRequestForm, LeaveStatusBadge
+│       ├── report/           ← AttendanceChart, DepartmentSummary
+│       └── payroll/          ← PayslipCard
+├── composables/
+│   ├── useApi.ts             ← $fetch wrapper với auth header
+│   ├── useAuth.ts            ← login, logout, currentUser, token
+│   ├── useEmployee.ts
+│   ├── useAttendance.ts
+│   ├── useLeave.ts
+│   ├── useReport.ts
+│   └── usePayroll.ts
+├── layouts/
+│   ├── default.vue           ← sidebar + topbar (auth required)
+│   └── auth.vue              ← login page layout
+├── middleware/
+│   ├── auth.ts               ← redirect /login nếu chưa có token
+│   └── role.ts               ← kiểm tra role, redirect nếu không đủ quyền
+├── pages/
+│   ├── login.vue
+│   ├── dashboard.vue
+│   ├── employees/
+│   │   ├── index.vue         ← danh sách
+│   │   └── [id].vue          ← chi tiết + edit
+│   ├── attendance/
+│   │   ├── index.vue         ← bảng công hôm nay
+│   │   └── monthly.vue       ← bảng công tháng
+│   ├── leave/
+│   │   ├── index.vue         ← danh sách đơn
+│   │   └── [id].vue          ← chi tiết + approve/reject
+│   ├── reports/
+│   │   └── index.vue
+│   ├── payroll/
+│   │   └── index.vue
+│   └── settings/
+│       └── index.vue
+├── types/
+│   ├── api.types.ts          ← ApiResponse, PaginatedResponse
+│   ├── employee.types.ts
+│   ├── attendance.types.ts
+│   ├── leave.types.ts
+│   ├── payroll.types.ts
+│   └── auth.types.ts
+└── utils/
+    ├── api.ts                ← base $fetch config
+    ├── date.ts               ← format helpers dùng date-fns/vi
+    └── format.ts             ← currency, số, status label
+```
+
+## Roles & Quyền truy cập trang
+
+| Page          | ADMIN | HR  | MANAGER  | EMPLOYEE |
+| ------------- | ----- | --- | -------- | -------- |
+| `/employees`  | ✓     | ✓   | —        | —        |
+| `/attendance` | ✓     | ✓   | ✓ (team) | —        |
+| `/leave`      | ✓     | ✓   | ✓ (team) | —        |
+| `/reports`    | ✓     | ✓   | ✓ (team) | —        |
+| `/payroll`    | ✓     | ✓   | —        | —        |
+| `/settings`   | ✓     | —   | —        | —        |
+
+---
 
 ## Environment Variables
 
@@ -104,11 +177,28 @@ Những rule này LUÔN áp dụng, không có ngoại lệ:
 - Gọi toast ở component/composable sau action, không gọi trong store
 - Xem pattern: @docs/forms.md#toast
 
-### Before Finishing Any Task
+## Checklist trước khi submit code
 
-- Trước khi kết thúc task, LUÔN tự chạy review theo @docs/review.md:
+- [ ] API calls qua composable, không gọi `$fetch` trực tiếp trong component
+- [ ] Types trong `types/` khớp với response shape từ API
+- [ ] Form validation dùng vee-validate + zod
+- [ ] Date/time hiển thị qua `utils/date.ts` (date-fns + locale vi)
+- [ ] Currency/số hiển thị qua `utils/format.ts`
+- [ ] Không hardcode API URL — dùng `runtimeConfig`
+- [ ] Route có role restriction → có middleware check
+- [ ] Không lưu token thủ công vào localStorage
 
-- Nếu phát hiện vi phạm → tự sửa, không hỏi Nếu có trade-off cần quyết định → báo cáo rõ lý do giữ nguyên
+---
+
+## KHÔNG được làm
+
+- Gọi `$fetch` trực tiếp trong component hay page
+- Hardcode API base URL
+- Tự ý thêm UI library mới (shadcn, headlessui...) không hỏi trước
+- Dùng `any` type
+- Bỏ qua form validation trước khi submit
+- Tự format date bằng string manipulation — dùng date-fns
+- Tự format tiền bằng string concatenation — dùng `Intl.NumberFormat`
 
 ## Documentation
 
@@ -117,4 +207,5 @@ Những rule này LUÔN áp dụng, không có ngoại lệ:
 - API service layer: @docs/api.md
 - Component patterns: @docs/components.md
 - Forms & notifications: @docs/forms.md
+- front-end docs: @docs/frontend/nuxt-conventions.md
 - Code review checklist: @docs/review.md
