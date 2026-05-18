@@ -28,8 +28,9 @@ export function useCheckInLocation() {
 	async function deactivateLocation(id: number): Promise<void> {
 		await service.deactivate(id);
 		const idx = locations.value.findIndex(l => l.id === id);
-		if (idx !== -1) {
-			locations.value[idx] = { ...locations.value[idx], isActive: false };
+		const loc = idx !== -1 ? locations.value[idx] : undefined;
+		if (loc) {
+			locations.value.splice(idx, 1, { ...loc, isActive: false });
 		}
 	}
 

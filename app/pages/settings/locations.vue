@@ -36,6 +36,17 @@ const searchingEmployees = ref(false);
 const assigningEmployeeId = ref<number | null>(null);
 const removingEmployeeId = ref<number | null>(null);
 
+// --- Geocoding search (Nominatim) ---
+interface GeoResult {
+	lat: string;
+	lon: string;
+	display_name: string;
+}
+const geoQuery = ref('');
+const geoResults = ref<GeoResult[]>([]);
+const searchingGeo = ref(false);
+let geoTimer: ReturnType<typeof setTimeout>;
+
 const availableEmployees = computed(() => {
 	const assignedIds = new Set(assignedEmployees.value.map(e => e.id));
 	return employeeSearchResults.value.filter(e => !assignedIds.has(e.id));
@@ -138,7 +149,7 @@ function placeModalMarker(lat: number, lng: number) {
 
 	addMarker = leaflet.marker([lat, lng], { icon: makePinIcon(leaflet), draggable: true }).addTo(modalMap);
 	addMarker.on('dragend', (e) => {
-		const pos = (e.target as LeafletType.Marker).getLatLng();
+		const pos = (e.target as Marker).getLatLng();
 		addForm.value.latitude = pos.lat;
 		addForm.value.longitude = pos.lng;
 		renderPreviewCircle(pos.lat, pos.lng, addForm.value.radiusMeters);
@@ -181,6 +192,8 @@ function openAddModal() {
 function closeAddModal() {
 	showAddModal.value = false;
 	if (modalMap) { modalMap.remove(); modalMap = null; }
+	geoQuery.value = '';
+	geoResults.value = [];
 }
 
 function validateAddForm(): boolean {
@@ -281,6 +294,37 @@ async function onRemoveEmployee(employeeId: number) {
 	} finally {
 		removingEmployeeId.value = null;
 	}
+}
+
+// --- Geocoding ---
+function onGeoSearchInput(val: string) {
+	geoQuery.value = val;
+	clearTimeout(geoTimer);
+	if (!val.trim()) { geoResults.value = []; return; }
+	geoTimer = setTimeout(async () => {
+		searchingGeo.value = true;
+		try {
+			const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&limit=5&countrycodes=vn`;
+			const res = await fetch(url, { headers: { 'User-Agent': 'HR-System/1.0' } });
+			geoResults.value = await res.json() as GeoResult[];
+		} catch {
+			geoResults.value = [];
+		} finally {
+			searchingGeo.value = false;
+		}
+	}, 500);
+}
+
+function selectGeoResult(result: GeoResult) {
+	const lat = parseFloat(result.lat);
+	const lng = parseFloat(result.lon);
+	geoResults.value = [];
+	geoQuery.value = '';
+	addForm.value.latitude = lat;
+	addForm.value.longitude = lng;
+	addFormErrors.value.location = '';
+	if (modalMap) modalMap.setView([lat, lng], 17, { animate: true });
+	placeModalMarker(lat, lng);
 }
 
 // --- Watchers ---
@@ -564,7 +608,7 @@ onUnmounted(() => {
 			leave-from-class="opacity-100 scale-100"
 			leave-to-class="opacity-0 scale-95"
 		>
-			<div v-if="showAddModal" class="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900">
+			<div v-if="showAddModal" class="fixed inset-0 z-[1000] flex flex-col bg-white dark:bg-gray-900">
 				<!-- Modal header -->
 				<div class="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
 					<svg class="w-5 h-5 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -589,8 +633,67 @@ onUnmounted(() => {
 						<ClientOnly>
 							<div ref="modalMapRef" class="w-full h-full" />
 						</ClientOnly>
+
+						<!-- Geocoding search bar (floating, above Leaflet panes) -->
+						<div class="absolute top-3 left-3 right-3 z-[1001] pointer-events-none">
+							<div class="relative max-w-sm pointer-events-auto">
+								<div class="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-600 px-3 py-2.5">
+									<svg
+										v-if="!searchingGeo"
+										class="w-4 h-4 text-gray-400 flex-shrink-0"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="1.5"
+									>
+										<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+									</svg>
+									<svg v-else class="animate-spin w-4 h-4 text-brand-600 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+									</svg>
+									<input
+										:value="geoQuery"
+										type="text"
+										placeholder="Tìm kiếm địa điểm trên bản đồ..."
+										class="flex-1 text-sm bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none"
+										@input="onGeoSearchInput(($event.target as HTMLInputElement).value)"
+									/>
+									<button
+										v-if="geoQuery"
+										class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+										@click="geoQuery = ''; geoResults = []"
+									>
+										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+
+								<!-- Geocoding results dropdown -->
+								<div
+									v-if="geoResults.length"
+									class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-lg max-h-60 overflow-y-auto"
+								>
+									<button
+										v-for="(result, idx) in geoResults"
+										:key="idx"
+										class="w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
+										@click="selectGeoResult(result)"
+									>
+										<svg class="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+										</svg>
+										<span class="text-sm text-gray-700 dark:text-gray-300 leading-snug">{{ result.display_name }}</span>
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Hint -->
 						<div
-							class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg px-4 py-2 text-xs text-gray-600 dark:text-gray-300 shadow pointer-events-none"
+							class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg px-4 py-2 text-xs text-gray-600 dark:text-gray-300 shadow pointer-events-none z-[1000]"
 						>
 							Click trên bản đồ để đặt vị trí · Kéo marker để điều chỉnh
 						</div>
@@ -680,7 +783,7 @@ onUnmounted(() => {
 		>
 			<div
 				v-if="deactivateTargetId"
-				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+				class="fixed inset-0 z-[1001] flex items-center justify-center bg-black/50 backdrop-blur-sm"
 				@click.self="deactivateTargetId = null"
 			>
 				<div class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl border border-gray-200 dark:border-gray-700">
