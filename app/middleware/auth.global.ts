@@ -1,18 +1,15 @@
-// Các route công khai không cần đăng nhập
 const PUBLIC_ROUTES = ['/login'];
 
 export default defineNuxtRouteMiddleware(to => {
-	const token = useCookie('access_token');
-
+	// Dùng store thay vì useCookie trực tiếp — store chia sẻ reactive state với login action
+	const store = useAuthStore();
 	const isPublicRoute = PUBLIC_ROUTES.includes(to.path);
 
-	// Đã đăng nhập mà vào trang login → redirect về trang chủ
-	if (isPublicRoute && token.value) {
+	if (isPublicRoute && store.isAuthenticated) {
 		return navigateTo('/');
 	}
 
-	// Chưa đăng nhập mà vào private route → redirect về login
-	if (!isPublicRoute && !token.value) {
+	if (!isPublicRoute && !store.isAuthenticated) {
 		return navigateTo('/login');
 	}
 });

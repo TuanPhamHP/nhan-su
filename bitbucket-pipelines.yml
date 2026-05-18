@@ -12,7 +12,7 @@ pipelines:
                 SSH_USER: $DEPLOY_USER
                 SERVER: $DEPLOY_HOST
                 COMMAND: >-
-                  cd $DEPLOY_PATH && git remote prune origin && git fetch origin develop && git reset --hard origin/develop && docker run --rm -v $DEPLOY_PATH:/app -w /app -e HOME=/tmp node:22.21-slim bash -c "yarn install --frozen-lockfile && yarn generate"
+                  cd $DEPLOY_PATH && git remote prune origin && git fetch origin develop && git reset --hard origin/develop && docker run --rm -v $DEPLOY_PATH:/app -w /app -e HOME=/tmp node:22.21-slim bash -c "corepack enable && corepack prepare yarn@1.22.22 --activate && yarn install --frozen-lockfile && yarn generate"
 
 
     staging:

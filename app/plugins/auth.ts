@@ -1,7 +1,9 @@
 import { useAuthStore } from '~/stores/auth';
 
-// Plugin chạy sau @pinia/nuxt → Pinia đã sẵn sàng, có thể dùng useCookie an toàn
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
 	const authStore = useAuthStore();
-	authStore._initFromCookie();
+	authStore.initFromCookie();
+	if (authStore.isAuthenticated) {
+		await authStore.fetchMe();
+	}
 });

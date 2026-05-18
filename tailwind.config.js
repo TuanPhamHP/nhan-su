@@ -1,9 +1,33 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-	media: false,
-	content: ['./components/**/*.{vue,js,ts}', './pages/**/*.{vue,js,ts}', './layouts/**/*.{vue,js,ts}', './app.vue'],
+	darkMode: 'class',
+	content: [
+		'./app/**/*.{vue,js,ts}',
+		'./components/**/*.{vue,js,ts}',
+		'./pages/**/*.{vue,js,ts}',
+		'./layouts/**/*.{vue,js,ts}',
+		'./app.vue',
+	],
 	theme: {
-		extend: {},
+		extend: {
+			colors: {
+				brand: {
+					50: '#eff6ff',
+					100: '#dbeafe',
+					200: '#bfdbfe',
+					300: '#93c5fd',
+					400: '#60a5fa',
+					500: '#3b82f6',
+					600: '#2563eb',
+					700: '#1d4ed8',
+					800: '#1e40af',
+					900: '#1e3a8a',
+				},
+			},
+			transitionProperty: {
+				width: 'width',
+			},
+		},
 	},
 	plugins: [],
 };

@@ -10,10 +10,13 @@
 		"postinstall": "nuxt prepare"
 	},
 	"dependencies": {
+		"@nuxtjs/tailwindcss": "^6.14.0",
 		"@pinia/nuxt": "^0.11.3",
+		"@types/leaflet": "^1.9.21",
 		"@types/node": "^25.0.10",
 		"@vee-validate/nuxt": "^4.15.1",
 		"date-fns": "^4.1.0",
+		"leaflet": "^1.9.4",
 		"nuxt": "^4.3.0",
 		"pinia": "^3.0.4",
 		"vue": "^3.5.27",
@@ -21,6 +24,11 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@nuxtjs/tailwindcss": "^6.14.0"
+		"@playwright/test": "^1.59.1",
+		"@vue/test-utils": "^2.4.6",
+		"happy-dom": "^20.9.0",
+		"sass-embedded": "^1.97.3",
+		"vite-svg-loader": "^5.1.1",
+		"vitest": "^4.1.4"
 	}
 }

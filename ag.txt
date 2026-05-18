@@ -32,3 +32,23 @@ Thứ tự bắt đầu code theo Sprint S1
 5. Module Attendance (check-in/out)
 6. Module Leave (submit + approve flow)
 7. Module Notification (email queue)
+
+
+
+-Thay thế các thẻ <select> <option> bằng components 'app\components\ui\Select.vue' thay vì dùng native, để UI đẹp hơn. Tương tự với mọi component date-picker.
+
+Tạo trang quản lý phòng ban.
+
+Dựa trên API: GET /v1/departments (xem docs/openapi.json → tag Departments)
+Response shape: xem app/types/department.types.ts → DepartmentSummary[]
+
+UI cần có:
+- Bảng hiển thị danh sách phòng ban, số lượng nhân viên, trạng thái.
+- Mỗi dòng trong bảng có menu dropdown gồm các buttons có icon và label là 'Chi tiết', 'Chỉnh sửa'.
+- Pagination (dùng meta.totalPages từ API)
+- Search input (query param: search)
+- Button "Thêm phòng ban" trên table-header => trang 'departments/new' với form tạo mới
+- Status badge: xanh (active), đỏ (disable)
+
+Gọi API qua useDepartment() composable, không gọi $fetch trực tiếp.
+Refer: CLAUDE.md phần API calls.

@@ -100,6 +100,13 @@ app/
 
 ## Roles & Quyền truy cập trang
 
+Authorization, ở đây chúng ra sẽ dùng mô hình roles & permissions, với logic như sau:
+
+- Toàn bộ App sẽ có nhiều permissions.
+- Chúng ta có thể CRUD các role (hoặc vị trí), sau đó gán các quyền tương ứng cho vị trí.
+- Có 2 loại role là: default (có thể sửa, không thể xóa). custom (có thể sửa, xóa).
+- Tiếp theo có thể gán người dùng vào role (quan hệ người dùng và role là nhiều - nhiều). Một người sẽ nhận toàn bộ permissions của các roles mà họ có.
+
 | Page          | ADMIN | HR  | MANAGER  | EMPLOYEE |
 | ------------- | ----- | --- | -------- | -------- |
 | `/employees`  | ✓     | ✓   | —        | —        |
@@ -110,6 +117,20 @@ app/
 | `/settings`   | ✓     | —   | —        | —        |
 
 ---
+
+### Khi cần làm việc với api, Types
+
+- Đọc file docs/api-endpoint.json để hiểu toàn bộ API shape.
+- Đọc các file docs/bridges/ để hiểu các nghiệp vụ đồng bộ từ phía backend.
+
+- Tạo toàn bộ types trong app/types/ dựa trên response schemas trong api-endpoint.json:
+
+- api.types.ts: ApiResponse<T>, PaginatedResponse<T>
+- employee.types.ts: EmployeeSummary, EmployeeDetail, CreateEmployeeDto, UpdateEmployeeDto
+- attendance.types.ts
+- leave.types.ts
+
+## Mỗi type phải khớp chính xác với response schema trong openapi.json.
 
 ## Environment Variables
 
@@ -141,6 +162,22 @@ Những rule này LUÔN áp dụng, không có ngoại lệ:
 - Luôn dùng `<script setup lang="ts">` — không dùng Options API, không dùng `defineComponent`
 - Import type riêng: `import type { Foo } from '...'`
 - Không dùng `any` — dùng `unknown` nếu chưa rõ type
+
+### Component Import — QUAN TRỌNG
+
+Nuxt chỉ auto-import đáng tin cậy cho `common/`, `ui/`, `layout/`. Components trong `modules/` **phải import thủ công** — dùng auto-import name (`ModulesXxxYyy`) sẽ gây lỗi runtime "Failed to resolve component".
+
+```ts
+// ✅ Đúng — explicit import cho mọi component trong components/modules/
+import RoleCreateModal from '~/components/modules/role/RoleCreateModal.vue';
+import EmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBadge.vue';
+```
+
+```vue
+<!-- ❌ Sai — KHÔNG dùng auto-import name cho modules/ -->
+<ModulesRoleRoleCreateModal />
+<ModulesEmployeeEmployeeStatusBadge />
+```
 
 ### API & Services
 
@@ -187,6 +224,7 @@ Những rule này LUÔN áp dụng, không có ngoại lệ:
 - [ ] Không hardcode API URL — dùng `runtimeConfig`
 - [ ] Route có role restriction → có middleware check
 - [ ] Không lưu token thủ công vào localStorage
+- [ ] Components trong `modules/` được **explicit import**, không dùng auto-import name
 
 ---
 
@@ -199,6 +237,7 @@ Những rule này LUÔN áp dụng, không có ngoại lệ:
 - Bỏ qua form validation trước khi submit
 - Tự format date bằng string manipulation — dùng date-fns
 - Tự format tiền bằng string concatenation — dùng `Intl.NumberFormat`
+- Dùng auto-import name (`ModulesXxxYyy`) cho components trong `components/modules/` — phải explicit import
 
 ## Documentation
 
@@ -207,5 +246,7 @@ Những rule này LUÔN áp dụng, không có ngoại lệ:
 - API service layer: @docs/api.md
 - Component patterns: @docs/components.md
 - Forms & notifications: @docs/forms.md
+- api endpoints: @docs/api-enpoint.json
+- backend bridges: @docs/bridges/
 - front-end docs: @docs/frontend/nuxt-conventions.md
 - Code review checklist: @docs/review.md
