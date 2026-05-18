@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type * as LeafletType from 'leaflet';
+import type { Map as LeafletMap, Circle, Marker } from 'leaflet';
 import type { CheckInLocation, CreateCheckInLocationDto } from '~/types/check-in-location.types';
 import type { EmployeeSummary } from '~/types/employee.types';
 import { useEmployeeService } from '~/services/employee.service';
@@ -45,18 +45,18 @@ const availableEmployees = computed(() => {
 const mainMapRef = ref<HTMLDivElement | null>(null);
 const modalMapRef = ref<HTMLDivElement | null>(null);
 
-type L = typeof LeafletType;
-let leaflet: L | null = null;
-let mainMap: LeafletType.Map | null = null;
-let modalMap: LeafletType.Map | null = null;
-const locationCircles = new Map<number, LeafletType.Circle>();
-let addMarker: LeafletType.Marker | null = null;
-let addPreviewCircle: LeafletType.Circle | null = null;
+type LeafletLib = typeof import('leaflet');
+let leaflet: LeafletLib | null = null;
+let mainMap: LeafletMap | null = null;
+let modalMap: LeafletMap | null = null;
+const locationCircles = new Map<number, Circle>();
+let addMarker: Marker | null = null;
+let addPreviewCircle: Circle | null = null;
 
 const HANOI: [number, number] = [21.0285, 105.8542];
 
 // --- Leaflet helpers ---
-function makePinIcon(L: L) {
+function makePinIcon(L: LeafletLib) {
 	return L.divIcon({
 		className: '',
 		html: '<div style="width:14px;height:14px;border-radius:50%;background:#2563eb;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35)"></div>',
@@ -298,7 +298,7 @@ watch(showAddModal, async (val) => {
 
 // --- Init ---
 onMounted(async () => {
-	leaflet = await import('leaflet') as unknown as L;
+	leaflet = await import('leaflet');
 	await fetchLocations();
 	await initMainMap();
 });
