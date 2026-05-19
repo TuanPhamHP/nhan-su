@@ -5,6 +5,7 @@ import type {
 	CreateCheckInLocationDto,
 	UpdateCheckInLocationDto,
 } from '~/types/check-in-location.types';
+import type { EmployeeSummary } from '~/types/employee.types';
 
 export const useCheckInLocationService = () => {
 	const authFetch = useAuthFetch();
@@ -31,6 +32,11 @@ export const useCheckInLocationService = () => {
 			return res.data;
 		},
 
+		async findEmployees(locationId: number): Promise<EmployeeSummary[]> {
+			const res = await authFetch<ApiResponse<EmployeeSummary[]>>(`/v1/check-in-locations/${locationId}/employees`);
+			return res.data;
+		},
+
 		deactivate(id: number): Promise<void> {
 			return authFetch<void>(`/v1/check-in-locations/${id}`, { method: 'DELETE' });
 		},
@@ -45,6 +51,14 @@ export const useCheckInLocationService = () => {
 			return authFetch<void>(`/v1/check-in-locations/${locationId}/employees/${employeeId}`, {
 				method: 'DELETE',
 			});
+		},
+
+		async bulkAssignEmployees(locationId: number, employeeIds: number[]): Promise<{ assigned: number; total: number }> {
+			const res = await authFetch<ApiResponse<{ assigned: number; total: number }>>(
+				`/v1/check-in-locations/${locationId}/employees/bulk`,
+				{ method: 'POST', body: { employeeIds } },
+			);
+			return res.data;
 		},
 	};
 };

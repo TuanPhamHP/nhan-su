@@ -1,22 +1,19 @@
 <script setup lang="ts">
 import type { Map as LeafletMap, Circle, Marker } from 'leaflet';
-import type { CheckInLocation, CreateCheckInLocationDto } from '~/types/check-in-location.types';
+import type { CheckInLocation, CreateCheckInLocationDto, UpdateCheckInLocationDto } from '~/types/check-in-location.types';
 import type { EmployeeSummary } from '~/types/employee.types';
-import { useEmployeeService } from '~/services/employee.service';
+import LocationAssignModal from '~/components/modules/location/LocationAssignModal.vue';
+import LocationEditModal from '~/components/modules/location/LocationEditModal.vue';
 
 definePageMeta({ title: 'Địa điểm chấm công' });
 
 const toast = useToast();
-const { locations, loading, locationEmployeesMap, fetchLocations, createLocation, deactivateLocation, assignEmployee, removeEmployee } = useCheckInLocation();
-const employeeService = useEmployeeService();
+const { locations, loading, locationEmployees, employeesLoading, fetchLocations, fetchLocationEmployees, createLocation, updateLocation, deactivateLocation, removeEmployee, bulkAssign } = useCheckInLocation();
 
 // --- Selection ---
 const selectedLocationId = ref<number | null>(null);
 const selectedLocation = computed(() =>
 	selectedLocationId.value ? locations.value.find(l => l.id === selectedLocationId.value) ?? null : null,
-);
-const assignedEmployees = computed(() =>
-	selectedLocationId.value ? locationEmployeesMap.value[selectedLocationId.value] ?? [] : [],
 );
 
 // --- Add modal ---
@@ -29,12 +26,19 @@ const submittingAdd = ref(false);
 const deactivateTargetId = ref<number | null>(null);
 const deactivating = ref(false);
 
-// --- Employee search ---
-const employeeSearch = ref('');
-const employeeSearchResults = ref<EmployeeSummary[]>([]);
-const searchingEmployees = ref(false);
-const assigningEmployeeId = ref<number | null>(null);
+// --- Edit modal ---
+const showEditModal = ref(false);
+
+// --- Assign modal ---
+const showAssignModal = ref(false);
 const removingEmployeeId = ref<number | null>(null);
+
+const colorMode = useColorMode();
+const addRadiusFillStyle = computed(() => {
+	const pct = ((addForm.value.radiusMeters - 10) / (500 - 10)) * 100;
+	const track = colorMode.value === 'dark' ? '#374151' : '#e5e7eb';
+	return { background: `linear-gradient(to right, #2563eb ${pct}%, ${track} ${pct}%)` };
+});
 
 // --- Geocoding search (Nominatim) ---
 interface GeoResult {
@@ -46,11 +50,6 @@ const geoQuery = ref('');
 const geoResults = ref<GeoResult[]>([]);
 const searchingGeo = ref(false);
 let geoTimer: ReturnType<typeof setTimeout>;
-
-const availableEmployees = computed(() => {
-	const assignedIds = new Set(assignedEmployees.value.map(e => e.id));
-	return employeeSearchResults.value.filter(e => !assignedIds.has(e.id));
-});
 
 // --- Map refs and instances ---
 const mainMapRef = ref<HTMLDivElement | null>(null);
@@ -172,11 +171,16 @@ function renderPreviewCircle(lat: number, lng: number, radius: number) {
 }
 
 // --- Location actions ---
-function selectLocation(loc: CheckInLocation) {
+async function selectLocation(loc: CheckInLocation) {
 	selectedLocationId.value = loc.id;
 	highlightCircle(loc.id);
 	if (mainMap) {
 		mainMap.setView([loc.latitude, loc.longitude], Math.max(mainMap.getZoom(), 15), { animate: true });
+	}
+	try {
+		await fetchLocationEmployees(loc.id);
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách nhân viên');
 	}
 }
 
@@ -249,37 +253,27 @@ async function confirmDeactivate() {
 	}
 }
 
-// --- Employee search ---
-let searchTimer: ReturnType<typeof setTimeout>;
-function onEmployeeSearchInput(val: string) {
-	employeeSearch.value = val;
-	clearTimeout(searchTimer);
-	if (!val.trim()) { employeeSearchResults.value = []; return; }
-	searchTimer = setTimeout(async () => {
-		searchingEmployees.value = true;
-		try {
-			const res = await employeeService.findAll({ search: val.trim(), limit: 20 });
-			employeeSearchResults.value = res.data;
-		} catch {
-			employeeSearchResults.value = [];
-		} finally {
-			searchingEmployees.value = false;
-		}
-	}, 400);
+async function onLocationUpdated(dto: UpdateCheckInLocationDto) {
+	if (!selectedLocationId.value) return;
+	try {
+		await updateLocation(selectedLocationId.value, dto);
+		toast.success('Đã cập nhật địa điểm');
+		showEditModal.value = false;
+		await nextTick();
+		renderMainCircles();
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Lỗi cập nhật địa điểm');
+	}
 }
 
-async function onAssignEmployee(emp: EmployeeSummary) {
+async function onBulkAssigned(employees: EmployeeSummary[]) {
 	if (!selectedLocationId.value) return;
-	assigningEmployeeId.value = emp.id;
 	try {
-		await assignEmployee(selectedLocationId.value, emp);
-		toast.success(`Đã gán ${emp.fullName} vào địa điểm`);
-		employeeSearch.value = '';
-		employeeSearchResults.value = [];
+		await bulkAssign(selectedLocationId.value, employees);
+		toast.success(`Đã gán ${employees.length} nhân viên vào địa điểm`);
+		showAssignModal.value = false;
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Lỗi gán nhân viên');
-	} finally {
-		assigningEmployeeId.value = null;
 	}
 }
 
@@ -419,11 +413,19 @@ onUnmounted(() => {
 							{{ loc.isActive ? 'Hoạt động' : 'Vô hiệu' }}
 						</span>
 					</div>
-					<div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-						<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
-						</svg>
-						Bán kính {{ loc.radiusMeters }}m
+					<div class="flex items-center gap-3">
+						<div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+							<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+							</svg>
+							{{ loc.radiusMeters }}m
+						</div>
+						<div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+							<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+							</svg>
+							{{ selectedLocationId === loc.id ? locationEmployees.length + ' NV' : '—' }}
+						</div>
 					</div>
 					<div v-if="loc.isActive" class="mt-3 flex justify-end">
 						<button
@@ -463,9 +465,21 @@ onUnmounted(() => {
 			<template v-else>
 				<!-- Info section -->
 				<div class="p-5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-					<h2 class="text-base font-semibold text-gray-900 dark:text-white mb-1 break-words">
-						{{ selectedLocation.name }}
-					</h2>
+					<div class="flex items-start justify-between gap-2 mb-1">
+						<h2 class="text-base font-semibold text-gray-900 dark:text-white break-words">
+							{{ selectedLocation.name }}
+						</h2>
+						<button
+							v-if="selectedLocation.isActive"
+							class="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors flex-shrink-0 mt-0.5"
+							@click="showEditModal = true"
+						>
+							<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+							</svg>
+							Chỉnh sửa
+						</button>
+					</div>
 					<div class="space-y-1.5 mt-2">
 						<p class="text-xs text-gray-500 dark:text-gray-400">
 							Bán kính:
@@ -489,80 +503,41 @@ onUnmounted(() => {
 
 				<!-- Employee section -->
 				<div class="flex-1 flex flex-col overflow-hidden p-4">
-					<p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Gán nhân viên</p>
-
-					<!-- Search input -->
-					<div class="relative mb-3 flex-shrink-0">
-						<div class="relative">
-							<svg
-								class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								stroke-width="1.5"
-							>
-								<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-							</svg>
-							<input
-								:value="employeeSearch"
-								type="text"
-								placeholder="Tìm để gán nhân viên..."
-								class="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-500 transition-colors"
-								@input="onEmployeeSearchInput(($event.target as HTMLInputElement).value)"
-							/>
-						</div>
-
-						<!-- Dropdown results -->
-						<div
-							v-if="employeeSearch && (searchingEmployees || availableEmployees.length > 0)"
-							class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 max-h-44 overflow-y-auto"
+					<div class="flex items-center justify-between mb-3 flex-shrink-0">
+						<p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+							Nhân viên được gán
+							<span v-if="locationEmployees.length" class="text-xs font-normal text-gray-400 ml-1">({{ locationEmployees.length }})</span>
+						</p>
+						<button
+							v-if="selectedLocation?.isActive"
+							class="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors"
+							@click="showAssignModal = true"
 						>
-							<div v-if="searchingEmployees" class="flex items-center justify-center py-5">
-								<svg class="animate-spin w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-								</svg>
-							</div>
-							<template v-else>
-								<div
-									v-for="emp in availableEmployees"
-									:key="emp.id"
-									class="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-									@click="onAssignEmployee(emp)"
-								>
-									<div class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0">
-										<span class="text-xs font-bold text-brand-700 dark:text-brand-400">{{ emp.fullName.charAt(0) }}</span>
-									</div>
-									<div class="flex-1 min-w-0">
-										<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
-										<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ emp.employeeCode }}</p>
-									</div>
-									<div v-if="assigningEmployeeId === emp.id" class="flex-shrink-0">
-										<svg class="animate-spin w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24">
-											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-										</svg>
-									</div>
-									<svg v-else class="w-4 h-4 text-brand-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-									</svg>
-								</div>
-								<div v-if="!availableEmployees.length" class="text-xs text-gray-400 px-3 py-3 text-center">
-									Không tìm thấy hoặc đã gán tất cả
-								</div>
-							</template>
-						</div>
+							<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+							</svg>
+							Thêm nhân sự
+						</button>
 					</div>
 
 					<!-- Assigned employees list -->
 					<div class="flex-1 overflow-y-auto">
-						<div v-if="!assignedEmployees.length" class="flex flex-col items-center justify-center h-20 text-center">
+						<!-- Loading skeleton -->
+						<div v-if="employeesLoading" class="space-y-1">
+							<div v-for="i in 3" :key="i" class="flex items-center gap-2.5 px-2 py-2">
+								<div class="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0" />
+								<div class="flex-1 space-y-1">
+									<div class="h-3 w-28 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+									<div class="h-2.5 w-16 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+								</div>
+							</div>
+						</div>
+						<div v-else-if="!locationEmployees.length" class="flex flex-col items-center justify-center h-20 text-center">
 							<p class="text-xs text-gray-400 dark:text-gray-500">Chưa có nhân viên nào được gán</p>
-							<p class="text-[11px] text-gray-300 dark:text-gray-600 mt-0.5">(Chỉ lưu trong phiên làm việc)</p>
 						</div>
 						<div v-else class="space-y-0.5">
 							<div
-								v-for="emp in assignedEmployees"
+								v-for="emp in locationEmployees"
 								:key="emp.id"
 								class="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 group"
 							>
@@ -723,7 +698,8 @@ onUnmounted(() => {
 									min="10"
 									max="500"
 									step="10"
-									class="w-full h-2 rounded-lg appearance-none cursor-pointer accent-brand-600"
+									:style="addRadiusFillStyle"
+									class="w-full appearance-none cursor-pointer rounded-full [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#2563eb] [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[#2563eb] [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
 								/>
 								<div class="flex justify-between text-xs text-gray-400 dark:text-gray-500">
 									<span>10m</span>
@@ -769,6 +745,27 @@ onUnmounted(() => {
 				</div>
 			</div>
 		</Transition>
+	</Teleport>
+
+	<!-- Edit location modal -->
+	<Teleport to="body">
+		<LocationEditModal
+			v-if="showEditModal && selectedLocation"
+			:location="selectedLocation"
+			@close="showEditModal = false"
+			@updated="onLocationUpdated"
+		/>
+	</Teleport>
+
+	<!-- Assign employees modal -->
+	<Teleport to="body">
+		<LocationAssignModal
+			v-if="showAssignModal && selectedLocationId"
+			:location-id="selectedLocationId"
+			:assigned-employees="locationEmployees"
+			@close="showAssignModal = false"
+			@assigned="onBulkAssigned"
+		/>
 	</Teleport>
 
 	<!-- Deactivate confirm modal -->

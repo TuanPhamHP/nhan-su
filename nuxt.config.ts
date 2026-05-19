@@ -40,7 +40,7 @@ export default defineNuxtConfig({
 	},
 	compatibilityDate: '2025-07-15',
 	devtools: { enabled: true },
-	modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@vee-validate/nuxt'],
+	modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@vee-validate/nuxt', '@nuxt/icon'],
 	css: ['~/assets/styles/globals.scss', 'leaflet/dist/leaflet.css'],
 	vite: {
 		plugins: [svgLoader({ defaultImport: 'component' })],

@@ -37,6 +37,8 @@ export const useAuthStore = defineStore('auth', () => {
 		user.value = res.user;
 
 		await loadPermissions();
+		const { load: loadDirectory } = useDirectoryStore();
+		loadDirectory();
 	}
 
 	async function fetchMe() {
@@ -53,6 +55,8 @@ export const useAuthStore = defineStore('auth', () => {
 				avatarUrl: emp.avatarUrl,
 			};
 			await loadPermissions();
+			const { load: loadDirectory } = useDirectoryStore();
+			loadDirectory();
 		} catch {
 			await logout();
 		}

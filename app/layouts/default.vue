@@ -1,4 +1,7 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+const { load: loadDirectory } = useDirectoryStore();
+onMounted(() => loadDirectory());
+</script>
 
 <template>
 	<div class="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">

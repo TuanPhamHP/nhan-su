@@ -30,7 +30,12 @@ CheckInLocation ◄──── LocationEmployee ────► Employee
                         ├── employeeId
                         ├── shiftId (WorkShift)
                         ├── locationId (CheckInLocation)
-                        └── effectiveShiftOverrideId (EffectiveShiftOverride | null)
+                        ├── effectiveShiftOverrideId (EffectiveShiftOverride | null)
+                        ├── isLocked → khi lock, nhân viên không tự sửa được
+                        │
+                        └──► MakeupAttendanceRequest
+                                  (PENDING → APPROVED/REJECTED)
+                                  Khi APPROVED: unlock record + apply giờ
 ```
 
 ---
@@ -39,7 +44,7 @@ CheckInLocation ◄──── LocationEmployee ────► Employee
 
 ```
 Bước 1 — Tạo khuôn ca (WorkShift)
-    ⚠️ Chưa có endpoint — hiện tạo qua DB seed
+    POST /v1/work-shifts
     Mỗi ca gồm: tên, giờ vào, giờ ra, ngày làm việc trong tuần, ngưỡng đến muộn
 
 Bước 2 — Tạo địa điểm chấm công (CheckInLocation)
@@ -80,8 +85,8 @@ GPS lấy tọa độ hiện tại
 Gửi check-in
     POST /v1/attendance/check-in  { latitude, longitude }
     │
-    ├─ Thất bại → hiển thị lỗi cụ thể (vị trí / ca / giờ)
-    │
+    ├─ 400 isLocked → "Bản ghi đã bị khóa. Hãy tạo đơn bù công."
+    ├─ Thất bại khác → hiển thị lỗi cụ thể (vị trí / ca / giờ)
     └─ Thành công → lưu AttendanceRecordDetail vào state
                     isHalfDay? → hiển thị "Ca rút gọn"
     │
@@ -89,7 +94,61 @@ Gửi check-in
 Gửi check-out
     POST /v1/attendance/check-out
     │
+    ├─ 400 isLocked → "Bản ghi đã bị khóa. Hãy tạo đơn bù công."
     └─ Thành công → cập nhật checkOutAt trong state
+```
+
+---
+
+## Flow auto-lock qua đêm (hệ thống — không cần frontend làm gì)
+
+```
+Cron chạy lúc 00:05 Asia/Ho_Chi_Minh mỗi ngày
+    │
+    ▼
+Tìm tất cả AttendanceRecord ngày hôm qua chưa lock và chưa hoàn chỉnh
+    │
+    ├─ Có checkInAt nhưng KHÔNG có checkOutAt
+    │       → isLocked = true, lockReason = 'AUTO_MIDNIGHT'
+    │       → missingType = 'MISSING_CHECKOUT'
+    │       → gửi email nhắc nhở nhân viên
+    │
+    └─ KHÔNG có checkInAt (vắng, không phải ON_LEAVE)
+            → isLocked = true, lockReason = 'AUTO_MIDNIGHT'
+            → không gửi email
+```
+
+> **Frontend:** Khi thấy `isLocked: true` trong `AttendanceRecord`, hiển thị nút "Tạo đơn bù công" thay vì cho phép check-in/check-out tiếp.
+
+---
+
+## Flow bù công (Employee + HR/Manager)
+
+```
+Nhân viên xem lịch sử — phát hiện ngày bị lock
+    │
+    ▼
+Tạo đơn bù công
+    POST /v1/makeup-attendance  (multipart/form-data)
+    Body: { attendanceDate, requestedCheckIn?, requestedCheckOut?, reason, evidencePhoto? }
+    │
+    ├─ 400 ngày chưa qua / không tìm thấy bản ghi / bản ghi chưa bị lock
+    ├─ 409 đã có đơn PENDING cho ngày đó
+    └─ 201 → MakeupRequestResponseDto (status: PENDING)
+    │
+    ▼
+HR/Manager nhận đơn → xem xét
+    GET /v1/makeup-attendance  (HR/Admin)
+    │
+    ├─ PATCH /v1/makeup-attendance/:id/approve  { reviewNote? }
+    │       → status: APPROVED
+    │       → AttendanceRecord được unlock + apply giờ từ đơn (transaction)
+    │       → gửi email thông báo duyệt
+    │
+    └─ PATCH /v1/makeup-attendance/:id/reject   { reviewNote: string }  ← bắt buộc
+            → status: REJECTED
+            → AttendanceRecord giữ nguyên trạng thái lock
+            → gửi email thông báo từ chối
 ```
 
 ---
@@ -127,19 +186,20 @@ Employee check-in bình thường
 ## Các trường hợp check-in thất bại
 
 | Lỗi | Nguyên nhân | Cách xử lý trên UI |
-|-----|-------------|-------------------|
+| --- | --- | --- |
 | `NO_VALID_LOCATION` | GPS ngoài bán kính mọi địa điểm được gán, hoặc chưa được gán địa điểm | "Vị trí không hợp lệ. Hãy đến gần văn phòng hơn." |
 | `NO_SHIFT_TODAY` | Không có ca (không có schedule cụ thể lẫn default shift) | "Bạn không có ca làm việc hôm nay." |
 | `OUTSIDE_WINDOW` | Ngoài cửa sổ ±30 phút xung quanh giờ bắt đầu ca thực tế | "Ngoài khung giờ chấm công. Vui lòng thử lại đúng giờ." |
 | `ATTENDANCE_ALREADY_CHECKED_IN` | Đã check-in hôm nay (409) | "Bạn đã check-in hôm nay rồi." |
+| `isLocked` | Bản ghi ngày đó đã bị khóa (400) | "Bản ghi đã bị khóa. Hãy tạo đơn bù công." |
 
 ---
 
 ## Bridge docs chi tiết
 
-| File | Nội dung |
-|------|---------|
+| File                                                 | Nội dung                                       |
+| ---------------------------------------------------- | ---------------------------------------------- |
 | [attendance-locations.md](./attendance-locations.md) | CRUD địa điểm, gán nhân viên, tích hợp Leaflet |
-| [attendance-shifts.md](./attendance-shifts.md) | Khuôn ca, gán lịch ca, ca mặc định |
-| [attendance.md](./attendance.md) | Check-in/out, lịch sử, chỉnh sửa thủ công |
-| [leave.md](./leave.md) | Đơn nghỉ phép — bao gồm nghỉ nửa ngày |
+| [attendance-shifts.md](./attendance-shifts.md)       | Khuôn ca, gán lịch ca, ca mặc định             |
+| [attendance.md](./attendance.md)                     | Check-in/out, lịch sử, chỉnh sửa thủ công      |
+| [makeup-attendance.md](./makeup-attendance.md)       | Đơn bù công — tạo, duyệt, từ chối              |
