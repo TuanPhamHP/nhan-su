@@ -10,3 +10,6 @@ export * from './shift-schedule.service';
 export * from './attendance.service';
 export * from './makeup-attendance.service';
 export * from './public-holiday.service';
+export * from './leave-request.service';
+export * from './leave-type.service';
+export * from './leave-balance.service';

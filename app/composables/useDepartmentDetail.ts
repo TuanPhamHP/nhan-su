@@ -67,6 +67,11 @@ export function useDepartmentDetail(deptId: number) {
 		if (idx !== -1) members.value[idx] = { ...members.value[idx], status: 'ACTIVE' };
 	}
 
+	async function changeManager(empId: number): Promise<void> {
+		const updated = await deptService.changeManager(deptId, empId);
+		department.value = updated;
+	}
+
 	return {
 		department,
 		loadingDept,
@@ -79,5 +84,6 @@ export function useDepartmentDetail(deptId: number) {
 		removeMember,
 		deactivateMember,
 		activateMember,
+		changeManager,
 	};
 }

@@ -38,6 +38,14 @@ export const useDepartmentService = () => {
 			return res.data;
 		},
 
+		async changeManager(id: number, employeeId: number): Promise<Department> {
+			const res = await authFetch<ApiResponse<Department>>(`/v1/departments/${id}/manager`, {
+				method: 'PATCH',
+				body: { employeeId },
+			});
+			return res.data;
+		},
+
 		deactivate(id: number): Promise<void> {
 			return authFetch<void>(`/v1/departments/${id}`, { method: 'DELETE' });
 		},

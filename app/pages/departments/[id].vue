@@ -24,6 +24,7 @@
 		removeMember,
 		deactivateMember,
 		activateMember,
+		changeManager,
 	} = useDepartmentDetail(id);
 
 	// ─── Edit dept form ───────────────────────────────────────────────────────────
@@ -152,6 +153,55 @@
 		}
 	}
 
+	// ─── Change manager modal ────────────────────────────────────────────────────
+
+	const showChangeManagerModal = ref(false);
+	const managerSearch = ref('');
+	const managerCandidates = ref<EmployeeSummary[]>([]);
+	const loadingManagerCandidates = ref(false);
+	const changingManagerId = ref<number | null>(null);
+
+	async function fetchManagerCandidates() {
+		loadingManagerCandidates.value = true;
+		try {
+			const res = await empService.findAll({ departmentId: id, search: managerSearch.value || undefined, limit: 100 });
+			managerCandidates.value = res.data;
+		} finally {
+			loadingManagerCandidates.value = false;
+		}
+	}
+
+	let managerSearchTimer: ReturnType<typeof setTimeout>;
+	function onManagerSearchInput(val: string) {
+		managerSearch.value = val;
+		clearTimeout(managerSearchTimer);
+		managerSearchTimer = setTimeout(fetchManagerCandidates, 400);
+	}
+
+	function openChangeManagerModal() {
+		managerSearch.value = '';
+		managerCandidates.value = [];
+		showChangeManagerModal.value = true;
+		fetchManagerCandidates();
+	}
+
+	function closeChangeManagerModal() {
+		showChangeManagerModal.value = false;
+	}
+
+	async function handleChangeManager(emp: EmployeeSummary) {
+		changingManagerId.value = emp.id;
+		try {
+			await changeManager(emp.id);
+			toast.success(`Đã đặt ${emp.fullName} làm trưởng phòng`);
+			showChangeManagerModal.value = false;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Lỗi thay đổi trưởng phòng');
+		} finally {
+			changingManagerId.value = null;
+		}
+	}
+
 	// ─── Row dropdown actions ─────────────────────────────────────────────────────
 
 	function getMemberActions(emp: EmployeeSummary): DropdownMenuItem[] {
@@ -204,6 +254,16 @@
 			</NuxtLink>
 
 			<div v-if="department && !isEditing" class="flex items-center gap-2">
+				<CommonAppButton variant="outline" @click="openChangeManagerModal">
+					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+						/>
+					</svg>
+					Thay đổi trưởng phòng
+				</CommonAppButton>
 				<CommonAppButton variant="outline" @click="startEditing">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
@@ -642,6 +702,141 @@
 							<CommonAppButton variant="danger" :loading="removing" @click="handleRemove">
 								Xác nhận xóa
 							</CommonAppButton>
+						</div>
+					</div>
+				</div>
+			</Transition>
+		</Teleport>
+
+		<!-- ─── Change manager modal ────────────────────────────────────────── -->
+		<Teleport to="body">
+			<Transition
+				enter-active-class="transition ease-out duration-150"
+				enter-from-class="opacity-0"
+				enter-to-class="opacity-100"
+				leave-active-class="transition ease-in duration-100"
+				leave-from-class="opacity-100"
+				leave-to-class="opacity-0"
+			>
+				<div
+					v-if="showChangeManagerModal"
+					class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+					@click.self="closeChangeManagerModal"
+				>
+					<div
+						class="bg-white dark:bg-gray-900 rounded-xl w-full max-w-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[85vh]"
+					>
+						<!-- Modal header -->
+						<div
+							class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0"
+						>
+							<div>
+								<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Thay đổi trưởng phòng</h3>
+								<p v-if="department?.manager" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+									Hiện tại: {{ department.manager.fullName }}
+								</p>
+							</div>
+							<button
+								type="button"
+								class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+								@click="closeChangeManagerModal"
+							>
+								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+
+						<!-- Search input -->
+						<div class="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+							<div class="relative">
+								<svg
+									class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+									/>
+								</svg>
+								<input
+									:value="managerSearch"
+									type="text"
+									placeholder="Tìm theo tên, email, mã NV..."
+									class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 pl-9 pr-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+									@input="onManagerSearchInput(($event.target as HTMLInputElement).value)"
+								/>
+							</div>
+						</div>
+
+						<!-- Results list -->
+						<div class="flex-1 overflow-y-auto">
+							<!-- Loading -->
+							<div v-if="loadingManagerCandidates" class="divide-y divide-gray-100 dark:divide-gray-800">
+								<div v-for="i in 4" :key="i" class="flex items-center gap-3 px-5 py-3.5">
+									<div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0" />
+									<div class="flex-1 space-y-1.5">
+										<div class="h-3.5 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+										<div class="h-3 w-44 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+									</div>
+									<div class="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
+								</div>
+							</div>
+
+							<!-- Empty -->
+							<div
+								v-else-if="!managerCandidates.length"
+								class="flex flex-col items-center justify-center py-12 text-center px-4"
+							>
+								<p class="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhân viên phù hợp</p>
+							</div>
+
+							<!-- List -->
+							<div v-else class="divide-y divide-gray-100 dark:divide-gray-800">
+								<div
+									v-for="emp in managerCandidates"
+									:key="emp.id"
+									class="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+								>
+									<div
+										class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
+									>
+										<span class="text-sm font-semibold text-brand-600 dark:text-brand-400">
+											{{ emp.fullName.charAt(0).toUpperCase() }}
+										</span>
+									</div>
+									<div class="flex-1 min-w-0">
+										<div class="flex items-center gap-2">
+											<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
+											<span
+												v-if="department?.manager?.id === emp.id"
+												class="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 font-medium"
+											>
+												Hiện tại
+											</span>
+										</div>
+										<p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{{ emp.email }}</p>
+									</div>
+									<CommonAppButton
+										size="sm"
+										:variant="department?.manager?.id === emp.id ? 'secondary' : 'primary'"
+										:loading="changingManagerId === emp.id"
+										:disabled="changingManagerId !== null || department?.manager?.id === emp.id"
+										@click="handleChangeManager(emp)"
+									>
+										{{ department?.manager?.id === emp.id ? 'Đang chọn' : 'Chọn' }}
+									</CommonAppButton>
+								</div>
+							</div>
+						</div>
+
+						<!-- Modal footer -->
+						<div class="px-5 py-3 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+							<CommonAppButton variant="outline" full-width @click="closeChangeManagerModal">Đóng</CommonAppButton>
 						</div>
 					</div>
 				</div>

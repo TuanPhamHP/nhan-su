@@ -49,5 +49,12 @@ export const useAttendanceService = () => {
 			});
 			return res.data;
 		},
+
+		async getPhotoPresignedUrl(fileUrl: string): Promise<string> {
+			const res = await authFetch<ApiResponse<{ presignedUrl: string }>>('/v1/attendance/photo-url', {
+				params: { fileUrl },
+			});
+			return res.data.presignedUrl;
+		},
 	};
 };

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AttendancePhoto from '~/components/modules/attendance/AttendancePhoto.vue';
+
 const props = defineProps<{
 	checkInPhotoUrl: string | null;
 	checkOutPhotoUrl: string | null;
@@ -59,46 +61,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 				<!-- Check-in photo -->
 				<div class="flex flex-col gap-2">
 					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ảnh check-in</p>
-					<div
-						class="aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center"
-					>
-						<button
-							v-if="props.checkInPhotoUrl"
-							class="w-full h-full"
-							@click="zoomUrl = props.checkInPhotoUrl"
-						>
-							<img :src="props.checkInPhotoUrl" alt="Ảnh check-in" class="w-full h-full object-cover hover:scale-105 transition-transform duration-200" />
-						</button>
-						<div v-else class="flex flex-col items-center gap-2 text-gray-400 dark:text-gray-600">
-							<svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-								<path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-							</svg>
-							<span class="text-xs">Chưa có ảnh</span>
-						</div>
+					<div class="aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+						<AttendancePhoto
+							:fileUrl="props.checkInPhotoUrl"
+							alt="Ảnh check-in"
+							size="full"
+							@click="zoomUrl = $event"
+						/>
 					</div>
 				</div>
 
 				<!-- Check-out photo -->
 				<div class="flex flex-col gap-2">
 					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ảnh check-out</p>
-					<div
-						class="aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center"
-					>
-						<button
-							v-if="props.checkOutPhotoUrl"
-							class="w-full h-full"
-							@click="zoomUrl = props.checkOutPhotoUrl"
-						>
-							<img :src="props.checkOutPhotoUrl" alt="Ảnh check-out" class="w-full h-full object-cover hover:scale-105 transition-transform duration-200" />
-						</button>
-						<div v-else class="flex flex-col items-center gap-2 text-gray-400 dark:text-gray-600">
-							<svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-								<path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-							</svg>
-							<span class="text-xs">Chưa có ảnh</span>
-						</div>
+					<div class="aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+						<AttendancePhoto
+							:fileUrl="props.checkOutPhotoUrl"
+							alt="Ảnh check-out"
+							size="full"
+							@click="zoomUrl = $event"
+						/>
 					</div>
 				</div>
 			</div>
@@ -119,7 +101,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 					class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 cursor-zoom-out"
 					@click="zoomUrl = null"
 				>
-					<img :src="zoomUrl" alt="Phóng to" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+					<img :src="zoomUrl" alt="Phóng to" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" referrerpolicy="no-referrer" />
 					<button
 						class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
 						@click.stop="zoomUrl = null"

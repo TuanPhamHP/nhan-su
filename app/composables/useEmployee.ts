@@ -1,5 +1,5 @@
 import { useEmployeeService } from '~/services/employee.service';
-import type { Employee, EmployeeSummary, EmployeeQueryParams, UpdateEmployeeDto } from '~/types/employee.types';
+import type { Employee, EmployeeSummary, EmployeeQueryParams, CreateEmployeeDto, UpdateEmployeeDto } from '~/types/employee.types';
 import type { PaginatedMeta } from '~/types/api.types';
 
 export function useEmployee() {
@@ -29,6 +29,10 @@ export function useEmployee() {
 		} finally {
 			detailLoading.value = false;
 		}
+	}
+
+	async function create(payload: CreateEmployeeDto): Promise<Employee> {
+		return service.create(payload);
 	}
 
 	async function deactivate(id: number) {
@@ -64,6 +68,7 @@ export function useEmployee() {
 		detailLoading,
 		fetchList,
 		fetchOne,
+		create,
 		deactivate,
 		update,
 	};

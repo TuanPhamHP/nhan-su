@@ -269,7 +269,7 @@
 						<p :class="valueCls">{{ currentEmployee.phone ?? '—' }}</p>
 					</div>
 					<div>
-						<p :class="labelCls">Vai trò</p>
+						<p :class="labelCls">Nhóm quyền</p>
 						<p :class="valueCls">{{ roleLabel }}</p>
 					</div>
 					<div>

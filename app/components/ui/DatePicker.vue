@@ -19,20 +19,94 @@ const emit = defineEmits<{
 	blur: [];
 }>();
 
-// ─── State ────────────────────────────────────────────────────────────────────
+// ─── Text input ───────────────────────────────────────────────────────────────
 
-const isOpen = ref(false);
-const triggerRef = ref<HTMLElement>();
+const wrapperRef = ref<HTMLElement>();
+const inputRef = ref<HTMLInputElement>();
 const calendarRef = ref<HTMLElement>();
-const dropdownStyle = ref<Record<string, string>>({});
 const inputId = computed(() => props.id ?? `ui-datepicker-${Math.random().toString(36).slice(2)}`);
+
+const textValue = ref('');
+
+watch(
+	() => props.modelValue,
+	val => {
+		if (val) {
+			const [y, m, d] = val.split('-');
+			textValue.value = `${d}/${m}/${y}`;
+		} else {
+			textValue.value = '';
+		}
+	},
+	{ immediate: true },
+);
+
+function onTextInput(e: Event) {
+	const raw = (e.target as HTMLInputElement).value;
+	const digits = raw.replace(/\D/g, '').slice(0, 8);
+	let formatted = '';
+	if (digits.length <= 2) {
+		formatted = digits;
+	} else if (digits.length <= 4) {
+		formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+	} else {
+		formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+	}
+	textValue.value = formatted;
+}
+
+function onTextKeydown(e: KeyboardEvent) {
+	if (e.key === 'Enter') {
+		e.preventDefault();
+		parseAndEmit();
+		close();
+	}
+	if (e.key === 'Escape') close();
+}
+
+function onTextBlur() {
+	parseAndEmit();
+	emit('blur');
+}
+
+function parseAndEmit() {
+	const val = textValue.value;
+	if (!val) {
+		emit('update:modelValue', undefined);
+		return;
+	}
+	const match = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+	if (match) {
+		const d = Number(match[1]);
+		const m = Number(match[2]);
+		const y = Number(match[3]);
+		const date = new Date(y, m - 1, d);
+		if (date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d) {
+			const ymd = toYMD(date);
+			emit('update:modelValue', ymd);
+			currentMonth.value = y * 12 + (m - 1);
+			return;
+		}
+	}
+	// Invalid input — reset display to last valid modelValue
+	if (props.modelValue) {
+		const [y, m, d] = props.modelValue.split('-');
+		textValue.value = `${d}/${m}/${y}`;
+	} else {
+		textValue.value = '';
+	}
+}
+
+function clearValue() {
+	textValue.value = '';
+	emit('update:modelValue', undefined);
+}
 
 // ─── Calendar navigation ──────────────────────────────────────────────────────
 
 const today = new Date();
 const todayStr = toYMD(today);
 
-// currentMonth encodes year*12 + month (0-based), same pattern as SingleDatePicker
 const initMonth = () => {
 	if (props.modelValue) {
 		const [y, m] = props.modelValue.split('-').map(Number);
@@ -41,6 +115,8 @@ const initMonth = () => {
 	return today.getFullYear() * 12 + today.getMonth();
 };
 
+const isOpen = ref(false);
+const dropdownStyle = ref<Record<string, string>>({});
 const currentMonth = ref(initMonth());
 const currentYear = computed(() => Math.floor(currentMonth.value / 12));
 const currentMonthIdx = computed(() => ((currentMonth.value % 12) + 12) % 12);
@@ -50,7 +126,6 @@ const MONTHS = [
 	'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12',
 ];
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-
 const monthLabel = computed(() => `${MONTHS[currentMonthIdx.value]}, ${currentYear.value}`);
 
 // ─── Calendar grid ────────────────────────────────────────────────────────────
@@ -65,11 +140,10 @@ interface DayCell {
 const cells = computed<DayCell[]>(() => {
 	const year = currentYear.value;
 	const month = currentMonthIdx.value;
-	const firstDay = new Date(year, month, 1).getDay(); // Sun=0
+	const firstDay = new Date(year, month, 1).getDay();
 	const daysInMonth = new Date(year, month + 1, 0).getDate();
 	const result: DayCell[] = [];
 
-	// Pad with prev-month days (Sunday-start, matching DAY_NAMES)
 	const prevDaysInMonth = new Date(year, month, 0).getDate();
 	for (let i = firstDay - 1; i >= 0; i--) {
 		const d = prevDaysInMonth - i;
@@ -77,31 +151,21 @@ const cells = computed<DayCell[]>(() => {
 		const py = month === 0 ? year - 1 : year;
 		result.push({ day: d, dateStr: toYMD(new Date(py, pm, d)), isCurrentMonth: false, isDisabled: true });
 	}
-
 	for (let d = 1; d <= daysInMonth; d++) {
 		const ds = toYMD(new Date(year, month, d));
 		const isDisabled = (!!props.min && ds < props.min) || (!!props.max && ds > props.max);
 		result.push({ day: d, dateStr: ds, isCurrentMonth: true, isDisabled });
 	}
-
-	// Pad to fill 6 rows × 7 cols = 42
 	const remaining = 42 - result.length;
 	for (let d = 1; d <= remaining; d++) {
 		const nm = month === 11 ? 0 : month + 1;
 		const ny = month === 11 ? year + 1 : year;
 		result.push({ day: d, dateStr: toYMD(new Date(ny, nm, d)), isCurrentMonth: false, isDisabled: true });
 	}
-
 	return result;
 });
 
 // ─── Selection ────────────────────────────────────────────────────────────────
-
-const displayValue = computed(() => {
-	if (!props.modelValue) return '';
-	const [y, m, d] = props.modelValue.split('-');
-	return `${d}/${m}/${y}`;
-});
 
 function isSelected(ds: string) {
 	return ds === props.modelValue;
@@ -113,11 +177,9 @@ function isToday(ds: string) {
 
 function onSelect(ds: string) {
 	emit('update:modelValue', ds);
+	const [y, m, d] = ds.split('-');
+	textValue.value = `${d}/${m}/${y}`;
 	close();
-}
-
-function clearValue() {
-	emit('update:modelValue', undefined);
 }
 
 function goToToday() {
@@ -127,7 +189,7 @@ function goToToday() {
 
 // ─── Open / close ─────────────────────────────────────────────────────────────
 
-function open() {
+function openCalendar() {
 	if (props.disabled) return;
 	currentMonth.value = initMonth();
 	updatePosition();
@@ -136,30 +198,37 @@ function open() {
 
 function close() {
 	isOpen.value = false;
-	emit('blur');
 }
 
+const DROPDOWN_W = 294;
+const DROPDOWN_H = 330;
+
 function updatePosition() {
-	if (!triggerRef.value) return;
-	const rect = triggerRef.value.getBoundingClientRect();
-	const DROPDOWN_W = 294;
-	const style: Record<string, string> = {
-		position: 'fixed',
-		top: `${rect.bottom + 4}px`,
-		zIndex: '9999',
-	};
-	// Prefer aligning left; flip right if not enough room
+	if (!wrapperRef.value) return;
+	const rect = wrapperRef.value.getBoundingClientRect();
+	const style: Record<string, string> = { position: 'fixed', zIndex: '9999' };
+
+	// Flip upward when not enough space below
+	const spaceBelow = window.innerHeight - rect.bottom - 4;
+	if (spaceBelow < DROPDOWN_H && rect.top >= DROPDOWN_H) {
+		style.bottom = `${window.innerHeight - rect.top + 4}px`;
+	} else {
+		style.top = `${rect.bottom + 4}px`;
+	}
+
+	// Prefer align-left, flip right if overflows
 	if (window.innerWidth - rect.left >= DROPDOWN_W) {
 		style.left = `${rect.left}px`;
 	} else {
 		style.right = `${window.innerWidth - rect.right}px`;
 	}
+
 	dropdownStyle.value = style;
 }
 
 function handleClickOutside(e: MouseEvent) {
 	const t = e.target as Node;
-	if (!triggerRef.value?.contains(t) && !calendarRef.value?.contains(t)) {
+	if (!wrapperRef.value?.contains(t) && !calendarRef.value?.contains(t)) {
 		isOpen.value = false;
 	}
 }
@@ -189,50 +258,60 @@ function toYMD(d: Date): string {
 			{{ label }}
 		</label>
 
-		<!-- Trigger -->
-		<div ref="triggerRef">
+		<!-- Input + calendar icon trigger -->
+		<div
+			ref="wrapperRef"
+			:class="[
+				'flex items-center w-full rounded-lg border transition-colors',
+				'bg-white dark:bg-gray-800',
+				disabled ? 'opacity-50 cursor-not-allowed' : '',
+				error
+					? 'border-red-400 focus-within:ring-2 focus-within:ring-red-300'
+					: isOpen
+						? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800'
+						: 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-200 dark:focus-within:ring-brand-800',
+			]"
+		>
+			<!-- Calendar icon button -->
 			<button
-				:id="inputId"
 				type="button"
+				tabindex="-1"
 				:disabled="disabled"
-				:class="[
-					'flex items-center w-full rounded-lg border px-3 py-2.5 text-sm text-left transition-colors gap-2',
-					'focus:outline-none focus:ring-2 focus:ring-offset-0',
-					'disabled:opacity-50 disabled:cursor-not-allowed',
-					error
-						? 'border-red-400 focus:ring-red-300 bg-white dark:bg-gray-800'
-						: isOpen
-							? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800 bg-white dark:bg-gray-800'
-							: 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500',
-				]"
-				@click="open"
+				class="pl-3 pr-2 py-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+				@click="openCalendar"
 			>
-				<!-- Calendar icon -->
-				<svg
-					class="w-4 h-4 text-gray-400 flex-shrink-0"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke="currentColor"
-					stroke-width="1.5"
-				>
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
 				</svg>
+			</button>
 
-				<span :class="['flex-1', displayValue ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500']">
-					{{ displayValue || placeholder }}
-				</span>
+			<!-- Text input -->
+			<input
+				:id="inputId"
+				ref="inputRef"
+				v-model="textValue"
+				type="text"
+				inputmode="numeric"
+				:placeholder="placeholder"
+				:disabled="disabled"
+				class="flex-1 py-2.5 pr-2 text-sm bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none min-w-0"
+				@input="onTextInput"
+				@keydown="onTextKeydown"
+				@blur="onTextBlur"
+				@focus="openCalendar"
+			/>
 
-				<!-- Clear button -->
-				<button
-					v-if="modelValue"
-					type="button"
-					class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-					@click.stop="clearValue"
-				>
-					<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-				</button>
+			<!-- Clear button -->
+			<button
+				v-if="modelValue || textValue"
+				type="button"
+				tabindex="-1"
+				class="pr-3 pl-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+				@click.stop="clearValue"
+			>
+				<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+				</svg>
 			</button>
 		</div>
 
@@ -250,7 +329,7 @@ function toYMD(d: Date): string {
 					v-if="isOpen"
 					ref="calendarRef"
 					:style="dropdownStyle"
-					class="w-[294px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden"
+					class="w-[294px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden"
 				>
 					<!-- Month header -->
 					<div class="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-700">
