@@ -21,7 +21,7 @@ export function useDepartment() {
 
 	// Kept for backward compatibility (e.g. employee page filter dropdown)
 	async function fetchAll() {
-		await fetchList({ limit: 100 });
+		await fetchList({ pagination: false });
 	}
 
 	return { departments, meta, loading, fetchList, fetchAll };

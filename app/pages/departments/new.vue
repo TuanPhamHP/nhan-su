@@ -1,75 +1,75 @@
 <script setup lang="ts">
-import { useForm } from 'vee-validate';
-import { useDepartmentService, useEmployeeService } from '~/services';
+	import { useForm } from 'vee-validate';
+	import { useDepartmentService, useEmployeeService } from '~/services';
 
-definePageMeta({ title: 'Thêm phòng ban' });
+	definePageMeta({ title: 'Thêm phòng ban' });
 
-const toast = useToast();
-const router = useRouter();
+	const toast = useToast();
+	const router = useRouter();
 
-const deptService = useDepartmentService();
-const empService = useEmployeeService();
+	const deptService = useDepartmentService();
+	const empService = useEmployeeService();
 
-// ─── Load managers for select ──────────────────────────────────────────────
+	// ─── Load managers for select ──────────────────────────────────────────────
 
-type ManagerOption = { value: number | undefined; label: string; sub?: string };
+	type ManagerOption = { value: number | undefined; label: string; sub?: string };
 
-const managerOptions = ref<ManagerOption[]>([{ value: undefined, label: '— Chưa chỉ định —' }]);
-const loadingManagers = ref(false);
+	const managerOptions = ref<ManagerOption[]>([{ value: undefined, label: '— Chưa chỉ định —' }]);
+	const loadingManagers = ref(false);
 
-onMounted(async () => {
-	loadingManagers.value = true;
-	try {
-		const res = await empService.findAll({ status: 'ACTIVE', limit: 100 });
-		managerOptions.value = [
-			{ value: undefined, label: '— Chưa chỉ định —' },
-			...res.data.map(e => ({
-				value: e.id as number | undefined,
-				label: e.fullName,
-				sub: `${e.employeeCode} · ${e.department?.name ?? 'Chưa có phòng ban'}`,
-			})),
-		];
-	} catch {
-		// non-blocking: manager select just stays empty
-	} finally {
-		loadingManagers.value = false;
-	}
-});
+	onMounted(async () => {
+		loadingManagers.value = true;
+		try {
+			const res = await empService.findAll({ status: 'ACTIVE', pagination: false });
+			managerOptions.value = [
+				{ value: undefined, label: '— Chưa chỉ định —' },
+				...res.data.map(e => ({
+					value: e.id as number | undefined,
+					label: e.fullName,
+					sub: `${e.employeeCode} · ${e.department?.name ?? 'Chưa có phòng ban'}`,
+				})),
+			];
+		} catch {
+			// non-blocking: manager select just stays empty
+		} finally {
+			loadingManagers.value = false;
+		}
+	});
 
-// ─── Form ──────────────────────────────────────────────────────────────────
+	// ─── Form ──────────────────────────────────────────────────────────────────
 
-const { handleSubmit, defineField, errors, isSubmitting, meta } = useForm<{
-	name: string;
-	managerId: number | undefined;
-}>({
-	validationSchema: {
-		name: (v: string) => {
-			if (!v || !v.trim()) return 'Vui lòng nhập tên phòng ban';
-			if (v.trim().length < 2) return 'Tối thiểu 2 ký tự';
-			if (v.trim().length > 100) return 'Tối đa 100 ký tự';
-			return true;
+	const { handleSubmit, defineField, errors, isSubmitting, meta } = useForm<{
+		name: string;
+		managerId: number | undefined;
+	}>({
+		validationSchema: {
+			name: (v: string) => {
+				if (!v || !v.trim()) return 'Vui lòng nhập tên phòng ban';
+				if (v.trim().length < 2) return 'Tối thiểu 2 ký tự';
+				if (v.trim().length > 100) return 'Tối đa 100 ký tự';
+				return true;
+			},
 		},
-	},
-});
+	});
 
-const [name, nameAttrs] = defineField('name');
-const [managerId] = defineField('managerId');
+	const [name, nameAttrs] = defineField('name');
+	const [managerId] = defineField('managerId');
 
-const nameLength = computed(() => (name.value?.length ?? 0));
+	const nameLength = computed(() => name.value?.length ?? 0);
 
-const onSubmit = handleSubmit(async values => {
-	try {
-		const created = await deptService.create({
-			name: values.name.trim(),
-			...(values.managerId ? { managerId: values.managerId } : {}),
-		});
-		toast.success('Tạo phòng ban thành công');
-		await router.push(`/departments/${created.id}`);
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : 'Có lỗi xảy ra, vui lòng thử lại';
-		toast.error(msg);
-	}
-});
+	const onSubmit = handleSubmit(async values => {
+		try {
+			const created = await deptService.create({
+				name: values.name.trim(),
+				...(values.managerId ? { managerId: values.managerId } : {}),
+			});
+			toast.success('Tạo phòng ban thành công');
+			await router.push(`/departments/${created.id}`);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : 'Có lỗi xảy ra, vui lòng thử lại';
+			toast.error(msg);
+		}
+	});
 </script>
 
 <template>
@@ -168,17 +168,9 @@ const onSubmit = handleSubmit(async values => {
 							@update:model-value="v => (managerId = v as number | undefined)"
 						/>
 						<div v-if="loadingManagers" class="absolute inset-y-0 right-8 flex items-center pointer-events-none">
-							<svg
-								class="animate-spin w-4 h-4 text-gray-400"
-								fill="none"
-								viewBox="0 0 24 24"
-							>
+							<svg class="animate-spin w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
 								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-								<path
-									class="opacity-75"
-									fill="currentColor"
-									d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-								/>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
 							</svg>
 						</div>
 					</div>

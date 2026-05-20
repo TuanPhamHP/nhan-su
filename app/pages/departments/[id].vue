@@ -164,7 +164,11 @@
 	async function fetchManagerCandidates() {
 		loadingManagerCandidates.value = true;
 		try {
-			const res = await empService.findAll({ departmentId: id, search: managerSearch.value || undefined, limit: 100 });
+			const res = await empService.findAll({
+				departmentId: id,
+				search: managerSearch.value || undefined,
+				pagination: false,
+			});
 			managerCandidates.value = res.data;
 		} finally {
 			loadingManagerCandidates.value = false;

@@ -34,7 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
 		setCookie(ACCESS_TOKEN_KEY, res.accessToken, 60 * 60 * 24);
 		setCookie(REFRESH_TOKEN_KEY, res.refreshToken, 60 * 60 * 24 * 7);
 		token.value = res.accessToken;
-		user.value = res.user;
+		user.value = { ...res.user, department: null };
 
 		await loadPermissions();
 		const { load: loadDirectory } = useDirectoryStore();
@@ -53,6 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
 				employeeCode: emp.employeeCode,
 				role: emp.role,
 				avatarUrl: emp.avatarUrl,
+				department: emp.department ?? null,
 			};
 			await loadPermissions();
 			const { load: loadDirectory } = useDirectoryStore();

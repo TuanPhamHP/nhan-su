@@ -48,5 +48,12 @@ export const useEmployeeService = () => {
 				body: { status: 'ACTIVE' },
 			});
 		},
+
+		async resetPassword(id: number): Promise<string> {
+			const res = await authFetch<ApiResponse<{ message: string }>>(`/v1/employees/${id}/reset-password`, {
+				method: 'POST',
+			});
+			return res.data.message;
+		},
 	};
 };

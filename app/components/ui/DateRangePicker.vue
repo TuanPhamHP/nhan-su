@@ -320,6 +320,18 @@
 			},
 			to: () => fmtDate(new Date()),
 		},
+		{
+			key: 'this_year',
+			label: 'Năm nay',
+			from: () => fmtDate(new Date(new Date().getFullYear(), 0, 1)),
+			to: () => fmtDate(new Date(new Date().getFullYear(), 11, 31)),
+		},
+		{
+			key: 'next_year',
+			label: 'Năm sau',
+			from: () => fmtDate(new Date(new Date().getFullYear() + 1, 0, 1)),
+			to: () => fmtDate(new Date(new Date().getFullYear() + 1, 11, 31)),
+		},
 		{ key: 'all', label: 'Tất cả', from: () => '', to: () => '' },
 	];
 

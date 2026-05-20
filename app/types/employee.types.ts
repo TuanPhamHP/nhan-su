@@ -21,6 +21,10 @@ export interface EmployeeSummary {
 	department: DepartmentSummary | null;
 	status: EmployeeStatus;
 	role: UserRole;
+	position: {
+		name: string;
+		id: number;
+	} | null;
 }
 
 export interface Employee {
@@ -76,4 +80,17 @@ export interface EmployeeQueryParams {
 	search?: string;
 	page?: number;
 	limit?: number;
+	pagination?: boolean;
+}
+
+export type DocumentType = 'ID_CARD' | 'CONTRACT' | 'OTHER';
+
+export interface EmployeeDocumentResponse {
+	id: number;
+	type: DocumentType;
+	typeLabel: string;
+	fileName: string;
+	fileUrl: string;
+	fileType: string;
+	uploadedAt: string;
 }

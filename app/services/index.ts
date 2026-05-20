@@ -13,3 +13,6 @@ export * from './public-holiday.service';
 export * from './leave-request.service';
 export * from './leave-type.service';
 export * from './leave-balance.service';
+export * from './employee-document.service';
+export * from './report.service';
+export * from './position.service';

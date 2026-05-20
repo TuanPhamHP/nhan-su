@@ -2,14 +2,30 @@
 import { useForm } from 'vee-validate';
 import type { CreateEmployeeDto, EmployeeGender } from '~/types/employee.types';
 import type { UserRole } from '~/types/auth.types';
+import { usePositionService } from '~/services/position.service';
+import type { PositionSummary } from '~/types/position.types';
 
 definePageMeta({ title: 'Thêm nhân viên mới' });
 
 const toast = useToast();
 const { create } = useEmployee();
 const { departments, fetchAll: fetchDepartments } = useDepartment();
+const positionService = usePositionService();
 
-onMounted(() => fetchDepartments());
+const positions = ref<PositionSummary[]>([]);
+
+async function loadPositions(departmentId?: number) {
+	try {
+		positions.value = await positionService.findActive(departmentId);
+	} catch {
+		positions.value = [];
+	}
+}
+
+onMounted(() => {
+	fetchDepartments();
+	loadPositions();
+});
 
 const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	fullName: string;
@@ -20,6 +36,7 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	joinDate: string;
 	role: UserRole;
 	departmentId: number | undefined;
+	positionId: number | undefined;
 	gender: EmployeeGender | '';
 	dateOfBirth: string;
 	address: string;
@@ -44,7 +61,13 @@ const [phone, phoneAttrs] = defineField('phone');
 const [joinDate] = defineField('joinDate');
 const [role] = defineField('role');
 const [departmentId] = defineField('departmentId');
+const [positionId] = defineField('positionId');
 const [gender] = defineField('gender');
+
+watch(departmentId, val => {
+	positionId.value = undefined;
+	loadPositions(val as number | undefined);
+});
 const [dateOfBirth] = defineField('dateOfBirth');
 const [address, addressAttrs] = defineField('address');
 
@@ -57,6 +80,7 @@ const onSubmit = handleSubmit(async values => {
 		role: values.role,
 		phone: values.phone || undefined,
 		departmentId: values.departmentId ? Number(values.departmentId) : undefined,
+		positionId: values.positionId ? Number(values.positionId) : undefined,
 		gender: (values.gender as EmployeeGender) || undefined,
 		dateOfBirth: values.dateOfBirth || undefined,
 		address: values.address || undefined,
@@ -87,6 +111,11 @@ const genderOptions = [
 const departmentOptions = computed(() => [
 	{ value: undefined as number | undefined, label: '-- Không thuộc phòng ban --' },
 	...departments.value.map(d => ({ value: d.id as number | undefined, label: d.name })),
+]);
+
+const positionOptions = computed(() => [
+	{ value: undefined as number | undefined, label: '-- Không có chức vụ --' },
+	...positions.value.map(p => ({ value: p.id as number | undefined, label: p.name })),
 ]);
 
 const inputCls =
@@ -195,6 +224,11 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 						<div>
 							<label :class="labelCls">Phòng ban</label>
 							<UiSelect v-model="departmentId" :options="departmentOptions" />
+						</div>
+
+						<div>
+							<label :class="labelCls">Chức vụ</label>
+							<UiSelect v-model="positionId" :options="positionOptions" />
 						</div>
 
 						<div>

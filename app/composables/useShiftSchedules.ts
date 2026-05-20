@@ -4,6 +4,8 @@ import type {
 	CalendarDayResponse,
 	AssignShiftDto,
 	BulkAssignShiftDto,
+	BulkRangeAssignShiftDto,
+	BulkRangeAssignResult,
 	SetDefaultShiftDto,
 	QueryShiftScheduleParams,
 	QueryCalendarParams,
@@ -44,6 +46,10 @@ export function useShiftSchedules() {
 		await service.bulkAssign(dto);
 	}
 
+	async function bulkAssignRange(dto: BulkRangeAssignShiftDto): Promise<BulkRangeAssignResult> {
+		return service.bulkAssignRange(dto);
+	}
+
 	async function removeShift(employeeId: number, date: string): Promise<void> {
 		await service.remove(employeeId, date);
 	}
@@ -60,6 +66,7 @@ export function useShiftSchedules() {
 		fetchMySchedule,
 		assignShift,
 		bulkAssign,
+		bulkAssignRange,
 		removeShift,
 		setDefaultShift,
 	};

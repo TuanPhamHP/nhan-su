@@ -16,9 +16,13 @@
 	definePageMeta({ title: 'Chấm công' });
 
 	const toast = useToast();
+	const { user } = useAuth();
 	const attendanceService = useAttendanceService();
 	const departmentService = useDepartmentService();
 	const employeeService = useEmployeeService();
+
+	const isManager = computed(() => user.value?.role === 'MANAGER');
+	const managerDepartmentId = computed(() => user.value?.department?.id);
 
 	// ─── Tabs ───────────────────────────────────────────────────────────────
 	type Tab = 'today' | 'history';
@@ -29,7 +33,7 @@
 
 	async function loadDepartments() {
 		try {
-			const res = await departmentService.findAll({ isActive: true, limit: 100 });
+			const res = await departmentService.findAll({ isActive: true, pagination: false });
 			departments.value = res.data;
 		} catch {
 			// non-critical, ignore silently
@@ -41,7 +45,7 @@
 
 	async function loadEmployees() {
 		try {
-			const res = await employeeService.findAll({ limit: 100 });
+			const res = await employeeService.findAll({ pagination: false });
 			employees.value = res.data;
 		} catch {
 			// non-critical, ignore silently
@@ -73,7 +77,7 @@
 	// ─── Tab 1: Today ────────────────────────────────────────────────────────
 	const todayRecords = ref<AttendanceRecordDetail[]>([]);
 	const todayLoading = ref(false);
-	const todayDepartmentId = ref<number | undefined>(undefined);
+	const todayDepartmentId = ref<number | undefined>(isManager.value ? managerDepartmentId.value : undefined);
 	const todaySearch = ref('');
 	let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -118,7 +122,7 @@
 	const historyFilter = reactive({
 		startDate: firstDayOfMonth,
 		endDate: today,
-		departmentId: undefined as number | undefined,
+		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
 		status: undefined as AttendanceStatus | undefined,
 		employeeId: undefined as number | undefined,
 		page: 1,
@@ -235,7 +239,8 @@
 				<!-- Department dropdown -->
 				<select
 					v-model="todayDepartmentId"
-					class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors w-full sm:w-48"
+					:disabled="isManager"
+					class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors w-full sm:w-48 disabled:opacity-60 disabled:cursor-not-allowed"
 				>
 					<option :value="undefined">Tất cả phòng ban</option>
 					<option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
@@ -383,25 +388,19 @@
 			<!-- Filter bar -->
 			<div class="flex flex-col sm:flex-row flex-wrap gap-3">
 				<!-- Date range -->
-				<div class="flex items-center gap-2">
-					<input
-						v-model="historyFilter.startDate"
-						type="date"
-						class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-					/>
-					<span class="text-gray-400 text-sm">→</span>
-					<input
-						v-model="historyFilter.endDate"
-						type="date"
-						class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-					/>
-				</div>
+				<UiDateRangePicker
+					:from-date="historyFilter.startDate || ''"
+					:to-date="historyFilter.endDate || ''"
+					@update:from-date="historyFilter.startDate = $event"
+					@update:to-date="historyFilter.endDate = $event"
+				/>
 
 				<!-- Department -->
 				<div class="w-full sm:w-44">
 					<UiSelect
 						:model-value="historyFilter.departmentId"
 						:options="departmentOptions"
+						:disabled="isManager"
 						placeholder="Tất cả phòng ban"
 						@update:model-value="historyFilter.departmentId = $event as number | undefined"
 					/>

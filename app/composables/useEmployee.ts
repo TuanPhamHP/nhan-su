@@ -43,6 +43,10 @@ export function useEmployee() {
 		}
 	}
 
+	async function resetPassword(id: number): Promise<string> {
+		return service.resetPassword(id);
+	}
+
 	async function update(id: number, payload: UpdateEmployeeDto): Promise<Employee> {
 		const updated = await service.update(id, payload);
 		if (currentEmployee.value?.id === id) {
@@ -71,5 +75,6 @@ export function useEmployee() {
 		create,
 		deactivate,
 		update,
+		resetPassword,
 	};
 }

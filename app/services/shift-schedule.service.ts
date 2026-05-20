@@ -5,6 +5,8 @@ import type {
 	CalendarDayResponse,
 	AssignShiftDto,
 	BulkAssignShiftDto,
+	BulkRangeAssignShiftDto,
+	BulkRangeAssignResult,
 	SetDefaultShiftDto,
 	QueryShiftScheduleParams,
 	QueryCalendarParams,
@@ -42,6 +44,14 @@ export const useShiftScheduleService = () => {
 				method: 'POST',
 				body: dto,
 			});
+		},
+
+		async bulkAssignRange(dto: BulkRangeAssignShiftDto): Promise<BulkRangeAssignResult> {
+			const res = await authFetch<ApiResponse<BulkRangeAssignResult>>('/v1/shift-schedules/bulk-range', {
+				method: 'POST',
+				body: dto,
+			});
+			return res.data;
 		},
 
 		setDefault(employeeId: number, dto: SetDefaultShiftDto): Promise<void> {

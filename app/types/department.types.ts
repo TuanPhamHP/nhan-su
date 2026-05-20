@@ -36,4 +36,5 @@ export interface DepartmentQueryParams {
 	isActive?: boolean;
 	page?: number;
 	limit?: number;
+	pagination?: boolean;
 }

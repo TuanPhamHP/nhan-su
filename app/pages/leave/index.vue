@@ -1,309 +1,323 @@
 <script setup lang="ts">
-import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { useLeaveRequestService } from '~/services/leave-request.service';
-import { useLeaveTypeService } from '~/services/leave-type.service';
-import { useLeaveBalanceService } from '~/services/leave-balance.service';
-import { useDepartmentService } from '~/services/department.service';
-import LeaveStatusBadge from '~/components/modules/leave/LeaveStatusBadge.vue';
-import RejectModal from '~/components/modules/leave/RejectModal.vue';
-import LeaveDetailModal from '~/components/modules/leave/LeaveDetailModal.vue';
-import LeaveTypeFormModal from '~/components/modules/leave/LeaveTypeFormModal.vue';
-import BulkInitModal from '~/components/modules/leave/BulkInitModal.vue';
-import AddBalanceModal from '~/components/modules/leave/AddBalanceModal.vue';
-import type { LeaveRequest, LeaveType, LeaveBalance, LeaveRequestSummary, LeaveStatus, QueryLeaveRequestParams, QueryLeaveBalanceParams } from '~/types/leave.types';
-import type { DepartmentSummary } from '~/types/department.types';
-import type { PaginatedMeta } from '~/types/api.types';
-import type { SelectOption } from '~/components/ui/Select.vue';
+	import { format, startOfMonth, endOfMonth } from 'date-fns';
+	import { useLeaveRequestService } from '~/services/leave-request.service';
+	import { useLeaveTypeService } from '~/services/leave-type.service';
+	import { useLeaveBalanceService } from '~/services/leave-balance.service';
+	import { useDepartmentService } from '~/services/department.service';
+	import LeaveStatusBadge from '~/components/modules/leave/LeaveStatusBadge.vue';
+	import RejectModal from '~/components/modules/leave/RejectModal.vue';
+	import LeaveDetailModal from '~/components/modules/leave/LeaveDetailModal.vue';
+	import LeaveTypeFormModal from '~/components/modules/leave/LeaveTypeFormModal.vue';
+	import BulkInitModal from '~/components/modules/leave/BulkInitModal.vue';
+	import AddBalanceModal from '~/components/modules/leave/AddBalanceModal.vue';
+	import type {
+		LeaveRequest,
+		LeaveType,
+		LeaveBalance,
+		LeaveRequestSummary,
+		LeaveStatus,
+		QueryLeaveRequestParams,
+		QueryLeaveBalanceParams,
+	} from '~/types/leave.types';
+	import type { DepartmentSummary } from '~/types/department.types';
+	import type { PaginatedMeta } from '~/types/api.types';
+	import type { SelectOption } from '~/components/ui/Select.vue';
 
-definePageMeta({ title: 'Nghỉ phép' });
+	definePageMeta({ title: 'Nghỉ phép' });
 
-const toast = useToast();
-const leaveRequestService = useLeaveRequestService();
-const leaveTypeService = useLeaveTypeService();
-const leaveBalanceService = useLeaveBalanceService();
-const departmentService = useDepartmentService();
+	const toast = useToast();
+	const { user } = useAuth();
+	const leaveRequestService = useLeaveRequestService();
+	const leaveTypeService = useLeaveTypeService();
+	const leaveBalanceService = useLeaveBalanceService();
+	const departmentService = useDepartmentService();
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
-type Tab = 'requests' | 'types' | 'balances';
-const activeTab = ref<Tab>('requests');
+	// ─── Tabs ─────────────────────────────────────────────────────────────────────
+	type Tab = 'requests' | 'types' | 'balances';
+	const activeTab = ref<Tab>('requests');
 
-// ─── Shared: leave types ──────────────────────────────────────────────────────
-const leaveTypes = ref<LeaveType[]>([]);
+	// ─── Shared: leave types ──────────────────────────────────────────────────────
+	const leaveTypes = ref<LeaveType[]>([]);
 
-async function loadLeaveTypes() {
-	try {
-		leaveTypes.value = await leaveTypeService.findAll();
-	} catch {
-		// non-critical
+	async function loadLeaveTypes() {
+		try {
+			leaveTypes.value = await leaveTypeService.findAll();
+		} catch {
+			// non-critical
+		}
 	}
-}
 
-// ─── Shared: departments ──────────────────────────────────────────────────────
-const departments = ref<DepartmentSummary[]>([]);
+	// ─── Shared: departments ──────────────────────────────────────────────────────
+	const departments = ref<DepartmentSummary[]>([]);
 
-async function loadDepartments() {
-	try {
-		const res = await departmentService.findAll({ isActive: true, limit: 100 });
-		departments.value = res.data;
-	} catch {
-		// non-critical
+	async function loadDepartments() {
+		try {
+			const res = await departmentService.findAll({ isActive: true, pagination: false });
+			departments.value = res.data;
+		} catch {
+			// non-critical
+		}
 	}
-}
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 1 — ĐƠN NGHỈ PHÉP
-// ═══════════════════════════════════════════════════════════════════════════════
-const requests = ref<LeaveRequest[]>([]);
-const requestsLoading = ref(false);
-const requestsMeta = ref<PaginatedMeta | null>(null);
-const summary = ref<LeaveRequestSummary | null>(null);
+	// ═══════════════════════════════════════════════════════════════════════════════
+	// TAB 1 — ĐƠN NGHỈ PHÉP
+	// ═══════════════════════════════════════════════════════════════════════════════
+	const requests = ref<LeaveRequest[]>([]);
+	const requestsLoading = ref(false);
+	const requestsMeta = ref<PaginatedMeta | null>(null);
+	const summary = ref<LeaveRequestSummary | null>(null);
 
-const today = new Date();
-const requestFilter = reactive({
-	departmentId: undefined as number | undefined,
-	leaveTypeId: undefined as number | undefined,
-	status: undefined as LeaveStatus | undefined,
-	startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
-	endDate: format(endOfMonth(today), 'yyyy-MM-dd'),
-	page: 1,
-});
+	const today = new Date();
+	const requestFilter = reactive({
+		departmentId: undefined as number | undefined,
+		leaveTypeId: undefined as number | undefined,
+		status: undefined as LeaveStatus | undefined,
+		startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
+		endDate: format(endOfMonth(today), 'yyyy-MM-dd'),
+		page: 1,
+	});
 
-async function fetchSummary() {
-	try {
-		summary.value = await leaveRequestService.getSummary();
-	} catch {
-		// non-critical — summary cards hidden if null
+	async function fetchSummary() {
+		try {
+			summary.value = await leaveRequestService.getSummary();
+		} catch {
+			// non-critical — summary cards hidden if null
+		}
 	}
-}
 
-async function fetchRequests() {
-	requestsLoading.value = true;
-	try {
-		const params: QueryLeaveRequestParams = {
-			departmentId: requestFilter.departmentId,
-			leaveTypeId: requestFilter.leaveTypeId,
-			status: requestFilter.status,
-			startDate: requestFilter.startDate || undefined,
-			endDate: requestFilter.endDate || undefined,
-			page: requestFilter.page,
-			limit: 20,
-		};
-		const res = await leaveRequestService.findAll(params);
-		requests.value = res.data;
-		requestsMeta.value = res.meta;
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách đơn nghỉ phép');
-	} finally {
-		requestsLoading.value = false;
+	async function fetchRequests() {
+		requestsLoading.value = true;
+		try {
+			const params: QueryLeaveRequestParams = {
+				departmentId: requestFilter.departmentId,
+				leaveTypeId: requestFilter.leaveTypeId,
+				status: requestFilter.status,
+				startDate: requestFilter.startDate || undefined,
+				endDate: requestFilter.endDate || undefined,
+				page: requestFilter.page,
+				limit: 20,
+			};
+			const res = await leaveRequestService.findAll(params);
+			requests.value = res.data;
+			requestsMeta.value = res.meta;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách đơn nghỉ phép');
+		} finally {
+			requestsLoading.value = false;
+		}
 	}
-}
 
-function applyRequestFilter() {
-	requestFilter.page = 1;
-	fetchRequests();
-}
+	function applyRequestFilter() {
+		requestFilter.page = 1;
+		fetchRequests();
+	}
 
-// ─── Approve ──────────────────────────────────────────────────────────────────
-const approvingId = ref<number | null>(null);
+	// ─── Approve ──────────────────────────────────────────────────────────────────
+	const approvingId = ref<number | null>(null);
 
-async function handleApprove(req: LeaveRequest) {
-	if (!confirm(`Duyệt đơn nghỉ phép của ${req.employee.fullName}?`)) return;
-	approvingId.value = req.id;
-	try {
-		const updated = await leaveRequestService.approve(req.id);
-		const idx = requests.value.findIndex(r => r.id === updated.id);
-		if (idx !== -1) requests.value.splice(idx, 1, updated);
-		toast.success('Đã duyệt đơn nghỉ phép');
+	async function handleApprove(req: LeaveRequest) {
+		if (!confirm(`Duyệt đơn nghỉ phép của ${req.employee.fullName}?`)) return;
+		approvingId.value = req.id;
+		try {
+			const updated = await leaveRequestService.approve(req.id);
+			const idx = requests.value.findIndex(r => r.id === updated.id);
+			if (idx !== -1) requests.value.splice(idx, 1, updated);
+			toast.success('Đã duyệt đơn nghỉ phép');
+			fetchSummary();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+		} finally {
+			approvingId.value = null;
+		}
+	}
+
+	// ─── Reject ───────────────────────────────────────────────────────────────────
+	const rejectTarget = ref<LeaveRequest | null>(null);
+
+	function onRejected() {
+		rejectTarget.value = null;
+		fetchRequests();
 		fetchSummary();
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-	} finally {
-		approvingId.value = null;
 	}
-}
 
-// ─── Reject ───────────────────────────────────────────────────────────────────
-const rejectTarget = ref<LeaveRequest | null>(null);
+	// ─── Detail ───────────────────────────────────────────────────────────────────
+	const detailTarget = ref<LeaveRequest | null>(null);
 
-function onRejected() {
-	rejectTarget.value = null;
-	fetchRequests();
-	fetchSummary();
-}
+	// ─── Helpers ──────────────────────────────────────────────────────────────────
+	function formatDate(d: string) {
+		return format(new Date(d), 'dd/MM/yyyy');
+	}
 
-// ─── Detail ───────────────────────────────────────────────────────────────────
-const detailTarget = ref<LeaveRequest | null>(null);
+	function truncate(text: string | null, len = 60) {
+		if (!text) return '—';
+		return text.length > len ? text.slice(0, len) + '…' : text;
+	}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatDate(d: string) {
-	return format(new Date(d), 'dd/MM/yyyy');
-}
+	const departmentOptions = computed<SelectOption[]>(() => [
+		{ value: undefined, label: 'Tất cả phòng ban' },
+		...departments.value.map(d => ({ value: d.id, label: d.name })),
+	]);
 
-function truncate(text: string | null, len = 60) {
-	if (!text) return '—';
-	return text.length > len ? text.slice(0, len) + '…' : text;
-}
+	const leaveTypeOptions = computed<SelectOption[]>(() => [
+		{ value: undefined, label: 'Tất cả loại đơn' },
+		...leaveTypes.value.map(t => ({ value: t.id, label: t.name })),
+	]);
 
-const departmentOptions = computed<SelectOption[]>(() => [
-	{ value: undefined, label: 'Tất cả phòng ban' },
-	...departments.value.map(d => ({ value: d.id, label: d.name })),
-]);
+	const statusOptions: SelectOption[] = [
+		{ value: undefined, label: 'Tất cả trạng thái' },
+		{ value: 'PENDING', label: 'Chờ duyệt' },
+		{ value: 'APPROVED', label: 'Đã duyệt' },
+		{ value: 'REJECTED', label: 'Từ chối' },
+		{ value: 'CANCELLED', label: 'Đã thu hồi' },
+	];
 
-const leaveTypeOptions = computed<SelectOption[]>(() => [
-	{ value: undefined, label: 'Tất cả loại đơn' },
-	...leaveTypes.value.map(t => ({ value: t.id, label: t.name })),
-]);
+	// ═══════════════════════════════════════════════════════════════════════════════
+	// TAB 2 — LOẠI PHÉP
+	// ═══════════════════════════════════════════════════════════════════════════════
+	const leaveTypesLoading = ref(false);
+	const leaveTypeFormTarget = ref<LeaveType | undefined>(undefined);
+	const showLeaveTypeForm = ref(false);
 
-const statusOptions: SelectOption[] = [
-	{ value: undefined, label: 'Tất cả trạng thái' },
-	{ value: 'PENDING', label: 'Chờ duyệt' },
-	{ value: 'APPROVED', label: 'Đã duyệt' },
-	{ value: 'REJECTED', label: 'Từ chối' },
-	{ value: 'CANCELLED', label: 'Đã thu hồi' },
-];
+	function openCreateLeaveType() {
+		leaveTypeFormTarget.value = undefined;
+		showLeaveTypeForm.value = true;
+	}
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 2 — LOẠI PHÉP
-// ═══════════════════════════════════════════════════════════════════════════════
-const leaveTypesLoading = ref(false);
-const leaveTypeFormTarget = ref<LeaveType | undefined>(undefined);
-const showLeaveTypeForm = ref(false);
+	function openEditLeaveType(lt: LeaveType) {
+		leaveTypeFormTarget.value = lt;
+		showLeaveTypeForm.value = true;
+	}
 
-function openCreateLeaveType() {
-	leaveTypeFormTarget.value = undefined;
-	showLeaveTypeForm.value = true;
-}
-
-function openEditLeaveType(lt: LeaveType) {
-	leaveTypeFormTarget.value = lt;
-	showLeaveTypeForm.value = true;
-}
-
-function onLeaveTypeSaved(lt: LeaveType) {
-	showLeaveTypeForm.value = false;
-	const idx = leaveTypes.value.findIndex(t => t.id === lt.id);
-	if (idx !== -1) leaveTypes.value.splice(idx, 1, lt);
-	else leaveTypes.value.push(lt);
-}
-
-async function handleDeactivateLeaveType(lt: LeaveType) {
-	const action = lt.isActive ? 'vô hiệu hóa' : 'kích hoạt lại';
-	if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} loại phép "${lt.name}"?\n\nLoại phép này sẽ không còn dùng được. Các đơn đang pending/approved sẽ không bị ảnh hưởng.`)) return;
-	leaveTypesLoading.value = true;
-	try {
-		await leaveTypeService.deactivate(lt.id);
+	function onLeaveTypeSaved(lt: LeaveType) {
+		showLeaveTypeForm.value = false;
 		const idx = leaveTypes.value.findIndex(t => t.id === lt.id);
-		if (idx !== -1) leaveTypes.value[idx].isActive = false;
-		toast.success(`Đã ${action} loại phép`);
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-	} finally {
-		leaveTypesLoading.value = false;
+		if (idx !== -1) leaveTypes.value.splice(idx, 1, lt);
+		else leaveTypes.value.push(lt);
 	}
-}
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 3 — SỐ DƯ PHÉP
-// ═══════════════════════════════════════════════════════════════════════════════
-const balances = ref<LeaveBalance[]>([]);
-const balancesLoading = ref(false);
-const balancesMeta = ref<PaginatedMeta | null>(null);
-const currentYear = new Date().getFullYear();
-
-const balanceFilter = reactive({
-	year: currentYear,
-	leaveTypeId: undefined as number | undefined,
-	page: 1,
-});
-
-const showBulkInit = ref(false);
-const showAddBalance = ref(false);
-
-const editingBalanceId = ref<number | null>(null);
-const editingDays = ref<number>(0);
-
-const limitedLeaveTypes = computed(() => leaveTypes.value.filter(t => t.daysPerYear !== null));
-
-const balanceLeaveTypeOptions = computed<SelectOption[]>(() => [
-	{ value: undefined, label: 'Tất cả loại phép' },
-	...limitedLeaveTypes.value.map(t => ({ value: t.id, label: t.name })),
-]);
-
-const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
-
-async function fetchBalances() {
-	balancesLoading.value = true;
-	try {
-		const params: QueryLeaveBalanceParams = {
-			year: balanceFilter.year,
-			leaveTypeId: balanceFilter.leaveTypeId,
-			page: balanceFilter.page,
-			limit: 20,
-		};
-		const res = await leaveBalanceService.findAll(params);
-		balances.value = res.data;
-		balancesMeta.value = res.meta;
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Lỗi tải số dư phép');
-	} finally {
-		balancesLoading.value = false;
+	async function handleDeactivateLeaveType(lt: LeaveType) {
+		const action = lt.isActive ? 'vô hiệu hóa' : 'kích hoạt lại';
+		if (
+			!confirm(
+				`${action.charAt(0).toUpperCase() + action.slice(1)} loại phép "${lt.name}"?\n\nLoại phép này sẽ không còn dùng được. Các đơn đang pending/approved sẽ không bị ảnh hưởng.`,
+			)
+		)
+			return;
+		leaveTypesLoading.value = true;
+		try {
+			await leaveTypeService.deactivate(lt.id);
+			const idx = leaveTypes.value.findIndex(t => t.id === lt.id);
+			if (idx !== -1) leaveTypes.value[idx].isActive = false;
+			toast.success(`Đã ${action} loại phép`);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+		} finally {
+			leaveTypesLoading.value = false;
+		}
 	}
-}
 
-function applyBalanceFilter() {
-	balanceFilter.page = 1;
-	fetchBalances();
-}
+	// ═══════════════════════════════════════════════════════════════════════════════
+	// TAB 3 — SỐ DƯ PHÉP
+	// ═══════════════════════════════════════════════════════════════════════════════
+	const balances = ref<LeaveBalance[]>([]);
+	const balancesLoading = ref(false);
+	const balancesMeta = ref<PaginatedMeta | null>(null);
+	const currentYear = new Date().getFullYear();
 
-function startEditBalance(balance: LeaveBalance) {
-	editingBalanceId.value = balance.id;
-	editingDays.value = balance.totalDays;
-}
+	const balanceFilter = reactive({
+		year: currentYear,
+		leaveTypeId: undefined as number | undefined,
+		page: 1,
+	});
 
-function cancelEditBalance() {
-	editingBalanceId.value = null;
-}
+	const showBulkInit = ref(false);
+	const showAddBalance = ref(false);
 
-async function saveEditBalance(balance: LeaveBalance) {
-	try {
-		const updated = await leaveBalanceService.update(balance.id, { totalDays: editingDays.value });
-		const idx = balances.value.findIndex(b => b.id === updated.id);
-		if (idx !== -1) balances.value.splice(idx, 1, updated);
+	const editingBalanceId = ref<number | null>(null);
+	const editingDays = ref<number>(0);
+
+	const limitedLeaveTypes = computed(() => leaveTypes.value.filter(t => t.daysPerYear !== null));
+
+	const balanceLeaveTypeOptions = computed<SelectOption[]>(() => [
+		{ value: undefined, label: 'Tất cả loại phép' },
+		...limitedLeaveTypes.value.map(t => ({ value: t.id, label: t.name })),
+	]);
+
+	const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
+
+	async function fetchBalances() {
+		balancesLoading.value = true;
+		try {
+			const params: QueryLeaveBalanceParams = {
+				year: balanceFilter.year,
+				leaveTypeId: balanceFilter.leaveTypeId,
+				page: balanceFilter.page,
+				limit: 20,
+			};
+			const res = await leaveBalanceService.findAll(params);
+			balances.value = res.data;
+			balancesMeta.value = res.meta;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Lỗi tải số dư phép');
+		} finally {
+			balancesLoading.value = false;
+		}
+	}
+
+	function applyBalanceFilter() {
+		balanceFilter.page = 1;
+		fetchBalances();
+	}
+
+	function startEditBalance(balance: LeaveBalance) {
+		editingBalanceId.value = balance.id;
+		editingDays.value = balance.totalDays;
+	}
+
+	function cancelEditBalance() {
 		editingBalanceId.value = null;
-		toast.success('Đã cập nhật số dư phép');
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 	}
-}
 
-function onBulkInitDone(created: number, skipped: number) {
-	showBulkInit.value = false;
-	fetchBalances();
-	toast.success(`Đã tạo ${created} balance mới, bỏ qua ${skipped} đã tồn tại`);
-}
+	async function saveEditBalance(balance: LeaveBalance) {
+		try {
+			const updated = await leaveBalanceService.update(balance.id, { totalDays: editingDays.value });
+			const idx = balances.value.findIndex(b => b.id === updated.id);
+			if (idx !== -1) balances.value.splice(idx, 1, updated);
+			editingBalanceId.value = null;
+			toast.success('Đã cập nhật số dư phép');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+		}
+	}
 
-function onBalanceCreated(balance: LeaveBalance) {
-	showAddBalance.value = false;
-	balances.value.unshift(balance);
-}
+	function onBulkInitDone(created: number, skipped: number) {
+		showBulkInit.value = false;
+		fetchBalances();
+		toast.success(`Đã tạo ${created} balance mới, bỏ qua ${skipped} đã tồn tại`);
+	}
 
-function remainingClass(days: number): string {
-	if (days < 2) return 'text-red-600 dark:text-red-400 font-semibold';
-	if (days <= 5) return 'text-orange-500 dark:text-orange-400 font-medium';
-	return 'text-green-600 dark:text-green-400 font-medium';
-}
+	function onBalanceCreated(balance: LeaveBalance) {
+		showAddBalance.value = false;
+		balances.value.unshift(balance);
+	}
 
-// ─── Lifecycle ────────────────────────────────────────────────────────────────
-onMounted(() => {
-	loadLeaveTypes();
-	loadDepartments();
-	fetchRequests();
-	fetchSummary();
-});
+	function remainingClass(days: number): string {
+		if (days < 2) return 'text-red-600 dark:text-red-400 font-semibold';
+		if (days <= 5) return 'text-orange-500 dark:text-orange-400 font-medium';
+		return 'text-green-600 dark:text-green-400 font-medium';
+	}
 
-watch(activeTab, tab => {
-	if (tab === 'balances' && balances.value.length === 0) fetchBalances();
-});
+	// ─── Lifecycle ────────────────────────────────────────────────────────────────
+	onMounted(() => {
+		loadLeaveTypes();
+		loadDepartments();
+		fetchRequests();
+		fetchSummary();
+	});
+
+	watch(activeTab, tab => {
+		if (tab === 'balances' && balances.value.length === 0) fetchBalances();
+	});
 </script>
 
 <template>
@@ -339,9 +353,19 @@ watch(activeTab, tab => {
 		<template v-if="activeTab === 'requests'">
 			<!-- Summary cards -->
 			<div v-if="summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-				<div class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
-					<div class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0">
-						<svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<div
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+				>
+					<div
+						class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0"
+					>
+						<svg
+							class="w-4 h-4 text-orange-600 dark:text-orange-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+						>
 							<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
 						</svg>
 					</div>
@@ -351,10 +375,24 @@ watch(activeTab, tab => {
 					</div>
 				</div>
 
-				<div class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
-					<div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-						<svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+				<div
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+				>
+					<div
+						class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0"
+					>
+						<svg
+							class="w-4 h-4 text-green-600 dark:text-green-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
 						</svg>
 					</div>
 					<div>
@@ -363,9 +401,17 @@ watch(activeTab, tab => {
 					</div>
 				</div>
 
-				<div class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+				<div
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+				>
 					<div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-						<svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<svg
+							class="w-4 h-4 text-red-600 dark:text-red-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+						>
 							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 						</svg>
 					</div>
@@ -375,9 +421,17 @@ watch(activeTab, tab => {
 					</div>
 				</div>
 
-				<div class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+				<div
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+				>
 					<div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-						<svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<svg
+							class="w-4 h-4 text-gray-500 dark:text-gray-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+						>
 							<path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
 						</svg>
 					</div>
@@ -429,7 +483,11 @@ watch(activeTab, tab => {
 				</div>
 				<CommonAppButton :loading="requestsLoading" @click="applyRequestFilter">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+						/>
 					</svg>
 					Tìm kiếm
 				</CommonAppButton>
@@ -441,12 +499,36 @@ watch(activeTab, tab => {
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nhân viên</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Loại phép</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thời gian</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Lý do</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
-								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thao tác</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Nhân viên
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Loại phép
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Thời gian
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Lý do
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Trạng thái
+								</th>
+								<th
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Thao tác
+								</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -524,7 +606,7 @@ watch(activeTab, tab => {
 								<!-- Thao tác -->
 								<td class="px-4 py-3">
 									<div class="flex items-center justify-end gap-1.5">
-										<template v-if="req.status === 'PENDING'">
+										<template v-if="req.status === 'PENDING' && req.assignedApprover?.id === user?.id">
 											<CommonAppButton
 												size="sm"
 												variant="primary"
@@ -542,7 +624,11 @@ watch(activeTab, tab => {
 											@click="detailTarget = req"
 										>
 											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+												/>
 												<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 											</svg>
 										</button>
@@ -562,7 +648,12 @@ watch(activeTab, tab => {
 				<CommonAppPagination
 					:current-page="requestFilter.page"
 					:total-pages="requestsMeta.totalPages"
-					@update:current-page="p => { requestFilter.page = p; fetchRequests(); }"
+					@update:current-page="
+						p => {
+							requestFilter.page = p;
+							fetchRequests();
+						}
+					"
 				/>
 			</div>
 		</template>
@@ -586,12 +677,36 @@ watch(activeTab, tab => {
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tên loại phép</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mã</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ngày/năm</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Có lương</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
-								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thao tác</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Tên loại phép
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Mã
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Ngày/năm
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Có lương
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Trạng thái
+								</th>
+								<th
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Thao tác
+								</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -607,7 +722,9 @@ watch(activeTab, tab => {
 							>
 								<td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ lt.name }}</td>
 								<td class="px-4 py-3">
-									<span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-mono text-xs">
+									<span
+										class="inline-flex items-center px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-mono text-xs"
+									>
 										{{ lt.code }}
 									</span>
 								</td>
@@ -625,7 +742,14 @@ watch(activeTab, tab => {
 									>
 										<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
 									</svg>
-									<svg v-else class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<svg
+										v-else
+										class="w-5 h-5 text-red-400"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
 										<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 									</svg>
 								</td>
@@ -649,7 +773,11 @@ watch(activeTab, tab => {
 											@click="openEditLeaveType(lt)"
 										>
 											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
+												/>
 											</svg>
 										</button>
 										<button
@@ -659,7 +787,11 @@ watch(activeTab, tab => {
 											@click="handleDeactivateLeaveType(lt)"
 										>
 											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+												/>
 											</svg>
 										</button>
 									</div>
@@ -675,9 +807,7 @@ watch(activeTab, tab => {
 		<template v-else-if="activeTab === 'balances'">
 			<!-- Header & controls -->
 			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-				<h2 class="text-base font-semibold text-gray-900 dark:text-white">
-					Số dư phép năm {{ balanceFilter.year }}
-				</h2>
+				<h2 class="text-base font-semibold text-gray-900 dark:text-white">Số dư phép năm {{ balanceFilter.year }}</h2>
 				<div class="flex flex-wrap items-center gap-2">
 					<!-- Year selector -->
 					<div class="flex gap-1">
@@ -690,7 +820,10 @@ watch(activeTab, tab => {
 									? 'bg-brand-600 text-white border-brand-600'
 									: 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-brand-400 hover:text-brand-600',
 							]"
-							@click="balanceFilter.year = yr; applyBalanceFilter()"
+							@click="
+								balanceFilter.year = yr;
+								applyBalanceFilter();
+							"
 						>
 							{{ yr }}
 						</button>
@@ -702,13 +835,20 @@ watch(activeTab, tab => {
 							:model-value="balanceFilter.leaveTypeId"
 							:options="balanceLeaveTypeOptions"
 							placeholder="Tất cả loại phép"
-							@update:model-value="balanceFilter.leaveTypeId = $event as number | undefined; applyBalanceFilter()"
+							@update:model-value="
+								balanceFilter.leaveTypeId = $event as number | undefined;
+								applyBalanceFilter();
+							"
 						/>
 					</div>
 
 					<CommonAppButton variant="secondary" @click="showBulkInit = true">
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"
+							/>
 						</svg>
 						Khởi tạo hàng loạt
 					</CommonAppButton>
@@ -727,13 +867,41 @@ watch(activeTab, tab => {
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nhân viên</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Phòng ban</th>
-								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Loại phép</th>
-								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tổng ngày</th>
-								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Đã dùng</th>
-								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Còn lại</th>
-								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thao tác</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Nhân viên
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Phòng ban
+								</th>
+								<th
+									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Loại phép
+								</th>
+								<th
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Tổng ngày
+								</th>
+								<th
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Đã dùng
+								</th>
+								<th
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Còn lại
+								</th>
+								<th
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
+									Thao tác
+								</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -810,7 +978,11 @@ watch(activeTab, tab => {
 										@click="startEditBalance(bal)"
 									>
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
+											/>
 										</svg>
 									</button>
 								</td>
@@ -828,7 +1000,12 @@ watch(activeTab, tab => {
 				<CommonAppPagination
 					:current-page="balanceFilter.page"
 					:total-pages="balancesMeta.totalPages"
-					@update:current-page="p => { balanceFilter.page = p; fetchBalances(); }"
+					@update:current-page="
+						p => {
+							balanceFilter.page = p;
+							fetchBalances();
+						}
+					"
 				/>
 			</div>
 		</template>
@@ -836,7 +1013,12 @@ watch(activeTab, tab => {
 
 	<!-- ─── Modals ─────────────────────────────────────────────────────────── -->
 	<Teleport to="body">
-		<RejectModal v-if="rejectTarget" :leave-request="rejectTarget" @rejected="onRejected" @close="rejectTarget = null" />
+		<RejectModal
+			v-if="rejectTarget"
+			:leave-request="rejectTarget"
+			@rejected="onRejected"
+			@close="rejectTarget = null"
+		/>
 		<LeaveDetailModal v-if="detailTarget" :leave-request="detailTarget" @close="detailTarget = null" />
 		<LeaveTypeFormModal
 			v-if="showLeaveTypeForm"
@@ -844,12 +1026,7 @@ watch(activeTab, tab => {
 			@saved="onLeaveTypeSaved"
 			@close="showLeaveTypeForm = false"
 		/>
-		<BulkInitModal
-			v-if="showBulkInit"
-			:leave-types="leaveTypes"
-			@done="onBulkInitDone"
-			@close="showBulkInit = false"
-		/>
+		<BulkInitModal v-if="showBulkInit" :leave-types="leaveTypes" @done="onBulkInitDone" @close="showBulkInit = false" />
 		<AddBalanceModal
 			v-if="showAddBalance"
 			:leave-types="leaveTypes"

@@ -24,7 +24,7 @@ export function useDepartmentDetail(deptId: number) {
 	async function loadMembers() {
 		loadingMembers.value = true;
 		try {
-			const res = await empService.findAll({ departmentId: deptId, limit: 100 });
+			const res = await empService.findAll({ departmentId: deptId, pagination: false });
 			members.value = res.data;
 		} finally {
 			loadingMembers.value = false;

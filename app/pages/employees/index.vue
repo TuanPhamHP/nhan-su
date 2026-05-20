@@ -210,6 +210,11 @@
 							<th
 								class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 							>
+								Vị trí
+							</th>
+							<th
+								class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+							>
 								Trạng thái
 							</th>
 							<th
@@ -221,7 +226,10 @@
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
 						<tr v-for="emp in items" :key="emp.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-							<td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+							<td
+								class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:underline"
+								@click="router.push(`/employees/${emp.id}`)"
+							>
 								{{ emp.employeeCode }}
 							</td>
 							<td class="px-6 py-4">
@@ -230,6 +238,9 @@
 							</td>
 							<td class="px-6 py-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">
 								{{ emp.department?.name ?? '—' }}
+							</td>
+							<td class="px-6 py-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+								{{ emp.position?.name ?? '—' }}
 							</td>
 							<td class="px-6 py-4 whitespace-nowrap">
 								<EmployeeEmployeeStatusBadge :status="emp.status" />

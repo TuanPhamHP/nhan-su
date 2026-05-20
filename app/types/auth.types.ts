@@ -7,6 +7,7 @@ export interface AuthUser {
 	employeeCode: string;
 	role: UserRole;
 	avatarUrl: string | null;
+	department: { id: number; name: string } | null;
 }
 
 export interface AuthResponse {

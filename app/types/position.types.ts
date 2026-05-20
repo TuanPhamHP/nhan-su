@@ -31,10 +31,13 @@ export interface UpdatePositionDto {
 	departmentId?: number;
 }
 
-export interface PositionQueryParams {
+export interface QueryPositionParams {
 	departmentId?: number;
 	search?: string;
 	isActive?: boolean;
 	page?: number;
 	limit?: number;
 }
+
+/** @deprecated use QueryPositionParams */
+export type PositionQueryParams = QueryPositionParams;

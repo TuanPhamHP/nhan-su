@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
-	import { startOfWeek, addDays, format, addWeeks, subWeeks, parseISO } from 'date-fns';
+	import { startOfWeek, addDays, format, addWeeks, subWeeks, startOfYear, endOfYear } from 'date-fns';
 	import type { WorkShiftResponse, CreateWorkShiftDto, CalendarDayEmployee } from '~/types/shift.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
@@ -36,7 +36,7 @@
 		loading: calendarLoading,
 		fetchCalendar,
 		assignShift,
-		bulkAssign,
+		bulkAssignRange,
 		removeShift,
 		setDefaultShift,
 	} = useShiftSchedules();
@@ -316,14 +316,27 @@
 	const bulkShiftId = ref<number | undefined>(undefined);
 	const bulkStartDate = ref('');
 	const bulkEndDate = ref('');
+	const bulkFilterDepartmentId = ref<number | undefined>(undefined);
 	const submittingBulk = ref(false);
+
+	const bulkFilteredEmployees = computed<EmployeeSummary[]>(() => {
+		if (!bulkFilterDepartmentId.value) return directoryStore.employees;
+		return directoryStore.employees.filter(e => e.department?.id === bulkFilterDepartmentId.value);
+	});
 
 	function openBulkModal() {
 		bulkSelectedEmployees.value = new Set();
 		bulkShiftId.value = undefined;
-		bulkStartDate.value = weekDateStrings.value[0] ?? '';
-		bulkEndDate.value = weekDateStrings.value[6] ?? '';
+		bulkFilterDepartmentId.value = undefined;
+		const now = new Date();
+		bulkStartDate.value = format(startOfYear(now), 'yyyy-MM-dd');
+		bulkEndDate.value = format(endOfYear(now), 'yyyy-MM-dd');
 		showBulkModal.value = true;
+	}
+
+	function onBulkDeptFilter(v: string | number | undefined) {
+		bulkFilterDepartmentId.value = typeof v === 'number' ? v : undefined;
+		bulkSelectedEmployees.value = new Set();
 	}
 
 	function toggleBulkEmployee(id: number) {
@@ -334,14 +347,14 @@
 	}
 
 	const allBulkSelected = computed(
-		() => filteredEmployees.value.length > 0 && bulkSelectedEmployees.value.size === filteredEmployees.value.length,
+		() => bulkFilteredEmployees.value.length > 0 && bulkSelectedEmployees.value.size === bulkFilteredEmployees.value.length,
 	);
 
 	function toggleAllBulkEmployees() {
 		if (allBulkSelected.value) {
 			bulkSelectedEmployees.value = new Set();
 		} else {
-			bulkSelectedEmployees.value = new Set(filteredEmployees.value.map(e => e.id));
+			bulkSelectedEmployees.value = new Set(bulkFilteredEmployees.value.map(e => e.id));
 		}
 	}
 
@@ -359,32 +372,20 @@
 			return;
 		}
 
-		const start = parseISO(bulkStartDate.value);
-		const end = parseISO(bulkEndDate.value);
-		if (start > end) {
+		if (bulkStartDate.value > bulkEndDate.value) {
 			toast.error('Ngày bắt đầu phải trước ngày kết thúc');
-			return;
-		}
-
-		const assignments: Array<{ employeeId: number; shiftId: number; date: string }> = [];
-		let current = start;
-		while (current <= end) {
-			const dateStr = format(current, 'yyyy-MM-dd');
-			for (const empId of bulkSelectedEmployees.value) {
-				assignments.push({ employeeId: empId, shiftId: bulkShiftId.value, date: dateStr });
-			}
-			current = addDays(current, 1);
-		}
-
-		if (assignments.length > 100) {
-			toast.error(`Tổng ${assignments.length} lượt gán vượt quá 100. Thu hẹp phạm vi hoặc bớt nhân viên.`);
 			return;
 		}
 
 		submittingBulk.value = true;
 		try {
-			await bulkAssign({ assignments });
-			toast.success(`Đã gán ca hàng loạt (${assignments.length} lượt)`);
+			const result = await bulkAssignRange({
+				fromDate: bulkStartDate.value,
+				toDate: bulkEndDate.value,
+				shiftId: bulkShiftId.value,
+				employeeIds: Array.from(bulkSelectedEmployees.value),
+			});
+			toast.success(`Đã gán ca hàng loạt (${result.totalAssignments} lượt)`);
 			showBulkModal.value = false;
 			await loadCalendar();
 		} catch (e) {
@@ -1126,23 +1127,15 @@
 
 					<div class="flex-1 overflow-y-auto p-6 space-y-5">
 						<!-- Date range -->
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Từ ngày</label>
-								<input
-									v-model="bulkStartDate"
-									type="date"
-									class="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-								/>
-							</div>
-							<div>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Đến ngày</label>
-								<input
-									v-model="bulkEndDate"
-									type="date"
-									class="w-full h-10 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-								/>
-							</div>
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Khoảng thời gian</label>
+							<UiDateRangePicker
+								:from-date="bulkStartDate"
+								:to-date="bulkEndDate"
+								placeholder="Chọn khoảng ngày"
+								@update:from-date="bulkStartDate = $event"
+								@update:to-date="bulkEndDate = $event"
+							/>
 						</div>
 
 						<!-- Shift selector -->
@@ -1153,6 +1146,16 @@
 								:options="activeShiftOptions"
 								placeholder="Chọn ca..."
 								@update:model-value="onBulkShiftChange"
+							/>
+						</div>
+
+						<!-- Department filter -->
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phòng ban</label>
+							<UiSelect
+								:model-value="bulkFilterDepartmentId"
+								:options="departmentOptions"
+								@update:model-value="onBulkDeptFilter"
 							/>
 						</div>
 
@@ -1174,7 +1177,7 @@
 								class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden max-h-48 overflow-y-auto"
 							>
 								<label
-									v-for="emp in filteredEmployees"
+									v-for="emp in bulkFilteredEmployees"
 									:key="emp.id"
 									class="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border-b border-gray-50 dark:border-gray-800 last:border-0"
 								>
@@ -1200,7 +1203,7 @@
 					<div
 						class="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0"
 					>
-						<p class="text-xs text-gray-400 dark:text-gray-500">Tối đa 100 lượt gán mỗi lần</p>
+						<p class="text-xs text-gray-400 dark:text-gray-500">Server sẽ gán toàn bộ ngày trong khoảng</p>
 						<div class="flex gap-3">
 							<CommonAppButton variant="outline" @click="showBulkModal = false">Hủy</CommonAppButton>
 							<CommonAppButton :loading="submittingBulk" @click="submitBulkAssign"> Gán ca </CommonAppButton>

@@ -53,7 +53,18 @@ export interface AssignShiftDto {
 }
 
 export interface BulkAssignShiftDto {
-	assignments: AssignShiftDto[];  // tối đa 100 phần tử
+	assignments: AssignShiftDto[];
+}
+
+export interface BulkRangeAssignShiftDto {
+	fromDate: string;
+	toDate: string;
+	shiftId: number;
+	employeeIds: number[];
+}
+
+export interface BulkRangeAssignResult {
+	totalAssignments: number;
 }
 
 export interface SetDefaultShiftDto {
