@@ -3,6 +3,7 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import { eachDayOfInterval, isWeekend, parseISO, isValid } from 'date-fns';
+	import { isOverLateEarlyLimit, MAX_LATE_EARLY_MINUTES } from '~/utils/leave.utils';
 	import { useLeaveTypeService } from '~/services/leave-type.service';
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import { useLeaveBalanceService } from '~/services/leave-balance.service';
@@ -136,8 +137,18 @@
 				startDate: z.string().min(1, 'Vui lòng chọn ngày'),
 				endDate: z.string().optional(),
 				halfDayPeriod: z.enum(['MORNING', 'AFTERNOON']).optional(),
-				lateMinutes: z.number().int().min(1).max(480).optional(),
-				earlyMinutes: z.number().int().min(1).max(480).optional(),
+				lateMinutes: z
+					.number()
+					.int()
+					.min(1)
+					.max(MAX_LATE_EARLY_MINUTES, { message: 'Tối đa 120 phút. Vui lòng chuyển sang đơn nghỉ nửa ngày.' })
+					.optional(),
+				earlyMinutes: z
+					.number()
+					.int()
+					.min(1)
+					.max(MAX_LATE_EARLY_MINUTES, { message: 'Tối đa 120 phút. Vui lòng chuyển sang đơn nghỉ nửa ngày.' })
+					.optional(),
 				reason: z.string().min(10, 'Lý do phải có ít nhất 10 ký tự'),
 			}),
 		),
@@ -150,6 +161,10 @@
 	const [lateMinutes, lateMinutesAttrs] = defineField('lateMinutes');
 	const [earlyMinutes, earlyMinutesAttrs] = defineField('earlyMinutes');
 	const [reason, reasonAttrs] = defineField('reason');
+
+	// ─── 120-minute limit warning state ──────────────────────────────────────────
+	const showLimitWarning = ref(false);
+	const suggestHalfDay = ref(false);
 
 	// Derived directly from leaveTypeId.value so it stays reactive without a watch
 	const selectedLeaveType = computed(
@@ -164,6 +179,8 @@
 		resetField('lateMinutes');
 		resetField('earlyMinutes');
 		resetField('startDate');
+		showLimitWarning.value = false;
+		suggestHalfDay.value = false;
 	});
 
 	// HALF_DAY / LATE / EARLY: endDate must equal startDate
@@ -213,6 +230,49 @@
 				return null;
 		}
 	});
+
+	// ─── 120-minute limit helpers ─────────────────────────────────────────────────
+	const isOverLimit = computed(() => {
+		if (selectedCode.value === 'LATE' && lateMinutes.value) {
+			return isOverLateEarlyLimit(lateMinutes.value as number);
+		}
+		if (selectedCode.value === 'EARLY' && earlyMinutes.value) {
+			return isOverLateEarlyLimit(earlyMinutes.value as number);
+		}
+		return false;
+	});
+
+	function onMinutesInput(value: number) {
+		if (!value) {
+			showLimitWarning.value = false;
+			suggestHalfDay.value = false;
+			return;
+		}
+		const over = isOverLateEarlyLimit(value);
+		showLimitWarning.value = over;
+		suggestHalfDay.value = over;
+	}
+
+	function switchToHalfDay() {
+		const halfDayType = leaveTypes.value.find(t => t.code === 'HALF_DAY');
+		if (!halfDayType) return;
+
+		// Save date before watch resets it
+		const savedDate = startDate.value as string | undefined;
+
+		setFieldValue('leaveTypeId', halfDayType.id);
+		showLimitWarning.value = false;
+		suggestHalfDay.value = false;
+
+		// Restore date after watch fires and resets fields
+		nextTick(() => {
+			if (savedDate) {
+				setFieldValue('startDate', savedDate);
+				setFieldValue('endDate', savedDate);
+			}
+			document.getElementById('half-day-period-field')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		});
+	}
 
 	// ─── Submit ────────────────────────────────────────────────────────────────────
 	const onSubmit = handleSubmit(async values => {
@@ -448,7 +508,7 @@
 									/>
 									<p v-if="errors.startDate" class="mt-1 text-xs text-red-500">{{ errors.startDate }}</p>
 								</div>
-								<div>
+								<div id="half-day-period-field">
 									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 										Thời gian <span class="text-red-500">*</span>
 									</label>
@@ -497,15 +557,57 @@
 										v-bind="lateMinutesAttrs"
 										type="number"
 										min="1"
-										max="480"
-										placeholder="Nhập số phút"
+										:max="MAX_LATE_EARLY_MINUTES"
+										placeholder="Nhập số phút (tối đa 120)"
 										class="w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
 										:class="
 											errors.lateMinutes ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
 										"
-										@input="lateMinutes = ($event.target as HTMLInputElement).valueAsNumber || undefined"
+										@input="
+											e => {
+												const v = (e.target as HTMLInputElement).valueAsNumber;
+												lateMinutes = v || undefined;
+												onMinutesInput(v);
+											}
+										"
 									/>
 									<p v-if="errors.lateMinutes" class="mt-1 text-xs text-red-500">{{ errors.lateMinutes }}</p>
+								</div>
+							</div>
+
+							<!-- Warning banner: > 120 phút -->
+							<div
+								v-if="showLimitWarning"
+								class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg"
+							>
+								<div class="flex items-start gap-2">
+									<svg
+										class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+										/>
+									</svg>
+									<div>
+										<p class="text-sm font-medium text-amber-800 dark:text-amber-300">Vượt quá giới hạn 2 giờ</p>
+										<p class="text-sm text-amber-700 dark:text-amber-400 mt-1">
+											Thời gian đi muộn không được quá 120 phút.
+										</p>
+										<button
+											v-if="suggestHalfDay"
+											type="button"
+											class="mt-2 text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:no-underline transition-all"
+											@click="switchToHalfDay"
+										>
+											→ Chuyển sang đơn nghỉ nửa ngày
+										</button>
+									</div>
 								</div>
 							</div>
 						</template>
@@ -535,17 +637,59 @@
 										v-bind="earlyMinutesAttrs"
 										type="number"
 										min="1"
-										max="480"
-										placeholder="Nhập số phút"
+										:max="MAX_LATE_EARLY_MINUTES"
+										placeholder="Nhập số phút (tối đa 120)"
 										class="w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
 										:class="
 											errors.earlyMinutes
 												? 'border-red-400 dark:border-red-500'
 												: 'border-gray-300 dark:border-gray-600'
 										"
-										@input="earlyMinutes = ($event.target as HTMLInputElement).valueAsNumber || undefined"
+										@input="
+											e => {
+												const v = (e.target as HTMLInputElement).valueAsNumber;
+												earlyMinutes = v || undefined;
+												onMinutesInput(v);
+											}
+										"
 									/>
 									<p v-if="errors.earlyMinutes" class="mt-1 text-xs text-red-500">{{ errors.earlyMinutes }}</p>
+								</div>
+							</div>
+
+							<!-- Warning banner: > 120 phút -->
+							<div
+								v-if="showLimitWarning"
+								class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg"
+							>
+								<div class="flex items-start gap-2">
+									<svg
+										class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+										/>
+									</svg>
+									<div>
+										<p class="text-sm font-medium text-amber-800 dark:text-amber-300">Vượt quá giới hạn 2 giờ</p>
+										<p class="text-sm text-amber-700 dark:text-amber-400 mt-1">
+											Thời gian về sớm không được quá 120 phút.
+										</p>
+										<button
+											v-if="suggestHalfDay"
+											type="button"
+											class="mt-2 text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:no-underline transition-all"
+											@click="switchToHalfDay"
+										>
+											→ Chuyển sang đơn nghỉ nửa ngày
+										</button>
+									</div>
 								</div>
 							</div>
 						</template>
@@ -613,7 +757,7 @@
 
 					<!-- Submit -->
 					<div class="pt-1">
-						<CommonAppButton type="submit" class="w-full justify-center" :loading="isSubmitting">
+						<CommonAppButton type="submit" class="w-full justify-center" :loading="isSubmitting" :disabled="isOverLimit">
 							<svg
 								v-if="!isSubmitting"
 								class="w-4 h-4"

@@ -27,8 +27,10 @@
 | --- | --- | --- | --- |
 | `ANNUAL` | Nghỉ cả ngày | `startDate` + `endDate` (có thể nhiều ngày) | Số ngày làm việc thực tế (trừ cuối tuần + ngày lễ) |
 | `HALF_DAY` | Nghỉ nửa ngày | `startDate === endDate` + `halfDayPeriod` (`MORNING`/`AFTERNOON`) | `0.5` |
-| `LATE` | Đi muộn | `startDate === endDate` + `lateMinutes` (1–480 phút) | `0` — không trừ phép |
-| `EARLY` | Về sớm | `startDate === endDate` + `earlyMinutes` (1–480 phút) | `0` — không trừ phép |
+| `LATE` | Đi muộn | `startDate === endDate` + `lateMinutes` (1–**120** phút) | `0` — không trừ phép |
+| `EARLY` | Về sớm | `startDate === endDate` + `earlyMinutes` (1–**120** phút) | `0` — không trừ phép |
+
+> **Giới hạn 120 phút:** `lateMinutes` và `earlyMinutes` tối đa **120 phút** (2 giờ). Nếu vượt quá, server trả **400**. Frontend nên chặn trước và gợi ý user chuyển sang đơn `HALF_DAY`.
 
 **Quy tắc chọn form phía frontend:**
 
@@ -500,6 +502,8 @@ export function useLeaveRequests() {
 | --- | --- |
 | EMPLOYEE gọi `GET /leave-requests` (không phải `/me`) | 403 Forbidden |
 | Tạo đơn LATE mà không truyền `lateMinutes` | 400 Bad Request |
+| `lateMinutes > 120` | **400** — frontend nên chặn trước và gợi ý chuyển `HALF_DAY` |
+| `earlyMinutes > 120` | **400** — frontend nên chặn trước và gợi ý chuyển `HALF_DAY` |
 | Tạo đơn LATE với `startDate !== endDate` | 400 Bad Request |
 | `halfDayPeriod` được set nhưng `startDate !== endDate` | 400 Bad Request |
 | Đơn ANNUAL với leaveType.daysPerYear=null (không giới hạn) | Không kiểm tra balance, tạo được |
