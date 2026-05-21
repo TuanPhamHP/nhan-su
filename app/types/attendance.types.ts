@@ -1,5 +1,9 @@
+import type { ViolationDetailView } from './violation.types';
+
 export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'LEAVE';
 export type LockReason = 'AUTO_MIDNIGHT' | 'HR_LOCKED';
+
+export type AttendanceViolationRef = ViolationDetailView;
 
 export interface AttendanceLocationDto {
 	id: number;
@@ -41,6 +45,7 @@ export interface AttendanceRecordDetail {
 	location: AttendanceLocationDto | null;
 	shift: AttendanceShiftDto | null;
 	employee: AttendanceEmployeeDto | null;
+	violationRequests: AttendanceViolationRef[];
 }
 
 export interface CheckInDto {

@@ -5,6 +5,7 @@ import type {
 	LeaveReportResponse,
 	SummaryStatsResponse,
 	QueryAttendanceReportParams,
+	QueryAttendanceDetailParams,
 	QueryLeaveReportParams,
 	QuerySummaryStatsParams,
 } from '~/types/report.types';
@@ -30,6 +31,10 @@ export const useReportService = () => {
 
 		async exportAttendanceExcel(params: QueryAttendanceReportParams): Promise<Blob> {
 			return authFetch<Blob>('/v1/reports/attendance/export', { params, responseType: 'blob' });
+		},
+
+		async exportAttendanceDetailExcel(params: QueryAttendanceDetailParams): Promise<Blob> {
+			return authFetch<Blob>('/v1/reports/attendance/export-detail', { params, responseType: 'blob' });
 		},
 
 		async exportLeaveExcel(params: QueryLeaveReportParams): Promise<Blob> {

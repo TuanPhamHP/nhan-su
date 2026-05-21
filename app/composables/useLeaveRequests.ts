@@ -1,5 +1,11 @@
 import { useLeaveRequestService } from '~/services/leave-request.service';
-import type { LeaveRequest, LeaveRequestSummary, QueryLeaveRequestParams, CreateLeaveRequestDto } from '~/types/leave.types';
+import type {
+	LeaveRequest,
+	LeaveRequestSummary,
+	LeavePreviewResponse,
+	QueryLeaveRequestParams,
+	CreateLeaveRequestDto,
+} from '~/types/leave.types';
 import type { PaginatedMeta } from '~/types/api.types';
 
 export function useLeaveRequests() {
@@ -38,6 +44,10 @@ export function useLeaveRequests() {
 		} catch {
 			// non-critical
 		}
+	}
+
+	async function previewRequest(dto: CreateLeaveRequestDto): Promise<LeavePreviewResponse> {
+		return service.preview(dto);
 	}
 
 	async function submitRequest(dto: CreateLeaveRequestDto): Promise<LeaveRequest> {
@@ -80,6 +90,7 @@ export function useLeaveRequests() {
 		fetchAll,
 		fetchMyRequests,
 		fetchSummary,
+		previewRequest,
 		submitRequest,
 		approveRequest,
 		rejectRequest,

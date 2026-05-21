@@ -8,7 +8,7 @@
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import { useLeaveBalanceService } from '~/services/leave-balance.service';
 	import { useEmployeeService } from '~/services/employee.service';
-	import type { LeaveType, LeaveBalance, HalfDayPeriod, CreateLeaveRequestDto } from '~/types/leave.types';
+	import type { LeaveType, LeaveBalance, HalfDayPeriod, CreateLeaveRequestDto, LeavePreviewResponse } from '~/types/leave.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
 
 	definePageMeta({ title: 'Tạo đơn nghỉ phép' });
@@ -166,6 +166,14 @@
 	const showLimitWarning = ref(false);
 	const suggestHalfDay = ref(false);
 
+	// ─── ANNUAL preview state ─────────────────────────────────────────────────────
+	const preview = ref<LeavePreviewResponse | null>(null);
+	const previewLoading = ref(false);
+	const showConfirmDialog = ref(false);
+	const isConfirming = ref(false);
+	const pendingDto = ref<CreateLeaveRequestDto | null>(null);
+	let previewTimer: ReturnType<typeof setTimeout> | null = null;
+
 	// Derived directly from leaveTypeId.value so it stays reactive without a watch
 	const selectedLeaveType = computed(
 		() => leaveTypes.value.find(t => t.id === (leaveTypeId.value as number | undefined)) ?? null,
@@ -181,6 +189,8 @@
 		resetField('startDate');
 		showLimitWarning.value = false;
 		suggestHalfDay.value = false;
+		preview.value = null;
+		if (previewTimer) clearTimeout(previewTimer);
 	});
 
 	// HALF_DAY / LATE / EARLY: endDate must equal startDate
@@ -189,6 +199,33 @@
 		if ((code === 'HALF_DAY' || code === 'LATE' || code === 'EARLY') && d) {
 			setFieldValue('endDate', d);
 		}
+	});
+
+	// ─── ANNUAL preview: debounced call when both dates are set ──────────────────
+	function triggerPreview() {
+		if (selectedCode.value !== 'ANNUAL' || !startDate.value || !endDate.value) {
+			preview.value = null;
+			return;
+		}
+		if (previewTimer) clearTimeout(previewTimer);
+		previewTimer = setTimeout(async () => {
+			previewLoading.value = true;
+			try {
+				preview.value = await leaveRequestService.preview({
+					leaveTypeId: leaveTypeId.value as number,
+					startDate: startDate.value as string,
+					endDate: endDate.value as string,
+				});
+			} catch {
+				preview.value = null;
+			} finally {
+				previewLoading.value = false;
+			}
+		}, 500);
+	}
+
+	watch([startDate, endDate], () => {
+		if (selectedCode.value === 'ANNUAL') triggerPreview();
 	});
 
 	// ─── Computed duration display ─────────────────────────────────────────────────
@@ -275,58 +312,85 @@
 	}
 
 	// ─── Submit ────────────────────────────────────────────────────────────────────
-	const onSubmit = handleSubmit(async values => {
+	async function doSubmit(dto: CreateLeaveRequestDto) {
 		try {
-			const code = selectedCode.value;
-
-			// Conditional validation not handled by static Zod schema
-			if (code === 'ANNUAL') {
-				if (!values.endDate) {
-					setErrors({ endDate: 'Vui lòng chọn ngày kết thúc' });
-					return;
-				}
-				if (values.endDate < values.startDate) {
-					setErrors({ endDate: 'Ngày kết thúc phải >= ngày bắt đầu' });
-					return;
-				}
-			}
-			if (code === 'HALF_DAY' && !values.halfDayPeriod) {
-				setErrors({ halfDayPeriod: 'Vui lòng chọn buổi' });
-				return;
-			}
-			if (code === 'LATE' && !values.lateMinutes) {
-				setErrors({ lateMinutes: 'Vui lòng nhập số phút đi muộn' });
-				return;
-			}
-			if (code === 'EARLY' && !values.earlyMinutes) {
-				setErrors({ earlyMinutes: 'Vui lòng nhập số phút về sớm' });
-				return;
-			}
-
-			const dto: CreateLeaveRequestDto = {
-				leaveTypeId: values.leaveTypeId,
-				startDate: values.startDate,
-				endDate: code === 'ANNUAL' ? (values.endDate ?? values.startDate) : values.startDate,
-				reason: values.reason,
-			};
-
-			if (code === 'HALF_DAY') dto.halfDayPeriod = values.halfDayPeriod as HalfDayPeriod;
-			if (code === 'LATE') dto.lateMinutes = values.lateMinutes;
-			if (code === 'EARLY') dto.earlyMinutes = values.earlyMinutes;
-
 			const created = await leaveRequestService.create(dto);
-			const approverName = created.assignedApprover?.fullName;
-
-			if (approverName) {
-				toast.success(`Đã gửi đơn thành công. Đang chờ ${approverName} duyệt.`);
+			if (created.leaveCode === 'P+KL' && created.paidDays !== undefined && created.unpaidDays !== undefined) {
+				toast.success(`Đã gửi đơn: ${created.paidDays} ngày P + ${created.unpaidDays} ngày KL`);
+			} else if (created.leaveCode === 'KL') {
+				toast.success('Đã gửi đơn nghỉ không lương');
 			} else {
-				toast.success('Đã gửi đơn. HR sẽ xem xét.');
+				const approverName = created.assignedApprover?.fullName;
+				if (approverName) {
+					toast.success(`Đã gửi đơn thành công. Đang chờ ${approverName} duyệt.`);
+				} else {
+					toast.success('Đã gửi đơn. HR sẽ xem xét.');
+				}
 			}
-
 			setTimeout(() => router.push('/users/leave-requests'), 1500);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 		}
+	}
+
+	async function confirmAndSubmit() {
+		if (!pendingDto.value) return;
+		showConfirmDialog.value = false;
+		isConfirming.value = true;
+		try {
+			await doSubmit(pendingDto.value);
+		} finally {
+			isConfirming.value = false;
+			pendingDto.value = null;
+		}
+	}
+
+	const onSubmit = handleSubmit(async values => {
+		const code = selectedCode.value;
+
+		// Conditional validation not handled by static Zod schema
+		if (code === 'ANNUAL') {
+			if (!values.endDate) {
+				setErrors({ endDate: 'Vui lòng chọn ngày kết thúc' });
+				return;
+			}
+			if (values.endDate < values.startDate) {
+				setErrors({ endDate: 'Ngày kết thúc phải >= ngày bắt đầu' });
+				return;
+			}
+		}
+		if (code === 'HALF_DAY' && !values.halfDayPeriod) {
+			setErrors({ halfDayPeriod: 'Vui lòng chọn buổi' });
+			return;
+		}
+		if (code === 'LATE' && !values.lateMinutes) {
+			setErrors({ lateMinutes: 'Vui lòng nhập số phút đi muộn' });
+			return;
+		}
+		if (code === 'EARLY' && !values.earlyMinutes) {
+			setErrors({ earlyMinutes: 'Vui lòng nhập số phút về sớm' });
+			return;
+		}
+
+		const dto: CreateLeaveRequestDto = {
+			leaveTypeId: values.leaveTypeId,
+			startDate: values.startDate,
+			endDate: code === 'ANNUAL' ? (values.endDate ?? values.startDate) : values.startDate,
+			reason: values.reason,
+		};
+
+		if (code === 'HALF_DAY') dto.halfDayPeriod = values.halfDayPeriod as HalfDayPeriod;
+		if (code === 'LATE') dto.lateMinutes = values.lateMinutes;
+		if (code === 'EARLY') dto.earlyMinutes = values.earlyMinutes;
+
+		// ANNUAL with unpaid days → show confirm dialog first
+		if (code === 'ANNUAL' && preview.value && preview.value.unpaidDays > 0) {
+			pendingDto.value = dto;
+			showConfirmDialog.value = true;
+			return;
+		}
+
+		await doSubmit(dto);
 	});
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -489,6 +553,69 @@
 								/>
 								<p v-if="errors.startDate" class="mt-1 text-xs text-red-500">{{ errors.startDate }}</p>
 								<p v-else-if="errors.endDate" class="mt-1 text-xs text-red-500">{{ errors.endDate }}</p>
+							</div>
+
+							<!-- Preview loading -->
+							<div v-if="previewLoading" class="mt-3 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+								<svg class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+								</svg>
+								Đang tính số dư phép...
+							</div>
+
+							<!-- Preview card -->
+							<div
+								v-else-if="preview"
+								:class="[
+									'mt-3 p-3 rounded-lg border',
+									preview.leaveCode === 'P'
+										? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+										: preview.leaveCode === 'KL'
+											? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+											: 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800',
+								]"
+							>
+								<!-- Kịch bản P: đủ phép -->
+								<template v-if="preview.leaveCode === 'P'">
+									<p class="text-sm font-medium text-green-800 dark:text-green-300">
+										✓ {{ preview.totalDays }} ngày nghỉ hưởng lương (P)
+									</p>
+									<p class="text-xs text-green-600 dark:text-green-400 mt-1">
+										Số dư còn lại sau khi duyệt: {{ preview.remainingAfter }} ngày
+									</p>
+								</template>
+
+								<!-- Kịch bản KL: hết phép -->
+								<template v-else-if="preview.leaveCode === 'KL'">
+									<p class="text-sm font-medium text-red-800 dark:text-red-300">⚠️ Số dư phép năm đã hết</p>
+									<p class="text-sm text-red-700 dark:text-red-400 mt-1">
+										{{ preview.totalDays }} ngày sẽ tính là Nghỉ không lương (KL)
+									</p>
+								</template>
+
+								<!-- Kịch bản P+KL: split -->
+								<template v-else>
+									<p class="text-sm font-medium text-amber-800 dark:text-amber-300">
+										⚠️ Phép năm không đủ — tự động tách đơn
+									</p>
+									<div class="mt-2 space-y-1">
+										<div class="flex justify-between text-sm">
+											<span class="text-amber-700 dark:text-amber-400">Nghỉ hưởng lương (P):</span>
+											<span class="font-medium text-amber-900 dark:text-amber-200">{{ preview.paidDays }} ngày</span>
+										</div>
+										<div class="flex justify-between text-sm">
+											<span class="text-amber-700 dark:text-amber-400">Nghỉ không lương (KL):</span>
+											<span class="font-medium text-amber-900 dark:text-amber-200">{{ preview.unpaidDays }} ngày</span>
+										</div>
+										<div
+											class="border-t border-amber-200 dark:border-amber-700 pt-1 flex justify-between text-sm"
+										>
+											<span class="text-amber-700 dark:text-amber-400">Số dư còn lại sau duyệt:</span>
+											<span class="font-medium text-amber-900 dark:text-amber-200">0 ngày</span>
+										</div>
+									</div>
+								</template>
 							</div>
 						</template>
 
@@ -879,4 +1006,59 @@
 			</div>
 		</div>
 	</div>
+
+	<!-- ─── Confirm dialog (KL / P+KL) ───────────────────────────────────────── -->
+	<Teleport to="body">
+		<div
+			v-if="showConfirmDialog"
+			class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+			@click.self="showConfirmDialog = false"
+		>
+			<div class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl border border-gray-200 dark:border-gray-700">
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Xác nhận gửi đơn</h3>
+
+				<!-- Kịch bản KL -->
+				<div v-if="preview?.leaveCode === 'KL'" class="mt-3">
+					<p class="text-gray-700 dark:text-gray-300">Số dư phép năm của bạn đã hết.</p>
+					<p class="mt-2 font-medium text-red-700 dark:text-red-400">
+						Toàn bộ {{ preview.totalDays }} ngày sẽ tính là
+						<span class="bg-red-100 dark:bg-red-900/40 px-1 rounded">Nghỉ không lương (KL)</span>.
+					</p>
+				</div>
+
+				<!-- Kịch bản P+KL -->
+				<div v-else-if="preview?.leaveCode === 'P+KL'" class="mt-3">
+					<p class="text-gray-700 dark:text-gray-300">Đơn của bạn sẽ được tách như sau:</p>
+					<div class="mt-2 bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-2">
+						<div class="flex justify-between">
+							<span class="text-gray-600 dark:text-gray-400">Hưởng lương (P):</span>
+							<span class="font-semibold text-green-700 dark:text-green-400">{{ preview.paidDays }} ngày</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-gray-600 dark:text-gray-400">Không lương (KL):</span>
+							<span class="font-semibold text-red-700 dark:text-red-400">{{ preview.unpaidDays }} ngày</span>
+						</div>
+					</div>
+				</div>
+
+				<p class="mt-3 text-sm text-gray-500 dark:text-gray-400">Bạn có muốn tiếp tục gửi đơn không?</p>
+
+				<div class="mt-4 flex gap-3 justify-end">
+					<button
+						class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+						@click="showConfirmDialog = false"
+					>
+						Hủy
+					</button>
+					<button
+						class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+						:disabled="isConfirming"
+						@click="confirmAndSubmit"
+					>
+						{{ isConfirming ? 'Đang gửi…' : 'Xác nhận gửi đơn' }}
+					</button>
+				</div>
+			</div>
+		</div>
+	</Teleport>
 </template>

@@ -4,6 +4,7 @@ import type {
 	LeaveReportResponse,
 	SummaryStatsResponse,
 	QueryAttendanceReportParams,
+	QueryAttendanceDetailParams,
 	QueryLeaveReportParams,
 	QuerySummaryStatsParams,
 } from '~/types/report.types';
@@ -17,6 +18,7 @@ export function useReports() {
 	const loadingAttendance = ref(false);
 	const loadingLeave = ref(false);
 	const exportingAttendance = ref(false);
+	const exportingAttendanceDetail = ref(false);
 	const exportingLeave = ref(false);
 
 	async function fetchAttendanceReport(params: QueryAttendanceReportParams) {
@@ -56,6 +58,21 @@ export function useReports() {
 		}
 	}
 
+	async function exportAttendanceDetailExcel(params: QueryAttendanceDetailParams) {
+		exportingAttendanceDetail.value = true;
+		try {
+			const blob = await service.exportAttendanceDetailExcel(params);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `bang-cong-chi-tiet-${params.month}-${params.year}.xlsx`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} finally {
+			exportingAttendanceDetail.value = false;
+		}
+	}
+
 	async function exportLeaveExcel(params: QueryLeaveReportParams) {
 		exportingLeave.value = true;
 		try {
@@ -78,11 +95,13 @@ export function useReports() {
 		loadingAttendance,
 		loadingLeave,
 		exportingAttendance,
+		exportingAttendanceDetail,
 		exportingLeave,
 		fetchAttendanceReport,
 		fetchLeaveReport,
 		fetchSummaryStats,
 		exportAttendanceExcel,
+		exportAttendanceDetailExcel,
 		exportLeaveExcel,
 	};
 }

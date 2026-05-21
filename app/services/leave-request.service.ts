@@ -3,6 +3,7 @@ import type { ApiResponse, PaginatedResponse, PaginatedMeta } from '~/types/api.
 import type {
 	LeaveRequest,
 	LeaveRequestSummary,
+	LeavePreviewResponse,
 	QueryLeaveRequestParams,
 	CreateLeaveRequestDto,
 } from '~/types/leave.types';
@@ -19,6 +20,14 @@ export const useLeaveRequestService = () => {
 		async findMe(params?: QueryLeaveRequestParams): Promise<{ data: LeaveRequest[]; meta: PaginatedMeta }> {
 			const res = await authFetch<PaginatedResponse<LeaveRequest>>('/v1/leave-requests/me', { params });
 			return { data: res.data, meta: res.meta };
+		},
+
+		async preview(dto: CreateLeaveRequestDto): Promise<LeavePreviewResponse> {
+			const res = await authFetch<ApiResponse<LeavePreviewResponse>>('/v1/leave-requests/preview', {
+				method: 'POST',
+				body: dto,
+			});
+			return res.data;
 		},
 
 		async create(dto: CreateLeaveRequestDto): Promise<LeaveRequest> {

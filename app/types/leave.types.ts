@@ -1,6 +1,7 @@
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type HalfDayPeriod = 'MORNING' | 'AFTERNOON';
 export type LeaveTypeCode = 'ANNUAL' | 'HALF_DAY' | 'LATE' | 'EARLY' | string;
+export type LeaveCode = 'P' | 'KL' | 'P+KL';
 
 export interface LeaveEmployeeRef {
 	id: number;
@@ -60,6 +61,19 @@ export interface LeaveRequest {
 	canBeRevoked: boolean;
 	canBeRemoved: boolean;
 	timeline: LeaveTimeline | null;
+	leaveCode?: LeaveCode;
+	paidDays?: number;
+	unpaidDays?: number;
+}
+
+export interface LeavePreviewResponse {
+	totalDays: number;
+	paidDays: number;
+	unpaidDays: number;
+	leaveCode: LeaveCode;
+	warningMessage: string | null;
+	remainingAfter: number;
+	currentBalance: number;
 }
 
 export interface LeaveType {

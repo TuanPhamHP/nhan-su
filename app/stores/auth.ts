@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import type { AuthUser, LoginDto } from '~/types/auth.types';
 import { useAuthService } from '~/services';
 import { getCookie, setCookie, deleteCookie } from '~/utils/cookie';
+import { useNotificationStore } from '~/stores/notification';
 
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -64,6 +65,10 @@ export const useAuthStore = defineStore('auth', () => {
 	}
 
 	async function logout() {
+		// Unregister FCM device token TRƯỚC khi xoá cookie (authFetch cần cookie để gọi API)
+		const notificationStore = useNotificationStore();
+		await notificationStore.unregisterDevice();
+
 		try {
 			const { logout: logoutFn } = useAuthService();
 			await logoutFn();
@@ -75,6 +80,7 @@ export const useAuthStore = defineStore('auth', () => {
 			token.value = null;
 			user.value = null;
 			permissions.value = [];
+			notificationStore.reset();
 		}
 	}
 

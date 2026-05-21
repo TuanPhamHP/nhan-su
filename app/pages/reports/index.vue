@@ -12,10 +12,12 @@
 		loadingAttendance,
 		loadingLeave,
 		exportingAttendance,
+		exportingAttendanceDetail,
 		exportingLeave,
 		fetchAttendanceReport,
 		fetchLeaveReport,
 		exportAttendanceExcel,
+		exportAttendanceDetailExcel,
 		exportLeaveExcel,
 	} = useReports();
 
@@ -79,7 +81,7 @@
 		const sum = (fn: (r: AttendanceReportResponse) => number) => rows.reduce((s, r) => s + fn(r), 0);
 		return {
 			totalEmployees: n,
-			avgPresent: (sum(r => r.presentDays) / n).toFixed(1),
+			avgPresent: (sum(r => r.presentDays + r.lateDays) / n).toFixed(1),
 			avgLate: (sum(r => r.lateDays) / n).toFixed(1),
 			avgAbsent: (sum(r => r.absentDays) / n).toFixed(1),
 			avgRate: (sum(r => r.attendanceRate) / n).toFixed(1),
@@ -108,6 +110,18 @@
 			});
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi xuất Excel bảng công');
+		}
+	}
+
+	async function handleExportAttendanceDetail() {
+		try {
+			await exportAttendanceDetailExcel({
+				year: attendanceFilter.year,
+				month: attendanceFilter.month,
+				departmentId: attendanceFilter.departmentId,
+			});
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Lỗi xuất Excel bảng công chi tiết');
 		}
 	}
 
@@ -251,7 +265,17 @@
 							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
 						/>
 					</svg>
-					Xuất Excel
+					Xuất tổng hợp
+				</CommonAppButton>
+				<CommonAppButton variant="secondary" :loading="exportingAttendanceDetail" @click="handleExportAttendanceDetail">
+					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+						/>
+					</svg>
+					Xuất chi tiết
 				</CommonAppButton>
 			</div>
 

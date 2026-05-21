@@ -558,7 +558,22 @@
 
 								<!-- Loại phép -->
 								<td class="px-4 py-3">
-									<p class="text-gray-700 dark:text-gray-300">{{ req.leaveType.name }}</p>
+									<div class="flex items-center gap-1.5">
+										<p class="text-gray-700 dark:text-gray-300">{{ req.leaveType.name }}</p>
+										<span
+											v-if="req.leaveCode"
+											:class="[
+												'text-xs font-bold px-1.5 py-0.5 rounded',
+												req.leaveCode === 'P'
+													? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+													: req.leaveCode === 'KL'
+														? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+														: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+											]"
+										>
+											{{ req.leaveCode }}
+										</span>
+									</div>
 									<span
 										v-if="req.halfDayPeriod"
 										class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 mt-0.5"

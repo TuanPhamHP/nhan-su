@@ -68,10 +68,12 @@
 
 	const employeeOptions = computed(() => [
 		{ label: 'Tất cả nhân viên', value: 0 },
-		...employees.value.map(e => ({
-			label: `${e.fullName} (${e.employeeCode})`,
-			value: e.id,
-		})),
+		...employees.value
+			.filter(e => !isManager.value || !managerDepartmentId.value || e.department?.id === managerDepartmentId.value)
+			.map(e => ({
+				label: `${e.fullName} (${e.employeeCode})`,
+				value: e.id,
+			})),
 	]);
 
 	// ─── Tab 1: Today ────────────────────────────────────────────────────────
@@ -386,14 +388,16 @@
 		<!-- ═══════════════════════════════════════ TAB 2: LỊCH SỬ ══════════════════════════════════════════ -->
 		<template v-else-if="activeTab === 'history'">
 			<!-- Filter bar -->
-			<div class="flex flex-col sm:flex-row flex-wrap gap-3">
+			<div class="flex flex-col sm:flex-row sm:items-center flex-wrap gap-3">
 				<!-- Date range -->
-				<UiDateRangePicker
-					:from-date="historyFilter.startDate || ''"
-					:to-date="historyFilter.endDate || ''"
-					@update:from-date="historyFilter.startDate = $event"
-					@update:to-date="historyFilter.endDate = $event"
-				/>
+				<div class="w-full sm:w-60">
+					<UiDateRangePicker
+						:from-date="historyFilter.startDate || ''"
+						:to-date="historyFilter.endDate || ''"
+						@update:from-date="historyFilter.startDate = $event"
+						@update:to-date="historyFilter.endDate = $event"
+					/>
+				</div>
 
 				<!-- Department -->
 				<div class="w-full sm:w-44">

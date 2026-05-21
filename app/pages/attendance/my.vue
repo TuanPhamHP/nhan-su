@@ -2,10 +2,15 @@
 	import { formatVNTime, formatShiftDisplay, formatMinutes } from '~/utils/attendance.utils';
 	import type { AttendanceRecordDetail } from '~/types/attendance.types';
 	import { useAttendanceService } from '~/services/attendance.service';
+	import { useViolationRequestService } from '~/services/violation-request.service';
+	import ViolationRequestModal from '~/components/modules/violation/ViolationRequestModal.vue';
+	import ViolationDetailModal from '~/components/modules/violation/ViolationDetailModal.vue';
+	import type { ViolationCounter, ViolationRequestType, ViolationRequestStatus, ViolationDetailView } from '~/types/violation.types';
 
 	definePageMeta({ title: 'Chấm công của tôi' });
 
 	const attendanceService = useAttendanceService();
+	const violationService = useViolationRequestService();
 	const toast = useToast();
 
 	// ─── Calendar state ───────────────────────────────────────────────────────────
@@ -185,6 +190,76 @@
 				return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
 			default:
 				return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+		}
+	}
+
+	// ─── Violation display helpers ────────────────────────────────────────────────
+
+	function violationStatusLabel(status: ViolationRequestStatus): string {
+		switch (status) {
+			case 'PENDING':
+				return 'Chờ duyệt';
+			case 'APPROVED':
+				return 'Đã duyệt';
+			case 'REJECTED':
+				return 'Từ chối';
+			case 'CANCELLED':
+				return 'Đã thu hồi';
+		}
+	}
+
+	function violationStatusBadgeClass(status: ViolationRequestStatus): string {
+		switch (status) {
+			case 'PENDING':
+				return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+			case 'APPROVED':
+				return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
+			case 'REJECTED':
+				return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+			case 'CANCELLED':
+				return 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400';
+		}
+	}
+
+	// ─── Violation detail modal ───────────────────────────────────────────────────
+	const detailViolation = ref<ViolationDetailView | null>(null);
+	const detailLoadingId = ref<number | null>(null);
+
+	async function openViolationDetail(id: number) {
+		detailLoadingId.value = id;
+		try {
+			const full = await violationService.findById(id);
+			detailViolation.value = full;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Không tải được chi tiết phiếu giải trình');
+		} finally {
+			detailLoadingId.value = null;
+		}
+	}
+
+	// ─── Violation modal ─────────────────────────────────────────────────────────
+
+	const violationModal = reactive({
+		open: false,
+		loading: false,
+		counter: null as ViolationCounter | null,
+		type: undefined as ViolationRequestType | undefined,
+		date: undefined as string | undefined,
+	});
+
+	async function openViolationModal(type: ViolationRequestType) {
+		if (!selectedRecord.value) return;
+		violationModal.loading = true;
+		try {
+			const counter = await violationService.getMyStatus(viewMonth.value + 1, viewYear.value);
+			violationModal.counter = counter;
+			violationModal.type = type;
+			violationModal.date = selectedRecord.value.date;
+			violationModal.open = true;
+		} catch {
+			toast.error('Không tải được thông tin quota vi phạm');
+		} finally {
+			violationModal.loading = false;
 		}
 	}
 
@@ -528,8 +603,125 @@
 							Tạo đơn bù công
 						</NuxtLink>
 					</div>
+
+					<!-- Linked violation requests -->
+					<div
+						v-if="selectedRecord.violationRequests.length > 0"
+						class="border-t border-gray-100 dark:border-gray-700 pt-3 space-y-2"
+					>
+						<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							Phiếu giải trình đã nộp
+						</p>
+						<div class="space-y-1.5">
+							<button
+								v-for="vr in selectedRecord.violationRequests"
+								:key="vr.id"
+								:disabled="detailLoadingId === vr.id"
+								class="w-full text-left p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:border-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/10 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+								@click="openViolationDetail(vr.id)"
+							>
+								<div class="flex items-center justify-between gap-2 mb-1">
+									<span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ vr.typeLabel }}</span>
+									<div class="flex items-center gap-1 flex-shrink-0">
+										<span
+											class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+											:class="violationStatusBadgeClass(vr.status)"
+										>
+											{{ violationStatusLabel(vr.status) }}
+										</span>
+										<svg
+											v-if="detailLoadingId !== vr.id"
+											class="w-3.5 h-3.5 text-gray-400"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+										</svg>
+										<svg
+											v-else
+											class="w-3.5 h-3.5 text-gray-400 animate-spin"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+										</svg>
+									</div>
+								</div>
+								<p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{{ vr.reason }}</p>
+								<p v-if="vr.reviewNote" class="text-xs text-red-600 dark:text-red-400 mt-1 italic">
+									↳ {{ vr.reviewNote }}
+								</p>
+							</button>
+						</div>
+					</div>
+
+					<!-- Violation actions -->
+					<div
+						v-if="selectedRecord.lateMinutes > 0 || selectedRecord.earlyMinutes > 0 || (selectedRecord.status === 'ABSENT' && selectedRecord.isLocked)"
+						class="border-t border-gray-100 dark:border-gray-700 pt-3 space-y-2"
+					>
+						<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							Tạo phiếu giải trình
+						</p>
+						<div class="flex flex-col gap-1.5">
+							<button
+								v-if="selectedRecord.lateMinutes > 0"
+								:disabled="violationModal.loading"
+								class="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-400 text-xs font-medium hover:bg-orange-100 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								@click="openViolationModal('LATE')"
+							>
+								<span>Giải trình đi muộn</span>
+								<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+								</svg>
+							</button>
+
+							<button
+								v-if="selectedRecord.earlyMinutes > 0"
+								:disabled="violationModal.loading"
+								class="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-purple-200 dark:border-purple-800/40 bg-purple-50 dark:bg-purple-900/10 text-purple-700 dark:text-purple-400 text-xs font-medium hover:bg-purple-100 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								@click="openViolationModal('EARLY')"
+							>
+								<span>Giải trình về sớm</span>
+								<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+								</svg>
+							</button>
+
+							<button
+								v-if="selectedRecord.status === 'ABSENT' && selectedRecord.isLocked"
+								:disabled="violationModal.loading"
+								class="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								@click="openViolationModal('FORGOT_CHECKIN')"
+							>
+								<span>Giải trình vắng / quên chấm</span>
+								<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+								</svg>
+							</button>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
 	</div>
+
+	<Teleport to="body">
+		<ViolationRequestModal
+			v-if="violationModal.open && violationModal.counter"
+			:counter="violationModal.counter"
+			:initial-type="violationModal.type"
+			:initial-date="violationModal.date"
+			@submitted="violationModal.open = false"
+			@close="violationModal.open = false"
+		/>
+		<ViolationDetailModal
+			v-if="detailViolation"
+			:violation-request="detailViolation"
+			@close="detailViolation = null"
+		/>
+	</Teleport>
 </template>

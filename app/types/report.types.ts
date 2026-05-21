@@ -56,3 +56,9 @@ export interface QuerySummaryStatsParams {
 	year: number;
 	month: number;
 }
+
+export interface QueryAttendanceDetailParams {
+	year: number;
+	month: number;
+	departmentId?: number;
+}

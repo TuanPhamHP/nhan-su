@@ -6,15 +6,16 @@
 
 ## Endpoints
 
-| Method | Path                             | Ai được gọi              | Ghi chú                          |
-| ------ | -------------------------------- | ------------------------ | -------------------------------- |
-| GET    | `/v1/leave-requests/me`          | `EMPLOYEE`               | Đơn của bản thân (có phân trang) |
-| GET    | `/v1/leave-requests`             | `HR`, `ADMIN`, `MANAGER` | Toàn bộ đơn (có filter)          |
-| POST   | `/v1/leave-requests`             | `EMPLOYEE`               | Tạo đơn mới                      |
-| PATCH  | `/v1/leave-requests/:id/approve` | `HR`, `ADMIN`, `MANAGER` | Duyệt đơn                        |
-| PATCH  | `/v1/leave-requests/:id/reject`  | `HR`, `ADMIN`, `MANAGER` | Từ chối đơn                      |
-| PATCH  | `/v1/leave-requests/:id/cancel`  | `EMPLOYEE` (chính chủ)   | Thu hồi → CANCELLED, giữ lịch sử |
-| DELETE | `/v1/leave-requests/:id`         | `EMPLOYEE` (chính chủ)   | Xóa hẳn khỏi DB (hard delete)    |
+| Method | Path                             | Ai được gọi              | Ghi chú                                |
+| ------ | -------------------------------- | ------------------------ | -------------------------------------- |
+| GET    | `/v1/leave-requests/me`          | `EMPLOYEE`               | Đơn của bản thân (có phân trang)       |
+| GET    | `/v1/leave-requests`             | `HR`, `ADMIN`, `MANAGER` | Toàn bộ đơn (có filter)                |
+| POST   | `/v1/leave-requests/preview`     | Mọi user đã đăng nhập    | Preview split P/KL — **không tạo đơn** |
+| POST   | `/v1/leave-requests`             | `EMPLOYEE`               | Tạo đơn mới                            |
+| PATCH  | `/v1/leave-requests/:id/approve` | `HR`, `ADMIN`, `MANAGER` | Duyệt đơn                              |
+| PATCH  | `/v1/leave-requests/:id/reject`  | `HR`, `ADMIN`, `MANAGER` | Từ chối đơn                            |
+| PATCH  | `/v1/leave-requests/:id/cancel`  | `EMPLOYEE` (chính chủ)   | Thu hồi → CANCELLED, giữ lịch sử       |
+| DELETE | `/v1/leave-requests/:id`         | `EMPLOYEE` (chính chủ)   | Xóa hẳn khỏi DB (hard delete)          |
 
 > **Lưu ý thứ tự route:** `/leave-requests/me` được khai báo trước `/leave-requests/:id`.  
 > Nếu server trả 400 "Validation failed" khi gọi `/me`, kiểm tra lại thứ tự route phía client.
@@ -29,8 +30,7 @@
 | `HALF_DAY` | Nghỉ nửa ngày | `startDate === endDate` + `halfDayPeriod` (`MORNING`/`AFTERNOON`) | `0.5` |
 | `LATE` | Đi muộn | `startDate === endDate` + `lateMinutes` (1–**120** phút) | `0` — không trừ phép |
 | `EARLY` | Về sớm | `startDate === endDate` + `earlyMinutes` (1–**120** phút) | `0` — không trừ phép |
-
-> **Giới hạn 120 phút:** `lateMinutes` và `earlyMinutes` tối đa **120 phút** (2 giờ). Nếu vượt quá, server trả **400**. Frontend nên chặn trước và gợi ý user chuyển sang đơn `HALF_DAY`.
+| `UNPAID` | Nghỉ không lương | `startDate` + `endDate` | Số ngày làm việc thực tế — `leaveCode` luôn là `'KL'` |
 
 **Quy tắc chọn form phía frontend:**
 
@@ -58,6 +58,101 @@ Email notification:
 
 - Có `assignedApprover` → gửi cho approver, CC cho HR/ADMIN
 - Fallback → gửi riêng cho từng HR/ADMIN, không CC
+
+---
+
+## Split P/KL — Nghỉ phép hưởng lương và không lương
+
+Áp dụng **chỉ với loại ANNUAL**. Khi tạo đơn, server tự tính split dựa vào số dư phép còn lại (`leaveBalance.totalDays - leaveBalance.usedDays`) và ghi vào `paidDays`, `unpaidDays`, `leaveCode`.
+
+### Kịch bản A — Hết phép (remaining = 0)
+
+```
+Còn lại: 0 ngày   |  Xin: 3 ngày
+─────────────────────────────────
+paidDays   = 0
+unpaidDays = 3
+leaveCode  = 'KL'
+warningMessage = 'Số dư phép năm của bạn đã hết. Đơn này sẽ tự động chuyển thành Nghỉ không lương.'
+```
+
+### Kịch bản B — Hết phép giữa chừng (0 < remaining < totalDays)
+
+```
+Còn lại: 1 ngày   |  Xin: 3 ngày
+─────────────────────────────────
+paidDays   = 1    → ngày hưởng lương
+unpaidDays = 2    → ngày không lương
+leaveCode  = 'P+KL'
+warningMessage = 'Số dư phép năm còn lại 1 ngày. 1 ngày đầu hưởng lương (P), 2 ngày còn lại không hưởng lương (KL).'
+```
+
+### Kịch bản C — Đủ phép (remaining ≥ totalDays)
+
+```
+Còn lại: 5 ngày   |  Xin: 3 ngày
+─────────────────────────────────
+paidDays   = 3
+unpaidDays = 0
+leaveCode  = 'P'
+warningMessage = null
+remainingAfter = 2
+```
+
+> **Lưu ý:**
+>
+> - ANNUAL không còn trả lỗi `LEAVE_INSUFFICIENT_BALANCE` — đơn luôn được tạo, server tự split.
+> - UNPAID luôn `leaveCode = 'KL'`, `paidDays = 0`, không check balance.
+> - HALF_DAY / LATE / EARLY luôn `leaveCode = 'P'` (không trừ ngày phép hoặc isPaid = true).
+> - Khi approve: backend trừ `paidDays` vào `usedDays` (không phải `totalDays`).
+> - Khi cancel đơn đã APPROVED: backend hoàn trả đúng `paidDays` vào balance.
+
+### POST /v1/leave-requests/preview — Preview split trước khi submit
+
+Body giống `CreateLeaveRequestDto`. Không tạo đơn, chỉ tính toán và trả về kết quả.
+
+**Ví dụ request:**
+
+```json
+{
+	"leaveTypeId": 1,
+	"startDate": "2026-06-02",
+	"endDate": "2026-06-04"
+}
+```
+
+**Response 200:** `ApiSuccess<LeavePreviewResponse>`
+
+```json
+{
+	"success": true,
+	"data": {
+		"totalDays": 3,
+		"paidDays": 1,
+		"unpaidDays": 2,
+		"leaveCode": "P+KL",
+		"warningMessage": "Số dư phép năm còn lại 1 ngày. 1 ngày đầu hưởng lương (P), 2 ngày còn lại không hưởng lương (KL).",
+		"remainingAfter": 0,
+		"currentBalance": 1
+	}
+}
+```
+
+**Pattern gọi preview trước khi submit:**
+
+```typescript
+// Gọi preview khi user chọn ngày xong, trước khi bấm "Gửi đơn"
+const preview = ref<LeavePreviewResponse | null>(null);
+
+async function onDateChanged() {
+	if (!form.leaveTypeId || !form.startDate || !form.endDate) return;
+	preview.value = await previewRequest(form);
+}
+
+// Hiển thị warning nếu có split
+// preview.value?.warningMessage → hiển thị banner cảnh báo
+// preview.value?.leaveCode      → hiển thị badge "P" / "KL" / "P+KL"
+```
 
 ---
 
@@ -112,12 +207,15 @@ export interface LeaveRequest {
 	leaveType: LeaveTypeRef;
 	startDate: string; // "YYYY-MM-DD"
 	endDate: string; // "YYYY-MM-DD"
-	totalDays: number; // 0 với LATE/EARLY, 0.5 với HALF_DAY, ≥1 với ANNUAL
+	totalDays: number; // 0 với LATE/EARLY, 0.5 với HALF_DAY, ≥1 với ANNUAL/UNPAID
+	paidDays: number; // số ngày hưởng lương (P)
+	unpaidDays: number; // số ngày không hưởng lương (KL)
+	leaveCode: 'P' | 'KL' | 'P+KL' | null; // null với đơn cũ trước khi deploy tính năng này
 	reason: string | null;
 	status: LeaveStatus;
 	halfDayPeriod: HalfDayPeriod | null; // chỉ có khi code = HALF_DAY
-	lateMinutes: number | null; // chỉ có khi code = LATE
-	earlyMinutes: number | null; // chỉ có khi code = EARLY
+	lateMinutes: number | null; // chỉ có khi code = LATE (tối đa 120 phút)
+	earlyMinutes: number | null; // chỉ có khi code = EARLY (tối đa 120 phút)
 	approvedBy: ApprovedByRef | null;
 	approvedAt: string | null; // ISO 8601 full datetime
 	rejectNote: string | null;
@@ -136,8 +234,19 @@ export interface CreateLeaveRequestDto {
 	endDate: string; // "YYYY-MM-DD"
 	reason?: string;
 	halfDayPeriod?: HalfDayPeriod; // bắt buộc nếu code = HALF_DAY
-	lateMinutes?: number; // bắt buộc nếu code = LATE (1–480)
-	earlyMinutes?: number; // bắt buộc nếu code = EARLY (1–480)
+	lateMinutes?: number; // bắt buộc nếu code = LATE (1–120)
+	earlyMinutes?: number; // bắt buộc nếu code = EARLY (1–120)
+}
+
+// Preview — dùng cùng body với CreateLeaveRequestDto, không tạo đơn
+export interface LeavePreviewResponse {
+	totalDays: number; // tổng ngày làm việc trong khoảng startDate–endDate
+	paidDays: number; // số ngày hưởng lương (P)
+	unpaidDays: number; // số ngày không hưởng lương (KL)
+	leaveCode: 'P' | 'KL' | 'P+KL';
+	warningMessage: string | null; // null nếu đủ balance; có nội dung nếu split hoặc hết phép
+	remainingAfter: number; // số ngày phép còn lại sau khi trừ (0 nếu KL hoặc P+KL)
+	currentBalance: number | null; // số dư hiện tại trước khi submit; null với loại không có balance
 }
 
 export interface RejectLeaveRequestDto {
@@ -376,12 +485,12 @@ Tất cả params đều optional. Response shape giống `/me`.
 
 **Lỗi có thể gặp:**
 
-| HTTP | Mô tả                                                                                             |
-| ---- | ------------------------------------------------------------------------------------------------- |
-| 400  | `lateMinutes` / `earlyMinutes` bắt buộc theo code; LATE/EARLY chỉ 1 ngày; `endDate` < `startDate` |
-| 400  | `LEAVE_INSUFFICIENT_BALANCE` — hết ngày phép (chỉ với ANNUAL)                                     |
-| 409  | `LEAVE_OVERLAP` — đã có đơn PENDING/APPROVED trùng ngày                                           |
-| 404  | Loại phép không tồn tại                                                                           |
+| HTTP | Mô tả |
+| --- | --- |
+| 400 | `lateMinutes` / `earlyMinutes` bắt buộc theo code; LATE/EARLY chỉ 1 ngày; `endDate` < `startDate` |
+| 400 | `LEAVE_INSUFFICIENT_BALANCE` — hết ngày phép (chỉ với loại phép tuỳ chỉnh có `daysPerYear`, không áp dụng với ANNUAL — ANNUAL tự split P/KL) |
+| 409 | `LEAVE_OVERLAP` — đã có đơn PENDING/APPROVED trùng ngày |
+| 404 | Loại phép không tồn tại |
 
 ---
 
@@ -502,8 +611,6 @@ export function useLeaveRequests() {
 | --- | --- |
 | EMPLOYEE gọi `GET /leave-requests` (không phải `/me`) | 403 Forbidden |
 | Tạo đơn LATE mà không truyền `lateMinutes` | 400 Bad Request |
-| `lateMinutes > 120` | **400** — frontend nên chặn trước và gợi ý chuyển `HALF_DAY` |
-| `earlyMinutes > 120` | **400** — frontend nên chặn trước và gợi ý chuyển `HALF_DAY` |
 | Tạo đơn LATE với `startDate !== endDate` | 400 Bad Request |
 | `halfDayPeriod` được set nhưng `startDate !== endDate` | 400 Bad Request |
 | Đơn ANNUAL với leaveType.daysPerYear=null (không giới hạn) | Không kiểm tra balance, tạo được |
@@ -515,3 +622,7 @@ export function useLeaveRequests() {
 | manager bị INACTIVE | Server bỏ qua line manager, fallback sang trưởng phòng hoặc HR |
 | trưởng phòng tự xin nghỉ | Server dùng `managerId` của trưởng phòng đó (leo lên cấp trên) |
 | HR duyệt thay manager | Hợp lệ — role HR/ADMIN bypass `assignedApprover` check |
+| ANNUAL với balance = 0 | `leaveCode = 'KL'`, `paidDays = 0` — đơn vẫn được tạo, không báo lỗi |
+| ANNUAL với balance < totalDays | `leaveCode = 'P+KL'`, split tự động theo số dư còn lại |
+| UNPAID | `leaveCode = 'KL'`, `paidDays = 0`, không check balance |
+| Khi approve đơn ANNUAL | Backend trừ `paidDays` vào `usedDays`, không phải `totalDays` |

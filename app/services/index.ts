@@ -16,3 +16,6 @@ export * from './leave-balance.service';
 export * from './employee-document.service';
 export * from './report.service';
 export * from './position.service';
+export * from './notification.service';
+export * from './device-token.service';
+export * from './violation-request.service';
