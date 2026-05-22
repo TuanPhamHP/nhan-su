@@ -25,6 +25,7 @@
 | GET | `/v1/shift-schedules` | `ADMIN`, `HR` | Lịch ca toàn công ty |
 | POST | `/v1/shift-schedules` | `ADMIN`, `HR` | Gán ca 1 ngày cho 1 nhân viên |
 | POST | `/v1/shift-schedules/bulk` | `ADMIN`, `HR` | Gán ca hàng loạt (tối đa 100 mục) |
+| POST | `/v1/shift-schedules/bulk-online-saturday` | `ADMIN`, `HR` | Gán Ca online T7 cho nhiều nhân viên trong 1 tháng |
 | PATCH | `/v1/shift-schedules/employees/:employeeId/default-shift` | `ADMIN`, `HR` | Gán ca mặc định hàng ngày |
 | DELETE | `/v1/shift-schedules/:employeeId/:date` | `ADMIN`, `HR` | Xóa lịch ca theo ngày |
 
@@ -48,6 +49,7 @@ export interface WorkShiftResponse {
 	lateThresholdMin: number; // Số phút trễ được phép, mặc định 15
 	earlyThresholdMin: number; // Số phút về sớm được phép, mặc định 15
 	workDays: number[]; // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
+	isOnline: boolean; // true = ca online, không yêu cầu GPS check-in
 	isActive: boolean;
 	createdAt: string; // ISO 8601
 }
@@ -60,6 +62,7 @@ export interface CreateWorkShiftDto {
 	lateThresholdMin?: number; // 0–60, mặc định 15
 	earlyThresholdMin?: number; // 0–60, mặc định 15
 	workDays: number[]; // 0=CN, 1=T2, ..., 6=T7
+	isOnline?: boolean; // mặc định false
 }
 
 // PATCH /work-shifts/:id — mọi field đều optional
@@ -80,6 +83,7 @@ export interface WorkShiftSummary {
 export interface ShiftScheduleResponse {
 	id: number;
 	date: string; // "YYYY-MM-DD"
+	isOnline: boolean; // true = lịch gán này là online (không cần GPS check-in)
 	employee: {
 		id: number;
 		fullName: string;
@@ -93,11 +97,20 @@ export interface AssignShiftDto {
 	employeeId: number;
 	shiftId: number;
 	date: string; // "YYYY-MM-DD"
+	isOnline?: boolean; // mặc định false
 }
 
 // POST /shift-schedules/bulk request
 export interface BulkAssignShiftDto {
 	assignments: AssignShiftDto[]; // tối đa 100 phần tử
+}
+
+// POST /shift-schedules/bulk-online-saturday request
+export interface BulkOnlineSaturdayDto {
+	month: number; // 1–12
+	year: number; // >= 2020
+	employeeIds: number[];
+	shiftId: number; // ID của "Ca online T7"
 }
 
 // PATCH /shift-schedules/employees/:id/default-shift request
@@ -522,6 +535,168 @@ Xóa override ca của một ngày cụ thể. Sau khi xóa, hệ thống fallba
 
 ---
 
+## Ca online T7
+
+### Khái niệm
+
+"Ca online T7" là loại ca làm việc đặc biệt: nhân viên làm việc tại nhà vào Thứ 7 và **không cần GPS check-in**. Hệ thống tự động ghi nhận PRESENT cuối ngày.
+
+Hai cấp `isOnline`: | Field | Model | Ý nghĩa | |-------|-------|---------| | `WorkShift.isOnline` | Khuôn ca | Ca này được thiết kế dành cho online | | `EmployeeShiftSchedule.isOnline` | Lịch gán | Ngày cụ thể này nhân viên làm online |
+
+Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: true`).
+
+---
+
+### Field `isOnline` trong response
+
+**`WorkShiftResponse`** — trường `isOnline` xuất hiện trong mọi response của `/v1/work-shifts`:
+
+```json
+{
+	"id": 5,
+	"name": "Ca online T7",
+	"checkInTime": "08:00",
+	"checkOutTime": "13:00",
+	"lateThresholdMin": 0,
+	"earlyThresholdMin": 0,
+	"workDays": [6],
+	"isOnline": true,
+	"isActive": true,
+	"createdAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+**`ShiftScheduleResponse`** — trường `isOnline` ở cấp lịch gán (không phải trong object `shift`):
+
+```json
+{
+	"id": 42,
+	"date": "2026-05-24",
+	"isOnline": true,
+	"employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
+	"shift": {
+		"id": 5,
+		"name": "Ca online T7",
+		"checkInTime": "08:00",
+		"checkOutTime": "13:00",
+		"workDays": [6]
+	}
+}
+```
+
+> `isOnline` trên lịch gán (`ShiftScheduleResponse`) có thể khác với `WorkShift.isOnline`. HR có thể gán bất kỳ ca nào với `isOnline: true` cho một ngày cụ thể.
+
+---
+
+### POST /v1/shift-schedules/bulk-online-saturday — Gán Ca online T7 hàng loạt
+
+Tự động tìm tất cả ngày Thứ 7 trong tháng và upsert `EmployeeShiftSchedule` với `isOnline: true` cho từng nhân viên.
+
+**Request body:**
+
+```json
+{
+	"month": 5,
+	"year": 2026,
+	"employeeIds": [4, 5, 7],
+	"shiftId": 5
+}
+```
+
+**Response 201:**
+
+```json
+{
+	"success": true,
+	"data": {
+		"assigned": 15,
+		"month": 5,
+		"year": 2026
+	}
+}
+```
+
+> `assigned` = tổng số bản ghi đã upsert = số Thứ 7 trong tháng × số nhân viên.
+
+**400** nếu không có ngày Thứ 7 nào (hiếm — tháng nào cũng có ít nhất 4):
+
+```json
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Không có ngày T7 nào trong tháng đã chọn" } }
+```
+
+**404** nếu ca làm việc hoặc bất kỳ nhân viên nào không tồn tại.
+
+---
+
+### Behavior khi nhân viên có lịch online
+
+**GPS check-in bị block:**  
+Khi nhân viên cố check-in thủ công vào ngày có `EmployeeShiftSchedule.isOnline = true`, API trả về lỗi ngay cả khi GPS hợp lệ:
+
+```json
+{
+	"success": false,
+	"error": {
+		"code": "BAD_REQUEST",
+		"message": "Hôm nay là ca làm việc online. Hệ thống sẽ tự động ghi nhận công."
+	}
+}
+```
+
+Mobile/Web nên kiểm tra `ShiftScheduleResponse.isOnline` trước khi hiển thị nút check-in.
+
+---
+
+**PRESENT tự động (cron 23:50 Thứ 7):**  
+Hệ thống chạy cron lúc **23:50 Thứ 7 (VN time)** và tạo `AttendanceRecord` tự động:
+
+```json
+{
+	"status": "PRESENT",
+	"checkInAt": null,
+	"checkOutAt": null,
+	"isManual": true,
+	"note": "Tự động ghi nhận — Ca online T7",
+	"lateMinutes": 0,
+	"earlyMinutes": 0
+}
+```
+
+Nếu nhân viên đã có `AttendanceRecord` cho ngày đó (ví dụ: đã được duyệt nghỉ phép) → cron **bỏ qua**, không ghi đè.
+
+---
+
+**Đơn nghỉ phép T7 hoạt động bình thường:**  
+Nếu nhân viên có đơn nghỉ phép đã duyệt trùng ngày Thứ 7 online:
+
+- `findActiveEmployeesWithoutAttendance` đã lọc ra những người có đơn nghỉ phép duyệt — họ không xuất hiện trong danh sách cần tạo record
+- Cron `autoRecordOnlineSaturday` bỏ qua nhân viên đã có `AttendanceRecord` (`existing` check)
+- Kết quả: `AttendanceRecord.status = ON_LEAVE` từ đơn nghỉ phép **override** PRESENT online — hoạt động đúng
+
+---
+
+### Luồng đầy đủ Ca online T7
+
+```
+HR gọi POST /shift-schedules/bulk-online-saturday
+    → Server tìm tất cả T7 trong tháng (ví dụ 4 ngày: 3/5, 10/5, 17/5, 24/5)
+    → Upsert EmployeeShiftSchedule với isOnline=true cho mỗi (nhân viên × ngày T7)
+
+Thứ 7 đến:
+    Nhân viên mở app → thấy isOnline=true → app ẩn nút check-in / hiển thị thông báo
+    23:50 VN: cron autoRecordOnlineSaturday chạy
+        → Lấy tất cả EmployeeShiftSchedule có date=hôm nay, isOnline=true
+        → Với mỗi nhân viên: nếu chưa có AttendanceRecord → tạo PRESENT tự động
+        → Nếu đã có record (ON_LEAVE, ABSENT từ trước) → bỏ qua
+
+00:10 (Chủ nhật): cron markAbsentEmployees chạy
+    → Với mỗi nhân viên chưa có record ngày hôm qua:
+        shouldWorkOnDate() → tìm shiftId
+        hasOnlineScheduleForEmployee() → nếu isOnline=true → skip (đã xử lý bởi cron T7)
+```
+
+---
+
 ## Composable — useShiftSchedules
 
 ```typescript
@@ -533,6 +708,7 @@ import type {
 	ShiftScheduleResponse,
 	AssignShiftDto,
 	BulkAssignShiftDto,
+	BulkOnlineSaturdayDto,
 	SetDefaultShiftDto,
 	QueryShiftScheduleParams,
 	QueryCalendarParams,
@@ -568,6 +744,9 @@ export function useShiftSchedules() {
 
 	const bulkAssign = (dto: BulkAssignShiftDto) => post<void>('/v1/shift-schedules/bulk', dto);
 
+	const bulkOnlineSaturday = (dto: BulkOnlineSaturdayDto) =>
+		post<{ assigned: number; month: number; year: number }>('/v1/shift-schedules/bulk-online-saturday', dto);
+
 	const setDefaultShift = (employeeId: number, dto: SetDefaultShiftDto) =>
 		patch<void>(`/v1/shift-schedules/employees/${employeeId}/default-shift`, dto);
 
@@ -583,6 +762,7 @@ export function useShiftSchedules() {
 		fetchCalendar,
 		assignShift,
 		bulkAssign,
+		bulkOnlineSaturday,
 		setDefaultShift,
 		removeShift,
 	};
@@ -593,23 +773,29 @@ export function useShiftSchedules() {
 
 ## Edge cases
 
-| Tình huống                                                | Kết quả                                              |
-| --------------------------------------------------------- | ---------------------------------------------------- |
-| `EMPLOYEE` gọi `GET /shift-schedules`                     | 403 Forbidden                                        |
-| Gán ca cho ngày đã có lịch ca                             | Upsert — ghi đè, không báo lỗi                       |
-| Gán ca đã bị vô hiệu hóa                                  | 400 Bad Request                                      |
-| `bulk` với > 100 mục                                      | 400 Bad Request                                      |
-| `date` truyền sai format (không phải `YYYY-MM-DD`)        | 400 Bad Request                                      |
-| `GET /calendar` không truyền `startDate`/`endDate`        | 400 Bad Request (2 field bắt buộc)                   |
-| `GET /calendar` với khoảng > 31 ngày                      | 400 Bad Request                                      |
-| `shift: null` trong calendar response                     | Nhân viên không có defaultShift và không có override |
-| `isDefault: true` trong calendar                          | Nhân viên đang dùng `Employee.defaultShiftId`        |
-| `isDefault: false` trong calendar                         | Có `EmployeeShiftSchedule` override cho ngày đó      |
-| Xóa lịch ca ngày đó → nhân viên còn `defaultShiftId`      | Hệ thống dùng `defaultShift` khi check-in            |
-| Xóa lịch ca ngày đó → nhân viên không có `defaultShiftId` | `NO_SHIFT_TODAY` khi check-in                        |
-| `DELETE /work-shifts/:id` khi ca đã inactive              | 400 Bad Request                                      |
-| `PATCH default-shift` với `shiftId` không tồn tại         | 404 Not Found                                        |
-| `workDays: [1,2,3,4,5]`                                   | Thứ 2 đến Thứ 6                                      |
-| `workDays: [0]`                                           | Chủ nhật                                             |
-| `workDays: [6]`                                           | Thứ 7                                                |
-| Không truyền `startDate`/`endDate` cho `/me`              | Server mặc định tuần hiện tại (Thứ 2 → Chủ nhật)     |
+| Tình huống | Kết quả |
+| --- | --- |
+| `EMPLOYEE` gọi `GET /shift-schedules` | 403 Forbidden |
+| Gán ca cho ngày đã có lịch ca | Upsert — ghi đè, không báo lỗi |
+| Gán ca đã bị vô hiệu hóa | 400 Bad Request |
+| `bulk` với > 100 mục | 400 Bad Request |
+| `date` truyền sai format (không phải `YYYY-MM-DD`) | 400 Bad Request |
+| `GET /calendar` không truyền `startDate`/`endDate` | 400 Bad Request (2 field bắt buộc) |
+| `GET /calendar` với khoảng > 31 ngày | 400 Bad Request |
+| `shift: null` trong calendar response | Nhân viên không có defaultShift và không có override |
+| `isDefault: true` trong calendar | Nhân viên đang dùng `Employee.defaultShiftId` |
+| `isDefault: false` trong calendar | Có `EmployeeShiftSchedule` override cho ngày đó |
+| Xóa lịch ca ngày đó → nhân viên còn `defaultShiftId` | Hệ thống dùng `defaultShift` khi check-in |
+| Xóa lịch ca ngày đó → nhân viên không có `defaultShiftId` | `NO_SHIFT_TODAY` khi check-in |
+| `DELETE /work-shifts/:id` khi ca đã inactive | 400 Bad Request |
+| `PATCH default-shift` với `shiftId` không tồn tại | 404 Not Found |
+| `workDays: [1,2,3,4,5]` | Thứ 2 đến Thứ 6 |
+| `workDays: [0]` | Chủ nhật |
+| `workDays: [6]` | Thứ 7 |
+| Không truyền `startDate`/`endDate` cho `/me` | Server mặc định tuần hiện tại (Thứ 2 → Chủ nhật) |
+| Nhân viên cố check-in khi `EmployeeShiftSchedule.isOnline = true` | 400 — "Hôm nay là ca làm việc online..." |
+| `WorkShift.isOnline = true` nhưng lịch gán `isOnline = false` | GPS check-in bình thường — cấp lịch gán được ưu tiên |
+| Nhân viên có đơn nghỉ phép T7 đã duyệt + lịch online T7 | Record ON_LEAVE tồn tại → cron bỏ qua, PRESENT không ghi đè |
+| `bulk-online-saturday` gán đè T7 đã có lịch ca khác | Upsert — ghi đè `shiftId` và `isOnline=true` |
+| `autoRecordOnlineSaturday` chạy nhưng không có lịch online hôm nay | Skip toàn bộ, không tạo record |
+| `markAbsentEmployees` (00:10 CN) gặp nhân viên có lịch online T7 | Skip — không đánh ABSENT nhân viên online |

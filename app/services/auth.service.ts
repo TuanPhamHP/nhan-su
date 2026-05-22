@@ -1,4 +1,4 @@
-import type { AuthResponse, LoginDto, RefreshTokenDto, ChangePasswordDto } from '~/types/auth.types';
+import type { AuthResponse, LoginDto, RefreshTokenDto, ChangePasswordDto, ProfileResponse, UpdateProfilePayload } from '~/types/auth.types';
 import type { Employee } from '~/types/employee.types';
 import type { ApiResponse } from '~/types/api.types';
 import { useAuthFetch } from './http/auth.fetch';
@@ -44,6 +44,24 @@ export const useAuthService = () => {
 		async myPermissions(): Promise<string[]> {
 			const res = await authFetch<ApiResponse<{ permissions: string[] }>>('/v1/auth/me');
 			return res.data.permissions ?? [];
+		},
+
+		async updateProfile(payload: UpdateProfilePayload): Promise<ProfileResponse> {
+			const res = await authFetch<ApiResponse<ProfileResponse>>('/v1/auth/profile', {
+				method: 'PATCH',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		async uploadAvatar(file: File): Promise<ProfileResponse> {
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await authFetch<ApiResponse<ProfileResponse>>('/v1/auth/avatar', {
+				method: 'POST',
+				body: formData,
+			});
+			return res.data;
 		},
 	};
 };

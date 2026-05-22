@@ -9,11 +9,7 @@
 
 	const { handleSubmit, defineField, errors, isSubmitting } = useForm({
 		validationSchema: {
-			email: (v: string) => {
-				if (!v) return 'Vui lòng nhập email';
-				if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Email không hợp lệ';
-				return true;
-			},
+			email: (v: string) => (v?.trim() ? true : 'Vui lòng nhập email hoặc mã nhân viên'),
 			password: (v: string) => {
 				if (!v) return 'Vui lòng nhập mật khẩu';
 				if (v.length < 6) return 'Mật khẩu tối thiểu 6 ký tự';
@@ -45,7 +41,7 @@
 			toast.success('Đăng nhập thành công! Chào mừng trở lại.');
 			await navigateTo('/');
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Email hoặc mật khẩu không đúng');
+			toast.error(err instanceof Error ? err.message : 'Tài khoản hoặc mật khẩu không đúng');
 		}
 	});
 
@@ -168,15 +164,15 @@
 					<!-- Email -->
 					<div class="flex flex-col gap-1">
 						<label for="email" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-							Email <span class="text-red-500">*</span>
+							Email hoặc mã nhân viên <span class="text-red-500">*</span>
 						</label>
 						<input
 							id="email"
 							v-model="email"
 							v-bind="emailAttrs"
 							type="text"
-							placeholder="admin@company.com"
-							autocomplete="email"
+							placeholder="admin@company.com hoặc EMP001"
+							autocomplete="username"
 							:class="[
 								'block w-full rounded-lg border px-3 py-2.5 text-sm transition-colors',
 								'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',

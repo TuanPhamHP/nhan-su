@@ -1,4 +1,28 @@
-export type UserRole = 'ADMIN' | 'HR' | 'MANAGER' | 'EMPLOYEE';
+export type UserRole = 'ADMIN' | 'CHIEF' | 'HR' | 'MANAGER' | 'EMPLOYEE';
+
+export type Gender = 'Nam' | 'Nữ' | 'Khác';
+
+export interface ProfileResponse {
+	id: number;
+	fullName: string;
+	email: string;
+	employeeCode: string;
+	role: string;
+	phone: string | null;
+	dateOfBirth: string | null;
+	gender: Gender | null;
+	address: string | null;
+	avatarUrl: string | null;
+}
+
+export interface UpdateProfilePayload {
+	fullName?: string;
+	email?: string;
+	phone?: string;
+	dateOfBirth?: string;
+	gender?: Gender;
+	address?: string;
+}
 
 export interface AuthUser {
 	id: number;

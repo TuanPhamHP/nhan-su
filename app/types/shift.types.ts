@@ -101,6 +101,23 @@ export interface CalendarDayEmployee {
 	department: string | null;
 	shift: CalendarShift | null; // null = không có ca (NO_SHIFT_TODAY)
 	isDefault: boolean;          // true = dùng defaultShift, false = override theo ngày
+	isOnline?: boolean;          // true = ca online T7 (không cần GPS check-in)
+}
+
+// ─── Online Saturday ────────────────────────────────────────────────────────
+
+export interface BulkOnlineSaturdayDto {
+	month?: number;      // 1-12, optional — bỏ qua để gán cả năm
+	year: number;
+	employeeIds: number[];
+	shiftId: number;
+}
+
+export interface BulkOnlineSaturdayResult {
+	assigned: number;
+	saturdays: number;
+	month: number | null; // null khi gán cả năm
+	year: number;
 }
 
 // Response từ GET /shift-schedules/calendar — grouped by date

@@ -4,6 +4,7 @@
 	import type { WorkShiftResponse, CreateWorkShiftDto, CalendarDayEmployee } from '~/types/shift.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
+	import OnlineSaturdayModal from '~/components/modules/shifts/OnlineSaturdayModal.vue';
 
 	definePageMeta({ title: 'Quản lý ca làm việc' });
 
@@ -39,11 +40,19 @@
 		bulkAssignRange,
 		removeShift,
 		setDefaultShift,
+		bulkAssignOnlineSaturday,
 	} = useShiftSchedules();
 	const directoryStore = useDirectoryStore();
 
 	// ─── Tab ───
 	const activeTab = ref<'shifts' | 'calendar'>('shifts');
+
+	// ─── Online Saturday modal ───
+	const showOnlineModal = ref(false);
+
+	function openOnlineSetupModal() {
+		showOnlineModal.value = true;
+	}
 
 	// ═══════════════════════════════════════════════════
 	// TAB 1 — KHUÔN CA
@@ -204,6 +213,17 @@
 
 	function getSchedule(employeeId: number, date: string): CalendarDayEmployee | null {
 		return scheduleMap.value.get(`${employeeId}:${date}`) ?? null;
+	}
+
+	function getCellStyle(employeeId: number, date: string): string {
+		const s = scheduleMap.value.get(`${employeeId}:${date}`);
+		if (s?.isOnline)
+			return 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50';
+		if (s?.shift && !s.isDefault)
+			return 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-900/30 dark:border-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/50';
+		if (s?.shift && s.isDefault)
+			return 'bg-gray-100 border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700';
+		return 'bg-red-50 border-transparent text-red-300 dark:bg-red-900/10 dark:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/20';
 	}
 
 	// ─── Select options ───
@@ -618,6 +638,27 @@
 				</div>
 			</div>
 
+			<!-- T7 Online config card -->
+			<div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+				<div class="flex items-center justify-between gap-4">
+					<div>
+						<h3 class="font-medium text-blue-900 dark:text-blue-200">🖥️ Làm việc online Thứ 7</h3>
+						<p class="text-sm text-blue-700 dark:text-blue-400 mt-1">
+							Nhân viên được chọn sẽ được tự động ghi nhận PRESENT mỗi T7 mà không cần chấm công GPS.
+						</p>
+					</div>
+					<button
+						class="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+						@click="openOnlineSetupModal"
+					>
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
+						</svg>
+						Cấu hình T7 Online
+					</button>
+				</div>
+			</div>
+
 			<!-- Calendar grid -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
 				<!-- Loading overlay -->
@@ -685,20 +726,16 @@
 									</button>
 								</td>
 
-								<!-- Day cells — 3 trạng thái: override (xanh) / mặc định (xám) / không có ca (đỏ nhạt) -->
+								<!-- Day cells — 4 trạng thái: online T7 (xanh nhạt) / override (brand) / mặc định (xám) / không có ca (đỏ nhạt) -->
 								<td v-for="(date) in weekDateStrings" :key="date" class="px-2 py-2 text-center">
 									<button
-										:class="[
-											'w-full min-h-[40px] rounded-lg border text-xs font-medium px-2 py-1.5 transition-colors leading-tight',
-											getSchedule(emp.id, date)?.shift && !getSchedule(emp.id, date)?.isDefault
-												? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-900/30 dark:border-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/50'
-												: getSchedule(emp.id, date)?.shift && getSchedule(emp.id, date)?.isDefault
-													? 'bg-gray-100 border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-													: 'bg-red-50 border-transparent text-red-300 dark:bg-red-900/10 dark:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/20',
-										]"
+										:class="['w-full min-h-[40px] rounded-lg border text-xs font-medium px-2 py-1.5 transition-colors leading-tight', getCellStyle(emp.id, date)]"
 										@click="openCellModal(emp, date)"
 									>
-										<template v-if="getSchedule(emp.id, date)?.shift">
+										<template v-if="getSchedule(emp.id, date)?.isOnline">
+											<span class="block">🖥️ Online</span>
+										</template>
+										<template v-else-if="getSchedule(emp.id, date)?.shift">
 											<span class="block truncate">{{ getSchedule(emp.id, date)!.shift!.name }}</span>
 											<span v-if="getSchedule(emp.id, date)?.isDefault" class="block text-[10px] opacity-60">mặc định</span>
 										</template>
@@ -1091,6 +1128,11 @@
 			</div>
 		</Transition>
 	</Teleport>
+
+	<!-- ═══════════════════════════════════════════════════ -->
+	<!-- MODAL: T7 Online                                  -->
+	<!-- ═══════════════════════════════════════════════════ -->
+	<OnlineSaturdayModal v-model="showOnlineModal" :shifts="shifts" @success="loadCalendar" />
 
 	<!-- ═══════════════════════════════════════════════════ -->
 	<!-- MODAL: Gán ca hàng loạt                           -->

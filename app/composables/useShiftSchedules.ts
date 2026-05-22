@@ -6,6 +6,8 @@ import type {
 	BulkAssignShiftDto,
 	BulkRangeAssignShiftDto,
 	BulkRangeAssignResult,
+	BulkOnlineSaturdayDto,
+	BulkOnlineSaturdayResult,
 	SetDefaultShiftDto,
 	QueryShiftScheduleParams,
 	QueryCalendarParams,
@@ -58,6 +60,10 @@ export function useShiftSchedules() {
 		await service.setDefault(employeeId, dto);
 	}
 
+	async function bulkAssignOnlineSaturday(dto: BulkOnlineSaturdayDto): Promise<BulkOnlineSaturdayResult> {
+		return service.bulkAssignOnlineSaturday(dto);
+	}
+
 	return {
 		calendarDays,
 		schedules,
@@ -69,5 +75,6 @@ export function useShiftSchedules() {
 		bulkAssignRange,
 		removeShift,
 		setDefaultShift,
+		bulkAssignOnlineSaturday,
 	};
 }

@@ -7,6 +7,8 @@ import type {
 	BulkAssignShiftDto,
 	BulkRangeAssignShiftDto,
 	BulkRangeAssignResult,
+	BulkOnlineSaturdayDto,
+	BulkOnlineSaturdayResult,
 	SetDefaultShiftDto,
 	QueryShiftScheduleParams,
 	QueryCalendarParams,
@@ -59,6 +61,14 @@ export const useShiftScheduleService = () => {
 				method: 'PATCH',
 				body: dto,
 			});
+		},
+
+		async bulkAssignOnlineSaturday(dto: BulkOnlineSaturdayDto): Promise<BulkOnlineSaturdayResult> {
+			const res = await authFetch<ApiResponse<BulkOnlineSaturdayResult>>('/v1/shift-schedules/bulk-online-saturday', {
+				method: 'POST',
+				body: dto,
+			});
+			return res.data;
 		},
 
 		remove(employeeId: number, date: string): Promise<void> {
