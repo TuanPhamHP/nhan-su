@@ -64,6 +64,7 @@ export interface LeaveRequest {
 	leaveCode?: LeaveCode;
 	paidDays?: number;
 	unpaidDays?: number;
+	warningMessage?: string | null;
 }
 
 export interface LeavePreviewResponse {

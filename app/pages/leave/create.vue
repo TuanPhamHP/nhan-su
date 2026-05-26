@@ -327,6 +327,9 @@
 					toast.success('Đã gửi đơn. HR sẽ xem xét.');
 				}
 			}
+			if (created.warningMessage) {
+				toast.warning(created.warningMessage);
+			}
 			setTimeout(() => router.push('/users/leave-requests'), 1500);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
