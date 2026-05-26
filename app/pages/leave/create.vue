@@ -375,7 +375,10 @@
 		const dto: CreateLeaveRequestDto = {
 			leaveTypeId: values.leaveTypeId,
 			startDate: values.startDate,
-			endDate: code === 'ANNUAL' ? (values.endDate ?? values.startDate) : values.startDate,
+			endDate:
+				code === 'HALF_DAY' || code === 'LATE' || code === 'EARLY'
+					? values.startDate
+					: (values.endDate ?? values.startDate),
 			reason: values.reason,
 		};
 
