@@ -33,8 +33,8 @@ export function useLeaveBalances() {
 		return updated;
 	}
 
-	async function bulkInit(leaveTypeId: number, year: number): Promise<{ created: number; skipped: number }> {
-		return service.bulkInit(leaveTypeId, year);
+	async function bulkInit(year: number, leaveTypeId?: number): Promise<{ created: number; skipped: number }> {
+		return service.bulkInit(year, leaveTypeId);
 	}
 
 	return {

@@ -10,6 +10,7 @@
 	import LeaveTypeFormModal from '~/components/modules/leave/LeaveTypeFormModal.vue';
 	import BulkInitModal from '~/components/modules/leave/BulkInitModal.vue';
 	import AddBalanceModal from '~/components/modules/leave/AddBalanceModal.vue';
+	import EmployeeBalanceDetailModal from '~/components/modules/leave/EmployeeBalanceDetailModal.vue';
 	import type {
 		LeaveRequest,
 		LeaveType,
@@ -17,7 +18,8 @@
 		LeaveRequestSummary,
 		LeaveStatus,
 		QueryLeaveRequestParams,
-		QueryLeaveBalanceParams,
+		EmployeeBalanceGroup,
+		QueryEmployeeBalanceParams,
 	} from '~/types/leave.types';
 	import type { DepartmentSummary } from '~/types/department.types';
 	import type { PaginatedMeta } from '~/types/api.types';
@@ -219,43 +221,48 @@
 	// ═══════════════════════════════════════════════════════════════════════════════
 	// TAB 3 — SỐ DƯ PHÉP
 	// ═══════════════════════════════════════════════════════════════════════════════
-	const balances = ref<LeaveBalance[]>([]);
+	const employeeGroups = ref<EmployeeBalanceGroup[]>([]);
 	const balancesLoading = ref(false);
 	const balancesMeta = ref<PaginatedMeta | null>(null);
 	const currentYear = new Date().getFullYear();
 
 	const balanceFilter = reactive({
 		year: currentYear,
-		leaveTypeId: undefined as number | undefined,
+		departmentId: undefined as number | undefined,
+		search: '',
 		page: 1,
 	});
 
 	const showBulkInit = ref(false);
 	const showAddBalance = ref(false);
-
-	const editingBalanceId = ref<number | null>(null);
-	const editingDays = ref<number>(0);
+	const detailGroup = ref<EmployeeBalanceGroup | null>(null);
 
 	const limitedLeaveTypes = computed(() => leaveTypes.value.filter(t => t.daysPerYear !== null));
 
-	const balanceLeaveTypeOptions = computed<SelectOption[]>(() => [
-		{ value: undefined, label: 'Tất cả loại phép' },
-		...limitedLeaveTypes.value.map(t => ({ value: t.id, label: t.name })),
-	]);
-
 	const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
+
+	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function onBalanceSearchInput() {
+		if (searchTimeout) clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			balanceFilter.page = 1;
+			fetchBalances();
+		}, 300);
+	}
 
 	async function fetchBalances() {
 		balancesLoading.value = true;
 		try {
-			const params: QueryLeaveBalanceParams = {
+			const params: QueryEmployeeBalanceParams = {
 				year: balanceFilter.year,
-				leaveTypeId: balanceFilter.leaveTypeId,
+				departmentId: balanceFilter.departmentId,
+				search: balanceFilter.search || undefined,
 				page: balanceFilter.page,
 				limit: 20,
 			};
-			const res = await leaveBalanceService.findAll(params);
-			balances.value = res.data;
+			const res = await leaveBalanceService.findByEmployee(params);
+			employeeGroups.value = res.data;
 			balancesMeta.value = res.meta;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi tải số dư phép');
@@ -269,42 +276,20 @@
 		fetchBalances();
 	}
 
-	function startEditBalance(balance: LeaveBalance) {
-		editingBalanceId.value = balance.id;
-		editingDays.value = balance.totalDays;
-	}
-
-	function cancelEditBalance() {
-		editingBalanceId.value = null;
-	}
-
-	async function saveEditBalance(balance: LeaveBalance) {
-		try {
-			const updated = await leaveBalanceService.update(balance.id, { totalDays: editingDays.value });
-			const idx = balances.value.findIndex(b => b.id === updated.id);
-			if (idx !== -1) balances.value.splice(idx, 1, updated);
-			editingBalanceId.value = null;
-			toast.success('Đã cập nhật số dư phép');
-		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-		}
-	}
-
 	function onBulkInitDone(created: number, skipped: number) {
 		showBulkInit.value = false;
 		fetchBalances();
 		toast.success(`Đã tạo ${created} balance mới, bỏ qua ${skipped} đã tồn tại`);
 	}
 
-	function onBalanceCreated(balance: LeaveBalance) {
+	function onBalanceCreated(_balance: LeaveBalance) {
 		showAddBalance.value = false;
-		balances.value.unshift(balance);
+		fetchBalances();
 	}
 
-	function remainingClass(days: number): string {
-		if (days < 2) return 'text-red-600 dark:text-red-400 font-semibold';
-		if (days <= 5) return 'text-orange-500 dark:text-orange-400 font-medium';
-		return 'text-green-600 dark:text-green-400 font-medium';
+	function onDetailUpdated() {
+		detailGroup.value = null;
+		fetchBalances();
 	}
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -316,7 +301,7 @@
 	});
 
 	watch(activeTab, tab => {
-		if (tab === 'balances' && balances.value.length === 0) fetchBalances();
+		if (tab === 'balances' && employeeGroups.value.length === 0) fetchBalances();
 	});
 </script>
 
@@ -824,6 +809,39 @@
 			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 				<h2 class="text-base font-semibold text-gray-900 dark:text-white">Số dư phép năm {{ balanceFilter.year }}</h2>
 				<div class="flex flex-wrap items-center gap-2">
+					<!-- Search -->
+					<div class="relative">
+						<svg
+							class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+						</svg>
+						<input
+							v-model="balanceFilter.search"
+							type="text"
+							placeholder="Tìm nhân viên..."
+							class="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-44 focus:outline-none focus:ring-1 focus:ring-brand-400"
+							@input="onBalanceSearchInput"
+						/>
+					</div>
+
+					<!-- Department filter -->
+					<div class="w-44">
+						<UiSelect
+							:model-value="balanceFilter.departmentId"
+							:options="departmentOptions"
+							placeholder="Tất cả phòng ban"
+							@update:model-value="
+								balanceFilter.departmentId = $event as number | undefined;
+								applyBalanceFilter();
+							"
+						/>
+					</div>
+
 					<!-- Year selector -->
 					<div class="flex gap-1">
 						<button
@@ -842,19 +860,6 @@
 						>
 							{{ yr }}
 						</button>
-					</div>
-
-					<!-- Leave type filter -->
-					<div class="w-44">
-						<UiSelect
-							:model-value="balanceFilter.leaveTypeId"
-							:options="balanceLeaveTypeOptions"
-							placeholder="Tất cả loại phép"
-							@update:model-value="
-								balanceFilter.leaveTypeId = $event as number | undefined;
-								applyBalanceFilter();
-							"
-						/>
 					</div>
 
 					<CommonAppButton variant="secondary" @click="showBulkInit = true">
@@ -876,128 +881,65 @@
 				</div>
 			</div>
 
-			<!-- Table -->
+			<!-- Table grouped by employee -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
 				<div class="overflow-x-auto">
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-								<th
-									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
+								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
 									Nhân viên
 								</th>
-								<th
-									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
+								<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
 									Phòng ban
 								</th>
-								<th
-									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
-									Loại phép
+								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+									Số loại phép
 								</th>
-								<th
-									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
-									Tổng ngày
-								</th>
-								<th
-									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
-									Đã dùng
-								</th>
-								<th
-									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
-									Còn lại
-								</th>
-								<th
-									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-								>
+								<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
 									Thao tác
 								</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 							<tr v-if="balancesLoading">
-								<td colspan="7" class="px-4 py-8 text-center">
+								<td colspan="4" class="px-4 py-8 text-center">
 									<svg class="animate-spin w-5 h-5 mx-auto text-brand-500" fill="none" viewBox="0 0 24 24">
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
 										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
 									</svg>
 								</td>
 							</tr>
-							<tr v-else-if="balances.length === 0">
-								<td colspan="7" class="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+							<tr v-else-if="employeeGroups.length === 0">
+								<td colspan="4" class="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
 									Không có dữ liệu số dư phép
 								</td>
 							</tr>
 							<tr
-								v-for="bal in balances"
-								:key="bal.id"
+								v-for="group in employeeGroups"
+								:key="group.employee.id"
 								class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
 							>
 								<td class="px-4 py-3">
-									<p class="font-medium text-gray-900 dark:text-white">{{ bal.employee.fullName }}</p>
-									<p class="text-xs text-gray-400 dark:text-gray-500">{{ bal.employee.employeeCode }}</p>
+									<p class="font-medium text-gray-900 dark:text-white">{{ group.employee.fullName }}</p>
+									<p class="text-xs text-gray-400 dark:text-gray-500">{{ group.employee.employeeCode }}</p>
 								</td>
 								<td class="px-4 py-3 text-gray-600 dark:text-gray-400 text-sm">
-									{{ bal.employee.department ?? '—' }}
+									{{ group.employee.department?.name ?? '—' }}
 								</td>
-								<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ bal.leaveType.name }}</td>
-
-								<!-- Tổng ngày — inline edit -->
 								<td class="px-4 py-3 text-right">
-									<div v-if="editingBalanceId === bal.id" class="flex items-center justify-end gap-1.5">
-										<input
-											v-model.number="editingDays"
-											type="number"
-											min="0"
-											class="w-16 text-right px-2 py-1 text-sm rounded border border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-											@keydown.enter="saveEditBalance(bal)"
-											@keydown.escape="cancelEditBalance"
-										/>
-										<button
-											class="p-1 rounded text-green-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-											title="Lưu"
-											@click="saveEditBalance(bal)"
-										>
-											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-											</svg>
-										</button>
-										<button
-											class="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-											title="Huỷ"
-											@click="cancelEditBalance"
-										>
-											<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
-									</div>
-									<span v-else class="text-gray-700 dark:text-gray-300 font-medium">{{ bal.totalDays }}</span>
+									<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+										{{ group.balances.length }} loại
+									</span>
 								</td>
-
-								<td class="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{{ bal.usedDays }}</td>
-								<td class="px-4 py-3 text-right">
-									<span :class="remainingClass(bal.remainingDays)">{{ bal.remainingDays }}</span>
-								</td>
-
 								<td class="px-4 py-3 text-right">
 									<button
-										v-if="editingBalanceId !== bal.id"
-										class="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
-										title="Sửa số ngày"
-										@click="startEditBalance(bal)"
+										class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:text-brand-400 dark:hover:text-brand-300 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+										@click="detailGroup = group"
 									>
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
-											/>
+										Xem chi tiết
+										<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
 										</svg>
 									</button>
 								</td>
@@ -1010,7 +952,7 @@
 			<!-- Pagination -->
 			<div v-if="balancesMeta && balancesMeta.totalPages > 1" class="flex items-center justify-between pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ balancesMeta.total }}</strong> bản ghi
+					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ balancesMeta.total }}</strong> nhân viên
 				</p>
 				<CommonAppPagination
 					:current-page="balanceFilter.page"
@@ -1047,6 +989,14 @@
 			:leave-types="leaveTypes"
 			@created="onBalanceCreated"
 			@close="showAddBalance = false"
+		/>
+		<EmployeeBalanceDetailModal
+			v-if="detailGroup"
+			:group="detailGroup"
+			:year="balanceFilter.year"
+			:leave-types="leaveTypes"
+			@updated="onDetailUpdated"
+			@close="detailGroup = null"
 		/>
 	</Teleport>
 </template>

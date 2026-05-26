@@ -5,6 +5,8 @@ import type {
 	CreateLeaveBalanceDto,
 	UpdateLeaveBalanceDto,
 	QueryLeaveBalanceParams,
+	EmployeeBalanceGroup,
+	QueryEmployeeBalanceParams,
 } from '~/types/leave.types';
 
 export const useLeaveBalanceService = () => {
@@ -37,10 +39,17 @@ export const useLeaveBalanceService = () => {
 			return res.data;
 		},
 
-		async bulkInit(leaveTypeId: number, year: number): Promise<{ created: number; skipped: number }> {
+		async findByEmployee(params: QueryEmployeeBalanceParams): Promise<{ data: EmployeeBalanceGroup[]; meta: PaginatedMeta }> {
+			const res = await authFetch<PaginatedResponse<EmployeeBalanceGroup>>('/v1/leave-balances/by-employee', { params });
+			return { data: res.data, meta: res.meta };
+		},
+
+		async bulkInit(year: number, leaveTypeId?: number): Promise<{ created: number; skipped: number }> {
+			const body: { year: number; leaveTypeId?: number } = { year };
+			if (leaveTypeId !== undefined) body.leaveTypeId = leaveTypeId;
 			const res = await authFetch<ApiResponse<{ created: number; skipped: number }>>('/v1/leave-balances/bulk-init', {
 				method: 'POST',
-				body: { leaveTypeId, year },
+				body,
 			});
 			return res.data;
 		},

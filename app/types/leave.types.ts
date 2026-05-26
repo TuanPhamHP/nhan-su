@@ -165,6 +165,32 @@ export interface QueryLeaveBalanceParams {
 	year?: number;
 	leaveTypeId?: number;
 	employeeId?: number;
+	search?: string;
+	page?: number;
+	limit?: number;
+}
+
+export interface EmployeeBalanceDeptRef {
+	id: number;
+	name: string;
+}
+
+export interface EmployeeBalanceRef {
+	id: number;
+	fullName: string;
+	employeeCode: string;
+	department: EmployeeBalanceDeptRef | null;
+}
+
+export interface EmployeeBalanceGroup {
+	employee: EmployeeBalanceRef;
+	balances: LeaveBalance[];
+}
+
+export interface QueryEmployeeBalanceParams {
+	year: number;
+	departmentId?: number;
+	search?: string;
 	page?: number;
 	limit?: number;
 }
