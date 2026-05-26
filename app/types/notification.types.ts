@@ -1,5 +1,7 @@
 export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE';
 
+export type NotificationActionType = 'NAVIGATE_ONLY' | 'APPROVE_REJECT' | null;
+
 export type NotificationType =
 	| 'CHECK_IN'
 	| 'CHECK_OUT'
@@ -20,6 +22,14 @@ export type NotificationType =
 	| 'VIOLATION_APPROVED'
 	| 'VIOLATION_REJECTED';
 
+export interface NotificationActionPayload {
+	approveEndpoint: string;
+	rejectEndpoint: string;
+	label: string;
+	refType: string;
+	refId: number;
+}
+
 export interface NotificationResponse {
 	id: number;
 	title: string;
@@ -30,6 +40,9 @@ export interface NotificationResponse {
 	refType: string | null;
 	isRead: boolean;
 	createdAt: string;
+	targetUrl: string | null;
+	actionType: NotificationActionType;
+	actionPayload: NotificationActionPayload | null;
 }
 
 export interface UnreadCountResponse {

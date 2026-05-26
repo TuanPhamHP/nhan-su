@@ -41,5 +41,13 @@ export const useNotificationService = () => {
 			const params = category ? { category } : undefined;
 			await authFetch<unknown>('/v1/notifications', { method: 'DELETE', params });
 		},
+
+		async approveRequest(endpoint: string): Promise<void> {
+			await authFetch<unknown>(endpoint, { method: 'PATCH' });
+		},
+
+		async rejectRequest(endpoint: string, rejectNote: string): Promise<void> {
+			await authFetch<unknown>(endpoint, { method: 'PATCH', body: { rejectNote } });
+		},
 	};
 };

@@ -226,6 +226,14 @@ import EmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBad
 - [ ] Không lưu token thủ công vào localStorage
 - [ ] Components trong `modules/` được **explicit import**, không dùng auto-import name
 
+### Checklist Notification
+
+- [ ] `targetUrl` đã được set đúng theo `NotificationUrlBuilder` trên backend
+- [ ] `actionType = 'APPROVE_REJECT'` cho các event tạo đơn gửi đến approver
+- [ ] `actionType = 'NAVIGATE_ONLY'` cho các event kết quả gửi đến employee
+- [ ] `actionType = null` cho các notification thuần informational (VD: ATTENDANCE)
+- [ ] `actionPayload` có đủ `approveEndpoint` + `rejectEndpoint` + `label` khi `actionType = 'APPROVE_REJECT'`
+
 ---
 
 ## KHÔNG được làm

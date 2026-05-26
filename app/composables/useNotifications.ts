@@ -4,7 +4,7 @@ import { useNotificationStore } from '~/stores/notification';
 export function useNotifications() {
 	const store = useNotificationStore();
 	const { unreadCount, notifications, meta, loading } = storeToRefs(store);
-	const { fetchUnreadCount, fetchNotifications, markRead, markAllRead, deleteAll } = store;
+	const { fetchUnreadCount, fetchNotifications, markRead, markAllRead, quickApprove, quickReject, deleteAll } = store;
 
-	return { unreadCount, notifications, meta, loading, fetchUnreadCount, fetchNotifications, markRead, markAllRead, deleteAll };
+	return { unreadCount, notifications, meta, loading, fetchUnreadCount, fetchNotifications, markRead, markAllRead, quickApprove, quickReject, deleteAll };
 }

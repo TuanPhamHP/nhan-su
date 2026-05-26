@@ -66,6 +66,20 @@ export const useNotificationStore = defineStore('notification', () => {
 		}
 	}
 
+	async function quickApprove(notification: NotificationResponse) {
+		if (!notification.actionPayload) return;
+		const { approveRequest } = useNotificationService();
+		await approveRequest(notification.actionPayload.approveEndpoint);
+		await markRead(notification.id);
+	}
+
+	async function quickReject(notification: NotificationResponse, rejectNote: string) {
+		if (!notification.actionPayload) return;
+		const { rejectRequest } = useNotificationService();
+		await rejectRequest(notification.actionPayload.rejectEndpoint, rejectNote);
+		await markRead(notification.id);
+	}
+
 	async function deleteAll(category?: NotificationCategory) {
 		const { deleteAll: deleteAllFn } = useNotificationService();
 		await deleteAllFn(category);
@@ -118,6 +132,8 @@ export const useNotificationStore = defineStore('notification', () => {
 		fetchNotifications,
 		markRead,
 		markAllRead,
+		quickApprove,
+		quickReject,
 		deleteAll,
 		registerDevice,
 		unregisterDevice,
