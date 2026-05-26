@@ -4,7 +4,7 @@ export default defineNuxtConfig({
 	ssr: false,
 	app: {
 		baseURL: '/',
-		pageTransition: { name: 'page', mode: 'out-in' },
+		pageTransition: false,
 		head: {
 			titleTemplate: 'Hệ thống nhân sự - %s',
 			title: 'Booking',
@@ -63,13 +63,6 @@ export default defineNuxtConfig({
 				scss: {
 					additionalData: `@use "~/assets/styles/variables.scss" as *;`,
 				},
-			},
-		},
-	},
-	experimental: {
-		defaults: {
-			nuxtLink: {
-				trailingSlash: 'append',
 			},
 		},
 	},
