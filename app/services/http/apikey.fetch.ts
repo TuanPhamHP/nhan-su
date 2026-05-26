@@ -7,6 +7,7 @@ export const useApiKeyFetch = () => {
 
 			options.headers = {
 				...options.headers,
+				'ngrok-skip-browser-warning': '1',
 				// @ts-ignore
 				'x-api-key': apiKey,
 			};

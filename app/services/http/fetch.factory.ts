@@ -5,6 +5,10 @@ export function createFetch(options: FetchOptions = {}) {
 		$fetch.create({
 			baseURL: useRuntimeConfig().public.baseApiUrl,
 			...options,
+			headers: {
+				'ngrok-skip-browser-warning': '1',
+				...options.headers,
+			},
 			onResponseError({ response }) {
 				const data = response._data as { error?: { message?: string } } | undefined;
 				const message = data?.error?.message;

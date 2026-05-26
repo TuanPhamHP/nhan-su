@@ -4,6 +4,7 @@ export const usePublicFetch = () => {
 	return createFetch({
 		headers: {
 			'Content-Type': 'application/json',
+			'ngrok-skip-browser-warning': '1',
 		},
 	})();
 };

@@ -13,6 +13,7 @@ export function setOnForceLogout(cb: () => void): void {
 
 // Captured from first useAuthFetch() call (composable context)
 let _baseApiUrl = '';
+const NGROK_HEADERS = { 'ngrok-skip-browser-warning': '1' };
 
 // Singleton refresh promise — prevents concurrent refresh calls
 let _refreshPromise: Promise<string> | null = null;
@@ -27,6 +28,7 @@ async function _doRefresh(): Promise<string> {
 			method: 'POST',
 			baseURL: _baseApiUrl,
 			body: { refreshToken },
+			headers: NGROK_HEADERS,
 		},
 	);
 
@@ -60,6 +62,7 @@ export const useAuthFetch = () => {
 			baseURL: _baseApiUrl,
 			...opts,
 			headers: {
+				...NGROK_HEADERS,
 				...(opts.headers as Record<string, string>),
 				...(token ? { Authorization: `Bearer ${token}` } : {}),
 			},
@@ -76,6 +79,7 @@ export const useAuthFetch = () => {
 					return await $fetch<T>(url, {
 						...options,
 						headers: {
+							...NGROK_HEADERS,
 							...(options.headers as Record<string, string>),
 							Authorization: `Bearer ${newToken}`,
 						},
