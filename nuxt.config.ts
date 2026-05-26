@@ -46,6 +46,12 @@ export default defineNuxtConfig({
 			firebaseVapidKey: process.env.NUXT_PUBLIC_FIREBASE_VAPID_KEY || '',
 		},
 	},
+	nitro: {
+		prerender: {
+			crawlLinks: false,
+			routes: ['/', '/200.html', '/404.html'],
+		},
+	},
 	compatibilityDate: '2025-07-15',
 	devtools: { enabled: true },
 	modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@vee-validate/nuxt', '@nuxt/icon'],
@@ -57,6 +63,13 @@ export default defineNuxtConfig({
 				scss: {
 					additionalData: `@use "~/assets/styles/variables.scss" as *;`,
 				},
+			},
+		},
+	},
+	experimental: {
+		defaults: {
+			nuxtLink: {
+				trailingSlash: 'append',
 			},
 		},
 	},
