@@ -250,7 +250,7 @@
 					<div
 						class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-800/50"
 					>
-						<p class="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Tài khoản mặc định</p>
+						<p class="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Tài khoản login nhanh:</p>
 						<div class="flex flex-wrap gap-2">
 							<button
 								v-for="acc in defaultAccounts"
@@ -265,9 +265,6 @@
 								{{ acc.email }}
 							</button>
 						</div>
-						<p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
-							Mật khẩu: <code class="font-mono text-gray-600 dark:text-gray-300">Hr@123456</code>
-						</p>
 					</div>
 
 					<!-- Submit -->
