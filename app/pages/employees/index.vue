@@ -44,12 +44,12 @@
 	}
 
 	const departmentOptions = computed(() => [
-		{ value: undefined, label: 'Tất cả phòng ban' },
-		...departments.value.map(d => ({ value: d.id as number | undefined, label: d.name })),
+		{ value: 0, label: 'Tất cả phòng ban' },
+		...departments.value.map(d => ({ value: d.id, label: d.name })),
 	]);
 
-	function onDepartmentChange(val: string | number | undefined) {
-		departmentId.value = val as number | undefined;
+	function onDepartmentChange(val: string | number) {
+		departmentId.value = val === 0 ? undefined : (val as number);
 		page.value = 1;
 	}
 
@@ -147,7 +147,7 @@
 				/>
 			</div>
 			<div class="min-w-[200px]">
-				<UiSelect :model-value="departmentId" :options="departmentOptions" @update:model-value="onDepartmentChange" />
+				<UiSelectInput :model-value="departmentId ?? 0" :options="departmentOptions" placeholder="Tất cả phòng ban" @update:model-value="onDepartmentChange" />
 			</div>
 		</div>
 

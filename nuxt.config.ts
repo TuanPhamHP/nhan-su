@@ -4,6 +4,7 @@ export default defineNuxtConfig({
 	ssr: false,
 	app: {
 		baseURL: '/',
+		pageTransition: { name: 'page', mode: 'out-in' },
 		head: {
 			titleTemplate: 'Hệ thống nhân sự - %s',
 			title: 'Booking',

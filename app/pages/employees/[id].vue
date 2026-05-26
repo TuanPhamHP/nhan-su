@@ -1,9 +1,10 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
 	import { formatDate, formatDateTime } from '~/utils/date';
-	import type { UpdateEmployeeDto, EmployeeGender } from '~/types/employee.types';
+	import type { UpdateEmployeeDto, EmployeeGender, EmployeeSummary } from '~/types/employee.types';
 	import type { UserRole } from '~/types/auth.types';
 	import { usePositionService } from '~/services/position.service';
+	import { useEmployeeService } from '~/services/employee.service';
 	import type { PositionSummary } from '~/types/position.types';
 	import EmployeeEmployeeStatusBadge from '@/components/modules/employee/EmployeeStatusBadge.vue';
 	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
@@ -20,8 +21,19 @@
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
 	const positionService = usePositionService();
+	const employeeService = useEmployeeService();
 
 	const positions = ref<PositionSummary[]>([]);
+	const allEmployees = ref<EmployeeSummary[]>([]);
+
+	async function loadAllEmployees() {
+		try {
+			const res = await employeeService.findAll({ pagination: false, status: 'ACTIVE' });
+			allEmployees.value = res.data;
+		} catch {
+			allEmployees.value = [];
+		}
+	}
 
 	async function loadPositions(departmentId?: number) {
 		try {
@@ -45,6 +57,7 @@
 			),
 			fetchDepartments(),
 			loadPositions(),
+			loadAllEmployees(),
 		]);
 		if (isEditing.value) resetFormFromEmployee();
 	});
@@ -58,6 +71,7 @@
 		role: UserRole;
 		departmentId: number | undefined;
 		positionId: number | undefined;
+		managerId: number | undefined;
 		gender: EmployeeGender | '';
 		dateOfBirth: string;
 		address: string;
@@ -74,6 +88,7 @@
 	const [role] = defineField('role');
 	const [departmentId] = defineField('departmentId');
 	const [positionId] = defineField('positionId');
+	const [managerId] = defineField('managerId');
 	const [gender] = defineField('gender');
 
 	watch(departmentId, val => {
@@ -95,6 +110,7 @@
 				role: emp.role,
 				departmentId: deptId,
 				positionId: emp.position?.id ?? undefined,
+				managerId: emp.manager?.id ?? undefined,
 				gender: emp.gender ?? '',
 				dateOfBirth: emp.dateOfBirth ?? '',
 				address: emp.address ?? '',
@@ -120,6 +136,7 @@
 			role: values.role,
 			departmentId: values.departmentId ? Number(values.departmentId) : undefined,
 			positionId: values.positionId ? Number(values.positionId) : undefined,
+			managerId: values.managerId ? Number(values.managerId) : undefined,
 			gender: (values.gender as EmployeeGender) || undefined,
 			dateOfBirth: values.dateOfBirth || undefined,
 			address: values.address || undefined,
@@ -184,6 +201,13 @@
 	const positionOptions = computed(() => [
 		{ value: undefined as number | undefined, label: '-- Không có chức vụ --' },
 		...positions.value.map(p => ({ value: p.id as number | undefined, label: p.name })),
+	]);
+
+	const managerOptions = computed(() => [
+		{ value: 0, label: '— Không có quản lý —' },
+		...allEmployees.value
+			.filter(e => e.id !== id)
+			.map(e => ({ value: e.id, label: `${e.fullName} (${e.employeeCode})` })),
 	]);
 
 	const roleLabel = computed(() => {
@@ -376,6 +400,17 @@
 							<p :class="valueCls">{{ currentEmployee.position?.name ?? '—' }}</p>
 						</div>
 						<div>
+							<p :class="labelCls">Quản lý trực tiếp</p>
+							<NuxtLink
+								v-if="currentEmployee.manager"
+								:to="`/employees/${currentEmployee.manager.id}`"
+								class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+							>
+								{{ currentEmployee.manager.fullName }}
+							</NuxtLink>
+							<p v-else :class="valueCls">—</p>
+						</div>
+						<div>
 							<p :class="labelCls">Ngày vào làm</p>
 							<p :class="valueCls">{{ formatDate(currentEmployee.joinDate) }}</p>
 						</div>
@@ -455,6 +490,18 @@
 						<div>
 							<label :class="labelCls">Chức vụ</label>
 							<UiSelect v-model="positionId" :options="positionOptions" />
+						</div>
+
+						<!-- Manager -->
+						<div>
+							<label :class="labelCls">Quản lý trực tiếp</label>
+							<UiSelectInput
+								:model-value="managerId ?? 0"
+								:options="managerOptions"
+								placeholder="— Không có quản lý —"
+								search-placeholder="Tìm nhân viên..."
+								@update:model-value="managerId = $event === 0 ? undefined : ($event as number)"
+							/>
 						</div>
 
 						<!-- Gender -->

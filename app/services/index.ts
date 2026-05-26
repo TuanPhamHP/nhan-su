@@ -20,3 +20,5 @@ export * from './notification.service';
 export * from './device-token.service';
 export * from './violation-request.service';
 export * from './overtime-request.service';
+export * from './online-work-request.service';
+export * from './dashboard.service';

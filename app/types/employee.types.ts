@@ -27,6 +27,12 @@ export interface EmployeeSummary {
 	} | null;
 }
 
+export interface ManagerSummary {
+	id: number;
+	fullName: string;
+	email: string;
+}
+
 export interface Employee {
 	id: number;
 	employeeCode: string;
@@ -42,6 +48,7 @@ export interface Employee {
 	avatarUrl: string | null;
 	department: DepartmentSummary | null;
 	position: PositionSummary | null;
+	manager: ManagerSummary | null;
 	createdAt: string;
 }
 

@@ -1,82 +1,82 @@
 <script setup lang="ts">
-import { format, parseISO } from 'date-fns';
-import type { NotificationResponse } from '~/types/notification.types';
+	import { format, parseISO } from 'date-fns';
+	import type { NotificationResponse } from '~/types/notification.types';
 
-const props = defineProps<{ notification: NotificationResponse }>();
-const emit = defineEmits<{
-	read: [id: number];
-	actioned: [id: number];
-	'close-panel': [];
-}>();
+	const props = defineProps<{ notification: NotificationResponse }>();
+	const emit = defineEmits<{
+		read: [id: number];
+		actioned: [id: number];
+		'close-panel': [];
+	}>();
 
-const { markRead, quickApprove, quickReject } = useNotifications();
-const router = useRouter();
-const toast = useToast();
+	const { markRead, quickApprove, quickReject } = useNotifications();
+	const router = useRouter();
+	const toast = useToast();
 
-const showRejectInput = ref(false);
-const rejectNote = ref('');
-const isLoading = ref(false);
-const isActioned = ref(false);
-const actionedMessage = ref('');
+	const showRejectInput = ref(false);
+	const rejectNote = ref('');
+	const isLoading = ref(false);
+	const isActioned = ref(false);
+	const actionedMessage = ref('');
 
-function formatVNTime(iso: string): string {
-	try {
-		return format(parseISO(iso), 'HH:mm');
-	} catch {
-		return '';
-	}
-}
-
-const handleClick = async () => {
-	if (!props.notification.isRead) {
+	function formatVNTime(iso: string): string {
 		try {
-			await markRead(props.notification.id);
-			emit('read', props.notification.id);
+			return format(parseISO(iso), 'HH:mm');
 		} catch {
-			// non-critical
+			return '';
 		}
 	}
-	if (!showRejectInput.value) {
-		handleNavigate();
-	}
-};
 
-const handleNavigate = () => {
-	if (props.notification.targetUrl) {
-		router.push(props.notification.targetUrl);
-		emit('close-panel');
-	}
-};
+	const handleClick = async () => {
+		if (!props.notification.isRead) {
+			try {
+				await markRead(props.notification.id);
+				emit('read', props.notification.id);
+			} catch {
+				// non-critical
+			}
+		}
+		if (!showRejectInput.value) {
+			handleNavigate();
+		}
+	};
 
-const handleQuickApprove = async () => {
-	isLoading.value = true;
-	try {
-		await quickApprove(props.notification);
-		isActioned.value = true;
-		actionedMessage.value = 'Đã duyệt thành công';
-		emit('actioned', props.notification.id);
-	} catch (err) {
-		toast.error(err instanceof Error ? err.message : 'Không thể duyệt. Vui lòng thử lại.');
-	} finally {
-		isLoading.value = false;
-	}
-};
+	const handleNavigate = () => {
+		if (props.notification.targetUrl) {
+			router.push(props.notification.targetUrl);
+			emit('close-panel');
+		}
+	};
 
-const handleQuickReject = async () => {
-	if (!rejectNote.value.trim()) return;
-	isLoading.value = true;
-	try {
-		await quickReject(props.notification, rejectNote.value);
-		isActioned.value = true;
-		actionedMessage.value = 'Đã từ chối';
-		showRejectInput.value = false;
-		emit('actioned', props.notification.id);
-	} catch (err) {
-		toast.error(err instanceof Error ? err.message : 'Không thể từ chối. Vui lòng thử lại.');
-	} finally {
-		isLoading.value = false;
-	}
-};
+	const handleQuickApprove = async () => {
+		isLoading.value = true;
+		try {
+			await quickApprove(props.notification);
+			isActioned.value = true;
+			actionedMessage.value = 'Đã duyệt thành công';
+			emit('actioned', props.notification.id);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Không thể duyệt. Vui lòng thử lại.');
+		} finally {
+			isLoading.value = false;
+		}
+	};
+
+	const handleQuickReject = async () => {
+		if (!rejectNote.value.trim()) return;
+		isLoading.value = true;
+		try {
+			await quickReject(props.notification, rejectNote.value);
+			isActioned.value = true;
+			actionedMessage.value = 'Đã từ chối';
+			showRejectInput.value = false;
+			emit('actioned', props.notification.id);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Không thể từ chối. Vui lòng thử lại.');
+		} finally {
+			isLoading.value = false;
+		}
+	};
 </script>
 
 <template>
@@ -108,10 +108,7 @@ const handleQuickReject = async () => {
 						<span class="text-xs text-gray-400 whitespace-nowrap">
 							{{ formatVNTime(notification.createdAt) }}
 						</span>
-						<div
-							v-if="!notification.isRead"
-							class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"
-						/>
+						<div v-if="!notification.isRead" class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
 					</div>
 				</div>
 
@@ -121,12 +118,9 @@ const handleQuickReject = async () => {
 				</p>
 
 				<!-- Quick actions (chỉ hiện APPROVE_REJECT) -->
-				<div
-					v-if="notification.actionType === 'APPROVE_REJECT' && !isActioned"
-					class="flex gap-2 mt-2"
-					@click.stop
-				>
+				<div v-if="notification.actionType === 'APPROVE_REJECT' && !isActioned" class="flex gap-2 mt-2" @click.stop>
 					<button
+						v-if="false"
 						:disabled="isLoading"
 						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 disabled:opacity-50 transition-colors"
 						@click="handleQuickApprove"
@@ -135,6 +129,7 @@ const handleQuickReject = async () => {
 					</button>
 
 					<button
+						v-if="false"
 						:disabled="isLoading"
 						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
 						@click="showRejectInput = true"

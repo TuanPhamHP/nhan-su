@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import type { SelectOption } from '~/components/ui/Select.vue';
 	import type { AttendanceReportResponse } from '~/types/report.types';
+	import EmployeeAttendanceDetailModal from '~/components/modules/attendance/EmployeeAttendanceDetailModal.vue';
 
 	definePageMeta({ title: 'Báo cáo' });
 
@@ -50,8 +51,8 @@
 		...monthOptions.value,
 	]);
 
-	const departmentOptions = computed<SelectOption[]>(() => [
-		{ value: undefined, label: 'Tất cả phòng ban' },
+	const departmentOptions = computed(() => [
+		{ value: 0, label: 'Tất cả phòng ban' },
 		...departments.value.map(d => ({ value: d.id, label: d.name })),
 	]);
 
@@ -64,11 +65,16 @@
 	// TAB 1 — BẢNG CÔNG
 	// ═══════════════════════════════════════════════════════════════════════════
 	const attendanceFetched = ref(false);
+	const attendanceDirty = ref(false);
 
 	const attendanceFilter = reactive({
 		year: currentYear,
 		month: currentMonth,
 		departmentId: undefined as number | undefined,
+	});
+
+	watch(attendanceFilter, () => {
+		if (attendanceFetched.value) attendanceDirty.value = true;
 	});
 
 	const attendanceRows = computed(() => attendanceReport.value.slice(0, DISPLAY_LIMIT));
@@ -96,6 +102,7 @@
 				departmentId: attendanceFilter.departmentId,
 			});
 			attendanceFetched.value = true;
+			attendanceDirty.value = false;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi tải báo cáo bảng công');
 		}
@@ -131,16 +138,28 @@
 		return 'text-red-600 dark:text-red-400 font-bold';
 	}
 
+	// ─── Employee detail modal ──────────────────────────────────────────────────
+	const detailEmployee = ref<AttendanceReportResponse | null>(null);
+
+	function openEmployeeDetail(row: AttendanceReportResponse) {
+		detailEmployee.value = row;
+	}
+
 	// ═══════════════════════════════════════════════════════════════════════════
 	// TAB 2 — NGHỈ PHÉP
 	// ═══════════════════════════════════════════════════════════════════════════
 	const leaveFetched = ref(false);
+	const leaveDirty = ref(false);
 
 	const leaveFilter = reactive({
 		year: currentYear,
 		month: undefined as number | undefined,
 		departmentId: undefined as number | undefined,
 		leaveTypeId: undefined as number | undefined,
+	});
+
+	watch(leaveFilter, () => {
+		if (leaveFetched.value) leaveDirty.value = true;
 	});
 
 	const leaveRows = computed(() => leaveReport.value.slice(0, DISPLAY_LIMIT));
@@ -155,6 +174,7 @@
 				leaveTypeId: leaveFilter.leaveTypeId,
 			});
 			leaveFetched.value = true;
+			leaveDirty.value = false;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi tải báo cáo nghỉ phép');
 		}
@@ -235,23 +255,29 @@
 					/>
 				</div>
 				<div class="w-full sm:w-48">
-					<UiSelect
-						:model-value="attendanceFilter.departmentId"
+					<UiSelectInput
+						:model-value="attendanceFilter.departmentId ?? 0"
 						:options="departmentOptions"
 						placeholder="Tất cả phòng ban"
-						@update:model-value="attendanceFilter.departmentId = $event as number | undefined"
+						@update:model-value="attendanceFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
 				</div>
-				<CommonAppButton :loading="loadingAttendance" @click="viewAttendanceReport">
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-						/>
-					</svg>
-					Xem báo cáo
-				</CommonAppButton>
+				<div class="relative">
+					<CommonAppButton :loading="loadingAttendance" @click="viewAttendanceReport">
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+							/>
+						</svg>
+						Xem báo cáo
+					</CommonAppButton>
+					<span v-if="attendanceDirty" class="absolute -top-1 -right-1 flex h-3 w-3 pointer-events-none">
+						<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+						<span class="relative inline-flex rounded-full h-3 w-3 bg-orange-500" />
+					</span>
+				</div>
 				<CommonAppButton
 					variant="secondary"
 					:loading="exportingAttendance"
@@ -277,6 +303,21 @@
 					</svg>
 					Xuất chi tiết
 				</CommonAppButton>
+			</div>
+
+			<!-- Dirty filter banner -->
+			<div
+				v-if="attendanceDirty"
+				class="flex items-center gap-2 px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400"
+			>
+				<svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+					/>
+				</svg>
+				Bộ lọc đã thay đổi — nhấn <span class="font-semibold mx-1">Xem báo cáo</span> để cập nhật dữ liệu.
 			</div>
 
 			<!-- Summary cards -->
@@ -422,7 +463,8 @@
 							<tr
 								v-for="row in attendanceRows"
 								:key="row.employeeId"
-								class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+								class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+								@click="openEmployeeDetail(row)"
 							>
 								<td class="px-4 py-3">
 									<span class="font-mono text-xs text-gray-500 dark:text-gray-400">{{ row.employeeCode }}</span>
@@ -506,11 +548,11 @@
 					/>
 				</div>
 				<div class="w-full sm:w-48">
-					<UiSelect
-						:model-value="leaveFilter.departmentId"
+					<UiSelectInput
+						:model-value="leaveFilter.departmentId ?? 0"
 						:options="departmentOptions"
 						placeholder="Tất cả phòng ban"
-						@update:model-value="leaveFilter.departmentId = $event as number | undefined"
+						@update:model-value="leaveFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
 				</div>
 				<div class="w-full sm:w-44">
@@ -521,16 +563,22 @@
 						@update:model-value="leaveFilter.leaveTypeId = $event as number | undefined"
 					/>
 				</div>
-				<CommonAppButton :loading="loadingLeave" @click="viewLeaveReport">
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-						/>
-					</svg>
-					Xem báo cáo
-				</CommonAppButton>
+				<div class="relative">
+					<CommonAppButton :loading="loadingLeave" @click="viewLeaveReport">
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+							/>
+						</svg>
+						Xem báo cáo
+					</CommonAppButton>
+					<span v-if="leaveDirty" class="absolute -top-1 -right-1 flex h-3 w-3 pointer-events-none">
+						<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+						<span class="relative inline-flex rounded-full h-3 w-3 bg-orange-500" />
+					</span>
+				</div>
 				<CommonAppButton
 					variant="secondary"
 					:loading="exportingLeave"
@@ -546,6 +594,21 @@
 					</svg>
 					Xuất Excel
 				</CommonAppButton>
+			</div>
+
+			<!-- Dirty filter banner -->
+			<div
+				v-if="leaveDirty"
+				class="flex items-center gap-2 px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400"
+			>
+				<svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+					/>
+				</svg>
+				Bộ lọc đã thay đổi — nhấn <span class="font-semibold mx-1">Xem báo cáo</span> để cập nhật dữ liệu.
 			</div>
 
 			<!-- Overflow warning -->
@@ -681,4 +744,16 @@
 			</div>
 		</template>
 	</div>
+
+	<Teleport to="body">
+		<EmployeeAttendanceDetailModal
+			v-if="detailEmployee"
+			:employee-id="detailEmployee.employeeId"
+			:employee-name="detailEmployee.fullName"
+			:employee-code="detailEmployee.employeeCode"
+			:initial-year="attendanceFilter.year"
+			:initial-month="attendanceFilter.month"
+			@close="detailEmployee = null"
+		/>
+	</Teleport>
 </template>

@@ -2,6 +2,7 @@ import type { ViolationDetailView } from './violation.types';
 
 export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'LEAVE';
 export type LockReason = 'AUTO_MIDNIGHT' | 'HR_LOCKED';
+export type WorkType = 'ONLINE_APPROVED' | 'ONLINE_T7' | 'OFFLINE' | null;
 
 export type AttendanceViolationRef = ViolationDetailView;
 
@@ -36,6 +37,7 @@ export interface AttendanceRecordDetail {
 	effectiveStart: string | null; // ISO 8601 epoch-based — dùng getUTCHours()
 	effectiveEnd: string | null; // ISO 8601 epoch-based — dùng getUTCHours()
 	isHalfDay: boolean;
+	workType: WorkType;
 	checkInPhotoUrl: string | null;
 	checkOutPhotoUrl: string | null;
 	isLocked: boolean;

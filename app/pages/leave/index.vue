@@ -155,8 +155,8 @@
 		return text.length > len ? text.slice(0, len) + '…' : text;
 	}
 
-	const departmentOptions = computed<SelectOption[]>(() => [
-		{ value: undefined, label: 'Tất cả phòng ban' },
+	const departmentOptions = computed(() => [
+		{ value: 0, label: 'Tất cả phòng ban' },
 		...departments.value.map(d => ({ value: d.id, label: d.name })),
 	]);
 
@@ -430,11 +430,11 @@
 			<!-- Filter bar -->
 			<div class="flex flex-col sm:flex-row flex-wrap gap-3">
 				<div class="w-full sm:w-44">
-					<UiSelect
-						:model-value="requestFilter.departmentId"
+					<UiSelectInput
+						:model-value="requestFilter.departmentId ?? 0"
 						:options="departmentOptions"
 						placeholder="Tất cả phòng ban"
-						@update:model-value="requestFilter.departmentId = $event as number | undefined"
+						@update:model-value="requestFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
 				</div>
 				<div class="w-full sm:w-44">
@@ -831,14 +831,11 @@
 
 					<!-- Department filter -->
 					<div class="w-44">
-						<UiSelect
-							:model-value="balanceFilter.departmentId"
+						<UiSelectInput
+							:model-value="balanceFilter.departmentId ?? 0"
 							:options="departmentOptions"
 							placeholder="Tất cả phòng ban"
-							@update:model-value="
-								balanceFilter.departmentId = $event as number | undefined;
-								applyBalanceFilter();
-							"
+							@update:model-value="(v) => { balanceFilter.departmentId = v === 0 ? undefined : (v as number); applyBalanceFilter(); }"
 						/>
 					</div>
 

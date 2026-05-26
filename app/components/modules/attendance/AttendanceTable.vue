@@ -164,6 +164,18 @@
 							>
 								Nửa ngày
 							</span>
+							<span
+								v-if="record.workType === 'ONLINE_APPROVED'"
+								class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+							>
+								🏠 Online
+							</span>
+							<span
+								v-else-if="record.workType === 'ONLINE_T7'"
+								class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+							>
+								🖥️ T7 Online
+							</span>
 						</div>
 					</td>
 

@@ -53,8 +53,8 @@
 	}
 
 	// ─── Select options ───────────────────────────────────────────────────────
-	const departmentOptions = computed<SelectOption[]>(() => [
-		{ value: undefined, label: 'Tất cả phòng ban' },
+	const departmentOptions = computed(() => [
+		{ value: 0, label: 'Tất cả phòng ban' },
 		...departments.value.map(d => ({ value: d.id, label: d.name })),
 	]);
 
@@ -401,12 +401,12 @@
 
 				<!-- Department -->
 				<div class="w-full sm:w-44">
-					<UiSelect
-						:model-value="historyFilter.departmentId"
+					<UiSelectInput
+						:model-value="historyFilter.departmentId ?? 0"
 						:options="departmentOptions"
 						:disabled="isManager"
 						placeholder="Tất cả phòng ban"
-						@update:model-value="historyFilter.departmentId = $event as number | undefined"
+						@update:model-value="historyFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
 				</div>
 

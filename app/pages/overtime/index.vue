@@ -43,8 +43,8 @@ async function loadDepartments() {
 	}
 }
 
-const departmentOptions = computed<SelectOption[]>(() => [
-	{ value: undefined, label: 'Tất cả phòng ban' },
+const departmentOptions = computed(() => [
+	{ value: 0, label: 'Tất cả phòng ban' },
 	...departments.value.map(d => ({ value: d.id, label: d.name })),
 ]);
 
@@ -305,11 +305,11 @@ watch(activeTab, tab => {
 					/>
 				</div>
 				<div class="w-full sm:w-44">
-					<UiSelect
-						:model-value="requestFilter.departmentId"
+					<UiSelectInput
+						:model-value="requestFilter.departmentId ?? 0"
 						:options="departmentOptions"
 						placeholder="Tất cả phòng ban"
-						@update:model-value="requestFilter.departmentId = $event as number | undefined"
+						@update:model-value="requestFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
 				</div>
 				<div class="w-full sm:w-44">
@@ -470,11 +470,11 @@ watch(activeTab, tab => {
 						/>
 					</div>
 					<div class="w-44">
-						<UiSelect
-							:model-value="reportFilter.departmentId"
+						<UiSelectInput
+							:model-value="reportFilter.departmentId ?? 0"
 							:options="departmentOptions"
 							placeholder="Tất cả phòng ban"
-							@update:model-value="reportFilter.departmentId = $event as number | undefined"
+							@update:model-value="reportFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 						/>
 					</div>
 					<CommonAppButton :loading="reportLoading" @click="fetchOvertimeReport">

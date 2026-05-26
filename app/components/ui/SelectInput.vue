@@ -212,7 +212,8 @@
 		position: relative;
 		z-index: 2;
 
-		&:focus {
+		&:focus,
+		&:focus-visible {
 			outline: none;
 		}
 
@@ -223,7 +224,6 @@
 
 	.selectTriggerOpen {
 		border-color: $color-primary;
-		box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
 	}
 
 	.selectTriggerError {
@@ -423,5 +423,9 @@
 	.fade-leave-to {
 		opacity: 0;
 		transform: translateY(-4px);
+	}
+	.none-focus {
+		box-shadow: none !important;
+		border: none !important;
 	}
 </style>
