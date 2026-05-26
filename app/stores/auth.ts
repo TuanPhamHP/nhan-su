@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import type { AuthUser, LoginDto } from '~/types/auth.types';
 import { useAuthService } from '~/services';
+import { setOnForceLogout } from '~/services/http/auth.fetch';
 import { getCookie, setCookie, deleteCookie } from '~/utils/cookie';
 import { useNotificationStore } from '~/stores/notification';
 
@@ -11,6 +12,13 @@ export const useAuthStore = defineStore('auth', () => {
 	const user = ref<AuthUser | null>(null);
 	const token = ref<string | null>(null);
 	const permissions = ref<string[]>([]);
+
+	// Allow the auth fetch layer to clear reactive state on forced logout (expired refresh token)
+	setOnForceLogout(() => {
+		token.value = null;
+		user.value = null;
+		permissions.value = [];
+	});
 
 	const isAuthenticated = computed(() => !!token.value);
 
