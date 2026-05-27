@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import { format, parseISO } from 'date-fns';
 	import type { NotificationResponse } from '~/types/notification.types';
+	import { resolveNotificationRoute } from '~/utils/notification-route';
 
 	const props = defineProps<{ notification: NotificationResponse }>();
 	const emit = defineEmits<{
@@ -10,6 +11,7 @@
 	}>();
 
 	const { markRead, quickApprove, quickReject } = useNotifications();
+	const { user } = useAuth();
 	const router = useRouter();
 	const toast = useToast();
 
@@ -42,8 +44,14 @@
 	};
 
 	const handleNavigate = () => {
-		if (props.notification.targetUrl) {
-			router.push(props.notification.targetUrl);
+		if (!user.value) return;
+		const route = resolveNotificationRoute(
+			props.notification.refType,
+			props.notification.refId,
+			user.value.role,
+		);
+		if (route) {
+			router.push(route);
 			emit('close-panel');
 		}
 	};
