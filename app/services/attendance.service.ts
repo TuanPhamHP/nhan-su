@@ -23,9 +23,11 @@ export const useAttendanceService = () => {
 			return res.data;
 		},
 
-		async checkOut(photo: File): Promise<AttendanceRecordDetail> {
+		async checkOut(params: { latitude: number; longitude: number; photo: File }): Promise<AttendanceRecordDetail> {
 			const formData = new FormData();
-			formData.append('photo', photo);
+			formData.append('photo', params.photo);
+			formData.append('latitude', String(params.latitude));
+			formData.append('longitude', String(params.longitude));
 			const res = await authFetch<ApiResponse<AttendanceRecordDetail>>('/v1/attendance/check-out', {
 				method: 'POST',
 				body: formData,

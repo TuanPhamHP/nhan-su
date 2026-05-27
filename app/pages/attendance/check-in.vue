@@ -284,7 +284,11 @@
 				todayRecord.value = result;
 				successAction.value = 'check-in';
 			} else {
-				const result = await attendanceService.checkOut(photo);
+				const result = await attendanceService.checkOut({
+					latitude: currentCoords.value.latitude,
+					longitude: currentCoords.value.longitude,
+					photo,
+				});
 				todayRecord.value = result;
 				successAction.value = 'check-out';
 			}

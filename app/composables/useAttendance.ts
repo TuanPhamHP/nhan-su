@@ -35,8 +35,8 @@ export function useAttendance() {
 		return service.checkIn(params);
 	}
 
-	async function checkOut(photo: File): Promise<AttendanceRecordDetail> {
-		return service.checkOut(photo);
+	async function checkOut(params: { latitude: number; longitude: number; photo: File }): Promise<AttendanceRecordDetail> {
+		return service.checkOut(params);
 	}
 
 	async function manualEdit(id: number, dto: ManualEditAttendanceDto): Promise<AttendanceRecordDetail> {
