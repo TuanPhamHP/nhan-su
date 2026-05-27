@@ -6,6 +6,7 @@
 	import type { Employee } from '~/types/employee.types';
 	import { useAuthService } from '~/services';
 	import { formatDate } from '~/utils/date';
+	import { deleteCookie } from '~/utils/cookie';
 
 	definePageMeta({ title: 'Hồ sơ cá nhân' });
 
@@ -142,6 +143,47 @@
 		'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50';
 	const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1';
 	const valueCls = 'text-sm text-gray-900 dark:text-white';
+
+	// ─── Change Password ──────────────────────────────────────────────────────────
+
+	const pwSchema = toTypedSchema(
+		z
+			.object({
+				currentPassword: z.string().min(1, 'Vui lòng nhập mật khẩu hiện tại'),
+				newPassword: z.string().min(6, 'Mật khẩu mới tối thiểu 6 ký tự'),
+				confirmPassword: z.string().min(1, 'Vui lòng xác nhận mật khẩu mới'),
+			})
+			.refine(data => data.newPassword === data.confirmPassword, {
+				message: 'Mật khẩu xác nhận không khớp',
+				path: ['confirmPassword'],
+			}),
+	);
+
+	const {
+		handleSubmit: handlePwSubmit,
+		defineField: definePwField,
+		errors: pwErrors,
+		isSubmitting: pwSubmitting,
+	} = useForm({ validationSchema: pwSchema });
+
+	const [currentPassword, currentPasswordAttrs] = definePwField('currentPassword');
+	const [newPassword, newPasswordAttrs] = definePwField('newPassword');
+	const [confirmPassword, confirmPasswordAttrs] = definePwField('confirmPassword');
+
+	const showCurrentPw = ref(false);
+	const showNewPw = ref(false);
+	const showConfirmPw = ref(false);
+
+	const onChangePassword = handlePwSubmit(async values => {
+		const { changePassword } = useAuthService();
+		await changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword });
+		toast.success('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
+		deleteCookie('access_token');
+		deleteCookie('refresh_token');
+		const authStore = useAuthStore();
+		authStore.$patch({ user: null, token: null, permissions: [] });
+		await navigateTo('/login');
+	});
 </script>
 
 <template>
@@ -339,6 +381,109 @@
 						</CommonAppButton>
 						<CommonAppButton type="submit" variant="primary" :disabled="isSubmitting">
 							{{ isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi' }}
+						</CommonAppButton>
+					</div>
+				</form>
+			</div>
+
+			<!-- Change password card -->
+			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+				<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Đổi mật khẩu</h3>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mb-5">
+					Sau khi đổi thành công, bạn sẽ được đăng xuất khỏi tất cả thiết bị.
+				</p>
+
+				<form class="space-y-4 max-w-sm" @submit.prevent="onChangePassword">
+					<!-- Current password -->
+					<div>
+						<label :class="labelCls">Mật khẩu hiện tại <span class="text-red-500">*</span></label>
+						<div class="relative">
+							<input
+								v-model="currentPassword"
+								v-bind="currentPasswordAttrs"
+								:type="showCurrentPw ? 'text' : 'password'"
+								:class="[inputCls, 'pr-10']"
+								placeholder="••••••••"
+								autocomplete="current-password"
+							/>
+							<button
+								type="button"
+								class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+								@click="showCurrentPw = !showCurrentPw"
+							>
+								<svg v-if="showCurrentPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+								</svg>
+								<svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+								</svg>
+							</button>
+						</div>
+						<p v-if="pwErrors.currentPassword" class="mt-1 text-xs text-red-500">{{ pwErrors.currentPassword }}</p>
+					</div>
+
+					<!-- New password -->
+					<div>
+						<label :class="labelCls">Mật khẩu mới <span class="text-red-500">*</span></label>
+						<div class="relative">
+							<input
+								v-model="newPassword"
+								v-bind="newPasswordAttrs"
+								:type="showNewPw ? 'text' : 'password'"
+								:class="[inputCls, 'pr-10']"
+								placeholder="Tối thiểu 6 ký tự"
+								autocomplete="new-password"
+							/>
+							<button
+								type="button"
+								class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+								@click="showNewPw = !showNewPw"
+							>
+								<svg v-if="showNewPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+								</svg>
+								<svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+								</svg>
+							</button>
+						</div>
+						<p v-if="pwErrors.newPassword" class="mt-1 text-xs text-red-500">{{ pwErrors.newPassword }}</p>
+					</div>
+
+					<!-- Confirm password -->
+					<div>
+						<label :class="labelCls">Xác nhận mật khẩu mới <span class="text-red-500">*</span></label>
+						<div class="relative">
+							<input
+								v-model="confirmPassword"
+								v-bind="confirmPasswordAttrs"
+								:type="showConfirmPw ? 'text' : 'password'"
+								:class="[inputCls, 'pr-10']"
+								placeholder="Nhập lại mật khẩu mới"
+								autocomplete="new-password"
+							/>
+							<button
+								type="button"
+								class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+								@click="showConfirmPw = !showConfirmPw"
+							>
+								<svg v-if="showConfirmPw" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+								</svg>
+								<svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+								</svg>
+							</button>
+						</div>
+						<p v-if="pwErrors.confirmPassword" class="mt-1 text-xs text-red-500">{{ pwErrors.confirmPassword }}</p>
+					</div>
+
+					<div class="pt-1">
+						<CommonAppButton type="submit" variant="primary" :disabled="pwSubmitting">
+							{{ pwSubmitting ? 'Đang xử lý...' : 'Đổi mật khẩu' }}
 						</CommonAppButton>
 					</div>
 				</form>

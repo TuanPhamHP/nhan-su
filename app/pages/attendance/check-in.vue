@@ -166,6 +166,17 @@
 	const isProcessing = ref(false);
 	const canAct = computed(() => locationStatus.value === 'verified' && !isProcessing.value && !loadingRecord.value);
 
+	const apiCanCheckIn = computed(() => locationInfo.value?.canCheckIn ?? false);
+	const apiCanCheckOut = computed(() => locationInfo.value?.canCheckOut ?? false);
+	const canCheckInAction = computed(() => canAct.value && apiCanCheckIn.value);
+	const canCheckOutAction = computed(() => canAct.value && apiCanCheckOut.value);
+	// Hiện check-out block khi: API xác nhận canCheckOut HOẶC canCheckIn=false (đã check-in rồi).
+	// Trước khi có phản hồi API, dùng hasCheckedIn làm fallback.
+	const showCheckOutBlock = computed(() => {
+		if (!locationInfo.value) return hasCheckedIn.value;
+		return !apiCanCheckIn.value || apiCanCheckOut.value;
+	});
+
 	// ─── Camera ───────────────────────────────────────────────────────────────────
 	const showCamera = ref(false);
 	const videoRef = ref<HTMLVideoElement | null>(null);
@@ -239,12 +250,12 @@
 	const showConfirmCheckOut = ref(false);
 
 	function initiateCheckIn() {
-		if (!canAct.value) return;
+		if (!canCheckInAction.value) return;
 		openCamera('check-in');
 	}
 
 	function initiateCheckOut() {
-		if (!canAct.value) return;
+		if (!canCheckOutAction.value) return;
 		showConfirmCheckOut.value = true;
 	}
 
@@ -447,34 +458,37 @@
 
 		<!-- Action area -->
 		<template v-if="!isCompleted">
-			<button
-				v-if="!hasCheckedIn"
-				:disabled="!canAct"
-				class="w-full py-4 rounded-xl text-lg font-semibold transition-colors"
-				:class="
-					canAct
-						? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white cursor-pointer'
-						: 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-				"
-				@click="initiateCheckIn"
-			>
-				{{ isProcessing ? 'Đang xử lý...' : 'Check-in' }}
-			</button>
-
-			<div v-else class="space-y-2">
+			<div class="space-y-3">
+				<!-- Check-in block: luôn hiển thị, disabled khi không được phép -->
 				<button
-					:disabled="!canAct"
+					:disabled="!canCheckInAction"
 					class="w-full py-4 rounded-xl text-lg font-semibold transition-colors"
 					:class="
-						canAct
+						canCheckInAction
 							? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white cursor-pointer'
+							: 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+					"
+					@click="initiateCheckIn"
+				>
+					{{ isProcessing && !apiCanCheckOut ? 'Đang xử lý...' : 'Check-in' }}
+				</button>
+
+				<!-- Check-out block: hiện khi canCheckOut=true hoặc canCheckIn=false -->
+				<button
+					v-if="showCheckOutBlock"
+					:disabled="!canCheckOutAction"
+					class="w-full py-4 rounded-xl text-lg font-semibold transition-colors"
+					:class="
+						canCheckOutAction
+							? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white cursor-pointer'
 							: 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
 					"
 					@click="initiateCheckOut"
 				>
-					{{ isProcessing ? 'Đang xử lý...' : 'Check-out' }}
+					{{ isProcessing && apiCanCheckOut ? 'Đang xử lý...' : 'Check-out' }}
 				</button>
-				<p v-if="!canAct && locationStatus === 'out_of_range'" class="text-center text-xs text-gray-500">
+
+				<p v-if="locationStatus === 'out_of_range'" class="text-center text-xs text-gray-500">
 					Vui lòng đến vị trí quy định của công ty
 				</p>
 			</div>

@@ -7,7 +7,7 @@ export interface ProfileResponse {
 	fullName: string;
 	email: string;
 	employeeCode: string;
-	role: string;
+	role: UserRole;
 	phone: string | null;
 	dateOfBirth: string | null;
 	gender: Gender | null;
@@ -52,5 +52,14 @@ export interface RefreshTokenDto {
 
 export interface ChangePasswordDto {
 	currentPassword: string;
+	newPassword: string;
+}
+
+export interface ForgotPasswordDto {
+	email: string;
+}
+
+export interface ResetPasswordDto {
+	token: string;
 	newPassword: string;
 }

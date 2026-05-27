@@ -1,4 +1,4 @@
-const PUBLIC_ROUTES = ['/login'];
+const PUBLIC_ROUTES = ['/login', '/forgot-password', '/reset-password'];
 
 export default defineNuxtRouteMiddleware(to => {
 	// Dùng store thay vì useCookie trực tiếp — store chia sẻ reactive state với login action

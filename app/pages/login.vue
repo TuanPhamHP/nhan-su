@@ -238,6 +238,11 @@
 							</button>
 						</div>
 						<p v-if="errors.password" class="text-xs text-red-500 dark:text-red-400">{{ errors.password }}</p>
+						<div class="flex justify-end mt-1">
+							<NuxtLink to="/forgot-password" class="text-xs text-brand-600 dark:text-brand-400 hover:underline">
+								Quên mật khẩu?
+							</NuxtLink>
+						</div>
 					</div>
 					<!-- <button
 						class="p-2 w-full text-center bg-gray-700 text-white rounded-lg hover:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-400 transition-colors"

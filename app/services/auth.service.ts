@@ -1,4 +1,4 @@
-import type { AuthResponse, LoginDto, RefreshTokenDto, ChangePasswordDto, ProfileResponse, UpdateProfilePayload } from '~/types/auth.types';
+import type { AuthResponse, LoginDto, RefreshTokenDto, ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto, ProfileResponse, UpdateProfilePayload } from '~/types/auth.types';
 import type { Employee } from '~/types/employee.types';
 import type { ApiResponse } from '~/types/api.types';
 import { useAuthFetch } from './http/auth.fetch';
@@ -62,6 +62,20 @@ export const useAuthService = () => {
 				body: formData,
 			});
 			return res.data;
+		},
+
+		async forgotPassword(payload: ForgotPasswordDto): Promise<void> {
+			await publicFetch<unknown>('/v1/auth/forgot-password', {
+				method: 'POST',
+				body: payload,
+			});
+		},
+
+		async resetPassword(payload: ResetPasswordDto): Promise<void> {
+			await publicFetch<unknown>('/v1/auth/reset-password', {
+				method: 'POST',
+				body: payload,
+			});
 		},
 	};
 };

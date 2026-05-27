@@ -64,6 +64,8 @@ export interface CheckAttendanceResponseDto {
 	distance: number;
 	isInRange: boolean;
 	isAvailableShift: boolean;
+	canCheckIn: boolean;
+	canCheckOut: boolean;
 }
 
 export interface ManualEditAttendanceDto {

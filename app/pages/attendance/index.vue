@@ -81,7 +81,12 @@
 	const todayLoading = ref(false);
 	const todayDepartmentId = ref<number | undefined>(isManager.value ? managerDepartmentId.value : undefined);
 	const todaySearch = ref('');
+	const todayStatusFilter = ref<AttendanceStatus | null>(null);
 	let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+	function toggleStatusFilter(status: AttendanceStatus) {
+		todayStatusFilter.value = todayStatusFilter.value === status ? null : status;
+	}
 
 	const today = new Date().toISOString().split('T')[0];
 
@@ -102,7 +107,7 @@
 		}
 	}
 
-	const todayFilteredRecords = computed(() => {
+	const todaySearchRecords = computed(() => {
 		if (!todaySearch.value.trim()) return todayRecords.value;
 		const q = todaySearch.value.trim().toLowerCase();
 		return todayRecords.value.filter(
@@ -110,7 +115,12 @@
 		);
 	});
 
-	const todaySummary = computed(() => calcAttendanceSummary(todayFilteredRecords.value));
+	const todayFilteredRecords = computed(() => {
+		if (!todayStatusFilter.value) return todaySearchRecords.value;
+		return todaySearchRecords.value.filter(r => r.status === todayStatusFilter.value);
+	});
+
+	const todaySummary = computed(() => calcAttendanceSummary(todaySearchRecords.value));
 
 	watch(todayDepartmentId, () => fetchToday());
 
@@ -281,7 +291,9 @@
 			<!-- Summary badges -->
 			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
 				<div
-					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer transition-all hover:shadow-md select-none"
+					:class="{ 'ring-2 ring-green-500 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20': todayStatusFilter === 'PRESENT' }"
+					@click="toggleStatusFilter('PRESENT')"
 				>
 					<div
 						class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0"
@@ -307,7 +319,9 @@
 				</div>
 
 				<div
-					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer transition-all hover:shadow-md select-none"
+					:class="{ 'ring-2 ring-orange-500 border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20': todayStatusFilter === 'LATE' }"
+					@click="toggleStatusFilter('LATE')"
 				>
 					<div
 						class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0"
@@ -329,7 +343,9 @@
 				</div>
 
 				<div
-					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer transition-all hover:shadow-md select-none"
+					:class="{ 'ring-2 ring-red-500 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20': todayStatusFilter === 'ABSENT' }"
+					@click="toggleStatusFilter('ABSENT')"
 				>
 					<div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
 						<svg
@@ -349,7 +365,9 @@
 				</div>
 
 				<div
-					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+					class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer transition-all hover:shadow-md select-none"
+					:class="{ 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20': todayStatusFilter === 'LEAVE' }"
+					@click="toggleStatusFilter('LEAVE')"
 				>
 					<div
 						class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0"

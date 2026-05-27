@@ -459,7 +459,9 @@ Dùng để kiểm tra xem nhân viên có đang trong bán kính địa điểm
 		"radiusMeters": 100,
 		"distance": 42,
 		"isInRange": true,
-		"isAvailableShift": true
+		"isAvailableShift": true,
+		"canCheckIn": true,
+		"canCheckOut": false
 	}
 }
 ```
