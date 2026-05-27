@@ -26,8 +26,9 @@
 	const defaultAccounts = [
 		{ label: 'Admin', email: 'tuanp.fs.contact@gmail.com', role: 'ADMIN', password: 'admin@123' },
 		{ label: 'HR', email: 'hanh.dh@sonthanh.net', role: 'HR', password: 'Hr@123456' },
-		{ label: 'Phòng KT - Manager', email: 'tuan.pa@8hours.vn', role: 'MANAGER', password: 'Abcd@1234' },
-		{ label: 'Phòng KT - Employee', email: 'oanh.nt@8hours.vn', role: 'EMPLOYEE', password: 'Abcd@1234' },
+		{ label: 'Phòng SX - Duyệt đơn', email: 'tuan.pa@8hours.vn', role: 'MANAGER', password: 'Abcd@1234' },
+		{ label: 'Phòng SX - Tạo đơn', email: 'binh.nh@8hours.vn', role: 'EMPLOYEE', password: 'Abcd@1234' },
+		{ label: 'Phòng SX - Tạo đơn', email: 'oanh.nt@8hours.vn', role: 'EMPLOYEE', password: 'Abcd@1234' },
 	];
 
 	function fillAccount(account: { email: string; password: string }) {
