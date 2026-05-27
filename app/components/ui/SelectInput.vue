@@ -199,7 +199,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.5rem 0.75rem;
+		padding: 0.625rem 0.75rem;
 		border: 1px solid $color-border;
 		border-radius: $radius-md;
 		background: #fff;
@@ -207,7 +207,6 @@
 		color: $color-text-primary;
 		cursor: pointer;
 		transition: all $transition-fast;
-		height: 38px;
 		user-select: none;
 		position: relative;
 		z-index: 2;
