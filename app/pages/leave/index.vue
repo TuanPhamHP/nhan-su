@@ -29,6 +29,8 @@
 
 	const toast = useToast();
 	const { user } = useAuth();
+	const route = useRoute();
+	const router = useRouter();
 	const leaveRequestService = useLeaveRequestService();
 	const leaveTypeService = useLeaveTypeService();
 	const leaveBalanceService = useLeaveBalanceService();
@@ -144,6 +146,23 @@
 
 	// ─── Detail ───────────────────────────────────────────────────────────────────
 	const detailTarget = ref<LeaveRequest | null>(null);
+
+	async function openByQueryId() {
+		const raw = route.query.open_id;
+		if (!raw) return;
+		const id = Number(raw);
+		if (!id || Number.isNaN(id)) return;
+
+		// Clear query string trước để tránh F5 mở lại
+		router.replace({ path: '/leave' });
+
+		try {
+			const req = await leaveRequestService.findOne(id);
+			detailTarget.value = req;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Không thể mở chi tiết đơn nghỉ phép');
+		}
+	}
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────────
 	function formatDate(d: string) {
@@ -298,6 +317,7 @@
 		loadDepartments();
 		fetchRequests();
 		fetchSummary();
+		openByQueryId();
 	});
 
 	watch(activeTab, tab => {

@@ -10,7 +10,7 @@ export interface ActivityItem {
 	status: string;
 	statusLabel: string;
 	createdAt: string;
-	targetUrl: string;
+	targetId: number;
 }
 
 export interface CompanyStats {
@@ -65,7 +65,4 @@ export interface MyDashboardResponse {
 	generatedAt: string;
 }
 
-export type DashboardResponse =
-	| CompanyDashboardResponse
-	| DepartmentDashboardResponse
-	| MyDashboardResponse;
+export type DashboardResponse = CompanyDashboardResponse | DepartmentDashboardResponse | MyDashboardResponse;

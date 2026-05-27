@@ -17,6 +17,11 @@ export const useLeaveRequestService = () => {
 			return { data: res.data, meta: res.meta };
 		},
 
+		async findOne(id: number): Promise<LeaveRequest> {
+			const res = await authFetch<ApiResponse<LeaveRequest>>(`/v1/leave-requests/${id}`);
+			return res.data;
+		},
+
 		async findMe(params?: QueryLeaveRequestParams): Promise<{ data: LeaveRequest[]; meta: PaginatedMeta }> {
 			const res = await authFetch<PaginatedResponse<LeaveRequest>>('/v1/leave-requests/me', { params });
 			return { data: res.data, meta: res.meta };

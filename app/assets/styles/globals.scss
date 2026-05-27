@@ -4,8 +4,8 @@
 
 /* Root Variables */
 :root {
-	--primary-color: #2563eb;
-	--primary-dark: #2563eb;
+	--primary-color: #0e6938;
+	--primary-dark: #0e6938;
 	--primary-light: #dcfce7;
 	color-scheme: light;
 }
@@ -179,11 +179,15 @@ table {
 
 /* Page Transitions */
 .page-enter-active {
-	transition: opacity 0.18s ease, transform 0.18s ease;
+	transition:
+		opacity 0.18s ease,
+		transform 0.18s ease;
 }
 
 .page-leave-active {
-	transition: opacity 0.12s ease, transform 0.12s ease;
+	transition:
+		opacity 0.12s ease,
+		transform 0.12s ease;
 }
 
 .page-enter-from {

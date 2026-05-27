@@ -4,6 +4,7 @@ export default defineNuxtConfig({
 	ssr: false,
 	app: {
 		baseURL: '/',
+		// pageTransition: { name: 'page', mode: 'out-in' },
 		pageTransition: false,
 		head: {
 			titleTemplate: 'Hệ thống nhân sự - %s',
@@ -22,7 +23,7 @@ export default defineNuxtConfig({
 					rel: 'stylesheet',
 					href: 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap',
 				},
-				{ rel: 'icon', type: 'image/x-icon', href: '/logo_web.svg' },
+				{ rel: 'icon', type: 'image/x-icon', href: '/favicon.svg' },
 			],
 		},
 	},

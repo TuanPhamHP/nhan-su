@@ -142,6 +142,49 @@ export interface PaginatedResponse<T> {
 
 ---
 
+## URL-driven Modal (deep link từ notification)
+
+Khi notification/activity navigate đến một trang kèm `?open_id=<id>`, page phải tự động mở modal chi tiết tương ứng.
+
+### Pattern chuẩn
+
+```ts
+// Trong onMounted của page
+const route = useRoute();
+const router = useRouter();
+
+async function openByQueryId() {
+  const raw = route.query.open_id;
+  if (!raw) return;
+  const id = Number(raw);
+  if (!id || Number.isNaN(id)) return;
+
+  // Clear query string trước để tránh F5 mở lại
+  router.replace({ path: '/current-page' });
+
+  try {
+    const item = await service.findOne(id);
+    detailTarget.value = item;
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Không thể mở chi tiết');
+  }
+}
+
+onMounted(() => {
+  // ... other loaders ...
+  openByQueryId();
+});
+```
+
+### Quy tắc
+
+- `router.replace` phải gọi **trước** khi fetch — nếu fetch lỗi, URL vẫn đã được clean
+- Xử lý lỗi bằng `toast.error` — không để unhandled rejection (có thể do lỗi server hoặc phân quyền)
+- Validate `id` là số hợp lệ trước khi gọi API
+- Navigate phía noti/activity dùng: `router.push(\`/leave?open_id=\${item.targetId}\`)`
+
+---
+
 ## Quy tắc
 
 - **Không** gọi API trực tiếp trong `<script setup>` của component — phải qua composable

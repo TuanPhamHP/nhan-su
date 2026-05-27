@@ -22,3 +22,4 @@ export * from './violation-request.service';
 export * from './overtime-request.service';
 export * from './online-work-request.service';
 export * from './dashboard.service';
+export * from './payroll.service';
