@@ -4,7 +4,7 @@
 	import * as z from 'zod';
 	import { format, parseISO } from 'date-fns';
 	import { useViolationRequestService } from '~/services/violation-request.service';
-	import type { ViolationCounter, ViolationRequest, ViolationRequestType, CreateViolationRequestDto } from '~/types/violation.types';
+	import type { ViolationCounter, ViolationRequest, ViolationRequestType } from '~/types/violation.types';
 
 	const props = defineProps<{
 		counter: ViolationCounter;
@@ -27,26 +27,14 @@
 
 	// ─── Validation schema ────────────────────────────────────────────────────────
 	const schema = toTypedSchema(
-		z
-			.object({
-				type: z.enum(['FORGOT_CHECKIN', 'LATE', 'EARLY'] as const, {
-					required_error: 'Vui lòng chọn loại vi phạm',
-					invalid_type_error: 'Vui lòng chọn loại vi phạm',
-				}),
-				violationDate: z.string().min(1, 'Vui lòng chọn ngày vi phạm'),
-				checkInTime: z.string().optional(),
-				checkOutTime: z.string().optional(),
-				reason: z.string().min(10, 'Lý do phải có ít nhất 10 ký tự'),
-			})
-			.superRefine((data, ctx) => {
-				if (data.type === 'FORGOT_CHECKIN' && !data.checkInTime) {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						path: ['checkInTime'],
-						message: 'Vui lòng nhập giờ vào thực tế',
-					});
-				}
+		z.object({
+			type: z.enum(['FORGOT_CHECKIN', 'LATE', 'EARLY'] as const, {
+				required_error: 'Vui lòng chọn loại vi phạm',
+				invalid_type_error: 'Vui lòng chọn loại vi phạm',
 			}),
+			violationDate: z.string().min(1, 'Vui lòng chọn ngày vi phạm'),
+			reason: z.string().min(10, 'Lý do phải có ít nhất 10 ký tự'),
+		}),
 	);
 
 	const { handleSubmit, defineField, errors, isSubmitting } = useForm({
@@ -59,8 +47,6 @@
 
 	const [type, typeAttrs] = defineField('type');
 	const [violationDate, violationDateAttrs] = defineField('violationDate');
-	const [checkInTime, checkInTimeAttrs] = defineField('checkInTime');
-	const [checkOutTime, checkOutTimeAttrs] = defineField('checkOutTime');
 	const [reason, reasonAttrs] = defineField('reason');
 
 	// ─── Deadline computed ────────────────────────────────────────────────────────
@@ -115,29 +101,27 @@
 	const onSubmit = handleSubmit(async vals => {
 		if (deadlinePassed.value) return;
 
-		if (props.counter.remaining === 1) {
-			if (!confirm('Đây là lần giải trình cuối cùng trong tháng này. Bạn có chắc muốn tiếp tục?')) return;
+		const isForgotCheckin = vals.type === 'FORGOT_CHECKIN';
+		const needsConfirm =
+			props.counter.remaining === 1 ||
+			(isForgotCheckin && props.counter.remaining === 2);
+
+		if (needsConfirm) {
+			const msg =
+				isForgotCheckin && props.counter.remaining === 2
+					? 'Nếu đây là phiếu quên chấm công cả ngày (tốn 2 lượt), bạn sẽ không còn lượt nào trong tháng. Tiếp tục?'
+					: 'Đây là lần giải trình cuối cùng trong tháng này. Bạn có chắc muốn tiếp tục?';
+			if (!confirm(msg)) return;
 		}
 
 		try {
-			const dto: CreateViolationRequestDto = {
+			const result = await service.create({
 				type: vals.type,
 				violationDate: vals.violationDate,
 				reason: vals.reason,
 				evidencePhoto: evidenceFile.value ?? undefined,
-			};
-
-			if (vals.type === 'FORGOT_CHECKIN') {
-				if (vals.checkInTime) {
-					dto.requestedCheckIn = new Date(`${vals.violationDate}T${vals.checkInTime}:00`).toISOString();
-				}
-				if (vals.checkOutTime) {
-					dto.requestedCheckOut = new Date(`${vals.violationDate}T${vals.checkOutTime}:00`).toISOString();
-				}
-			}
-
-			const result = await service.create(dto);
-			const remaining = Math.max(0, props.counter.remaining - 1);
+			});
+			const remaining = Math.max(0, props.counter.remaining - result.slotCost);
 			toast.success(`Đã gửi phiếu, chờ duyệt. Còn ${remaining} lần trong tháng.`);
 			emit('submitted', result);
 		} catch (e) {
@@ -169,11 +153,14 @@
 				<!-- Quota warning -->
 				<div
 					v-if="counter.remaining <= 2"
-					class="mb-4 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700"
+					class="mb-4 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 space-y-1"
 				>
-					<span class="text-sm text-amber-700 dark:text-amber-300 font-medium">
+					<p class="text-sm text-amber-700 dark:text-amber-300 font-medium">
 						⚠️ Bạn còn {{ counter.remaining }} lần giải trình trong tháng này
-					</span>
+					</p>
+					<p v-if="type === 'FORGOT_CHECKIN' && counter.remaining <= 2" class="text-xs text-amber-600 dark:text-amber-400">
+						Lưu ý: phiếu quên chấm công cả ngày tốn 2 lượt.
+					</p>
 				</div>
 
 				<form id="violation-create-form" class="space-y-4" @submit.prevent="onSubmit">
@@ -221,39 +208,19 @@
 						</template>
 					</div>
 
-					<!-- FORGOT_CHECKIN: giờ vào/ra -->
-					<template v-if="type === 'FORGOT_CHECKIN'">
-						<div class="grid grid-cols-2 gap-3">
-							<div class="space-y-1.5">
-								<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-									Giờ vào thực tế <span class="text-red-500">*</span>
-								</label>
-								<input
-									v-model="checkInTime"
-									v-bind="checkInTimeAttrs"
-									type="time"
-									:class="[
-										'block w-full rounded-lg border px-3 py-2.5 text-sm transition-colors',
-										'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
-										'focus:outline-none focus:ring-2 focus:ring-offset-0',
-										errors.checkInTime
-											? 'border-red-400 focus:ring-red-300'
-											: 'border-gray-300 focus:border-brand-500 focus:ring-brand-200 dark:border-gray-600',
-									]"
-								/>
-								<p v-if="errors.checkInTime" class="text-xs text-red-500">{{ errors.checkInTime }}</p>
-							</div>
-							<div class="space-y-1.5">
-								<label class="text-sm font-medium text-gray-700 dark:text-gray-300">Giờ ra thực tế</label>
-								<input
-									v-model="checkOutTime"
-									v-bind="checkOutTimeAttrs"
-									type="time"
-									class="block w-full rounded-lg border px-3 py-2.5 text-sm transition-colors bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 focus:border-brand-500 focus:ring-brand-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-0"
-								/>
-							</div>
+					<!-- FORGOT_CHECKIN: thông tin tự động -->
+					<div
+						v-if="type === 'FORGOT_CHECKIN'"
+						class="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
+					>
+						<svg class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						<div class="text-xs text-blue-700 dark:text-blue-300 space-y-0.5">
+							<p>Hệ thống tự động xác định giờ check-in/check-out theo ca làm việc khi phiếu được duyệt.</p>
+							<p class="font-medium">Quên chấm công cả ngày (không có bản ghi) tốn <span class="underline">2 lượt</span> giải trình.</p>
 						</div>
-					</template>
+					</div>
 
 					<!-- Lý do -->
 					<div class="space-y-1.5">

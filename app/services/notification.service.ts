@@ -6,6 +6,11 @@ import type {
 	NotificationListMeta,
 	QueryNotificationsParams,
 	NotificationCategory,
+	TestNotificationDto,
+	TestNotificationResult,
+	TestFcmDto,
+	FcmTestResult,
+	TestEmailResult,
 } from '~/types/notification.types';
 
 interface NotificationListWrapper {
@@ -48,6 +53,29 @@ export const useNotificationService = () => {
 
 		async rejectRequest(endpoint: string, rejectNote: string): Promise<void> {
 			await authFetch<unknown>(endpoint, { method: 'PATCH', body: { rejectNote } });
+		},
+
+		async testUnified(payload: TestNotificationDto): Promise<TestNotificationResult> {
+			const res = await authFetch<ApiResponse<TestNotificationResult>>('/v1/notifications/test', {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		async testFcm(payload: TestFcmDto): Promise<FcmTestResult> {
+			const res = await authFetch<ApiResponse<FcmTestResult>>('/v1/notifications/test-fcm', {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		async testEmail(to: string): Promise<TestEmailResult> {
+			const res = await authFetch<ApiResponse<TestEmailResult>>('/v1/notifications/test-email', {
+				params: { to },
+			});
+			return res.data;
 		},
 	};
 };

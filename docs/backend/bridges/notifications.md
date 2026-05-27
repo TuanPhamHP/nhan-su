@@ -9,18 +9,21 @@ Khác với email notifications — đây là **in-app + push**, không phải e
 
 ## Endpoints
 
-| Method | Path                             | Ghi chú                                                 |
-| ------ | -------------------------------- | ------------------------------------------------------- |
-| GET    | `/v1/notifications`              | Danh sách của tôi, hỗ trợ lọc theo `category`           |
-| GET    | `/v1/notifications/unread-count` | Số chưa đọc theo từng category (dùng cho badge)         |
-| PATCH  | `/v1/notifications/read-all`     | Đánh dấu tất cả đã đọc; truyền `?category=` để giới hạn |
-| PATCH  | `/v1/notifications/:id/read`     | Đánh dấu một thông báo đã đọc                           |
-| DELETE | `/v1/notifications`              | Xóa tất cả; truyền `?category=` để xóa một category     |
+| Method | Path | Ai được gọi | Ghi chú |
+| --- | --- | --- | --- |
+| GET | `/v1/notifications` | Mọi user đã đăng nhập | Danh sách của tôi, hỗ trợ lọc theo `category` |
+| GET | `/v1/notifications/unread-count` | Mọi user đã đăng nhập | Số chưa đọc theo từng category (dùng cho badge) |
+| PATCH | `/v1/notifications/read-all` | Mọi user đã đăng nhập | Đánh dấu tất cả đã đọc; truyền `?category=` để giới hạn |
+| PATCH | `/v1/notifications/:id/read` | Mọi user đã đăng nhập | Đánh dấu một thông báo đã đọc |
+| DELETE | `/v1/notifications` | Mọi user đã đăng nhập | Xóa tất cả; truyền `?category=` để xóa một category |
+| POST | `/v1/notifications/test` | `ADMIN` | Gửi test notification tới nhiều platform (email/in-app/FCM) |
+| POST | `/v1/notifications/test-fcm` | `ADMIN` | Gửi FCM test tới tất cả device của một nhân viên |
+| GET | `/v1/notifications/test-email` | `ADMIN` | Gửi email test để kiểm tra pipeline Gmail SMTP |
 
-> **Lưu ý thứ tự route:** `/notifications/unread-count` và `/notifications/read-all` được khai báo **trước** `/notifications/:id/read` trong controller.  
+> **Lưu ý thứ tự route:** `/notifications/unread-count`, `/notifications/read-all`, `/notifications/test*` được khai báo **trước** `/notifications/:id/read` trong controller.  
 > Nếu `PATCH /notifications/read-all` trả 404, kiểm tra thứ tự route của router phía client.
 
-Tất cả endpoints yêu cầu `Authorization: Bearer <access-token>`. Mỗi user chỉ đọc/ghi được thông báo của chính mình — không có endpoint admin.
+Mỗi user chỉ đọc/ghi được thông báo của chính mình. Các endpoint `/test*` yêu cầu role `ADMIN`.
 
 ---
 
@@ -31,35 +34,43 @@ Tất cả endpoints yêu cầu `Authorization: Bearer <access-token>`. Mỗi us
 
 export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE';
 
-export type NotificationActionType = 'NAVIGATE_ONLY' | 'APPROVE_REJECT' | null;
-
 export type NotificationType =
+	// Chấm công
 	| 'CHECK_IN'
 	| 'CHECK_OUT'
 	| 'LATE'
 	| 'ABSENT'
 	| 'MISSING_CHECKOUT'
+	// Nghỉ phép
 	| 'LEAVE_CREATED'
 	| 'LEAVE_APPROVED'
 	| 'LEAVE_REJECTED'
 	| 'LEAVE_CANCELLED'
 	| 'LEAVE_AUTO_CANCELLED'
+	// OT
 	| 'OT_CREATED'
 	| 'OT_APPROVED'
 	| 'OT_REJECTED'
 	| 'OT_CANCELLED'
 	| 'OT_AUTO_CANCELLED'
+	// Vi phạm
 	| 'VIOLATION_CREATED'
 	| 'VIOLATION_APPROVED'
-	| 'VIOLATION_REJECTED';
+	| 'VIOLATION_REJECTED'
+	// Đăng ký WFH
+	| 'ONLINE_WORK_CREATED'
+	| 'ONLINE_WORK_APPROVED'
+	| 'ONLINE_WORK_REJECTED'
+	| 'ONLINE_WORK_CANCELLED'
+	| 'ONLINE_WORK_COMPLETED'
+	// Bù công
+	| 'MAKEUP_CREATED'
+	| 'MAKEUP_APPROVED'
+	| 'MAKEUP_REJECTED'
+	// Admin test
+	| 'TEST';
 
-export interface NotificationActionPayload {
-	approveEndpoint: string; // e.g. '/v1/leave-requests/55/approve'
-	rejectEndpoint: string;  // e.g. '/v1/leave-requests/55/reject'
-	label: string;           // human-readable label cho action (VD: 'Đơn nghỉ phép')
-	refType: string;         // 'leave_request' | 'overtime_request' | 'violation_request'
-	refId: number;
-}
+export type NotificationActionType = 'NAVIGATE_ONLY' | 'APPROVE_REJECT';
 
 export interface NotificationResponse {
 	id: number;
@@ -68,12 +79,12 @@ export interface NotificationResponse {
 	category: NotificationCategory;
 	type: NotificationType;
 	refId: number | null; // ID của entity liên quan — null nếu không có navigation
-	refType: string | null; // 'leave_request' | 'overtime_request' | 'violation_request' | null
+	refType: string | null; // 'leave_request' | 'overtime_request' | 'violation_request' | 'online_work_request' | 'makeup_request' | null
+	actionType: NotificationActionType | null; // 'APPROVE_REJECT' = người duyệt; 'NAVIGATE_ONLY' = đọc thôi
+	targetUrl: string | null; // URL deep link tương đối, ví dụ "/leave/55"
+	actionPayload: Record<string, unknown> | null; // data phụ cho action (nếu cần)
 	isRead: boolean;
 	createdAt: string; // ISO 8601
-	targetUrl: string | null; // pre-computed URL để navigate khi click
-	actionType: NotificationActionType; // loại action inline trong notification panel
-	actionPayload: NotificationActionPayload | null; // payload cho quick approve/reject
 }
 
 export interface UnreadCountResponse {
@@ -96,32 +107,48 @@ export interface QueryNotificationsParams {
 
 | Category | Các type thuộc về |
 | --- | --- |
-| `EVENT` | `OT_CREATED`, `OT_APPROVED`, `OT_REJECTED`, `OT_CANCELLED`, `OT_AUTO_CANCELLED`, `VIOLATION_CREATED`, `VIOLATION_APPROVED`, `VIOLATION_REJECTED` |
+| `EVENT` | `OT_CREATED`, `OT_APPROVED`, `OT_REJECTED`, `OT_CANCELLED`, `OT_AUTO_CANCELLED`, `VIOLATION_CREATED`, `VIOLATION_APPROVED`, `VIOLATION_REJECTED`, `ONLINE_WORK_CREATED`, `ONLINE_WORK_APPROVED`, `ONLINE_WORK_REJECTED`, `ONLINE_WORK_CANCELLED`, `ONLINE_WORK_COMPLETED`, `MAKEUP_CREATED`, `MAKEUP_APPROVED`, `MAKEUP_REJECTED` |
 | `ATTENDANCE` | `CHECK_IN`, `CHECK_OUT`, `LATE`, `ABSENT`, `MISSING_CHECKOUT` |
 | `LEAVE` | `LEAVE_CREATED`, `LEAVE_APPROVED`, `LEAVE_REJECTED`, `LEAVE_CANCELLED`, `LEAVE_AUTO_CANCELLED` |
 
 ---
 
-## Navigation — refType + refId
+## Navigation — targetUrl + refType + refId
 
-Khi user tap vào notification, dùng `refType` + `refId` để navigate:
+Ưu tiên dùng `targetUrl` nếu có (backend đã build sẵn path). Fallback về `refType + refId` nếu cần.
 
-| refType | Route | Ghi chú |
-| --- | --- | --- |
-| `leave_request` | `/leave/:refId` | Áp dụng cho `LEAVE_CREATED/APPROVED/REJECTED/CANCELLED` |
-| `overtime_request` | `/overtime/:refId` | Áp dụng cho `OT_CREATED/APPROVED/REJECTED/AUTO_CANCELLED` |
-| `violation_request` | `/violation/:refId` | Áp dụng cho `VIOLATION_APPROVED/REJECTED` |
-| `null` | _(không navigate)_ | Tất cả type thuộc `ATTENDANCE` — `CHECK_IN`, `CHECK_OUT`, `LATE`, `ABSENT`, `MISSING_CHECKOUT` |
+| `actionType`       | Ý nghĩa                                     | Hiển thị trên UI        |
+| ------------------ | ------------------------------------------- | ----------------------- |
+| `'APPROVE_REJECT'` | Người nhận cần duyệt/từ chối — tiền tố `📋` | Hiện nút "Xem và duyệt" |
+| `'NAVIGATE_ONLY'`  | Chỉ đọc/theo dõi — tiền tố `✅❌🔄⚠️⏰📌`   | Chỉ điều hướng          |
+| `null`             | Không điều hướng (ATTENDANCE informational) | Không có nút/link       |
+
+| `refType`             | Route fallback        | Các type sử dụng           |
+| --------------------- | --------------------- | -------------------------- |
+| `leave_request`       | `/leave/:refId`       | `LEAVE_*`                  |
+| `overtime_request`    | `/overtime/:refId`    | `OT_*`                     |
+| `violation_request`   | `/violation/:refId`   | `VIOLATION_*`              |
+| `online_work_request` | `/online-work/:refId` | `ONLINE_WORK_*`            |
+| `makeup_request`      | `/makeup/:refId`      | `MAKEUP_*`                 |
+| `null`                | _(không navigate)_    | `ATTENDANCE` types, `TEST` |
 
 ```typescript
 function navigateFromNotification(notification: NotificationResponse, router: Router) {
+	// Ưu tiên targetUrl nếu backend đã build sẵn
+	if (notification.targetUrl) {
+		router.push(notification.targetUrl);
+		return;
+	}
+
 	const { refType, refId } = notification;
-	if (!refType || refId === null) return; // attendance types — informational only
+	if (!refType || refId === null) return;
 
 	const routes: Record<string, string> = {
 		leave_request: `/leave/${refId}`,
 		overtime_request: `/overtime/${refId}`,
 		violation_request: `/violation/${refId}`,
+		online_work_request: `/online-work/${refId}`,
+		makeup_request: `/makeup/${refId}`,
 	};
 
 	const route = routes[refType];
@@ -286,6 +313,74 @@ Khi nhận FCM:
 
 ---
 
+---
+
+## Admin — Test Endpoints (`ADMIN` only)
+
+Ba endpoint dùng để kiểm tra pipeline notification. **Không gọi từ UI production** — chỉ dùng trong Swagger hoặc Postman.
+
+### POST /v1/notifications/test — Unified test
+
+Gửi cùng một notification tới nhiều platform trong một lần gọi. Kết quả trả về cho từng platform.
+
+**Request body:**
+
+```json
+{
+	"employeeId": 1,
+	"title": "Test Notification",
+	"body": "Đây là nội dung thông báo test từ admin.",
+	"platforms": ["in-app", "email", "fcm"],
+	"emailTo": "admin@company.com"
+}
+```
+
+| Field        | Bắt buộc                       | Ghi chú                                                   |
+| ------------ | ------------------------------ | --------------------------------------------------------- |
+| `employeeId` | ✓                              | Nhân viên nhận in-app và FCM                              |
+| `title`      | ✓                              | Tiêu đề                                                   |
+| `body`       | ✓                              | Nội dung                                                  |
+| `platforms`  | ✓                              | Mảng, tối thiểu 1 phần tử: `'email'`, `'in-app'`, `'fcm'` |
+| `emailTo`    | Khi `platforms` chứa `'email'` | Địa chỉ email nhận                                        |
+
+**Response 200:**
+
+```json
+{
+	"success": true,
+	"data": {
+		"platforms": {
+			"in-app": { "sent": true },
+			"email": { "sent": true },
+			"fcm": { "sent": true, "detail": { "sent": 2, "invalidRemoved": 0, "tokens": ["abc…"] } }
+		}
+	}
+}
+```
+
+> **Lưu ý:** platform `'in-app'` tự động gửi kèm FCM qua `NotificationCenterService`. Nếu chọn cả `'in-app'` và `'fcm'` cùng lúc, FCM sẽ được gửi 2 lần.
+
+### POST /v1/notifications/test-fcm — FCM standalone
+
+```json
+{
+	"employeeId": 1,
+	"title": "Test FCM",
+	"body": "Kiểm tra FCM pipeline",
+	"type": "test.manual"
+}
+```
+
+**Response 200:** `{ sent: number, invalidRemoved: number, tokens: string[] }`
+
+### GET /v1/notifications/test-email — Email standalone
+
+`?to=dev@company.com`
+
+**Response 200:** `{ message: string }` — email được đưa vào queue, không chờ send thực tế.
+
+---
+
 ## Edge Cases
 
 | Tình huống | Kết quả |
@@ -299,3 +394,9 @@ Khi nhận FCM:
 | `PATCH /:id/read` với id của người khác | 204 nhưng không có gì thay đổi (silently ignored) |
 | `meta.unreadCount` khi lọc `?category=LEAVE` | Vẫn trả tổng toàn bộ unread (không phải chỉ LEAVE) — dùng cho bell badge |
 | Type `ABSENT`, `LEAVE_AUTO_CANCELLED`, `OT_CANCELLED`, `VIOLATION_CREATED` | Có trong enum, chưa có factory — reserved cho tính năng tương lai |
+| `actionType: 'APPROVE_REJECT'` | Notification dành cho người duyệt — hiện nút hành động rõ ràng trên UI |
+| `actionType: 'NAVIGATE_ONLY'` | Notification thông tin — chỉ tap để xem, không cần nút duyệt |
+| `targetUrl` có giá trị | Backend đã build sẵn deep link — dùng trực tiếp, không cần parse `refType`+`refId` |
+| `type: 'TEST'` | Notification test từ admin — `category: EVENT`, không có `refId`/`refType` |
+| `type: 'ONLINE_WORK_COMPLETED'` | Đơn WFH hoàn thành — kèm `refType: 'online_work_request'` để navigate |
+| `POST /test` không truyền `emailTo` mà `platforms` chứa `'email'` | 400 `emailTo là bắt buộc khi platforms chứa 'email'` |

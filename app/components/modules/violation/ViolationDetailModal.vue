@@ -35,11 +35,6 @@
 		}
 	}
 
-	function formatUTCTime(iso: string | null | undefined) {
-		if (!iso) return '—';
-		const d = new Date(iso);
-		return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-	}
 </script>
 
 <template>
@@ -86,29 +81,15 @@
 					<p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{{ violationRequest.reason }}</p>
 				</div>
 
-				<!-- Requested check-in/out — FORGOT_CHECKIN only -->
-				<div
-					v-if="
-						violationRequest.type === 'FORGOT_CHECKIN' &&
-						(violationRequest.requestedCheckIn || violationRequest.requestedCheckOut)
-					"
-					class="space-y-1"
-				>
-					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Giờ đề xuất</p>
-					<div class="flex gap-6 text-sm">
-						<div v-if="violationRequest.requestedCheckIn" class="text-gray-600 dark:text-gray-400">
-							Vào:
-							<span class="font-semibold text-gray-900 dark:text-white">
-								{{ formatUTCTime(violationRequest.requestedCheckIn) }}
-							</span>
-						</div>
-						<div v-if="violationRequest.requestedCheckOut" class="text-gray-600 dark:text-gray-400">
-							Ra:
-							<span class="font-semibold text-gray-900 dark:text-white">
-								{{ formatUTCTime(violationRequest.requestedCheckOut) }}
-							</span>
-						</div>
-					</div>
+				<!-- slotCost — FORGOT_CHECKIN only -->
+				<div v-if="violationRequest.type === 'FORGOT_CHECKIN'" class="space-y-1">
+					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Chi phí lượt</p>
+					<p class="text-sm text-gray-700 dark:text-gray-300">
+						<span class="font-semibold">{{ violationRequest.slotCost }} lượt</span>
+						<span class="text-gray-400 dark:text-gray-500 ml-1.5">
+							{{ violationRequest.slotCost === 2 ? '— quên chấm công cả ngày' : '— thiếu check-in hoặc check-out' }}
+						</span>
+					</p>
 				</div>
 
 				<!-- Evidence photo -->

@@ -7,40 +7,75 @@
 ## Endpoints
 
 | Method | Path | Ai được gọi | Ghi chú |
-|--------|------|-------------|---------|
+| --- | --- | --- | --- |
 | GET | `/v1/violation-requests/me` | Mọi user đã đăng nhập | Phiếu của bản thân (có phân trang) |
 | GET | `/v1/violation-requests/me/status` | Mọi user đã đăng nhập | Quota tháng — **bắt buộc `?month=&year=`** |
 | POST | `/v1/violation-requests` | Mọi user đã đăng nhập | Tạo phiếu giải trình — `multipart/form-data` |
-| GET | `/v1/violation-requests` | `HR`, `ADMIN` | Toàn bộ phiếu (có filter) |
+| GET | `/v1/violation-requests` | `HR`, `ADMIN`, `MANAGER` | HR/Admin: tất cả; Manager: chỉ phòng ban mình |
 | GET | `/v1/violation-requests/report` | `HR`, `ADMIN` | Thống kê vi phạm theo tháng — **bắt buộc `?month=&year=`** |
-| PATCH | `/v1/violation-requests/:id/approve` | `HR`, `ADMIN`, `MANAGER` | Duyệt phiếu |
-| PATCH | `/v1/violation-requests/:id/reject` | `HR`, `ADMIN`, `MANAGER` | Từ chối phiếu — body: `{ reviewNote }` |
+| PATCH | `/v1/violation-requests/:id/approve` | `MANAGER` (được phân công) | Duyệt phiếu — chỉ đúng người được giao |
+| PATCH | `/v1/violation-requests/:id/reject` | `MANAGER` (được phân công) | Từ chối phiếu — body: `{ reviewNote }` |
 | PATCH | `/v1/violation-requests/:id/cancel` | Employee (chính chủ) | Thu hồi phiếu đang chờ |
 
 > **Lưu ý thứ tự route:** `/me` và `/me/status` được khai báo **trước** `/:id/...` và `/report` trong controller.
 
 ---
 
-## Loại vi phạm — 3 loại (phân biệt qua `type`)
+## Phân quyền duyệt/từ chối
 
-| `type` | Tên | Fields bổ sung khi tạo | Ghi chú |
-|--------|-----|------------------------|---------|
-| `FORGOT_CHECKIN` | Quên chấm công | `requestedCheckIn` (ISO 8601, **bắt buộc**) + `requestedCheckOut` (tùy chọn) | Phải có bản ghi chấm công **đã bị khóa** ngày đó |
-| `LATE` | Đi muộn | _(không có)_ | Chỉ cần `type` + `violationDate` + `reason` |
-| `EARLY` | Về sớm | _(không có)_ | Chỉ cần `type` + `violationDate` + `reason` |
+Mỗi phiếu có `assignedReviewer` — trưởng phòng ban của nhân viên tại thời điểm tạo phiếu.  
+**Chỉ đúng người đó mới được approve/reject.** HR/ADMIN không có quyền này.
 
-**Tại sao LATE/EARLY không cần gửi số phút?**
+| Trường hợp                                   | Người được phép duyệt/từ chối      |
+| -------------------------------------------- | ---------------------------------- |
+| Phiếu có `assignedReviewer`                  | Đúng người đó (department manager) |
+| Phiếu không có `assignedReviewer` (fallback) | Bất kỳ HR/ADMIN nào                |
 
-Phiếu giải trình chỉ là hồ sơ giải trình — việc đi muộn/về sớm đã được hệ thống ghi nhận trong bản ghi chấm công. Server không cập nhật lại giờ khi duyệt LATE/EARLY; mục đích duy nhất là ghi nhận lý do và trừ quota tháng.
+Nếu sai người → `403 Chỉ trưởng phòng được phân công mới có thể xử lý phiếu này`.
 
 ---
 
-## Quota Logic — 5 lần/tháng
+## Loại vi phạm — 3 loại (phân biệt qua `type`)
 
-Mỗi nhân viên được tạo tối đa **5 phiếu giải trình mỗi tháng**, tính chung cho cả 3 loại.
+| `type` | Tên | Fields bổ sung khi tạo | Side effect khi APPROVE |
+| --- | --- | --- | --- |
+| `FORGOT_CHECKIN` | Quên chấm công | _(không có — xem chi tiết bên dưới)_ | Tự động cập nhật check-in/check-out theo giờ ca ngày đó |
+| `LATE` | Đi muộn | _(không có)_ | Cập nhật `checkInAt` về đúng giờ bắt đầu ca, `lateMinutes` → 0, `status` → PRESENT |
+| `EARLY` | Về sớm | _(không có)_ | Cập nhật `checkOutAt` về đúng giờ kết thúc ca, `earlyMinutes` → 0, `status` → PRESENT |
+
+> Với LATE/EARLY, khi tạo phiếu server tự động tìm và link bản ghi chấm công ngày tương ứng (`attendanceRecordId`). Không cần client gửi gì thêm.
+
+### FORGOT_CHECKIN — 2 trường hợp
+
+Server tự phát hiện trường hợp dựa vào trạng thái chấm công ngày vi phạm:
+
+| Trường hợp | Điều kiện | `slotCost` | Side effect khi APPROVE |
+| --- | --- | --- | --- |
+| **Thiếu check-in hoặc check-out** | Có bản ghi chấm công bị khóa | 1 | Điền check-in/check-out còn thiếu theo giờ ca |
+| **Quên cả ngày** | Không có bản ghi chấm công | **2** | Tạo bản ghi chấm công mới với giờ theo ca |
+
+**Client không cần gửi `requestedCheckIn`/`requestedCheckOut`.** Hệ thống tự tính giờ hợp lệ từ ca làm việc (ưu tiên `EmployeeShiftSchedule` của ngày đó, fallback về `defaultShift` của nhân viên).
+
+Thứ tự ưu tiên giờ ca:
+
+- Check-in: `effectiveShiftOverride.effectiveStart` → `shift.checkInTime`
+- Check-out: `effectiveShiftOverride.effectiveEnd` → `shift.checkOutTime`
+
+---
+
+## Quota Logic — 5 lượt/tháng (có trọng số)
+
+Mỗi nhân viên có tổng cộng **5 lượt (slots) giải trình mỗi tháng**, tính chung cho cả 3 loại. Mỗi phiếu tiêu tốn một số lượt nhất định (`slotCost`):
+
+| Loại phiếu                                         | `slotCost` |
+| -------------------------------------------------- | ---------- |
+| `LATE`                                             | 1          |
+| `EARLY`                                            | 1          |
+| `FORGOT_CHECKIN` — thiếu check-in/out (có bản ghi) | 1          |
+| `FORGOT_CHECKIN` — quên cả ngày (không có bản ghi) | **2**      |
 
 ```
-usedCount = số phiếu có status PENDING hoặc APPROVED trong tháng vi phạm
+usedCount = SUM(slotCost) của các phiếu PENDING hoặc APPROVED trong tháng vi phạm
 remaining = max(0, 5 - usedCount)
 isBlocked = usedCount >= 5
 ```
@@ -48,15 +83,19 @@ isBlocked = usedCount >= 5
 **REJECTED và CANCELLED không tính vào quota:**
 
 | Tình huống | usedCount | remaining |
-|-----------|-----------|-----------|
-| Tạo 3 phiếu, cả 3 APPROVED | 3 | 2 |
-| Tạo 3 phiếu, 2 APPROVED + 1 REJECTED | 2 | 3 — được tạo thêm |
-| Tạo 5 phiếu, tất cả PENDING | 5 | 0 — **bị block** |
-| Tạo 5 phiếu, 2 bị REJECT → còn 3 active | 3 | 2 — **được tạo tiếp** |
-| Thu hồi (CANCELLED) 1 phiếu PENDING | usedCount - 1 | tăng lên |
+| --- | --- | --- |
+| 1 phiếu LATE APPROVED | 1 | 4 |
+| 1 phiếu quên cả ngày APPROVED | **2** | 3 |
+| 2 phiếu quên cả ngày PENDING | **4** | 1 — **không đủ để tạo thêm quên cả ngày** |
+| 4 phiếu thường + 1 phiếu quên cả ngày PENDING → tổng 6 | ❌ block trước khi tạo |
+| Tạo 5 phiếu thường, tất cả PENDING | 5 | 0 — **bị block** |
+| 2 REJECTED → còn 3 active lượt | 3 | 2 — **được tạo tiếp** |
+| Thu hồi (CANCELLED) 1 phiếu PENDING slotCost=2 | usedCount - 2 | tăng 2 |
 
-Khi `isBlocked = true`, server trả `400`:
-> `"Bạn đã hết số lần giải trình vi phạm chuyên cần trong tháng (Tối đa 5 lần)."`
+Khi không đủ lượt, server trả `400`:
+
+> Phiếu thường: `"Bạn đã hết số lần giải trình vi phạm chuyên cần trong tháng (Tối đa 5 lần)."`  
+> Quên cả ngày: `"Không đủ lượt giải trình để tạo phiếu quên chấm công cả ngày (cần 2 lượt, còn X lượt)."`
 
 ---
 
@@ -68,15 +107,27 @@ Deadline được tính dựa vào **ngày vi phạm** (không phải ngày tạ
 deadline = ngày 05 của tháng kế tiếp lúc 23:59:59
 ```
 
-| Ngày vi phạm | Deadline |
-|-------------|----------|
-| 2026-05-01 | 2026-06-05T23:59:59 |
-| 2026-05-15 | 2026-06-05T23:59:59 |
-| 2026-05-31 | 2026-06-05T23:59:59 |
-| 2026-12-20 | 2027-01-05T23:59:59 |
+| Ngày vi phạm | Deadline            |
+| ------------ | ------------------- |
+| 2026-05-01   | 2026-06-05T23:59:59 |
+| 2026-05-15   | 2026-06-05T23:59:59 |
+| 2026-05-31   | 2026-06-05T23:59:59 |
+| 2026-12-20   | 2027-01-05T23:59:59 |
 
 Nếu tạo phiếu sau deadline, server trả `400`:
+
 > `"Đã quá hạn tạo phiếu. Thời hạn là ngày 05/06/2026."`
+
+---
+
+## Thông báo email
+
+| Sự kiện                           | To                                  | CC       |
+| --------------------------------- | ----------------------------------- | -------- |
+| Tạo phiếu                         | Trưởng phòng ban (assignedReviewer) | HR/ADMIN |
+| Tạo phiếu (không có trưởng phòng) | Tất cả HR/ADMIN                     | —        |
+| Approve                           | Nhân viên                           | HR/ADMIN |
+| Reject                            | Nhân viên                           | HR/ADMIN |
 
 ---
 
@@ -89,89 +140,87 @@ export type ViolationRequestType = 'FORGOT_CHECKIN' | 'LATE' | 'EARLY';
 export type ViolationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export interface ViolationEmployeeRef {
-  id: number;
-  fullName: string;
-  employeeCode: string;
+	id: number;
+	fullName: string;
+	employeeCode: string;
 }
 
-export interface ViolationReviewedByRef {
-  id: number;
-  fullName: string;
+export interface ViolationReviewerRef {
+	id: number;
+	fullName: string;
 }
 
 export interface ViolationRequest {
-  id: number;
-  type: ViolationRequestType;
-  typeLabel: string;                        // 'Quên chấm công' | 'Đi muộn' | 'Về sớm'
-  violationDate: string;                    // "YYYY-MM-DD"
-  violationMonth: number;                   // 1–12
-  violationYear: number;
-  deadline: string;                         // ISO 8601 — ngày 05 tháng sau lúc 23:59:59
-  deadlinePassed: boolean;                  // true nếu đã qua deadline tại thời điểm query
-  requestedCheckIn: string | null;          // ISO 8601 — chỉ có với FORGOT_CHECKIN
-  requestedCheckOut: string | null;         // ISO 8601 — chỉ có với FORGOT_CHECKIN, tùy chọn
-  reason: string;                           // tối thiểu 10 ký tự
-  evidencePhotoUrl: string | null;          // URL ảnh minh chứng
-  status: ViolationRequestStatus;
-  reviewNote: string | null;                // ghi chú khi duyệt/từ chối
-  reviewedBy: ViolationReviewedByRef | null;
-  reviewedAt: string | null;               // ISO 8601 full datetime
-  isViolationFlagged: boolean;             // bản ghi bị đánh dấu vi phạm kỷ luật
-  employee: ViolationEmployeeRef;
-  createdAt: string;                       // ISO 8601 full datetime
+	id: number;
+	type: ViolationRequestType;
+	typeLabel: string; // 'Quên chấm công' | 'Đi muộn' | 'Về sớm'
+	violationDate: string; // "YYYY-MM-DD"
+	violationMonth: number; // 1–12
+	violationYear: number;
+	deadline: string; // ISO 8601 — ngày 05 tháng sau lúc 23:59:59
+	deadlinePassed: boolean; // true nếu đã qua deadline tại thời điểm query
+	slotCost: number; // 1 (thường) hoặc 2 (FORGOT_CHECKIN cả ngày)
+	reason: string; // tối thiểu 10 ký tự
+	evidencePhotoUrl: string | null; // URL ảnh minh chứng
+	status: ViolationRequestStatus;
+	reviewNote: string | null; // ghi chú khi từ chối
+	assignedReviewer: ViolationReviewerRef | null; // trưởng phòng được giao duyệt
+	reviewedBy: ViolationReviewerRef | null; // người đã duyệt/từ chối
+	reviewedAt: string | null; // ISO 8601 full datetime
+	isViolationFlagged: boolean; // bản ghi bị đánh dấu vi phạm kỷ luật
+	employee: ViolationEmployeeRef;
+	createdAt: string; // ISO 8601 full datetime
 }
 
 // Trạng thái quota tháng — dùng để block tạo phiếu khi hết lượt
 export interface ViolationCounter {
-  usedCount: number;            // số phiếu PENDING + APPROVED trong tháng
-  remaining: number;            // số lần còn lại (max: 5 - usedCount, tối thiểu 0)
-  isBlocked: boolean;           // true khi usedCount >= 5
-  blockedMessage: string | null; // null nếu chưa blocked
+	usedCount: number; // số phiếu PENDING + APPROVED trong tháng
+	remaining: number; // số lần còn lại (max: 5 - usedCount, tối thiểu 0)
+	isBlocked: boolean; // true khi usedCount >= 5
+	blockedMessage: string | null; // null nếu chưa blocked
 }
 
 // Request DTOs
 export interface CreateViolationRequestDto {
-  type: ViolationRequestType;
-  violationDate: string;          // "YYYY-MM-DD"
-  reason: string;                 // tối thiểu 10 ký tự
-  requestedCheckIn?: string;      // ISO 8601 — bắt buộc với FORGOT_CHECKIN
-  requestedCheckOut?: string;     // ISO 8601 — tùy chọn với FORGOT_CHECKIN
-  evidencePhoto?: File;           // ảnh minh chứng (multipart), tùy chọn
+	type: ViolationRequestType;
+	violationDate: string; // "YYYY-MM-DD"
+	reason: string; // tối thiểu 10 ký tự
+	evidencePhoto?: File; // ảnh minh chứng (multipart), tùy chọn
 }
 
 export interface QueryViolationRequestParams {
-  page?: number;                  // default 1
-  limit?: number;                 // default 20, max 100
-  month?: number;                 // 1–12
-  year?: number;
-  status?: ViolationRequestStatus;
-  type?: ViolationRequestType;
-  departmentId?: number;          // chỉ HR/Admin dùng
+	page?: number; // default 1
+	limit?: number; // default 20, max 100
+	month?: number; // 1–12
+	year?: number;
+	status?: ViolationRequestStatus;
+	type?: ViolationRequestType;
+	departmentId?: number; // HR/Admin: filter theo phòng ban; Manager: bị ignore (tự động filter phòng mình)
 }
 
 export interface QueryViolationReportParams {
-  month: number;                  // bắt buộc, 1–12
-  year: number;                   // bắt buộc
-  departmentId?: number;          // tùy chọn
+	month: number; // bắt buộc, 1–12
+	year: number; // bắt buộc
+	departmentId?: number; // tùy chọn
 }
 
 export interface RejectViolationRequestDto {
-  reviewNote: string;             // tối thiểu 1 ký tự
+	reviewNote: string; // tối thiểu 1 ký tự
 }
 
 // Thống kê vi phạm mỗi nhân viên trong tháng
 export interface ViolationMonthlyStats {
-  employeeId: number;
-  employeeCode: string;
-  fullName: string;
-  departmentName: string | null;
-  forgotCount: number;      // số phiếu FORGOT_CHECKIN đã APPROVED
-  lateCount: number;        // số phiếu LATE đã APPROVED
-  earlyCount: number;       // số phiếu EARLY đã APPROVED
-  totalCount: number;       // forgotCount + lateCount + earlyCount
-  flaggedCount: number;     // số bản ghi bị đánh dấu vi phạm kỷ luật
-  remainingQuota: number;   // lượt giải trình còn lại = max(0, 5 - usedQuota)
-                            // usedQuota = PENDING + APPROVED (khác totalCount)
+	employeeId: number;
+	employeeCode: string;
+	fullName: string;
+	departmentName: string | null;
+	forgotCount: number; // số phiếu FORGOT_CHECKIN đã APPROVED
+	lateCount: number; // số phiếu LATE đã APPROVED
+	earlyCount: number; // số phiếu EARLY đã APPROVED
+	totalCount: number; // forgotCount + lateCount + earlyCount
+	flaggedCount: number; // số bản ghi bị đánh dấu vi phạm kỷ luật
+	remainingQuota: number; // lượt giải trình còn lại = max(0, 5 - usedQuota)
+	// usedQuota = PENDING + APPROVED (khác totalCount)
 }
 ```
 
@@ -187,31 +236,32 @@ Tất cả params đều optional.
 
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "type": "LATE",
-      "typeLabel": "Đi muộn",
-      "violationDate": "2026-05-15",
-      "violationMonth": 5,
-      "violationYear": 2026,
-      "deadline": "2026-06-05T23:59:59.999Z",
-      "deadlinePassed": false,
-      "requestedCheckIn": null,
-      "requestedCheckOut": null,
-      "reason": "Tôi bị kẹt xe trên đường đến công ty",
-      "evidencePhotoUrl": null,
-      "status": "PENDING",
-      "reviewNote": null,
-      "reviewedBy": null,
-      "reviewedAt": null,
-      "isViolationFlagged": false,
-      "employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
-      "createdAt": "2026-05-15T04:00:00.000Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
+	"success": true,
+	"data": [
+		{
+			"id": 1,
+			"type": "LATE",
+			"typeLabel": "Đi muộn",
+			"violationDate": "2026-05-15",
+			"violationMonth": 5,
+			"violationYear": 2026,
+			"deadline": "2026-06-05T23:59:59.999Z",
+			"deadlinePassed": false,
+			"requestedCheckIn": null,
+			"requestedCheckOut": null,
+			"reason": "Tôi bị kẹt xe trên đường đến công ty",
+			"evidencePhotoUrl": null,
+			"status": "PENDING",
+			"reviewNote": null,
+			"assignedReviewer": { "id": 12, "fullName": "Trần Văn Bình" },
+			"reviewedBy": null,
+			"reviewedAt": null,
+			"isViolationFlagged": false,
+			"employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
+			"createdAt": "2026-05-15T04:00:00.000Z"
+		}
+	],
+	"meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
 }
 ```
 
@@ -225,36 +275,37 @@ Tất cả params đều optional.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "usedCount": 3,
-    "remaining": 2,
-    "isBlocked": false,
-    "blockedMessage": null
-  }
+	"success": true,
+	"data": {
+		"usedCount": 3,
+		"remaining": 2,
+		"isBlocked": false,
+		"blockedMessage": null
+	}
 }
 ```
 
 Khi đã dùng hết 5 lần:
+
 ```json
 {
-  "success": true,
-  "data": {
-    "usedCount": 5,
-    "remaining": 0,
-    "isBlocked": true,
-    "blockedMessage": "Bạn đã hết số lần giải trình vi phạm chuyên cần trong tháng (Tối đa 5 lần)."
-  }
+	"success": true,
+	"data": {
+		"usedCount": 5,
+		"remaining": 0,
+		"isBlocked": true,
+		"blockedMessage": "Bạn đã hết số lần giải trình vi phạm chuyên cần trong tháng (Tối đa 5 lần)."
+	}
 }
 ```
 
 **Pattern gọi trước khi hiển thị form tạo phiếu:**
+
 ```typescript
-// Gọi khi user chọn tháng, kiểm tra còn lượt không
 const status = await fetchMyMonthlyStatus(month, year);
 if (status.isBlocked) {
-  // Hiện banner: status.blockedMessage
-  // Disable nút "Tạo phiếu"
+	// Hiện banner: status.blockedMessage
+	// Disable nút "Tạo phiếu"
 }
 ```
 
@@ -265,35 +316,36 @@ if (status.isBlocked) {
 **Content-Type:** `multipart/form-data` (dù không upload ảnh vẫn phải dùng form-data)
 
 ### Ví dụ: Đi muộn (LATE)
+
 ```json
 {
-  "type": "LATE",
-  "violationDate": "2026-05-15",
-  "reason": "Tôi bị kẹt xe trên đường đến công ty"
+	"type": "LATE",
+	"violationDate": "2026-05-15",
+	"reason": "Tôi bị kẹt xe trên đường đến công ty"
 }
 ```
 
 ### Ví dụ: Về sớm (EARLY)
+
 ```json
 {
-  "type": "EARLY",
-  "violationDate": "2026-05-15",
-  "reason": "Cần đưa con đi khám bệnh theo lịch hẹn bác sĩ"
+	"type": "EARLY",
+	"violationDate": "2026-05-15",
+	"reason": "Cần đưa con đi khám bệnh theo lịch hẹn bác sĩ"
 }
 ```
 
 ### Ví dụ: Quên chấm công (FORGOT_CHECKIN)
+
 ```json
 {
-  "type": "FORGOT_CHECKIN",
-  "violationDate": "2026-05-15",
-  "requestedCheckIn": "2026-05-15T01:30:00.000Z",
-  "requestedCheckOut": "2026-05-15T10:00:00.000Z",
-  "reason": "Tôi quên chấm công do có cuộc họp khẩn đầu giờ"
+	"type": "FORGOT_CHECKIN",
+	"violationDate": "2026-05-15",
+	"reason": "Tôi quên chấm công do có cuộc họp khẩn đầu giờ"
 }
 ```
 
-> Với `FORGOT_CHECKIN`, `requestedCheckIn` là **bắt buộc**; `requestedCheckOut` là tùy chọn (trường hợp chỉ quên check-in).
+> Server tự xác định là thiếu check-in/check-out hay quên cả ngày dựa vào bản ghi chấm công ngày đó. Không cần gửi `requestedCheckIn`/`requestedCheckOut`.
 
 **Upload ảnh minh chứng (tùy chọn):** Gửi file qua field `evidencePhoto` trong form-data. Chấp nhận JPG/PNG, tối đa 5MB.
 
@@ -301,22 +353,25 @@ if (status.isBlocked) {
 
 **Lỗi có thể gặp:**
 
-| HTTP | Mô tả |
-|------|-------|
-| 400 | Đã quá hạn tạo phiếu cho ngày vi phạm này |
-| 400 | Đã hết 5 lần giải trình trong tháng |
-| 400 | `requestedCheckIn` bắt buộc với FORGOT_CHECKIN |
-| 400 | Bản ghi chấm công ngày đó chưa bị khóa (chỉ với FORGOT_CHECKIN) |
-| 404 | Không tìm thấy bản ghi chấm công ngày vi phạm (chỉ với FORGOT_CHECKIN) |
-| 409 | Đã có phiếu PENDING/APPROVED cho bản ghi chấm công này (chỉ với FORGOT_CHECKIN) |
+| HTTP | Mô tả                                                                          |
+| ---- | ------------------------------------------------------------------------------ |
+| 400  | Đã quá hạn tạo phiếu cho ngày vi phạm này                                      |
+| 400  | Đã hết lượt giải trình trong tháng (hoặc không đủ 2 lượt cho quên cả ngày)     |
+| 400  | Bản ghi chấm công ngày đó chưa bị khóa (chỉ với FORGOT_CHECKIN có bản ghi)     |
+| 409  | Đã có phiếu PENDING/APPROVED cho bản ghi này hoặc cho cùng ngày (quên cả ngày) |
 
 ---
 
-## GET /v1/violation-requests — Toàn bộ phiếu (HR/Admin)
+## GET /v1/violation-requests — Danh sách phiếu
 
 **Query params:** `?month=5&year=2026&departmentId=1&status=PENDING&type=LATE&page=1&limit=20`
 
 Nếu không truyền `month`/`year`, server mặc định tháng/năm hiện tại.
+
+**Hành vi theo role:**
+
+- **HR/ADMIN:** Xem tất cả. `departmentId` filter tùy chọn.
+- **MANAGER:** Tự động chỉ thấy phòng ban của mình. `departmentId` từ query bị **bỏ qua**.
 
 **Response:** `ApiPaginated<ViolationRequest>` — shape giống `/me`.
 
@@ -324,28 +379,27 @@ Nếu không truyền `month`/`year`, server mặc định tháng/năm hiện t�
 
 ## GET /v1/violation-requests/report — Thống kê tháng (HR/Admin)
 
-**Query params bắt buộc:** `?month=5&year=2026`
-**Query params tùy chọn:** `?departmentId=1`
+**Query params bắt buộc:** `?month=5&year=2026` **Query params tùy chọn:** `?departmentId=1`
 
 **Response:** `ApiSuccess<ViolationMonthlyStats[]>`
 
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "employeeId": 4,
-      "employeeCode": "EMP004",
-      "fullName": "Nguyễn Văn An",
-      "departmentName": "Kỹ thuật",
-      "forgotCount": 0,
-      "lateCount": 2,
-      "earlyCount": 1,
-      "totalCount": 3,
-      "flaggedCount": 0,
-      "remainingQuota": 2
-    }
-  ]
+	"success": true,
+	"data": [
+		{
+			"employeeId": 4,
+			"employeeCode": "EMP004",
+			"fullName": "Nguyễn Văn An",
+			"departmentName": "Kỹ thuật",
+			"forgotCount": 0,
+			"lateCount": 2,
+			"earlyCount": 1,
+			"totalCount": 3,
+			"flaggedCount": 0,
+			"remainingQuota": 2
+		}
+	]
 }
 ```
 
@@ -356,34 +410,45 @@ Nếu không truyền `month`/`year`, server mặc định tháng/năm hiện t�
 
 ## PATCH /v1/violation-requests/:id/approve — Duyệt phiếu
 
-Không cần body. Chỉ `HR`, `ADMIN` gọi được (MANAGER bị chặn ở service layer).
+Không cần body.
 
-**Side effect khi duyệt FORGOT_CHECKIN:**
-Server tự mở khóa bản ghi chấm công và cập nhật `checkInAt`/`checkOutAt` bằng `requestedCheckIn`/`requestedCheckOut` của phiếu. Thao tác là atomic.
+**Điều kiện:** Người gọi phải là `assignedReviewer` của phiếu (trưởng phòng ban được phân công).
 
-**Side effect khi duyệt LATE/EARLY:**
-Không có cập nhật nào — phiếu chỉ chuyển trạng thái APPROVED.
+**Side effect khi duyệt — cập nhật bản ghi chấm công:**
+
+| Loại | Hành động |
+| --- | --- |
+| `FORGOT_CHECKIN` (thiếu check-in/out) | Điền check-in/check-out còn thiếu theo giờ ca, `lateMinutes`/`earlyMinutes` → 0, `status` → `PRESENT` |
+| `FORGOT_CHECKIN` (quên cả ngày) | **Tạo mới** bản ghi chấm công với giờ check-in/check-out theo ca, `status` → `PRESENT`, `isManual: true` |
+| `LATE` | Cập nhật `checkInAt` về giờ bắt đầu ca, `lateMinutes` → 0, `status` → `PRESENT` |
+| `EARLY` | Cập nhật `checkOutAt` về giờ kết thúc ca, `earlyMinutes` → 0, `status` → `PRESENT` |
+
+> Giờ ca ưu tiên `effectiveShiftOverride` (nghỉ nửa ngày) trước, fallback về `shift.checkInTime`/`shift.checkOutTime`.  
+> Với FORGOT_CHECKIN (quên cả ngày): ưu tiên `EmployeeShiftSchedule` của ngày đó, fallback về `defaultShift` của nhân viên.
 
 **Response 200:** `ApiSuccess<ViolationRequest>` (status = `APPROVED`)
 
 **Lỗi có thể gặp:**
 
-| HTTP | Mô tả |
-|------|-------|
-| 400 | Phiếu không ở trạng thái PENDING |
-| 403 | Không phải HR/ADMIN |
-| 404 | Phiếu không tồn tại |
+| HTTP | Mô tả                                           |
+| ---- | ----------------------------------------------- |
+| 400  | Phiếu không ở trạng thái PENDING                |
+| 403  | Không phải người được phân công duyệt phiếu này |
+| 404  | Phiếu không tồn tại                             |
 
 ---
 
 ## PATCH /v1/violation-requests/:id/reject — Từ chối phiếu
 
 **Request body:**
+
 ```json
 { "reviewNote": "Thông tin không khớp với dữ liệu chấm công hệ thống" }
 ```
 
 `reviewNote` là **bắt buộc** khi từ chối.
+
+**Điều kiện:** Người gọi phải là `assignedReviewer` của phiếu.
 
 **Response 200:** `ApiSuccess<ViolationRequest>` (status = `REJECTED`)
 
@@ -398,14 +463,61 @@ Không cần body. Chỉ chính chủ gọi được. Chỉ thu hồi được k
 **Response 200:** `ApiSuccess<ViolationRequest>` (status = `CANCELLED`)
 
 **400** nếu không phải PENDING:
+
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Chỉ được thu hồi phiếu đang chờ xử lý" } }
 ```
 
 **403** nếu không phải chính chủ:
+
 ```json
 { "success": false, "error": { "code": "FORBIDDEN", "message": "Chỉ được thu hồi phiếu của chính mình" } }
 ```
+
+---
+
+## Đính kèm phiếu trong bản ghi chấm công
+
+`GET /v1/attendance/me` trả về field `violationRequests` trong mỗi bản ghi chấm công:
+
+```typescript
+// Thêm vào AttendanceRecord
+violationRequests: {
+	id: number;
+	type: ViolationRequestType;
+	typeLabel: string;
+	status: ViolationRequestStatus;
+	reason: string;
+	createdAt: string;
+}
+[];
+```
+
+Ví dụ bản ghi đã được duyệt violation LATE:
+
+```json
+{
+	"id": 78,
+	"date": "2026-05-14",
+	"checkInAt": "2026-05-14T01:30:00.000Z",
+	"lateMinutes": 0,
+	"status": "PRESENT",
+	"isManual": true,
+	"shift": { "id": 4, "name": "Ca hành chính HN", "checkInTime": "08:30", "checkOutTime": "18:00" },
+	"violationRequests": [
+		{
+			"id": 1,
+			"type": "LATE",
+			"typeLabel": "Đi muộn",
+			"status": "APPROVED",
+			"reason": "Tôi bị kẹt xe trên đường đến công ty",
+			"createdAt": "2026-05-21T09:21:37.060Z"
+		}
+	]
+}
+```
+
+Mảng rỗng `[]` với các ngày không có phiếu.
 
 ---
 
@@ -413,10 +525,10 @@ Không cần body. Chỉ chính chủ gọi được. Chỉ thu hồi được k
 
 Ngoài endpoint `/v1/violation-requests/report`, HR/Admin có thể dùng endpoints trong `ReportsController`:
 
-| Method | Path | Ghi chú |
-|--------|------|---------|
-| GET | `/v1/reports/violations` | JSON thống kê — cùng shape với `/violation-requests/report` |
-| GET | `/v1/reports/violations/export` | Tải file Excel |
+| Method | Path                            | Ghi chú                                                     |
+| ------ | ------------------------------- | ----------------------------------------------------------- |
+| GET    | `/v1/reports/violations`        | JSON thống kê — cùng shape với `/violation-requests/report` |
+| GET    | `/v1/reports/violations/export` | Tải file Excel                                              |
 
 **Query params:** `?month=5&year=2026&departmentId=1`
 
@@ -429,74 +541,70 @@ File Excel gồm các cột: Mã NV · Họ tên · Phòng ban · Quên CC · Đ
 ```typescript
 // composables/useViolationRequests.ts
 import type {
-  ViolationRequest,
-  ViolationCounter,
-  ViolationMonthlyStats,
-  CreateViolationRequestDto,
-  RejectViolationRequestDto,
-  QueryViolationRequestParams,
-  QueryViolationReportParams,
+	ViolationRequest,
+	ViolationCounter,
+	ViolationMonthlyStats,
+	CreateViolationRequestDto,
+	RejectViolationRequestDto,
+	QueryViolationRequestParams,
+	QueryViolationReportParams,
 } from '~/types/violation.types';
 
 export function useViolationRequests() {
-  const { get, list, post, patch } = useFetch();
+	const { get, list, post, patch } = useFetch();
 
-  /** Mọi user: danh sách phiếu của bản thân */
-  const fetchMyRequests = (params?: QueryViolationRequestParams) =>
-    list<ViolationRequest>('/v1/violation-requests/me', { params });
+	/** Mọi user: danh sách phiếu của bản thân */
+	const fetchMyRequests = (params?: QueryViolationRequestParams) =>
+		list<ViolationRequest>('/v1/violation-requests/me', { params });
 
-  /** Mọi user: kiểm tra quota tháng trước khi tạo phiếu */
-  const fetchMyMonthlyStatus = (month: number, year: number) =>
-    get<ViolationCounter>('/v1/violation-requests/me/status', { params: { month, year } });
+	/** Mọi user: kiểm tra quota tháng trước khi tạo phiếu */
+	const fetchMyMonthlyStatus = (month: number, year: number) =>
+		get<ViolationCounter>('/v1/violation-requests/me/status', { params: { month, year } });
 
-  /**
-   * Tạo phiếu giải trình — gửi dưới dạng FormData.
-   * Nếu có ảnh minh chứng, append vào field "evidencePhoto".
-   */
-  const submitRequest = (dto: CreateViolationRequestDto) => {
-    const form = new FormData();
-    form.append('type', dto.type);
-    form.append('violationDate', dto.violationDate);
-    form.append('reason', dto.reason);
-    if (dto.requestedCheckIn) form.append('requestedCheckIn', dto.requestedCheckIn);
-    if (dto.requestedCheckOut) form.append('requestedCheckOut', dto.requestedCheckOut);
-    if (dto.evidencePhoto) form.append('evidencePhoto', dto.evidencePhoto);
-    return post<ViolationRequest>('/v1/violation-requests', form);
-  };
+	/**
+	 * Tạo phiếu giải trình — gửi dưới dạng FormData.
+	 * Nếu có ảnh minh chứng, append vào field "evidencePhoto".
+	 */
+	const submitRequest = (dto: CreateViolationRequestDto) => {
+		const form = new FormData();
+		form.append('type', dto.type);
+		form.append('violationDate', dto.violationDate);
+		form.append('reason', dto.reason);
+		if (dto.evidencePhoto) form.append('evidencePhoto', dto.evidencePhoto);
+		return post<ViolationRequest>('/v1/violation-requests', form);
+	};
 
-  /** HR/Admin: danh sách toàn bộ phiếu */
-  const fetchAllRequests = (params?: QueryViolationRequestParams) =>
-    list<ViolationRequest>('/v1/violation-requests', { params });
+	/** HR/Admin/Manager: danh sách phiếu theo quyền */
+	const fetchAllRequests = (params?: QueryViolationRequestParams) =>
+		list<ViolationRequest>('/v1/violation-requests', { params });
 
-  /** HR/Admin: thống kê vi phạm tháng */
-  const fetchMonthlyReport = (params: QueryViolationReportParams) =>
-    get<ViolationMonthlyStats[]>('/v1/violation-requests/report', { params });
+	/** HR/Admin: thống kê vi phạm tháng */
+	const fetchMonthlyReport = (params: QueryViolationReportParams) =>
+		get<ViolationMonthlyStats[]>('/v1/violation-requests/report', { params });
 
-  /** HR/Admin: duyệt phiếu */
-  const approveRequest = (id: number) =>
-    patch<ViolationRequest>(`/v1/violation-requests/${id}/approve`);
+	/** Manager (được phân công): duyệt phiếu */
+	const approveRequest = (id: number) => patch<ViolationRequest>(`/v1/violation-requests/${id}/approve`);
 
-  /**
-   * HR/Admin: từ chối phiếu.
-   * reviewNote bắt buộc.
-   */
-  const rejectRequest = (id: number, dto: RejectViolationRequestDto) =>
-    patch<ViolationRequest>(`/v1/violation-requests/${id}/reject`, dto);
+	/**
+	 * Manager (được phân công): từ chối phiếu.
+	 * reviewNote bắt buộc.
+	 */
+	const rejectRequest = (id: number, dto: RejectViolationRequestDto) =>
+		patch<ViolationRequest>(`/v1/violation-requests/${id}/reject`, dto);
 
-  /** Chính chủ: thu hồi phiếu đang chờ */
-  const cancelRequest = (id: number) =>
-    patch<ViolationRequest>(`/v1/violation-requests/${id}/cancel`);
+	/** Chính chủ: thu hồi phiếu đang chờ */
+	const cancelRequest = (id: number) => patch<ViolationRequest>(`/v1/violation-requests/${id}/cancel`);
 
-  return {
-    fetchMyRequests,
-    fetchMyMonthlyStatus,
-    submitRequest,
-    fetchAllRequests,
-    fetchMonthlyReport,
-    approveRequest,
-    rejectRequest,
-    cancelRequest,
-  };
+	return {
+		fetchMyRequests,
+		fetchMyMonthlyStatus,
+		submitRequest,
+		fetchAllRequests,
+		fetchMonthlyReport,
+		approveRequest,
+		rejectRequest,
+		cancelRequest,
+	};
 }
 ```
 
@@ -505,23 +613,31 @@ export function useViolationRequests() {
 ## Edge cases
 
 | Tình huống | Kết quả |
-|-----------|---------|
+| --- | --- |
 | `usedCount = 5` (5 phiếu PENDING/APPROVED) | 400 — bị block |
 | Tạo phiếu với `violationDate` tháng trước đã qua ngày 05 tháng này | 400 — đã quá hạn |
 | `violationDate = 2026-05-31`, tạo vào 2026-06-06 | 400 — đã quá hạn (deadline là 05/06) |
 | `violationDate = 2026-05-31`, tạo vào 2026-06-05 23:59 | 201 — còn trong deadline |
-| FORGOT_CHECKIN, bản ghi chấm công ngày đó chưa bị khóa | 400 |
-| FORGOT_CHECKIN, không tìm thấy bản ghi chấm công | 404 |
-| FORGOT_CHECKIN, đã có 1 phiếu PENDING/APPROVED cho cùng bản ghi | 409 |
+| FORGOT_CHECKIN, có bản ghi nhưng chưa bị khóa | 400 |
+| FORGOT_CHECKIN, có bản ghi đã bị khóa + đã có phiếu PENDING/APPROVED | 409 |
+| FORGOT_CHECKIN, không có bản ghi (quên cả ngày) + đã có phiếu PENDING/APPROVED cùng ngày | 409 |
+| FORGOT_CHECKIN, không có bản ghi + `remaining < 2` | 400 — không đủ 2 lượt |
 | FORGOT_CHECKIN, phiếu trước REJECTED → tạo lại cho cùng ngày | 201 — hợp lệ |
-| FORGOT_CHECKIN không truyền `requestedCheckIn` | 400 |
 | LATE/EARLY — không cần gửi thêm field nào | 201 — chỉ cần type + violationDate + reason |
-| REJECTED → `usedCount` giảm 1 → nhân viên được tạo phiếu mới | 201 nếu còn quota |
-| CANCELLED → `usedCount` giảm 1 (CANCELLED không tính quota) | — |
-| EMPLOYEE gọi `GET /violation-requests` (không phải `/me`) | 403 Forbidden |
-| MANAGER gọi `GET /violation-requests` | 403 Forbidden |
+| REJECTED → `usedCount` giảm theo `slotCost` → nhân viên được tạo phiếu mới | 201 nếu còn quota |
+| CANCELLED → `usedCount` giảm theo `slotCost` (CANCELLED không tính quota) | — |
+| EMPLOYEE gọi `GET /violation-requests` | 403 Forbidden |
+| MANAGER gọi `GET /violation-requests` | 200 — chỉ thấy phòng ban của mình |
+| MANAGER không phải assignedReviewer gọi approve/reject | 403 — chỉ người được phân công |
+| HR/ADMIN gọi approve/reject (phiếu có assignedReviewer) | 403 — không có quyền |
 | Thu hồi phiếu đã APPROVED | 400 — chỉ được thu hồi PENDING |
 | Thu hồi phiếu của người khác | 403 Forbidden |
-| Approve FORGOT_CHECKIN → bản ghi chấm công tự mở khóa + cập nhật giờ | atomic transaction |
-| Approve LATE/EARLY → không có side effect | chỉ chuyển status APPROVED |
+| Approve LATE → bản ghi chấm công: checkInAt = giờ ca, lateMinutes = 0, status = PRESENT | tự động |
+| Approve EARLY → bản ghi chấm công: checkOutAt = giờ ca, earlyMinutes = 0, status = PRESENT | tự động |
+| Approve FORGOT_CHECKIN (thiếu check-in/out) → điền từ ca, lateMinutes/earlyMinutes = 0 | tự động |
+| Approve FORGOT_CHECKIN (quên cả ngày) → tạo bản ghi mới với giờ ca | tự động |
+| FORGOT_CHECKIN quên cả ngày, employee không có shift và không có defaultShift | Approve OK nhưng bản ghi không được tạo (log warning) |
 | `remainingQuota` trong report có thể < `5 - totalCount` | vì `totalCount` chỉ đếm APPROVED, còn PENDING cũng trừ quota |
+| `slotCost = 2` → `remainingQuota` có thể giảm 2 sau 1 phiếu | quên cả ngày |
+| Bản ghi chấm công có `violationRequests[]` rỗng | ngày không có phiếu nào |
+| Bản ghi chấm công có `violationRequests[]` không rỗng | hiển thị badge/link xem phiếu |

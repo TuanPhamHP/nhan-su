@@ -7,15 +7,19 @@
 
 ## Endpoints
 
-| Method | Path                       | Ai được gọi   | Ghi chú                                   |
-| ------ | -------------------------- | ------------- | ----------------------------------------- |
-| POST   | `/v1/attendance/check-in`  | `EMPLOYEE`    | Chấm công vào — gửi kèm GPS               |
-| POST   | `/v1/attendance/check-out` | `EMPLOYEE`    | Chấm công ra — không cần GPS              |
-| GET    | `/v1/attendance/me`        | `EMPLOYEE`    | Lịch sử chấm công cá nhân (có phân trang) |
-| GET    | `/v1/attendance`           | `ADMIN`, `HR` | Toàn bộ chấm công công ty (có phân trang) |
-| PATCH  | `/v1/attendance/:id`       | `ADMIN`, `HR` | Chỉnh sửa thủ công bản ghi                |
+| Method | Path | Ai được gọi | Ghi chú |
+| --- | --- | --- | --- |
+| POST | `/v1/attendance/check-in` | `EMPLOYEE` | Multipart — ảnh selfie + GPS |
+| POST | `/v1/attendance/check-out` | `EMPLOYEE` | Multipart — ảnh selfie |
+| GET | `/v1/attendance/check-attendance` | `EMPLOYEE` | Kiểm tra GPS + ca trước khi check-in |
+| GET | `/v1/attendance/me/stats` | `EMPLOYEE` | Thống kê chấm công theo tháng |
+| GET | `/v1/attendance/photo-url` | `EMPLOYEE` | Presigned URL ảnh check-in/check-out từ S3 |
+| GET | `/v1/attendance/today-info` | `EMPLOYEE` | Thông tin hôm nay: ca, địa điểm, bản ghi |
+| GET | `/v1/attendance/me` | `EMPLOYEE` | Lịch sử chấm công cá nhân (có phân trang) |
+| GET | `/v1/attendance` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Toàn bộ chấm công (có phân trang + filter) |
+| PATCH | `/v1/attendance/:id` | `ADMIN`, `HR` | Chỉnh sửa thủ công bản ghi |
 
-> **Lưu ý thứ tự route:** `/attendance/me` được khai báo **trước** `/attendance/:id` trong controller.
+> **Lưu ý thứ tự route:** `/attendance/check-attendance`, `/attendance/me/stats`, `/attendance/photo-url`, `/attendance/today-info`, `/attendance/me` đều được khai báo **trước** `/attendance/:id` trong controller.
 
 ---
 
@@ -23,7 +27,7 @@
 
 ```typescript
 // types/attendance.types.ts
-export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'LEAVE';
+export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'HALF_DAY' | 'ON_LEAVE';
 
 export interface AttendanceLocationDto {
 	id: number;
@@ -43,29 +47,116 @@ export interface AttendanceEmployeeDto {
 	employeeCode: string;
 }
 
+export type AttendanceWorkType = 'OFFLINE' | 'ONLINE_APPROVED' | 'ONLINE_T7' | null;
+
+export interface AttendanceViolationRef {
+	id: number;
+	type: 'FORGOT_CHECKIN' | 'LATE' | 'EARLY';
+	typeLabel: string; // "Quên chấm công" | "Đi muộn" | "Về sớm"
+	status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+	reason: string;
+	createdAt: string; // ISO 8601
+}
+
 export interface AttendanceRecordDetail {
 	id: number;
 	date: string; // "YYYY-MM-DD"
-	checkInAt: string | null; // ISO 8601 full datetime, null nếu chưa check-in
-	checkOutAt: string | null; // ISO 8601 full datetime, null nếu chưa check-out
-	lateMinutes: number; // số phút đến muộn (0 nếu đúng giờ hoặc sớm)
-	earlyMinutes: number; // số phút về sớm (0 nếu đúng giờ hoặc muộn)
+	checkInAt: string | null; // ISO 8601 full datetime
+	checkOutAt: string | null; // ISO 8601 full datetime
+	checkInPhotoUrl: string | null; // S3 URL ảnh selfie check-in (dùng /photo-url để lấy presigned)
+	checkOutPhotoUrl: string | null; // S3 URL ảnh selfie check-out
+	isLocked: boolean; // true = bị lock, không tự sửa được
+	lockReason: string | null; // "AUTO_MIDNIGHT" | "HR_LOCKED"
+	missingType: string | null; // "MISSING_CHECKOUT" | "MISSING_CHECKIN"
+	lateMinutes: number;
+	earlyMinutes: number;
 	status: AttendanceStatus;
 	isManual: boolean; // true nếu HR chỉnh sửa thủ công
-	distance: number | null; // khoảng cách GPS khi check-in (mét, đã làm tròn), null nếu isManual
-	effectiveStart: string | null; // ISO 8601 epoch-based — xem ghi chú bên dưới ⚠️
-	effectiveEnd: string | null; // ISO 8601 epoch-based — xem ghi chú bên dưới ⚠️
-	isHalfDay: boolean; // true nếu ngày này có EffectiveShiftOverride (nghỉ nửa ngày)
+	note: string | null;
+	workType: AttendanceWorkType; // null = offline bình thường; 'ONLINE_APPROVED' = WFH được duyệt
+	distance: number | null; // khoảng cách GPS khi check-in (mét), null nếu isManual
+	effectiveStart: string | null; // ISO 8601 epoch-based — xem ghi chú ⚠️ bên dưới
+	effectiveEnd: string | null; // ISO 8601 epoch-based — xem ghi chú ⚠️ bên dưới
+	isHalfDay: boolean; // true nếu ngày này có EffectiveShiftOverride
 	location: AttendanceLocationDto | null;
 	shift: AttendanceShiftDto | null;
 	employee: AttendanceEmployeeDto | null;
+	violationRequests: AttendanceViolationRef[]; // danh sách đơn vi phạm liên quan bản ghi này
 }
 
-// POST /check-in request body
-export interface CheckInDto {
+// GET /attendance/check-attendance
+export interface CheckAttendanceResponseDto {
+	id: number; // ID địa điểm
+	name: string; // tên địa điểm
 	latitude: number;
 	longitude: number;
+	radiusMeters: number; // bán kính cho phép (mét)
+	distance: number; // khoảng cách từ GPS của nhân viên đến địa điểm (mét)
+	isInRange: boolean; // true nếu distance <= radiusMeters
+	isAvailableShift: boolean; // true nếu hiện đang trong khung giờ của ca
 }
+
+// GET /attendance/me/stats
+export interface AttendanceStatsResponseDto {
+	year: number;
+	month: number;
+	workedDays: number; // số ngày đã chấm công (PRESENT + LATE)
+	totalWorkingDays: number; // tổng số ngày làm việc trong tháng (trừ T7/CN/lễ)
+	remainingDays: number; // totalWorkingDays - workedDays
+	onTimeDays: number; // số ngày đúng giờ (PRESENT)
+	onTimeRate: number; // % đúng giờ = onTimeDays / workedDays * 100
+	lateTimes: number; // số lần đi muộn
+	annualLeaveBalance: number; // số ngày phép năm còn lại
+	annualLeaveUsed: number; // số ngày phép năm đã dùng
+}
+
+// GET /attendance/today-info
+export interface TodayShiftDto {
+	id: number;
+	name: string;
+	checkInTime: string; // "HH:mm" UTC
+	checkOutTime: string; // "HH:mm" UTC
+	isOnline: boolean; // true nếu ca online
+}
+
+export interface TodayLocationDto {
+	id: number;
+	name: string;
+	latitude: number;
+	longitude: number;
+	radiusMeters: number;
+}
+
+export interface TodayRecordDto {
+	id: number;
+	checkInAt: string | null; // ISO 8601
+	checkOutAt: string | null; // ISO 8601
+	status: AttendanceStatus;
+	isLocked: boolean;
+}
+
+export interface TodayInfoResponseDto {
+	date: string; // "YYYY-MM-DD"
+	isHoliday: boolean; // true nếu ngày lễ
+	hasShift: boolean; // true nếu có ca hôm nay
+	shift: TodayShiftDto | null;
+	locations: TodayLocationDto[];
+	todayRecord: TodayRecordDto | null; // null nếu chưa check-in
+}
+
+// Query params
+export interface AttendanceStatsQueryParams {
+	year: number; // bắt buộc, >= 2020
+	month: number; // bắt buộc, 1–12
+}
+
+export interface CheckAttendanceQueryParams {
+	latitude: number; // bắt buộc
+	longitude: number; // bắt buộc
+}
+
+// POST /check-in — multipart/form-data (không phải JSON)
+// Dùng FormData: append('photo', file), append('latitude', '21.0285'), append('longitude', '105.8542')
 
 // PATCH /:id request body
 export interface ManualEditAttendanceDto {
@@ -86,6 +177,8 @@ export interface QueryAttendanceParams {
 	status?: AttendanceStatus;
 }
 ```
+
+> **Check-in và check-out đều là `multipart/form-data`.** Không set `Content-Type` khi dùng `FormData` — để browser tự set boundary.
 
 ### ⚠️ Quan trọng: `effectiveStart` và `effectiveEnd`
 
@@ -115,52 +208,44 @@ Khi `isHalfDay: true`, dùng `effectiveStart`/`effectiveEnd` để hiển thị 
 ## Flow check-in từ góc nhìn frontend
 
 ```
-Mobile lấy GPS
+Mobile lấy GPS + chụp ảnh selfie
     │
     ├─ Khuyến nghị: kiểm tra accuracy < 100m trước khi gửi
     │   (server không validate accuracy — chỉ validate vị trí và bán kính)
     │
     ▼
-POST /v1/attendance/check-in  { latitude, longitude }
+POST /v1/attendance/check-in  (multipart/form-data)
+  photo     = <File JPG/PNG ≤ 5MB>
+  latitude  = 21.0285
+  longitude = 105.8542
     │
-    ├─ 400 Bad Request
-    │     ├─ message: "Vị trí hiện tại không nằm trong bán kính địa điểm chấm công được phép"
-    │     │   → Hiển thị: "Vị trí không hợp lệ. Hãy đến gần văn phòng hơn."
-    │     │
-    │     ├─ message: "Không có ca làm việc hôm nay"
-    │     │   → Hiển thị: "Bạn không có ca làm việc hôm nay."
-    │     │
-    │     └─ message: "Ngoài khung giờ cho phép của ca làm việc"
-    │         → Hiển thị: "Ngoài khung giờ chấm công. Vui lòng thử lại đúng giờ."
-    │         (server cho phép ±30 phút xung quanh giờ bắt đầu ca thực tế)
-    │
-    ├─ 409 Conflict
-    │     → "Bạn đã check-in hôm nay rồi."
+    ├─ 400 "Ảnh check-in là bắt buộc"
+    ├─ 400 "Chỉ chấp nhận ảnh JPG hoặc PNG"
+    ├─ 400 "Ảnh không được vượt quá 5MB"
+    ├─ 400 "Vị trí hiện tại không nằm trong bán kính địa điểm chấm công được phép"
+    ├─ 400 "Không có ca làm việc hôm nay"
+    ├─ 400 "Ngoài khung giờ cho phép của ca làm việc"
+    ├─ 400 "Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công."
+    ├─ 409 "ATTENDANCE_ALREADY_CHECKED_IN"
     │
     └─ 201 Created → AttendanceRecordDetail
-           │
-           ├─ isHalfDay: false
-           │     Hiển thị ca bình thường: shift.checkInTime – shift.checkOutTime
-           │
-           └─ isHalfDay: true
-                 Hiển thị "Ca rút gọn"
-                 Dùng effectiveStart/effectiveEnd (phải parse bằng getUTCHours())
+           ├─ isHalfDay: false → hiển thị ca bình thường
+           └─ isHalfDay: true  → hiển thị "Ca rút gọn" (getUTCHours())
 ```
 
 ---
 
 ## POST /v1/attendance/check-in — Check-in
 
-**Request body:**
+**Content-Type:** `multipart/form-data`
 
-```json
-{
-	"latitude": 21.0285,
-	"longitude": 105.8542
-}
-```
+| Field       | Type   | Bắt buộc | Mô tả                                |
+| ----------- | ------ | -------- | ------------------------------------ |
+| `photo`     | File   | ✓        | Ảnh selfie, JPG hoặc PNG, tối đa 5MB |
+| `latitude`  | number | ✓        | Vĩ độ GPS                            |
+| `longitude` | number | ✓        | Kinh độ GPS                          |
 
-**Response 201 — check-in thành công (ca bình thường):**
+**Response 201 — check-in thành công:**
 
 ```json
 {
@@ -170,86 +255,38 @@ POST /v1/attendance/check-in  { latitude, longitude }
 		"date": "2026-05-18",
 		"checkInAt": "2026-05-18T08:05:00.000Z",
 		"checkOutAt": null,
+		"checkInPhotoUrl": "https://bucket.s3.ap-southeast-1.amazonaws.com/attendance/check-in/2026/05/18/uuid.jpg",
+		"checkOutPhotoUrl": null,
+		"isLocked": false,
+		"lockReason": null,
+		"missingType": null,
 		"lateMinutes": 5,
 		"earlyMinutes": 0,
 		"status": "LATE",
 		"isManual": false,
+		"note": null,
 		"distance": 42,
 		"effectiveStart": null,
 		"effectiveEnd": null,
 		"isHalfDay": false,
 		"location": { "id": 1, "name": "Văn phòng Hà Nội" },
-		"shift": {
-			"id": 1,
-			"name": "Ca sáng",
-			"checkInTime": "08:00",
-			"checkOutTime": "17:00"
-		},
-		"employee": {
-			"id": 4,
-			"fullName": "Nguyễn Văn An",
-			"employeeCode": "EMP004"
-		}
+		"shift": { "id": 1, "name": "Ca sáng", "checkInTime": "08:00", "checkOutTime": "17:00" },
+		"employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" }
 	}
 }
 ```
 
-**Response 201 — check-in ngày có nửa ngày phép buổi sáng (`isHalfDay: true`):**
+**Response 201 — `isHalfDay: true` (nghỉ sáng):** Giống trên nhưng `effectiveStart: "1970-01-01T12:00:00.000Z"`, `effectiveEnd: "1970-01-01T17:00:00.000Z"`, `isHalfDay: true`.
 
-```json
-{
-	"success": true,
-	"data": {
-		"id": 102,
-		"date": "2026-05-19",
-		"checkInAt": "2026-05-19T13:05:00.000Z",
-		"checkOutAt": null,
-		"lateMinutes": 0,
-		"earlyMinutes": 0,
-		"status": "PRESENT",
-		"isManual": false,
-		"distance": 38,
-		"effectiveStart": "1970-01-01T12:00:00.000Z",
-		"effectiveEnd": "1970-01-01T17:00:00.000Z",
-		"isHalfDay": true,
-		"location": { "id": 1, "name": "Văn phòng Hà Nội" },
-		"shift": {
-			"id": 1,
-			"name": "Ca sáng",
-			"checkInTime": "08:00",
-			"checkOutTime": "17:00"
-		},
-		"employee": {
-			"id": 4,
-			"fullName": "Nguyễn Văn An",
-			"employeeCode": "EMP004"
-		}
-	}
-}
-```
+> `shift.checkInTime` vẫn là `"08:00"` — giờ ca gốc, không đổi dù có nửa ngày phép.
 
-> `effectiveStart: "1970-01-01T12:00:00.000Z"` — nghỉ sáng nên bắt đầu làm từ 12:00 UTC.  
-> `shift.checkInTime` vẫn là `"08:00"` — giờ ca gốc, không đổi.
-
-**Response 400 — vị trí không hợp lệ:**
+**Response 400 — bản ghi bị lock:**
 
 ```json
 {
 	"success": false,
-	"error": { "code": "BAD_REQUEST", "message": "Vị trí hiện tại không nằm trong bán kính địa điểm chấm công được phép" }
+	"error": { "code": "BAD_REQUEST", "message": "Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công." }
 }
-```
-
-**Response 400 — không có ca hôm nay:**
-
-```json
-{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Không có ca làm việc hôm nay" } }
-```
-
-**Response 400 — ngoài khung giờ:**
-
-```json
-{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Ngoài khung giờ cho phép của ca làm việc" } }
 ```
 
 **Response 409 — đã check-in rồi:**
@@ -262,46 +299,35 @@ POST /v1/attendance/check-in  { latitude, longitude }
 
 ## POST /v1/attendance/check-out — Check-out
 
-Không cần request body. Server lấy thời điểm check-out = thời điểm nhận request.
+**Content-Type:** `multipart/form-data`
 
-**Response 200:** `ApiSuccess<AttendanceRecordDetail>`
+| Field   | Type | Bắt buộc | Mô tả                                |
+| ------- | ---- | -------- | ------------------------------------ |
+| `photo` | File | ✓        | Ảnh selfie, JPG hoặc PNG, tối đa 5MB |
+
+Server lấy `checkOutAt = thời điểm nhận request`.
+
+**Response 200:** `ApiSuccess<AttendanceRecordDetail>` (shape giống check-in, `checkOutAt` và `checkOutPhotoUrl` được điền)
+
+**400** nếu chưa check-in:
+
+```json
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Chưa check-in" } }
+```
+
+**400** nếu đã check-out rồi:
+
+```json
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Đã check-out rồi" } }
+```
+
+**400** nếu bản ghi bị lock:
 
 ```json
 {
-	"success": true,
-	"data": {
-		"id": 101,
-		"date": "2026-05-18",
-		"checkInAt": "2026-05-18T08:05:00.000Z",
-		"checkOutAt": "2026-05-18T17:30:00.000Z",
-		"lateMinutes": 5,
-		"earlyMinutes": 0,
-		"status": "LATE",
-		"isManual": false,
-		"distance": 42,
-		"effectiveStart": null,
-		"effectiveEnd": null,
-		"isHalfDay": false,
-		"location": { "id": 1, "name": "Văn phòng Hà Nội" },
-		"shift": {
-			"id": 1,
-			"name": "Ca sáng",
-			"checkInTime": "08:00",
-			"checkOutTime": "17:00"
-		},
-		"employee": {
-			"id": 4,
-			"fullName": "Nguyễn Văn An",
-			"employeeCode": "EMP004"
-		}
-	}
+	"success": false,
+	"error": { "code": "BAD_REQUEST", "message": "Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công." }
 }
-```
-
-**400** nếu chưa check-in hoặc đã check-out rồi:
-
-```json
-{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Chưa check-in hoặc đã check-out rồi" } }
 ```
 
 ---
@@ -311,46 +337,6 @@ Không cần request body. Server lấy thời điểm check-out = thời điể
 **Query params:** `?page=1&limit=20&startDate=2026-05-01&endDate=2026-05-31&status=LATE`
 
 **Response:** `ApiPaginated<AttendanceRecordDetail>`
-
-```json
-{
-	"success": true,
-	"data": [
-		{
-			"id": 101,
-			"date": "2026-05-18",
-			"checkInAt": "2026-05-18T08:05:00.000Z",
-			"checkOutAt": "2026-05-18T17:30:00.000Z",
-			"lateMinutes": 5,
-			"earlyMinutes": 0,
-			"status": "LATE",
-			"isManual": false,
-			"distance": 42,
-			"effectiveStart": null,
-			"effectiveEnd": null,
-			"isHalfDay": false,
-			"location": { "id": 1, "name": "Văn phòng Hà Nội" },
-			"shift": {
-				"id": 1,
-				"name": "Ca sáng",
-				"checkInTime": "08:00",
-				"checkOutTime": "17:00"
-			},
-			"employee": {
-				"id": 4,
-				"fullName": "Nguyễn Văn An",
-				"employeeCode": "EMP004"
-			}
-		}
-	],
-	"meta": {
-		"page": 1,
-		"limit": 20,
-		"total": 15,
-		"totalPages": 1
-	}
-}
-```
 
 ---
 
@@ -366,7 +352,7 @@ Chỉ `ADMIN` và `HR` được gọi.
 
 ## PATCH /v1/attendance/:id — Chỉnh sửa thủ công
 
-Dành cho HR/Admin điều chỉnh khi nhân viên quên check-in/check-out. Bản ghi sau khi sửa sẽ có `isManual: true`, `distance: null`.
+Dành cho HR/Admin. Bản ghi sau khi sửa có `isManual: true`, `isLocked: false` (tự động unlock), `distance: null`.
 
 **Request body:**
 
@@ -394,20 +380,38 @@ Tất cả fields đều optional — có thể chỉ cập nhật `checkOutAt` 
 
 ```typescript
 // composables/useAttendance.ts
-import type {
-	AttendanceRecordDetail,
-	CheckInDto,
-	ManualEditAttendanceDto,
-	QueryAttendanceParams,
-} from '~/types/attendance.types';
+import type { AttendanceRecordDetail, ManualEditAttendanceDto, QueryAttendanceParams } from '~/types/attendance.types';
 import type { ApiPaginated } from '~/types/api.types';
 
 export function useAttendance() {
-	const { get, post, patch } = useFetch();
+	const { get, patch } = useFetch();
 
-	const checkIn = (dto: CheckInDto) => post<AttendanceRecordDetail>('/v1/attendance/check-in', dto);
+	// check-in: multipart/form-data — không set Content-Type thủ công
+	const checkIn = (params: { latitude: number; longitude: number }, photo: File) => {
+		const form = new FormData();
+		form.append('photo', photo);
+		form.append('latitude', String(params.latitude));
+		form.append('longitude', String(params.longitude));
+		return fetch('/v1/attendance/check-in', { method: 'POST', body: form });
+	};
 
-	const checkOut = () => post<AttendanceRecordDetail>('/v1/attendance/check-out');
+	// check-out: multipart/form-data
+	const checkOut = (photo: File) => {
+		const form = new FormData();
+		form.append('photo', photo);
+		return fetch('/v1/attendance/check-out', { method: 'POST', body: form });
+	};
+
+	const checkAttendance = (params: CheckAttendanceQueryParams) =>
+		get<CheckAttendanceResponseDto | null>('/v1/attendance/check-attendance', { params });
+
+	const fetchMyStats = (params: AttendanceStatsQueryParams) =>
+		get<AttendanceStatsResponseDto>('/v1/attendance/me/stats', { params });
+
+	const getPhotoUrl = (fileUrl: string) =>
+		get<{ presignedUrl: string }>('/v1/attendance/photo-url', { params: { fileUrl } });
+
+	const fetchTodayInfo = () => get<TodayInfoResponseDto>('/v1/attendance/today-info');
 
 	const fetchMyHistory = (params?: QueryAttendanceParams) =>
 		get<ApiPaginated<AttendanceRecordDetail>>('/v1/attendance/me', { params });
@@ -421,12 +425,216 @@ export function useAttendance() {
 	return {
 		checkIn,
 		checkOut,
+		checkAttendance,
+		fetchMyStats,
+		getPhotoUrl,
+		fetchTodayInfo,
 		fetchMyHistory,
 		fetchAll,
 		manualEdit,
 	};
 }
 ```
+
+---
+
+## GET /v1/attendance/check-attendance — Kiểm tra GPS trước khi check-in
+
+Dùng để kiểm tra xem nhân viên có đang trong bán kính địa điểm được phép chấm công không, và có ca đang hoạt động không. **Không tạo bản ghi — chỉ đọc.** Gọi trước khi hiện nút "Check-in" để cung cấp feedback tức thì.
+
+**Query params:** `?latitude=21.0285&longitude=105.8542`
+
+**Response 200:** `ApiSuccess<CheckAttendanceResponseDto | null>`
+
+- Trả về `null` nếu không có địa điểm nào được cấu hình.
+
+```json
+{
+	"success": true,
+	"data": {
+		"id": 1,
+		"name": "Văn phòng Hà Nội",
+		"latitude": 21.0285,
+		"longitude": 105.8542,
+		"radiusMeters": 100,
+		"distance": 42,
+		"isInRange": true,
+		"isAvailableShift": true
+	}
+}
+```
+
+**Pattern dùng trên mobile:**
+
+```typescript
+// Kiểm tra trước khi enable nút check-in
+const status = await checkAttendance({ latitude, longitude });
+if (!status) {
+	showError('Chưa cấu hình địa điểm chấm công');
+} else if (!status.isInRange) {
+	showError(`Bạn đang cách ${status.distance}m — vượt quá ${status.radiusMeters}m cho phép`);
+} else if (!status.isAvailableShift) {
+	showError('Ngoài khung giờ ca làm việc');
+} else {
+	enableCheckInButton();
+}
+```
+
+---
+
+## GET /v1/attendance/me/stats — Thống kê chấm công
+
+**Query params:** `?year=2026&month=5` (cả hai bắt buộc)
+
+**Response 200:** `ApiSuccess<AttendanceStatsResponseDto>`
+
+```json
+{
+	"success": true,
+	"data": {
+		"year": 2026,
+		"month": 5,
+		"workedDays": 18,
+		"totalWorkingDays": 22,
+		"remainingDays": 4,
+		"onTimeDays": 15,
+		"onTimeRate": 83.33,
+		"lateTimes": 3,
+		"annualLeaveBalance": 9,
+		"annualLeaveUsed": 3
+	}
+}
+```
+
+| Field                | Ý nghĩa                                                     |
+| -------------------- | ----------------------------------------------------------- |
+| `workedDays`         | Số ngày PRESENT + LATE trong tháng                          |
+| `totalWorkingDays`   | Số ngày làm việc lý thuyết (trừ T7/CN/lễ)                   |
+| `remainingDays`      | `totalWorkingDays - workedDays`                             |
+| `onTimeRate`         | `onTimeDays / workedDays * 100` — `0` nếu chưa làm ngày nào |
+| `annualLeaveBalance` | Số ngày phép năm còn lại (lấy từ leave_balances)            |
+| `annualLeaveUsed`    | Số ngày phép năm đã dùng trong năm                          |
+
+---
+
+## GET /v1/attendance/photo-url — Presigned URL ảnh
+
+Ảnh check-in/check-out lưu trên S3 với private ACL. Để hiển thị, cần lấy presigned URL có thời hạn.
+
+**Query params:** `?fileUrl=https://bucket.s3.amazonaws.com/attendance/.../uuid.jpg`
+
+`fileUrl` là giá trị lấy từ `checkInPhotoUrl` hoặc `checkOutPhotoUrl` của `AttendanceRecordDetail`.
+
+**Response 200:** `ApiSuccess<{ presignedUrl: string }>`
+
+```json
+{
+	"success": true,
+	"data": {
+		"presignedUrl": "https://bucket.s3.amazonaws.com/attendance/.../uuid.jpg?X-Amz-Algorithm=...&X-Amz-Expires=3600&..."
+	}
+}
+```
+
+**Lưu ý:**
+
+- Presigned URL có thời hạn ~1 giờ. Không cache lâu dài — lấy lại khi cần hiển thị.
+- Không gọi S3 URL trực tiếp — sẽ bị `403 Access Denied`.
+
+```typescript
+// Dùng trong img src
+const { presignedUrl } = await getPhotoUrl(record.checkInPhotoUrl!);
+imgSrc.value = presignedUrl;
+```
+
+---
+
+## GET /v1/attendance/today-info — Thông tin hôm nay
+
+Lấy toàn bộ thông tin cần thiết cho màn hình chấm công: ca hiện tại, danh sách địa điểm, và bản ghi hôm nay (nếu đã check-in).
+
+**Response 200:** `ApiSuccess<TodayInfoResponseDto>`
+
+```json
+{
+	"success": true,
+	"data": {
+		"date": "2026-05-27",
+		"isHoliday": false,
+		"hasShift": true,
+		"shift": {
+			"id": 1,
+			"name": "Ca sáng",
+			"checkInTime": "08:00",
+			"checkOutTime": "17:00",
+			"isOnline": false
+		},
+		"locations": [
+			{
+				"id": 1,
+				"name": "Văn phòng Hà Nội",
+				"latitude": 21.0285,
+				"longitude": 105.8542,
+				"radiusMeters": 100
+			}
+		],
+		"todayRecord": {
+			"id": 204,
+			"checkInAt": "2026-05-27T01:05:00.000Z",
+			"checkOutAt": null,
+			"status": "PRESENT",
+			"isLocked": false
+		}
+	}
+}
+```
+
+**Logic hiển thị trên màn hình chấm công:**
+
+```typescript
+const info = await fetchTodayInfo();
+
+if (info.isHoliday) {
+	// Hiển thị "Hôm nay nghỉ lễ"
+} else if (!info.hasShift) {
+	// Hiển thị "Không có ca hôm nay"
+} else if (!info.todayRecord) {
+	// Hiển thị nút "Check-in"
+} else if (!info.todayRecord.checkInAt) {
+	// Hiển thị nút "Check-in"
+} else if (!info.todayRecord.checkOutAt) {
+	// Đã check-in → hiển thị nút "Check-out"
+} else {
+	// Đã check-out → hiển thị trạng thái hoàn thành
+}
+```
+
+---
+
+## workType — badge trạng thái làm việc
+
+Field `workType` trong `AttendanceRecordDetail` cho biết hình thức làm việc trong ngày đó:
+
+| `workType`          | Badge hiển thị       | Nguồn gốc                                    |
+| ------------------- | -------------------- | -------------------------------------------- |
+| `null`              | _(không hiển thị)_   | Offline bình thường                          |
+| `'ONLINE_APPROVED'` | 🟢 Badge "Online"    | Đơn WFH được duyệt (`/online-work-requests`) |
+| `'ONLINE_T7'`       | 🟠 Badge "Online T7" | Làm online ngày thứ 7                        |
+| `'OFFLINE'`         | ⚫ Badge "Offline"   | Khai báo offline rõ ràng                     |
+
+---
+
+## violationRequests — đơn vi phạm liên kết
+
+`violationRequests` là mảng các đơn bù công/vi phạm được tạo cho bản ghi chấm công này.
+
+```typescript
+// Hiển thị badge trên bản ghi
+const hasPendingViolation = record.violationRequests.some(v => v.status === 'PENDING');
+const hasApprovedViolation = record.violationRequests.some(v => v.status === 'APPROVED');
+```
+
+Mảng rỗng `[]` nếu không có đơn vi phạm nào. Chi tiết về đơn vi phạm xem tại [violation-requests.md](./violation-requests.md).
 
 ---
 
@@ -475,3 +683,11 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 | Lọc `?date=X` kết hợp `startDate`/`endDate` | Nên dùng một trong hai, không nên kết hợp |
 | Không truyền `page`/`limit` | Mặc định `page=1`, `limit=20` |
 | `status: "ABSENT"` | Bản ghi vắng — `checkInAt` và `checkOutAt` đều `null` |
+| `workType: 'ONLINE_APPROVED'` | Nhân viên có đơn WFH COMPLETED ngày đó — không cần check-in từ văn phòng |
+| `violationRequests: []` | Không có vi phạm — bình thường |
+| `GET /check-attendance` trả `null` | Không có địa điểm nào được cấu hình trong hệ thống |
+| `GET /check-attendance` trả `isAvailableShift: false` | Đang ngoài khung giờ ca — nhân viên không thể check-in |
+| `GET /me/stats` tháng chưa kết thúc | `workedDays` tính đến hôm nay; `totalWorkingDays` vẫn tính cả tháng |
+| `GET /photo-url` với URL hết hạn | Lấy presigned URL mới — không cache |
+| `GET /today-info` ngày lễ | `isHoliday: true`, `hasShift: false`, `shift: null` |
+| `MANAGER`/`CHIEF` gọi `GET /attendance` | 200 OK — xem tất cả (MANAGER scope theo phòng ban) |

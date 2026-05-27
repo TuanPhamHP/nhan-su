@@ -21,8 +21,7 @@ export interface ViolationRequest {
 	violationYear: number;
 	deadline: string;
 	deadlinePassed: boolean;
-	requestedCheckIn: string | null;
-	requestedCheckOut: string | null;
+	slotCost: number;
 	reason: string;
 	evidencePhotoUrl: string | null;
 	status: ViolationRequestStatus;
@@ -41,10 +40,9 @@ export interface ViolationDetailView {
 	typeLabel: string;
 	status: ViolationRequestStatus;
 	violationDate: string;
+	slotCost: number;
 	reason: string;
 	evidencePhotoUrl: string | null;
-	requestedCheckIn: string | null;
-	requestedCheckOut: string | null;
 	assignedReviewer: ViolationReviewedByRef | null;
 	reviewedBy: ViolationReviewedByRef | null;
 	reviewedAt: string | null;
@@ -65,8 +63,6 @@ export interface CreateViolationRequestDto {
 	type: ViolationRequestType;
 	violationDate: string;
 	reason: string;
-	requestedCheckIn?: string;
-	requestedCheckOut?: string;
 	evidencePhoto?: File;
 }
 

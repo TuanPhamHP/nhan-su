@@ -446,8 +446,18 @@
 
 			<!-- Skeleton -->
 			<div v-if="loading" class="divide-y divide-gray-100 dark:divide-gray-700">
-				<div v-for="n in 4" :key="n" class="px-5 py-4 animate-pulse">
-					<div class="flex items-center gap-3">
+				<div v-for="n in 4" :key="n" class="px-4 py-3 sm:px-5 sm:py-4 animate-pulse">
+					<!-- Mobile skeleton -->
+					<div class="sm:hidden">
+						<div class="flex items-center justify-between mb-2">
+							<div class="h-5 w-28 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+							<div class="h-5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+						</div>
+						<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-36 mb-1.5"></div>
+						<div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+					</div>
+					<!-- Desktop skeleton -->
+					<div class="hidden sm:flex items-center gap-3">
 						<div class="h-5 w-24 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0"></div>
 						<div class="flex-1">
 							<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-36 mb-1.5"></div>
@@ -466,20 +476,37 @@
 				<button
 					v-for="item in recentActivity"
 					:key="item.id"
-					class="w-full px-5 py-4 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+					class="w-full px-4 py-3 sm:px-5 sm:py-4 flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
 					@click="navigateActivity(item)"
 				>
-					<!-- Type badge -->
-					<span
-						:class="[
-							'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 mt-0.5',
-							activityTypeCls(item.type),
-						]"
-					>
-						{{ item.typeLabel }}
-					</span>
+					<!-- Row 1 on mobile: type badge (left) + status badge + time (right) -->
+					<!-- On desktop: just the type badge in the flex-row flow -->
+					<div class="flex items-center justify-between sm:block sm:flex-shrink-0">
+						<span
+							:class="[
+								'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium sm:mt-0.5',
+								activityTypeCls(item.type),
+							]"
+						>
+							{{ item.typeLabel }}
+						</span>
+						<!-- Mobile only: status + time beside type badge -->
+						<div class="flex items-center gap-2 sm:hidden">
+							<span
+								:class="[
+									'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+									statusBadgeCls(item.status),
+								]"
+							>
+								{{ item.statusLabel }}
+							</span>
+							<span class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+								{{ formatRelativeTime(item.createdAt) }}
+							</span>
+						</div>
+					</div>
 
-					<!-- Content -->
+					<!-- Content: employee name + action (full width on mobile) -->
 					<div class="flex-1 min-w-0">
 						<p class="text-sm font-medium text-gray-900 dark:text-white truncate">
 							<span class="text-gray-500 dark:text-gray-400 mr-1">{{ item.employeeCode }}</span
@@ -488,8 +515,8 @@
 						<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ item.action }}</p>
 					</div>
 
-					<!-- Status + time -->
-					<div class="flex flex-col items-end gap-1 flex-shrink-0">
+					<!-- Desktop only: status + time column -->
+					<div class="hidden sm:flex flex-col items-end gap-1 flex-shrink-0">
 						<span
 							:class="[
 								'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',

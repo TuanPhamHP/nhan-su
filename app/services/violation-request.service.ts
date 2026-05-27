@@ -31,8 +31,6 @@ export const useViolationRequestService = () => {
 			form.append('type', dto.type);
 			form.append('violationDate', dto.violationDate);
 			form.append('reason', dto.reason);
-			if (dto.requestedCheckIn) form.append('requestedCheckIn', dto.requestedCheckIn);
-			if (dto.requestedCheckOut) form.append('requestedCheckOut', dto.requestedCheckOut);
 			if (dto.evidencePhoto) form.append('evidencePhoto', dto.evidencePhoto);
 
 			const res = await authFetch<ApiResponse<ViolationRequest>>('/v1/violation-requests', {
