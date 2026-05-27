@@ -13,9 +13,13 @@
 		items: NavItem[];
 	}
 
-	const { isOpen } = useSidebar();
+	const { isOpen, close } = useSidebar();
 	const { user } = useAuth();
 	const route = useRoute();
+
+	watch(() => route.path, () => {
+		if (import.meta.client && window.innerWidth < 1024) close();
+	});
 	const { isDark } = useColorMode();
 
 	const navSections: NavSection[] = [
@@ -66,6 +70,12 @@
 					label: 'Chấm công của tôi',
 					route: '/attendance/my',
 					icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
+				},
+				{
+					label: 'Check-in / Check-out',
+					route: '/attendance/check-in',
+					icon: 'M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
 				},
 			],
@@ -197,9 +207,10 @@
 <template>
 	<aside
 		:class="[
-			'flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700',
-			'transition-[width] duration-300 ease-in-out overflow-hidden',
-			isOpen ? 'w-64' : 'w-16',
+			'flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 overflow-hidden',
+			'fixed top-0 bottom-0 left-0 z-30 lg:static lg:z-auto',
+			'transition-transform lg:transition-[width] duration-300 ease-in-out',
+			isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0 lg:w-16',
 		]"
 	>
 		<!-- Logo -->

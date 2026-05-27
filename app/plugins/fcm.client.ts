@@ -4,6 +4,9 @@ import { useAuthStore } from '~/stores/auth';
 import { useNotificationStore } from '~/stores/notification';
 
 export default defineNuxtPlugin(() => {
+	// Service Worker chỉ hoạt động trên HTTPS hoặc localhost
+	if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+
 	const config = useRuntimeConfig();
 	const authStore = useAuthStore();
 	const notificationStore = useNotificationStore();

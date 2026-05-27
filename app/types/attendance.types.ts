@@ -55,6 +55,17 @@ export interface CheckInDto {
 	longitude: number;
 }
 
+export interface CheckAttendanceResponseDto {
+	id: number;
+	name: string;
+	latitude: number;
+	longitude: number;
+	radiusMeters: number;
+	distance: number;
+	isInRange: boolean;
+	isAvailableShift: boolean;
+}
+
 export interface ManualEditAttendanceDto {
 	checkInAt?: string; // ISO 8601
 	checkOutAt?: string; // ISO 8601

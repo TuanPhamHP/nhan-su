@@ -2,6 +2,7 @@ import { useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse, PaginatedResponse, PaginatedMeta } from '~/types/api.types';
 import type {
 	AttendanceRecordDetail,
+	CheckAttendanceResponseDto,
 	ManualEditAttendanceDto,
 	QueryAttendanceParams,
 } from '~/types/attendance.types';
@@ -55,6 +56,13 @@ export const useAttendanceService = () => {
 				params: { fileUrl },
 			});
 			return res.data.presignedUrl;
+		},
+
+		async checkAttendance(latitude: number, longitude: number): Promise<CheckAttendanceResponseDto | null> {
+			const res = await authFetch<ApiResponse<CheckAttendanceResponseDto | null>>('/v1/attendance/check-attendance', {
+				params: { latitude, longitude },
+			});
+			return res.data;
 		},
 	};
 };

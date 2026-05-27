@@ -59,6 +59,12 @@ export default defineNuxtConfig({
 	css: ['~/assets/styles/globals.scss', 'leaflet/dist/leaflet.css'],
 	vite: {
 		plugins: [svgLoader({ defaultImport: 'component' })],
+		server: {
+			hmr: {
+				protocol: 'ws',
+				host: '0.0.0.0',
+			},
+		},
 		css: {
 			preprocessorOptions: {
 				scss: {
