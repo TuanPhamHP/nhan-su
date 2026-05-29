@@ -87,7 +87,7 @@
 	>
 		<div
 			v-if="open"
-			class="absolute right-0 top-full mt-2 w-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 flex flex-col"
+			class="fixed inset-x-2 top-[68px] sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 flex flex-col"
 			style="max-height: 480px"
 		>
 			<!-- Header -->
