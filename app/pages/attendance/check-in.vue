@@ -1,6 +1,9 @@
 <script setup lang="ts">
 	import { useAttendanceService } from '~/services/attendance.service';
+	import { useViolationRequestService } from '~/services/violation-request.service';
+	import ViolationRequestModal from '~/components/modules/violation/ViolationRequestModal.vue';
 	import type { AttendanceRecordDetail, CheckAttendanceResponseDto } from '~/types/attendance.types';
+	import type { ViolationCounter, ViolationRequestType } from '~/types/violation.types';
 	import { formatVNTime } from '~/utils/attendance.utils';
 
 	definePageMeta({ title: 'Check-in / Check-out' });
@@ -174,7 +177,7 @@
 	// Trước khi có phản hồi API, dùng hasCheckedIn làm fallback.
 	const showCheckOutBlock = computed(() => {
 		if (!locationInfo.value) return hasCheckedIn.value;
-		return !apiCanCheckIn.value || apiCanCheckOut.value;
+		return !apiCanCheckIn.value || apiCanCheckOut.value || isMissedCheckOut.value;
 	});
 
 	const shiftName = computed(() => todayRecord.value?.shift?.name ?? null);
@@ -183,6 +186,26 @@
 
 	const checkInWindow = computed(() => locationInfo.value?.checkInWindow ?? null);
 	const checkOutWindow = computed(() => locationInfo.value?.checkOutWindow ?? null);
+
+	const vnTimeTotalMinutes = computed(() => {
+		const d = currentTime.value;
+		return (d.getUTCHours() * 60 + d.getUTCMinutes() + 7 * 60) % (24 * 60);
+	});
+
+	function parseWindowMinutes(timeStr: string): number {
+		const parts = timeStr.split(':');
+		return Number(parts[0]) * 60 + Number(parts[1]);
+	}
+
+	const isMissedCheckIn = computed(() => {
+		if (hasCheckedIn.value || !checkInWindow.value) return false;
+		return vnTimeTotalMinutes.value > parseWindowMinutes(checkInWindow.value.to);
+	});
+
+	const isMissedCheckOut = computed(() => {
+		if (hasCheckedOut.value || !checkOutWindow.value) return false;
+		return vnTimeTotalMinutes.value > parseWindowMinutes(checkOutWindow.value.to);
+	});
 
 	// ─── Camera ───────────────────────────────────────────────────────────────────
 	const showCamera = ref(false);
@@ -274,6 +297,31 @@
 	// ─── Success modal ─────────────────────────────────────────────────────────────
 	const showSuccess = ref(false);
 	const successAction = ref<'check-in' | 'check-out'>('check-in');
+
+	// ─── Violation modal ──────────────────────────────────────────────────────────
+	const violationService = useViolationRequestService();
+	const showViolationModal = ref(false);
+	const violationInitialType = ref<ViolationRequestType | undefined>(undefined);
+	const violationCounter = ref<ViolationCounter | null>(null);
+	const loadingViolationCounter = ref(false);
+
+	async function openViolationModal(type?: ViolationRequestType) {
+		violationInitialType.value = type;
+		loadingViolationCounter.value = true;
+		try {
+			const today = new Date();
+			violationCounter.value = await violationService.getMyStatus(today.getMonth() + 1, today.getFullYear());
+			showViolationModal.value = true;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Không thể tải thông tin vi phạm');
+		} finally {
+			loadingViolationCounter.value = false;
+		}
+	}
+
+	function onViolationSubmitted() {
+		showViolationModal.value = false;
+	}
 
 	// ─── Submit ───────────────────────────────────────────────────────────────────
 	async function submitAction(photo: File) {
@@ -381,7 +429,7 @@
 				<!-- Bullet -->
 				<div
 					class="flex-shrink-0 mt-1.5 w-4 h-4 rounded-full border-2 z-10"
-					:class="hasCheckedIn ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-600'"
+					:class="isMissedCheckIn ? 'bg-red-500 border-red-500' : hasCheckedIn ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-600'"
 				/>
 
 				<div class="flex-1 min-w-0">
@@ -425,6 +473,30 @@
 								Cập nhật
 							</button>
 						</div>
+					</div>
+
+					<!-- Missed card -->
+					<div
+						v-else-if="isMissedCheckIn"
+						class="bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-200 dark:border-red-800 p-4"
+					>
+						<div class="flex items-center gap-2 mb-2">
+							<svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							<p class="text-sm font-semibold text-red-600 dark:text-red-400">Chưa chấm công vào</p>
+						</div>
+						<p v-if="checkInWindow" class="text-xs text-red-400 dark:text-red-500 mb-3">
+							Khung giờ: {{ checkInWindow.from }} – {{ checkInWindow.to }}
+						</p>
+						<button
+							:disabled="loadingViolationCounter"
+							class="w-full py-3 rounded-xl text-sm font-semibold transition-colors"
+							:class="loadingViolationCounter ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600 text-white'"
+							@click="openViolationModal('FORGOT_CHECKIN')"
+						>
+							{{ loadingViolationCounter ? 'Đang tải...' : 'Tạo đơn vi phạm' }}
+						</button>
 					</div>
 
 					<!-- Action card -->
@@ -495,9 +567,11 @@
 				<div
 					class="flex-shrink-0 mt-1.5 w-4 h-4 rounded-full border-2 z-10"
 					:class="
-						hasCheckedOut || canCheckOutAction
-							? 'bg-blue-500 border-blue-500'
-							: 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-600'
+						isMissedCheckOut
+							? 'bg-red-500 border-red-500'
+							: hasCheckedOut || canCheckOutAction
+								? 'bg-blue-500 border-blue-500'
+								: 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-600'
 					"
 				/>
 
@@ -542,6 +616,30 @@
 								Cập nhật
 							</button>
 						</div>
+					</div>
+
+					<!-- Missed card -->
+					<div
+						v-else-if="isMissedCheckOut"
+						class="bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-200 dark:border-red-800 p-4"
+					>
+						<div class="flex items-center gap-2 mb-2">
+							<svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							<p class="text-sm font-semibold text-red-600 dark:text-red-400">Chưa chấm công ra</p>
+						</div>
+						<p v-if="checkOutWindow" class="text-xs text-red-400 dark:text-red-500 mb-3">
+							Khung giờ: {{ checkOutWindow.from }} – {{ checkOutWindow.to }}
+						</p>
+						<button
+							:disabled="loadingViolationCounter"
+							class="w-full py-3 rounded-xl text-sm font-semibold transition-colors"
+							:class="loadingViolationCounter ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600 text-white'"
+							@click="openViolationModal()"
+						>
+							{{ loadingViolationCounter ? 'Đang tải...' : 'Tạo đơn vi phạm' }}
+						</button>
 					</div>
 
 					<!-- Action card -->
@@ -715,6 +813,16 @@
 			</div>
 		</div>
 	</Teleport>
+
+	<!-- Violation request modal -->
+	<ViolationRequestModal
+		v-if="showViolationModal && violationCounter"
+		:counter="violationCounter"
+		:initial-type="violationInitialType"
+		:initial-date="new Date().toISOString().slice(0, 10)"
+		@submitted="onViolationSubmitted"
+		@close="showViolationModal = false"
+	/>
 
 	<!-- Success modal -->
 	<Teleport to="body">
