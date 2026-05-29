@@ -55,6 +55,11 @@ export interface CheckInDto {
 	longitude: number;
 }
 
+export interface TimeWindowDto {
+	from: string; // "HH:MM" — giờ Việt Nam
+	to: string; // "HH:MM" — giờ Việt Nam
+}
+
 export interface CheckAttendanceResponseDto {
 	id: number;
 	name: string;
@@ -66,6 +71,8 @@ export interface CheckAttendanceResponseDto {
 	isAvailableShift: boolean;
 	canCheckIn: boolean;
 	canCheckOut: boolean;
+	checkInWindow: TimeWindowDto | null;
+	checkOutWindow: TimeWindowDto | null;
 }
 
 export interface ManualEditAttendanceDto {

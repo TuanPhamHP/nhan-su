@@ -84,6 +84,11 @@ export interface AttendanceRecordDetail {
 	violationRequests: AttendanceViolationRef[]; // danh sách đơn vi phạm liên quan bản ghi này
 }
 
+export interface TimeWindowDto {
+	from: string; // "HH:MM" — giờ bắt đầu window (giờ Việt Nam)
+	to: string; // "HH:MM" — giờ kết thúc window (giờ Việt Nam)
+}
+
 // GET /attendance/check-attendance
 export interface CheckAttendanceResponseDto {
 	id: number; // ID địa điểm
@@ -93,7 +98,11 @@ export interface CheckAttendanceResponseDto {
 	radiusMeters: number; // bán kính cho phép (mét)
 	distance: number; // khoảng cách từ GPS của nhân viên đến địa điểm (mét)
 	isInRange: boolean; // true nếu distance <= radiusMeters
-	isAvailableShift: boolean; // true nếu hiện đang trong khung giờ của ca
+	isAvailableShift: boolean; // true nếu có ca hôm nay
+	canCheckIn: boolean; // GPS ok + time window ok + chưa check-in + chưa check-out + chưa lock
+	canCheckOut: boolean; // GPS ok + time window ok + chưa check-out + chưa lock
+	checkInWindow: TimeWindowDto | null; // khung giờ check-in hợp lệ; null nếu không có ca / ca online
+	checkOutWindow: TimeWindowDto | null; // khung giờ check-out hợp lệ; null nếu không có ca
 }
 
 // GET /attendance/me/stats
@@ -226,9 +235,11 @@ POST /v1/attendance/check-in  (multipart/form-data)
     ├─ 400 "Không có ca làm việc hôm nay"
     ├─ 400 "Ngoài khung giờ cho phép của ca làm việc"
     ├─ 400 "Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công."
-    ├─ 409 "ATTENDANCE_ALREADY_CHECKED_IN"
+    ├─ 400 "Đã check-out, không thể check-in lại trong ngày."
+    │       (check-in lần 2 sau khi đã check-out)
     │
     └─ 201 Created → AttendanceRecordDetail
+    │       (check-in mới hoặc overwrite check-in cũ nếu vẫn trong window)
            ├─ isHalfDay: false → hiển thị ca bình thường
            └─ isHalfDay: true  → hiển thị "Ca rút gọn" (getUTCHours())
 ```
@@ -289,11 +300,13 @@ POST /v1/attendance/check-in  (multipart/form-data)
 }
 ```
 
-**Response 409 — đã check-in rồi:**
+**Response 400 — đã check-out, không thể check-in lại:**
 
 ```json
-{ "success": false, "error": { "code": "CONFLICT", "message": "ATTENDANCE_ALREADY_CHECKED_IN" } }
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Đã check-out, không thể check-in lại trong ngày." } }
 ```
+
+> **Overwrite check-in trong window:** Nếu nhân viên đã check-in nhưng chưa check-out và vẫn trong khung giờ hợp lệ (`checkInWindow`), check-in mới sẽ **ghi đè** bản ghi cũ (cập nhật ảnh, thời gian, `lateMinutes`). Server không trả 409 trong trường hợp này.
 
 ---
 
@@ -461,10 +474,14 @@ Dùng để kiểm tra xem nhân viên có đang trong bán kính địa điểm
 		"isInRange": true,
 		"isAvailableShift": true,
 		"canCheckIn": true,
-		"canCheckOut": false
+		"canCheckOut": false,
+		"checkInWindow": { "from": "07:30", "to": "09:30" },
+		"checkOutWindow": { "from": "16:00", "to": "18:00" }
 	}
 }
 ```
+
+> `checkInWindow` / `checkOutWindow` luôn được trả về khi có ca (kể cả khi `canCheckIn`/`canCheckOut` là `false`) — dùng để hiển thị thông báo "Check-in từ HH:MM đến HH:MM" trước khi nhân viên vào window.
 
 **Pattern dùng trên mobile:**
 
@@ -475,10 +492,17 @@ if (!status) {
 	showError('Chưa cấu hình địa điểm chấm công');
 } else if (!status.isInRange) {
 	showError(`Bạn đang cách ${status.distance}m — vượt quá ${status.radiusMeters}m cho phép`);
-} else if (!status.isAvailableShift) {
-	showError('Ngoài khung giờ ca làm việc');
-} else {
+} else if (status.canCheckIn) {
 	enableCheckInButton();
+	if (status.checkInWindow) {
+		showInfo(`Khung giờ check-in: ${status.checkInWindow.from} – ${status.checkInWindow.to}`);
+	}
+} else if (status.canCheckOut) {
+	enableCheckOutButton();
+} else if (status.checkInWindow) {
+	showInfo(`Check-in mở lúc ${status.checkInWindow.from}`);
+} else {
+	showError('Ngoài khung giờ ca làm việc');
 }
 ```
 
@@ -671,7 +695,9 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 
 | Tình huống | Kết quả |
 | --- | --- |
-| Check-in lần 2 trong ngày | 409 `ATTENDANCE_ALREADY_CHECKED_IN` |
+| Check-in lần 2, chưa check-out, **trong window** | 201 — overwrite check-in cũ (ảnh + thời gian mới) |
+| Check-in lần 2, chưa check-out, **ngoài window** | 400 từ validation time window |
+| Check-in sau khi đã check-out | 400 `"Đã check-out, không thể check-in lại trong ngày."` |
 | Check-in khi bản ghi đã lock | 400 `"Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công."` |
 | Check-out khi chưa check-in | 400 Bad Request |
 | Check-out khi bản ghi đã lock | 400 `"Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công."` |
@@ -688,7 +714,9 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 | `workType: 'ONLINE_APPROVED'` | Nhân viên có đơn WFH COMPLETED ngày đó — không cần check-in từ văn phòng |
 | `violationRequests: []` | Không có vi phạm — bình thường |
 | `GET /check-attendance` trả `null` | Không có địa điểm nào được cấu hình trong hệ thống |
-| `GET /check-attendance` trả `isAvailableShift: false` | Đang ngoài khung giờ ca — nhân viên không thể check-in |
+| `GET /check-attendance` trả `canCheckIn: false` | GPS ngoài bán kính, ngoài time window, đã check-in/out, hoặc bị lock |
+| `GET /check-attendance` trả `checkInWindow: null` | Không có ca hôm nay hoặc ca online — không cần check-in thủ công |
+| `GET /check-attendance` — hiển thị window khi chưa đến giờ | `canCheckIn: false` nhưng `checkInWindow` vẫn có → dùng để hiện "Check-in từ HH:MM" |
 | `GET /me/stats` tháng chưa kết thúc | `workedDays` tính đến hôm nay; `totalWorkingDays` vẫn tính cả tháng |
 | `GET /photo-url` với URL hết hạn | Lấy presigned URL mới — không cache |
 | `GET /today-info` ngày lễ | `isHoliday: true`, `hasShift: false`, `shift: null` |

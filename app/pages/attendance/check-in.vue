@@ -181,6 +181,9 @@
 	const shiftCheckInTime = computed(() => todayRecord.value?.shift?.checkInTime ?? null);
 	const shiftCheckOutTime = computed(() => todayRecord.value?.shift?.checkOutTime ?? null);
 
+	const checkInWindow = computed(() => locationInfo.value?.checkInWindow ?? null);
+	const checkOutWindow = computed(() => locationInfo.value?.checkOutWindow ?? null);
+
 	// ─── Camera ───────────────────────────────────────────────────────────────────
 	const showCamera = ref(false);
 	const videoRef = ref<HTMLVideoElement | null>(null);
@@ -397,8 +400,30 @@
 						<p v-if="todayRecord?.location" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
 							{{ todayRecord.location.name }}
 						</p>
-						<div v-if="todayRecord?.checkInPhotoUrl" class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-							<img :src="todayRecord.checkInPhotoUrl" alt="Check-in photo" class="w-16 h-16 rounded-xl object-cover" />
+						<div
+							v-if="todayRecord?.checkInPhotoUrl || apiCanCheckIn"
+							class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3"
+						>
+							<img
+								v-if="todayRecord?.checkInPhotoUrl"
+								:src="todayRecord.checkInPhotoUrl"
+								alt="Check-in photo"
+								class="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+							/>
+							<div v-else />
+							<button
+								v-if="apiCanCheckIn"
+								:disabled="!canCheckInAction"
+								class="px-4 py-2 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+								:class="
+									canCheckInAction
+										? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40'
+										: 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+								"
+								@click="initiateCheckIn"
+							>
+								Cập nhật
+							</button>
 						</div>
 					</div>
 
@@ -456,6 +481,10 @@
 								<span class="text-gray-500 dark:text-gray-400">Không thể lấy vị trí</span>
 							</template>
 						</div>
+						<!-- Check-in window info -->
+						<p v-if="checkInWindow" class="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+							Khung giờ check-in: {{ checkInWindow.from }} – {{ checkInWindow.to }}
+						</p>
 					</div>
 				</div>
 			</div>
@@ -488,8 +517,30 @@
 						<p v-if="todayRecord?.location" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
 							{{ todayRecord.location.name }}
 						</p>
-						<div v-if="todayRecord?.checkOutPhotoUrl" class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-							<img :src="todayRecord.checkOutPhotoUrl" alt="Check-out photo" class="w-16 h-16 rounded-xl object-cover" />
+						<div
+							v-if="todayRecord?.checkOutPhotoUrl || apiCanCheckOut"
+							class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3"
+						>
+							<img
+								v-if="todayRecord?.checkOutPhotoUrl"
+								:src="todayRecord.checkOutPhotoUrl"
+								alt="Check-out photo"
+								class="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+							/>
+							<div v-else />
+							<button
+								v-if="apiCanCheckOut"
+								:disabled="!canCheckOutAction"
+								class="px-4 py-2 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+								:class="
+									canCheckOutAction
+										? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+										: 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+								"
+								@click="initiateCheckOut"
+							>
+								Cập nhật
+							</button>
 						</div>
 					</div>
 
@@ -547,6 +598,10 @@
 								<span class="text-gray-500 dark:text-gray-400">Không thể lấy vị trí</span>
 							</template>
 						</div>
+						<!-- Check-out window info -->
+						<p v-if="checkOutWindow" class="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+							Khung giờ check-out: {{ checkOutWindow.from }} – {{ checkOutWindow.to }}
+						</p>
 					</div>
 				</div>
 			</div>
