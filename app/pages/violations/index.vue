@@ -18,6 +18,8 @@
 	definePageMeta({ title: 'Quản lý vi phạm' });
 
 	const toast = useToast();
+	const route = useRoute();
+	const router = useRouter();
 	const { user } = useAuth();
 	const violationService = useViolationRequestService();
 	const departmentService = useDepartmentService();
@@ -131,6 +133,21 @@
 	// ─── Detail modal ─────────────────────────────────────────────────────────────
 	const detailRequest = ref<ViolationRequest | null>(null);
 
+	async function openByQueryId() {
+		const raw = route.query.open_id;
+		if (!raw) return;
+		const id = Number(raw);
+		if (!id || Number.isNaN(id)) return;
+
+		router.replace({ path: '/violations' });
+
+		try {
+			detailRequest.value = await violationService.findById(id);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Không thể mở chi tiết phiếu vi phạm');
+		}
+	}
+
 	// ─── Reject ───────────────────────────────────────────────────────────────────
 	const rejectTarget = ref<ViolationRequest | null>(null);
 
@@ -203,6 +220,7 @@
 		}
 		loadDepartments();
 		fetchAllRequests();
+		openByQueryId();
 	});
 </script>
 
