@@ -7,6 +7,7 @@
 
 	const attendanceService = useAttendanceService();
 	const toast = useToast();
+	const { user } = useAuth();
 
 	// ─── Clock ────────────────────────────────────────────────────────────────────
 	const currentTime = ref(new Date());
@@ -162,7 +163,6 @@
 
 	const hasCheckedIn = computed(() => !!todayRecord.value?.checkInAt);
 	const hasCheckedOut = computed(() => !!todayRecord.value?.checkOutAt);
-	const isCompleted = computed(() => hasCheckedIn.value && hasCheckedOut.value);
 	const isProcessing = ref(false);
 	const canAct = computed(() => locationStatus.value === 'verified' && !isProcessing.value && !loadingRecord.value);
 
@@ -176,6 +176,10 @@
 		if (!locationInfo.value) return hasCheckedIn.value;
 		return !apiCanCheckIn.value || apiCanCheckOut.value;
 	});
+
+	const shiftName = computed(() => todayRecord.value?.shift?.name ?? null);
+	const shiftCheckInTime = computed(() => todayRecord.value?.shift?.checkInTime ?? null);
+	const shiftCheckOutTime = computed(() => todayRecord.value?.shift?.checkOutTime ?? null);
 
 	// ─── Camera ───────────────────────────────────────────────────────────────────
 	const showCamera = ref(false);
@@ -318,116 +322,20 @@
 </script>
 
 <template>
-	<div class="max-w-lg mx-auto py-8 px-4">
-		<!-- Date header -->
-		<p class="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">{{ dateDisplay }}</p>
-
-		<!-- Check-in status bar -->
-		<div
-			v-if="hasCheckedIn"
-			class="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 mb-3"
-		>
-			<svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-				<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-			</svg>
-			<div>
-				<p class="text-sm font-medium text-green-800 dark:text-green-300">
-					Đã check-in lúc {{ formatVNTime(todayRecord!.checkInAt) }}
-				</p>
-				<p v-if="todayRecord?.location" class="text-xs text-green-600 dark:text-green-400">
-					{{ todayRecord.location.name }}
-				</p>
-			</div>
-		</div>
-
-		<div
-			v-if="hasCheckedOut"
-			class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 mb-3"
-		>
-			<svg class="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-				<path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-			</svg>
-			<p class="text-sm font-medium text-blue-800 dark:text-blue-300">
-				Đã check-out lúc {{ formatVNTime(todayRecord!.checkOutAt) }}
-			</p>
-		</div>
-
-		<!-- Main clock card -->
-		<div
-			class="border-2 border-dashed rounded-2xl p-8 mb-4 text-center transition-colors"
-			:class="{
-				'border-green-400 bg-green-50/40 dark:border-green-600 dark:bg-green-900/10': locationStatus === 'verified',
-				'border-yellow-300 bg-yellow-50/40 dark:border-yellow-600 dark:bg-yellow-900/10': locationStatus === 'getting',
-				'border-orange-300 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/10': locationPermission !== 'unknown',
-				'border-gray-200 bg-gray-50/40 dark:border-gray-700 dark:bg-gray-800/20':
-					locationPermission === 'unknown' && ['out_of_range', 'no_shift', 'no_location', 'error'].includes(locationStatus),
-			}"
-		>
-			<!-- Big clock -->
-			<p class="text-5xl font-bold tracking-tight text-gray-900 dark:text-white font-mono tabular-nums mb-5">
-				{{ timeDisplay }}
-			</p>
-
-			<!-- Location status row -->
-			<div class="flex items-center justify-center gap-2">
-				<template v-if="locationStatus === 'getting'">
-					<svg class="w-4 h-4 text-yellow-500 animate-spin" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-					</svg>
-					<span class="text-sm text-yellow-600 dark:text-yellow-400">Đang lấy vị trí...</span>
-				</template>
-
-				<template v-else-if="locationStatus === 'verified'">
-					<svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-					</svg>
-					<span class="text-sm font-medium text-green-700 dark:text-green-400">{{ locationInfo?.name }}</span>
-					<span v-if="locationInfo?.distance != null" class="text-xs text-green-500">({{ locationInfo.distance }}m)</span>
-				</template>
-
-				<template v-else-if="locationStatus === 'out_of_range'">
-					<svg class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-						<path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-					</svg>
-					<span class="text-sm text-red-600 dark:text-red-400">Ngoài vị trí cho phép</span>
-					<span v-if="locationInfo?.distance != null" class="text-xs text-red-400">({{ locationInfo.distance }}m)</span>
-				</template>
-
-				<template v-else-if="locationStatus === 'no_shift'">
-					<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-					</svg>
-					<span class="text-sm text-gray-500 dark:text-gray-400">Không có ca hôm nay</span>
-				</template>
-
-				<!-- error state — phân biệt permission denied vs lỗi khác -->
-				<template v-else>
-					<template v-if="locationPermission !== 'unknown'">
-						<svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-						</svg>
-						<span class="text-sm text-orange-600 dark:text-orange-400">Chưa cấp quyền vị trí</span>
-					</template>
-					<template v-else>
-						<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
-						</svg>
-						<span class="text-sm text-gray-500 dark:text-gray-400">Không thể lấy vị trí</span>
-					</template>
-				</template>
-			</div>
-
-			<p v-if="locationStatus === 'out_of_range'" class="text-xs text-red-500 mt-2">
-				Vui lòng đến vị trí quy định của công ty
+	<div class="max-w-lg mx-auto py-6 px-4">
+		<!-- ── Header ── -->
+		<div class="mb-8">
+			<p class="text-xs text-gray-400 dark:text-gray-500 mb-1">{{ dateDisplay }}</p>
+			<h2 class="text-2xl font-bold text-gray-900 dark:text-white">Hi, {{ user?.fullName ?? '...' }}</h2>
+			<p v-if="shiftName" class="text-sm font-medium text-brand-600 dark:text-brand-400 mt-0.5 uppercase tracking-wide">
+				{{ shiftName }}
 			</p>
 		</div>
 
 		<!-- Location permission banner -->
 		<div
 			v-if="locationPermission !== 'unknown'"
-			class="border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 mb-4"
+			class="border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 mb-6"
 		>
 			<div class="flex items-start gap-3 mb-3">
 				<svg class="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -460,184 +368,319 @@
 			</button>
 		</div>
 
-		<!-- Action area -->
-		<template v-if="!isCompleted">
-			<div class="space-y-3">
-				<!-- Check-in block: luôn hiển thị, disabled khi không được phép -->
-				<button
-					:disabled="!canCheckInAction"
-					class="w-full py-4 rounded-xl text-lg font-semibold transition-colors"
-					:class="
-						canCheckInAction
-							? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white cursor-pointer'
-							: 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-					"
-					@click="initiateCheckIn"
-				>
-					{{ isProcessing && !apiCanCheckOut ? 'Đang xử lý...' : 'Check-in' }}
-				</button>
+		<!-- ── Timeline ── -->
+		<div class="relative">
+			<!-- Vertical connector line (chỉ hiện khi có cả 2 node) -->
+			<div v-if="showCheckOutBlock" class="absolute left-[7px] top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700 z-0" />
 
-				<!-- Check-out block: hiện khi canCheckOut=true hoặc canCheckIn=false -->
-				<button
-					v-if="showCheckOutBlock"
-					:disabled="!canCheckOutAction"
-					class="w-full py-4 rounded-xl text-lg font-semibold transition-colors"
-					:class="
-						canCheckOutAction
-							? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white cursor-pointer'
-							: 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-					"
-					@click="initiateCheckOut"
-				>
-					{{ isProcessing && apiCanCheckOut ? 'Đang xử lý...' : 'Check-out' }}
-				</button>
+			<!-- ── Node 1: Check-in ── -->
+			<div class="relative flex gap-5 mb-5">
+				<!-- Bullet -->
+				<div
+					class="flex-shrink-0 mt-1.5 w-4 h-4 rounded-full border-2 z-10"
+					:class="hasCheckedIn ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-600'"
+				/>
 
-				<p v-if="locationStatus === 'out_of_range'" class="text-center text-xs text-gray-500">
-					Vui lòng đến vị trí quy định của công ty
-				</p>
-			</div>
+				<div class="flex-1 min-w-0">
+					<p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2">
+						Bắt đầu{{ shiftCheckInTime ? ` · ${shiftCheckInTime}` : '' }}
+					</p>
 
-			<!-- Camera permission banner -->
-			<div
-				v-if="cameraPermission !== 'unknown'"
-				class="border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 mt-4"
-			>
-				<div class="flex items-start gap-3 mb-3">
-					<svg class="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-						<path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-					</svg>
-					<div>
-						<p class="text-sm font-semibold text-orange-800 dark:text-orange-300">Quyền truy cập camera bị từ chối</p>
-						<p class="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-							<template v-if="cameraPermission === 'permanently_denied'">
-								Trình duyệt đã chặn vĩnh viễn. Vào <strong>Cài đặt trình duyệt → Quyền riêng tư → Camera</strong> để cấp quyền, sau đó tải lại trang.
-								<br />Camera bị chặn vĩnh viễn — bạn có thể tải ảnh lên thủ công thay thế.
+					<!-- Recorded card -->
+					<div
+						v-if="hasCheckedIn"
+						class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4"
+					>
+						<p class="font-semibold text-gray-900 dark:text-white">
+							Attendance recorded {{ formatVNTime(todayRecord!.checkInAt) }}
+						</p>
+						<p v-if="todayRecord?.location" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+							{{ todayRecord.location.name }}
+						</p>
+						<div v-if="todayRecord?.checkInPhotoUrl" class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+							<img :src="todayRecord.checkInPhotoUrl" alt="Check-in photo" class="w-16 h-16 rounded-xl object-cover" />
+						</div>
+					</div>
+
+					<!-- Action card -->
+					<div
+						v-else
+						class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5"
+					>
+						<p class="text-4xl font-bold text-gray-900 dark:text-white font-mono tabular-nums mb-4">{{ timeDisplay }}</p>
+
+						<button
+							:disabled="!canCheckInAction"
+							class="w-full py-3.5 rounded-xl font-semibold transition-colors"
+							:class="
+								canCheckInAction
+									? 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white cursor-pointer'
+									: 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+							"
+							@click="initiateCheckIn"
+						>
+							{{ isProcessing ? 'Đang xử lý...' : 'Clock In' }}
+						</button>
+
+						<!-- Location status inline -->
+						<div class="mt-3 flex items-center gap-2 text-sm">
+							<template v-if="locationStatus === 'getting'">
+								<svg class="w-4 h-4 text-yellow-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+								</svg>
+								<span class="text-yellow-600 dark:text-yellow-400">Đang lấy vị trí...</span>
+							</template>
+							<template v-else-if="locationStatus === 'verified'">
+								<span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+								<span class="text-gray-600 dark:text-gray-300 truncate">Within range: {{ locationInfo?.name }}</span>
+								<span v-if="locationInfo?.distance != null" class="text-gray-400 flex-shrink-0">({{ locationInfo.distance }}m)</span>
+							</template>
+							<template v-else-if="locationStatus === 'out_of_range'">
+								<span class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+								<span class="text-red-600 dark:text-red-400">Ngoài vị trí cho phép</span>
+								<span v-if="locationInfo?.distance != null" class="text-red-400 flex-shrink-0">({{ locationInfo.distance }}m)</span>
+							</template>
+							<template v-else-if="locationStatus === 'no_shift'">
+								<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+								<span class="text-gray-500 dark:text-gray-400">Không có ca hôm nay</span>
+							</template>
+							<template v-else-if="locationPermission !== 'unknown'">
+								<svg class="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+								</svg>
+								<span class="text-orange-600 dark:text-orange-400">Chưa cấp quyền vị trí</span>
 							</template>
 							<template v-else>
-								Ứng dụng cần camera để chụp ảnh xác nhận khi chấm công.
+								<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+								<span class="text-gray-500 dark:text-gray-400">Không thể lấy vị trí</span>
 							</template>
-						</p>
+						</div>
 					</div>
 				</div>
-				<button
-					v-if="cameraPermission === 'denied'"
-					:disabled="isRequestingCamera"
-					class="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2"
-					:class="isRequestingCamera ? 'bg-orange-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'"
-					@click="requestCameraPermission"
-				>
-					<svg v-if="isRequestingCamera" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-					</svg>
-					{{ isRequestingCamera ? 'Đang xin quyền...' : 'Cho phép truy cập camera' }}
-				</button>
 			</div>
-		</template>
 
-		<!-- Completed state -->
-		<div v-else class="flex flex-col items-center py-6 gap-2">
-			<div class="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-				<svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-				</svg>
+			<!-- ── Node 2: Check-out ── -->
+			<div v-if="showCheckOutBlock" class="relative flex gap-5">
+				<!-- Bullet -->
+				<div
+					class="flex-shrink-0 mt-1.5 w-4 h-4 rounded-full border-2 z-10"
+					:class="
+						hasCheckedOut || canCheckOutAction
+							? 'bg-blue-500 border-blue-500'
+							: 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-600'
+					"
+				/>
+
+				<div class="flex-1 min-w-0">
+					<p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2">
+						Kết thúc{{ shiftCheckOutTime ? ` · ${shiftCheckOutTime}` : '' }}
+					</p>
+
+					<!-- Recorded card -->
+					<div
+						v-if="hasCheckedOut"
+						class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4"
+					>
+						<p class="font-semibold text-gray-900 dark:text-white">
+							Attendance recorded {{ formatVNTime(todayRecord!.checkOutAt) }}
+						</p>
+						<p v-if="todayRecord?.location" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+							{{ todayRecord.location.name }}
+						</p>
+						<div v-if="todayRecord?.checkOutPhotoUrl" class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+							<img :src="todayRecord.checkOutPhotoUrl" alt="Check-out photo" class="w-16 h-16 rounded-xl object-cover" />
+						</div>
+					</div>
+
+					<!-- Action card -->
+					<div
+						v-else
+						class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5"
+					>
+						<p class="text-4xl font-bold text-gray-900 dark:text-white font-mono tabular-nums mb-4">{{ timeDisplay }}</p>
+
+						<button
+							:disabled="!canCheckOutAction"
+							class="w-full py-3.5 rounded-xl font-semibold transition-colors"
+							:class="
+								canCheckOutAction
+									? 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white cursor-pointer'
+									: 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+							"
+							@click="initiateCheckOut"
+						>
+							{{ isProcessing ? 'Đang xử lý...' : 'Clock Out' }}
+						</button>
+
+						<!-- Location status inline -->
+						<div class="mt-3 flex items-center gap-2 text-sm">
+							<template v-if="locationStatus === 'getting'">
+								<svg class="w-4 h-4 text-yellow-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+								</svg>
+								<span class="text-yellow-600 dark:text-yellow-400">Đang lấy vị trí...</span>
+							</template>
+							<template v-else-if="locationStatus === 'verified'">
+								<span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+								<span class="text-gray-600 dark:text-gray-300 truncate">Within range: {{ locationInfo?.name }}</span>
+								<span v-if="locationInfo?.distance != null" class="text-gray-400 flex-shrink-0">({{ locationInfo.distance }}m)</span>
+							</template>
+							<template v-else-if="locationStatus === 'out_of_range'">
+								<span class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+								<span class="text-red-600 dark:text-red-400">Ngoài vị trí cho phép</span>
+								<span v-if="locationInfo?.distance != null" class="text-red-400 flex-shrink-0">({{ locationInfo.distance }}m)</span>
+							</template>
+							<template v-else-if="locationStatus === 'no_shift'">
+								<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+								<span class="text-gray-500 dark:text-gray-400">Không có ca hôm nay</span>
+							</template>
+							<template v-else-if="locationPermission !== 'unknown'">
+								<svg class="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+								</svg>
+								<span class="text-orange-600 dark:text-orange-400">Chưa cấp quyền vị trí</span>
+							</template>
+							<template v-else>
+								<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+								<span class="text-gray-500 dark:text-gray-400">Không thể lấy vị trí</span>
+							</template>
+						</div>
+					</div>
+				</div>
 			</div>
-			<p class="text-gray-700 dark:text-gray-300 font-medium">Đã hoàn thành chấm công hôm nay</p>
-			<p class="text-sm text-gray-500">
-				{{ formatVNTime(todayRecord?.checkInAt ?? null) }} → {{ formatVNTime(todayRecord?.checkOutAt ?? null) }}
-			</p>
+		</div>
+
+		<!-- Camera permission banner -->
+		<div
+			v-if="cameraPermission !== 'unknown'"
+			class="border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 mt-5"
+		>
+			<div class="flex items-start gap-3 mb-3">
+				<svg class="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+					<path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+				</svg>
+				<div>
+					<p class="text-sm font-semibold text-orange-800 dark:text-orange-300">Quyền truy cập camera bị từ chối</p>
+					<p class="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
+						<template v-if="cameraPermission === 'permanently_denied'">
+							Trình duyệt đã chặn vĩnh viễn. Vào <strong>Cài đặt trình duyệt → Quyền riêng tư → Camera</strong> để cấp quyền, sau đó tải lại trang.
+							<br />Camera bị chặn vĩnh viễn — bạn có thể tải ảnh lên thủ công thay thế.
+						</template>
+						<template v-else>
+							Ứng dụng cần camera để chụp ảnh xác nhận khi chấm công.
+						</template>
+					</p>
+				</div>
+			</div>
+			<button
+				v-if="cameraPermission === 'denied'"
+				:disabled="isRequestingCamera"
+				class="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2"
+				:class="isRequestingCamera ? 'bg-orange-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'"
+				@click="requestCameraPermission"
+			>
+				<svg v-if="isRequestingCamera" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+				</svg>
+				{{ isRequestingCamera ? 'Đang xin quyền...' : 'Cho phép truy cập camera' }}
+			</button>
 		</div>
 
 		<!-- Hidden file input (fallback khi getUserMedia không khả dụng) -->
 		<input ref="fileInputRef" type="file" accept="image/*" capture="user" class="hidden" @change="onFileInputChange" />
+	</div>
 
-		<!-- Camera modal -->
-		<Teleport to="body">
-			<div v-if="showCamera" class="fixed inset-0 z-50 flex flex-col bg-black">
-				<div class="flex-1 relative overflow-hidden flex items-center justify-center">
-					<video ref="videoRef" autoplay playsinline muted class="h-full max-h-full w-full object-cover" style="transform: scaleX(-1)" />
+	<!-- ─── Modals ─────────────────────────────────────────────────────────────── -->
+
+	<!-- Camera modal -->
+	<Teleport to="body">
+		<div v-if="showCamera" class="fixed inset-0 z-50 flex flex-col bg-black">
+			<div class="flex-1 relative overflow-hidden flex items-center justify-center">
+				<video ref="videoRef" autoplay playsinline muted class="h-full max-h-full w-full object-cover" style="transform: scaleX(-1)" />
+			</div>
+			<canvas ref="canvasRef" class="hidden" />
+			<div class="py-6 px-8 flex items-center justify-between bg-black">
+				<button class="px-5 py-2.5 text-sm text-white border border-white/30 rounded-lg hover:bg-white/10" @click="stopCamera">
+					Hủy
+				</button>
+				<button
+					class="w-16 h-16 rounded-full bg-white border-[5px] border-gray-400 hover:bg-gray-100 active:scale-95 transition-transform flex-shrink-0"
+					@click="captureFromCamera"
+				/>
+				<div class="w-20" />
+			</div>
+		</div>
+	</Teleport>
+
+	<!-- Check-out confirmation modal -->
+	<Teleport to="body">
+		<div
+			v-if="showConfirmCheckOut"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+			@click.self="showConfirmCheckOut = false"
+		>
+			<div class="bg-white dark:bg-gray-800 rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl">
+				<div class="flex justify-end mb-1">
+					<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" @click="showConfirmCheckOut = false">
+						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
 				</div>
-				<canvas ref="canvasRef" class="hidden" />
-				<div class="py-6 px-8 flex items-center justify-between bg-black">
-					<button class="px-5 py-2.5 text-sm text-white border border-white/30 rounded-lg hover:bg-white/10" @click="stopCamera">
+				<div class="text-center mb-5">
+					<div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-3">
+						<svg class="w-7 h-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					</div>
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Xác nhận CHECK-OUT</h3>
+				</div>
+				<div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3 mb-5 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+					<p>Thời gian: <span class="font-medium">{{ timeDisplay }}</span></p>
+					<p v-if="locationInfo">Vị trí: <span class="font-medium">{{ locationInfo.name }}</span></p>
+				</div>
+				<div class="flex gap-3">
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+						@click="showConfirmCheckOut = false"
+					>
 						Hủy
 					</button>
 					<button
-						class="w-16 h-16 rounded-full bg-white border-[5px] border-gray-400 hover:bg-gray-100 active:scale-95 transition-transform flex-shrink-0"
-						@click="captureFromCamera"
-					/>
-					<div class="w-20" />
-				</div>
-			</div>
-		</Teleport>
-
-		<!-- Check-out confirmation modal -->
-		<Teleport to="body">
-			<div
-				v-if="showConfirmCheckOut"
-				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-				@click.self="showConfirmCheckOut = false"
-			>
-				<div class="bg-white dark:bg-gray-800 rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl">
-					<div class="flex justify-end mb-1">
-						<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" @click="showConfirmCheckOut = false">
-							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-							</svg>
-						</button>
-					</div>
-					<div class="text-center mb-5">
-						<div class="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-3">
-							<svg class="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-							</svg>
-						</div>
-						<h3 class="text-base font-semibold text-gray-900 dark:text-white">Xác nhận CHECK-OUT</h3>
-					</div>
-					<div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3 mb-5 text-sm text-gray-600 dark:text-gray-300 space-y-1">
-						<p>Thời gian: <span class="font-medium">{{ timeDisplay }}</span></p>
-						<p v-if="locationInfo">Vị trí: <span class="font-medium">{{ locationInfo.name }}</span></p>
-					</div>
-					<div class="flex gap-3">
-						<button
-							class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-							@click="showConfirmCheckOut = false"
-						>
-							Hủy
-						</button>
-						<button
-							class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-green-600 hover:bg-green-700 text-white"
-							@click="onConfirmCheckOut"
-						>
-							Xác nhận
-						</button>
-					</div>
-				</div>
-			</div>
-		</Teleport>
-
-		<!-- Success modal -->
-		<Teleport to="body">
-			<div v-if="showSuccess" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-				<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 mx-4 w-full max-w-xs text-center shadow-xl">
-					<div class="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
-						<svg class="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-						</svg>
-					</div>
-					<h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-1">
-						{{ successAction === 'check-in' ? 'Check-in thành công!' : 'Check-out thành công!' }}
-					</h3>
-					<p class="text-sm text-gray-500 mb-6">{{ timeDisplay }}</p>
-					<button
-						class="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 text-sm font-semibold text-white"
-						@click="showSuccess = false"
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
+						@click="onConfirmCheckOut"
 					>
-						Đóng
+						Xác nhận
 					</button>
 				</div>
 			</div>
-		</Teleport>
-	</div>
+		</div>
+	</Teleport>
+
+	<!-- Success modal -->
+	<Teleport to="body">
+		<div v-if="showSuccess" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+			<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 mx-4 w-full max-w-xs text-center shadow-xl">
+				<div class="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
+					<svg class="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+					</svg>
+				</div>
+				<h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+					{{ successAction === 'check-in' ? 'Check-in thành công!' : 'Check-out thành công!' }}
+				</h3>
+				<p class="text-sm text-gray-500 mb-6">{{ timeDisplay }}</p>
+				<button
+					class="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 text-sm font-semibold text-white"
+					@click="showSuccess = false"
+				>
+					Đóng
+				</button>
+			</div>
+		</div>
+	</Teleport>
 </template>
