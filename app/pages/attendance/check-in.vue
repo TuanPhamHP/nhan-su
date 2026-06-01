@@ -135,6 +135,7 @@
 				locationInfo.value = null;
 				return;
 			}
+			// result.isAvailableShift = false;
 			locationInfo.value = result;
 			if (!result.isAvailableShift) {
 				locationStatus.value = 'no_shift';
@@ -174,6 +175,7 @@
 	// Hiện check-out block khi: API xác nhận canCheckOut HOẶC canCheckIn=false (đã check-in rồi).
 	// Trước khi có phản hồi API, dùng hasCheckedIn làm fallback.
 	const showCheckOutBlock = computed(() => {
+		if (locationStatus.value === 'no_shift') return false;
 		if (!locationInfo.value) return hasCheckedIn.value;
 		return !apiCanCheckIn.value || apiCanCheckOut.value || isMissedCheckOut.value;
 	});
@@ -430,8 +432,34 @@
 			</button>
 		</div>
 
+		<!-- ── No shift state ── -->
+		<div
+			v-if="locationStatus === 'no_shift'"
+			class="flex flex-col items-center text-center py-10 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700"
+		>
+			<div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+				<svg
+					class="w-8 h-8 text-gray-400 dark:text-gray-500"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="1.5"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 9v7.5"
+					/>
+				</svg>
+			</div>
+			<p class="text-base font-semibold text-gray-700 dark:text-gray-200">Hôm nay không có lịch làm việc</p>
+			<p class="text-sm text-gray-400 dark:text-gray-500 mt-1.5 max-w-xs">
+				Ngày nghỉ hoặc chưa được phân ca. Không cần chấm công hôm nay.
+			</p>
+		</div>
+
 		<!-- ── Timeline ── -->
-		<div class="relative">
+		<div v-else class="relative">
 			<!-- Vertical connector line (chỉ hiện khi có cả 2 node) -->
 			<div v-if="showCheckOutBlock" class="absolute left-[7px] top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700 z-0" />
 
@@ -574,10 +602,6 @@
 								<span v-if="locationInfo?.distance != null" class="text-red-400 flex-shrink-0"
 									>({{ locationInfo.distance }}m)</span
 								>
-							</template>
-							<template v-else-if="locationStatus === 'no_shift'">
-								<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
-								<span class="text-gray-500 dark:text-gray-400">Không có ca hôm nay</span>
 							</template>
 							<template v-else-if="locationPermission !== 'unknown'">
 								<svg
@@ -747,10 +771,6 @@
 								<span v-if="locationInfo?.distance != null" class="text-red-400 flex-shrink-0"
 									>({{ locationInfo.distance }}m)</span
 								>
-							</template>
-							<template v-else-if="locationStatus === 'no_shift'">
-								<span class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
-								<span class="text-gray-500 dark:text-gray-400">Không có ca hôm nay</span>
 							</template>
 							<template v-else-if="locationPermission !== 'unknown'">
 								<svg

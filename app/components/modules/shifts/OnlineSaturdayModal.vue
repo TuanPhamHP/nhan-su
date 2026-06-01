@@ -26,6 +26,7 @@ const selectedYear = ref(now.getFullYear());
 const selectedShiftId = ref<number | undefined>(undefined);
 const selectedEmployeeIds = ref<Set<number>>(new Set());
 const employeeSearch = ref('');
+const selectedDepartmentId = ref<number | null>(null);
 const submitting = ref(false);
 
 // ─── Computed ───
@@ -45,12 +46,32 @@ const activeShiftOptions = computed(() =>
 		})),
 );
 
+function normalize(s: string) {
+	return s
+		.normalize('NFD')
+		.replace(/[̀-ͯ]/g, '')
+		.toLowerCase();
+}
+
+const departmentOptions = computed(() => {
+	const seen = new Map<number, string>();
+	for (const e of directoryStore.employees) {
+		if (e.department && !seen.has(e.department.id)) {
+			seen.set(e.department.id, e.department.name);
+		}
+	}
+	return Array.from(seen.entries())
+		.sort((a, b) => a[1].localeCompare(b[1], 'vi'))
+		.map(([id, name]) => ({ id, name }));
+});
+
 const filteredEmployees = computed<EmployeeSummary[]>(() => {
-	const q = employeeSearch.value.toLowerCase().trim();
-	if (!q) return directoryStore.employees;
-	return directoryStore.employees.filter(
-		e => e.fullName.toLowerCase().includes(q) || e.employeeCode.toLowerCase().includes(q),
-	);
+	const q = normalize(employeeSearch.value.trim());
+	return directoryStore.employees.filter(e => {
+		if (selectedDepartmentId.value !== null && e.department?.id !== selectedDepartmentId.value) return false;
+		if (!q) return true;
+		return normalize(e.fullName).includes(q) || e.employeeCode.toLowerCase().includes(q);
+	});
 });
 
 const allSelected = computed(
@@ -96,6 +117,7 @@ function resetForm() {
 	selectedShiftId.value = undefined;
 	selectedEmployeeIds.value = new Set();
 	employeeSearch.value = '';
+	selectedDepartmentId.value = null;
 }
 
 function toggleEmployee(id: number) {
@@ -302,27 +324,41 @@ watch(
 								</button>
 							</div>
 
-							<!-- Search -->
-							<div class="relative mb-2">
-								<svg
-									class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									stroke-width="2"
+							<!-- Filters row -->
+							<div class="flex gap-2 mb-2">
+								<!-- Department filter -->
+								<select
+									v-model.number="selectedDepartmentId"
+									class="h-9 px-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent min-w-0 flex-1"
 								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+									<option :value="null">Tất cả phòng ban</option>
+									<option v-for="dept in departmentOptions" :key="dept.id" :value="dept.id">
+										{{ dept.name }}
+									</option>
+								</select>
+
+								<!-- Search -->
+								<div class="relative flex-1">
+									<svg
+										class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+										/>
+									</svg>
+									<input
+										v-model="employeeSearch"
+										type="text"
+										placeholder="Tìm theo tên hoặc mã NV..."
+										class="w-full h-9 pl-9 pr-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
 									/>
-								</svg>
-								<input
-									v-model="employeeSearch"
-									type="text"
-									placeholder="Tìm theo tên hoặc mã NV..."
-									class="w-full h-9 pl-9 pr-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-								/>
+								</div>
 							</div>
 
 							<!-- List -->
