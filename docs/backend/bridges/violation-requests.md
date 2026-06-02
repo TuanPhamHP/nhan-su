@@ -35,28 +35,36 @@ Nếu sai người → `403 Chỉ trưởng phòng được phân công mới c�
 
 ---
 
-## Loại vi phạm — 3 loại (phân biệt qua `type`)
+## Loại vi phạm — 4 loại (phân biệt qua `type`)
 
 | `type` | Tên | Fields bổ sung khi tạo | Side effect khi APPROVE |
 | --- | --- | --- | --- |
-| `FORGOT_CHECKIN` | Quên chấm công | _(không có — xem chi tiết bên dưới)_ | Tự động cập nhật check-in/check-out theo giờ ca ngày đó |
-| `LATE` | Đi muộn | _(không có)_ | Cập nhật `checkInAt` về đúng giờ bắt đầu ca, `lateMinutes` → 0, `status` → PRESENT |
-| `EARLY` | Về sớm | _(không có)_ | Cập nhật `checkOutAt` về đúng giờ kết thúc ca, `earlyMinutes` → 0, `status` → PRESENT |
+| `FORGOT_CHECKIN` | Quên chấm công vào | _(không có — xem chi tiết bên dưới)_ | Tự động điền check-in (và check-out nếu thiếu) theo giờ ca |
+| `FORGOT_CHECKOUT` | Quên chấm công ra | _(không có — xem chi tiết bên dưới)_ | Điền `checkOutAt` theo giờ ca, `earlyMinutes` → 0, `status` → PRESENT |
+| `LATE` | Đi muộn | _(không có)_ | Cập nhật `lateMinutes` → 0, `status` → PRESENT |
+| `EARLY` | Về sớm | _(không có)_ | Cập nhật `earlyMinutes` → 0, `status` → PRESENT |
 
-> Với LATE/EARLY, khi tạo phiếu server tự động tìm và link bản ghi chấm công ngày tương ứng (`attendanceRecordId`). Không cần client gửi gì thêm.
+> Với tất cả loại, khi tạo phiếu server tự động tìm và link bản ghi chấm công ngày tương ứng (`attendanceRecordId`). Không cần client gửi gì thêm.
 
 ### FORGOT_CHECKIN — 2 trường hợp
 
-Server tự phát hiện trường hợp dựa vào trạng thái chấm công ngày vi phạm:
+Server tự phát hiện trường hợp dựa vào bản ghi chấm công ngày vi phạm. **Không cần bản ghi bị khóa** — nhân viên có thể gửi trong ngày (ví dụ: sáng quên check-in, trưa gửi phiếu).
 
 | Trường hợp | Điều kiện | `slotCost` | Side effect khi APPROVE |
 | --- | --- | --- | --- |
-| **Thiếu check-in hoặc check-out** | Có bản ghi chấm công bị khóa | 1 | Điền check-in/check-out còn thiếu theo giờ ca |
+| **Thiếu check-in hoặc check-out** | Có bản ghi chấm công (chưa hoặc đã bị khóa) | 1 | Điền check-in/check-out còn thiếu theo giờ ca |
 | **Quên cả ngày** | Không có bản ghi chấm công | **2** | Tạo bản ghi chấm công mới với giờ theo ca |
 
 **Client không cần gửi `requestedCheckIn`/`requestedCheckOut`.** Hệ thống tự tính giờ hợp lệ từ ca làm việc (ưu tiên `EmployeeShiftSchedule` của ngày đó, fallback về `defaultShift` của nhân viên).
 
-Thứ tự ưu tiên giờ ca:
+### FORGOT_CHECKOUT — điều kiện tạo
+
+- **Bắt buộc phải có bản ghi chấm công** cho ngày đó (đã check-in). Nếu không có → `400`.
+- Nếu bản ghi **đã có `checkOutAt`** (đã chấm công ra) → `400`.
+- **Không cần bản ghi bị khóa** — có thể gửi trong ngày (ví dụ: chiều quên checkout, gửi phiếu ngay).
+- `slotCost = 1`.
+
+Thứ tự ưu tiên giờ ca (áp dụng cho cả FORGOT_CHECKIN và FORGOT_CHECKOUT):
 
 - Check-in: `effectiveShiftOverride.effectiveStart` → `shift.checkInTime`
 - Check-out: `effectiveShiftOverride.effectiveEnd` → `shift.checkOutTime`
@@ -65,7 +73,7 @@ Thứ tự ưu tiên giờ ca:
 
 ## Quota Logic — 5 lượt/tháng (có trọng số)
 
-Mỗi nhân viên có tổng cộng **5 lượt (slots) giải trình mỗi tháng**, tính chung cho cả 3 loại. Mỗi phiếu tiêu tốn một số lượt nhất định (`slotCost`):
+Mỗi nhân viên có tổng cộng **5 lượt (slots) giải trình mỗi tháng**, tính chung cho cả 4 loại. Mỗi phiếu tiêu tốn một số lượt nhất định (`slotCost`):
 
 | Loại phiếu                                         | `slotCost` |
 | -------------------------------------------------- | ---------- |
@@ -73,6 +81,7 @@ Mỗi nhân viên có tổng cộng **5 lượt (slots) giải trình mỗi thá
 | `EARLY`                                            | 1          |
 | `FORGOT_CHECKIN` — thiếu check-in/out (có bản ghi) | 1          |
 | `FORGOT_CHECKIN` — quên cả ngày (không có bản ghi) | **2**      |
+| `FORGOT_CHECKOUT`                                  | 1          |
 
 ```
 usedCount = SUM(slotCost) của các phiếu PENDING hoặc APPROVED trong tháng vi phạm
@@ -136,7 +145,7 @@ Nếu tạo phiếu sau deadline, server trả `400`:
 ```typescript
 // types/violation.types.ts
 
-export type ViolationRequestType = 'FORGOT_CHECKIN' | 'LATE' | 'EARLY';
+export type ViolationRequestType = 'FORGOT_CHECKIN' | 'FORGOT_CHECKOUT' | 'LATE' | 'EARLY';
 export type ViolationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export interface ViolationEmployeeRef {
@@ -153,7 +162,7 @@ export interface ViolationReviewerRef {
 export interface ViolationRequest {
 	id: number;
 	type: ViolationRequestType;
-	typeLabel: string; // 'Quên chấm công' | 'Đi muộn' | 'Về sớm'
+	typeLabel: string; // 'Quên chấm công vào' | 'Quên chấm công ra' | 'Đi muộn' | 'Về sớm'
 	violationDate: string; // "YYYY-MM-DD"
 	violationMonth: number; // 1–12
 	violationYear: number;
@@ -214,7 +223,7 @@ export interface ViolationMonthlyStats {
 	employeeCode: string;
 	fullName: string;
 	departmentName: string | null;
-	forgotCount: number; // số phiếu FORGOT_CHECKIN đã APPROVED
+	forgotCount: number; // số phiếu FORGOT_CHECKIN + FORGOT_CHECKOUT đã APPROVED
 	lateCount: number; // số phiếu LATE đã APPROVED
 	earlyCount: number; // số phiếu EARLY đã APPROVED
 	totalCount: number; // forgotCount + lateCount + earlyCount
@@ -335,7 +344,7 @@ if (status.isBlocked) {
 }
 ```
 
-### Ví dụ: Quên chấm công (FORGOT_CHECKIN)
+### Ví dụ: Quên chấm công vào (FORGOT_CHECKIN)
 
 ```json
 {
@@ -345,7 +354,19 @@ if (status.isBlocked) {
 }
 ```
 
-> Server tự xác định là thiếu check-in/check-out hay quên cả ngày dựa vào bản ghi chấm công ngày đó. Không cần gửi `requestedCheckIn`/`requestedCheckOut`.
+> Server tự xác định là thiếu check-in/check-out hay quên cả ngày dựa vào bản ghi chấm công ngày đó. Không cần gửi `requestedCheckIn`/`requestedCheckOut`. Có thể gửi ngay trong ngày, không cần đợi bản ghi bị khóa.
+
+### Ví dụ: Quên chấm công ra (FORGOT_CHECKOUT)
+
+```json
+{
+	"type": "FORGOT_CHECKOUT",
+	"violationDate": "2026-05-15",
+	"reason": "Tôi ra về vội do có việc gia đình, quên bấm chấm công ra"
+}
+```
+
+> Bắt buộc phải có bản ghi chấm công ngày đó (đã check-in). Có thể gửi ngay trong ngày.
 
 **Upload ảnh minh chứng (tùy chọn):** Gửi file qua field `evidencePhoto` trong form-data. Chấp nhận JPG/PNG, tối đa 5MB.
 
@@ -357,7 +378,8 @@ if (status.isBlocked) {
 | ---- | ------------------------------------------------------------------------------ |
 | 400  | Đã quá hạn tạo phiếu cho ngày vi phạm này                                      |
 | 400  | Đã hết lượt giải trình trong tháng (hoặc không đủ 2 lượt cho quên cả ngày)     |
-| 400  | Bản ghi chấm công ngày đó chưa bị khóa (chỉ với FORGOT_CHECKIN có bản ghi)     |
+| 400  | `FORGOT_CHECKOUT`: Không tìm thấy bản ghi chấm công ngày đó (chưa check-in)    |
+| 400  | `FORGOT_CHECKOUT`: Bản ghi đã có giờ chấm công ra rồi                          |
 | 409  | Đã có phiếu PENDING/APPROVED cho bản ghi này hoặc cho cùng ngày (quên cả ngày) |
 
 ---
@@ -420,8 +442,9 @@ Không cần body.
 | --- | --- |
 | `FORGOT_CHECKIN` (thiếu check-in/out) | Điền check-in/check-out còn thiếu theo giờ ca, `lateMinutes`/`earlyMinutes` → 0, `status` → `PRESENT` |
 | `FORGOT_CHECKIN` (quên cả ngày) | **Tạo mới** bản ghi chấm công với giờ check-in/check-out theo ca, `status` → `PRESENT`, `isManual: true` |
-| `LATE` | Cập nhật `checkInAt` về giờ bắt đầu ca, `lateMinutes` → 0, `status` → `PRESENT` |
-| `EARLY` | Cập nhật `checkOutAt` về giờ kết thúc ca, `earlyMinutes` → 0, `status` → `PRESENT` |
+| `FORGOT_CHECKOUT` | Điền `checkOutAt` theo giờ kết thúc ca, `earlyMinutes` → 0, `status` → `PRESENT` |
+| `LATE` | Cập nhật `lateMinutes` → 0, `status` → `PRESENT` |
+| `EARLY` | Cập nhật `earlyMinutes` → 0, `status` → `PRESENT` |
 
 > Giờ ca ưu tiên `effectiveShiftOverride` (nghỉ nửa ngày) trước, fallback về `shift.checkInTime`/`shift.checkOutTime`.  
 > Với FORGOT_CHECKIN (quên cả ngày): ưu tiên `EmployeeShiftSchedule` của ngày đó, fallback về `defaultShift` của nhân viên.
@@ -618,11 +641,15 @@ export function useViolationRequests() {
 | Tạo phiếu với `violationDate` tháng trước đã qua ngày 05 tháng này | 400 — đã quá hạn |
 | `violationDate = 2026-05-31`, tạo vào 2026-06-06 | 400 — đã quá hạn (deadline là 05/06) |
 | `violationDate = 2026-05-31`, tạo vào 2026-06-05 23:59 | 201 — còn trong deadline |
-| FORGOT_CHECKIN, có bản ghi nhưng chưa bị khóa | 400 |
-| FORGOT_CHECKIN, có bản ghi đã bị khóa + đã có phiếu PENDING/APPROVED | 409 |
+| FORGOT_CHECKIN, có bản ghi (chưa hoặc đã bị khóa) — cho phép gửi trong ngày | 201 — hợp lệ |
+| FORGOT_CHECKIN, có bản ghi + đã có phiếu PENDING/APPROVED | 409 |
 | FORGOT_CHECKIN, không có bản ghi (quên cả ngày) + đã có phiếu PENDING/APPROVED cùng ngày | 409 |
 | FORGOT_CHECKIN, không có bản ghi + `remaining < 2` | 400 — không đủ 2 lượt |
 | FORGOT_CHECKIN, phiếu trước REJECTED → tạo lại cho cùng ngày | 201 — hợp lệ |
+| FORGOT_CHECKOUT, không có bản ghi chấm công ngày đó | 400 — cần check-in trước |
+| FORGOT_CHECKOUT, bản ghi đã có `checkOutAt` | 400 — đã chấm công ra rồi |
+| FORGOT_CHECKOUT, có bản ghi + đã có phiếu PENDING/APPROVED | 409 |
+| FORGOT_CHECKOUT, phiếu trước REJECTED → tạo lại | 201 — hợp lệ |
 | LATE/EARLY — không cần gửi thêm field nào | 201 — chỉ cần type + violationDate + reason |
 | REJECTED → `usedCount` giảm theo `slotCost` → nhân viên được tạo phiếu mới | 201 nếu còn quota |
 | CANCELLED → `usedCount` giảm theo `slotCost` (CANCELLED không tính quota) | — |
@@ -632,10 +659,11 @@ export function useViolationRequests() {
 | HR/ADMIN gọi approve/reject (phiếu có assignedReviewer) | 403 — không có quyền |
 | Thu hồi phiếu đã APPROVED | 400 — chỉ được thu hồi PENDING |
 | Thu hồi phiếu của người khác | 403 Forbidden |
-| Approve LATE → bản ghi chấm công: checkInAt = giờ ca, lateMinutes = 0, status = PRESENT | tự động |
-| Approve EARLY → bản ghi chấm công: checkOutAt = giờ ca, earlyMinutes = 0, status = PRESENT | tự động |
+| Approve LATE → lateMinutes = 0, status = PRESENT | tự động |
+| Approve EARLY → earlyMinutes = 0, status = PRESENT | tự động |
 | Approve FORGOT_CHECKIN (thiếu check-in/out) → điền từ ca, lateMinutes/earlyMinutes = 0 | tự động |
 | Approve FORGOT_CHECKIN (quên cả ngày) → tạo bản ghi mới với giờ ca | tự động |
+| Approve FORGOT_CHECKOUT → checkOutAt = giờ kết thúc ca, earlyMinutes = 0, status = PRESENT | tự động |
 | FORGOT_CHECKIN quên cả ngày, employee không có shift và không có defaultShift | Approve OK nhưng bản ghi không được tạo (log warning) |
 | `remainingQuota` trong report có thể < `5 - totalCount` | vì `totalCount` chỉ đếm APPROVED, còn PENDING cũng trừ quota |
 | `slotCost = 2` → `remainingQuota` có thể giảm 2 sau 1 phiếu | quên cả ngày |

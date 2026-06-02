@@ -28,7 +28,7 @@
 	// ─── Validation schema ────────────────────────────────────────────────────────
 	const schema = toTypedSchema(
 		z.object({
-			type: z.enum(['FORGOT_CHECKIN', 'LATE', 'EARLY'] as const, {
+			type: z.enum(['FORGOT_CHECKIN', 'FORGOT_CHECKOUT', 'LATE', 'EARLY'] as const, {
 				required_error: 'Vui lòng chọn loại vi phạm',
 				invalid_type_error: 'Vui lòng chọn loại vi phạm',
 			}),
@@ -182,7 +182,8 @@
 							]"
 						>
 							<option value="">-- Chọn loại vi phạm --</option>
-							<option value="FORGOT_CHECKIN">Quên chấm công</option>
+							<option value="FORGOT_CHECKIN">Quên chấm công vào</option>
+							<option value="FORGOT_CHECKOUT">Quên chấm công ra</option>
 							<option value="LATE">Đi muộn</option>
 							<option value="EARLY">Về sớm</option>
 						</select>
