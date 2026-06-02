@@ -95,7 +95,7 @@ export interface LeaveBalance {
 
 export interface MyStats {
   isCheckedInToday: boolean;        // đã check-in hôm nay chưa
-  checkedOutToday: boolean;         // đã check-out hôm nay chưa
+  isCheckedOutToday: boolean;       // đã check-out hôm nay chưa
   leaveBalance: LeaveBalance | null; // null nếu chưa được khởi tạo leave balance năm nay
   pendingLeaveRequests: number;     // đơn nghỉ phép của mình đang PENDING
   lateCountThisMonth: number;       // số lần đi muộn trong tháng hiện tại
@@ -259,7 +259,7 @@ Mỗi item bao gồm 5 loại:
   "data": {
     "stats": {
       "isCheckedInToday": true,
-      "checkedOutToday": false,
+      "isCheckedOutToday": false,
       "leaveBalance": {
         "totalDays": 12,
         "usedDays": 3,
@@ -360,8 +360,9 @@ if (isMyDashboard(dashboardData)) {
 |-----------|---------|
 | `MANAGER` chưa được gán làm `managerId` của bất kỳ phòng ban nào | **400** — `"Bạn không quản lý phòng ban nào"` |
 | `EMPLOYEE` chưa có `LeaveBalance` năm nay (chưa được khởi tạo) | `leaveBalance: null` — không lỗi |
-| Nhân viên chưa check-in hôm nay | `isCheckedInToday: false`, `checkedOutToday: false` |
-| Nhân viên đã check-in nhưng chưa check-out | `isCheckedInToday: true`, `checkedOutToday: false` |
+| Nhân viên chưa check-in hôm nay | `isCheckedInToday: false`, `isCheckedOutToday: false` |
+| Nhân viên đã check-in nhưng chưa check-out | `isCheckedInToday: true`, `isCheckedOutToday: false` |
+| Nhân viên có check-out nhưng không có check-in | `isCheckedInToday: false`, `isCheckedOutToday: true` — trạng thái "Thiếu check-in" |
 | Không có hoạt động nào trong phòng ban / của mình | `recentActivity: []` — không lỗi |
 | `checkedInRate` khi `totalEmployees = 0` | `0` (tránh chia cho 0) |
 | Token hết hạn | **401** — dùng refresh token flow thông thường |

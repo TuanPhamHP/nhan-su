@@ -42,7 +42,7 @@ export interface AttendanceRecordDetail {
 	checkOutPhotoUrl: string | null;
 	isLocked: boolean;
 	lockReason: LockReason | null;
-	missingType: 'MISSING_CHECKOUT' | null;
+	missingType: 'MISSING_CHECKIN' | 'MISSING_CHECKOUT' | null;
 	note: string | null;
 	location: AttendanceLocationDto | null;
 	shift: AttendanceShiftDto | null;

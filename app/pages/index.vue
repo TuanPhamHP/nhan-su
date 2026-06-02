@@ -90,30 +90,7 @@
 			type StatusConfig = { value: string; sub: string; cls: string; iconBg: string };
 			let status: StatusConfig;
 
-			if (!s.isCheckedInToday && !s.checkedOutToday) {
-				status = {
-					value: 'Chưa check-in',
-					sub: 'Hôm nay chưa điểm danh',
-					cls: 'text-red-600 dark:text-red-400',
-					iconBg: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
-				};
-			} else if (s.isCheckedInToday && !s.checkedOutToday) {
-				if (s.isLateToday) {
-					status = {
-						value: 'Đi muộn',
-						sub: 'Check-in muộn hơn quy định',
-						cls: 'text-orange-600 dark:text-orange-400',
-						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
-					};
-				} else {
-					status = {
-						value: 'Chưa check-out',
-						sub: 'Đang trong ca làm việc',
-						cls: 'text-amber-600 dark:text-amber-400',
-						iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-					};
-				}
-			} else if (s.checkedOutToday) {
+			if (s.isCheckedInToday && s.isCheckedOutToday) {
 				if (s.isEarlyLeaveToday) {
 					status = {
 						value: 'Về sớm',
@@ -136,6 +113,29 @@
 						iconBg: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
 					};
 				}
+			} else if (s.isCheckedInToday && !s.isCheckedOutToday) {
+				if (s.isLateToday) {
+					status = {
+						value: 'Đi muộn',
+						sub: 'Check-in muộn hơn quy định',
+						cls: 'text-orange-600 dark:text-orange-400',
+						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+					};
+				} else {
+					status = {
+						value: 'Chưa check-out',
+						sub: 'Đang trong ca làm việc',
+						cls: 'text-amber-600 dark:text-amber-400',
+						iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+					};
+				}
+			} else if (!s.isCheckedInToday && s.isCheckedOutToday) {
+				status = {
+					value: 'Thiếu check-in',
+					sub: 'Chỉ có check-out, không có check-in',
+					cls: 'text-amber-600 dark:text-amber-400',
+					iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+				};
 			} else {
 				status = {
 					value: 'Chưa check-in',

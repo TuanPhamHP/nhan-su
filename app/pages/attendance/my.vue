@@ -88,8 +88,9 @@
 
 	// ─── Styling helpers ──────────────────────────────────────────────────────────
 
-	function statusDotColor(status: string): string {
-		switch (status) {
+	function statusDotColor(record: AttendanceRecordDetail): string {
+		if (record.missingType) return 'bg-amber-400';
+		switch (record.status) {
 			case 'PRESENT':
 				return 'bg-green-500';
 			case 'LATE':
@@ -112,6 +113,7 @@
 		if (isSelected)
 			return 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white font-semibold flex items-center justify-center text-sm';
 		if (!record) return 'w-8 h-8 flex items-center justify-center text-sm text-gray-700 dark:text-gray-300';
+		if (record.missingType) return 'w-8 h-8 flex items-center justify-center text-sm text-amber-500 font-medium';
 		if (record.status === 'ABSENT') return 'w-8 h-8 flex items-center justify-center text-sm text-red-500 font-medium';
 		if (record.status === 'LATE') return 'w-8 h-8 flex items-center justify-center text-sm text-orange-400 font-medium';
 		if (record.status === 'LEAVE') return 'w-8 h-8 flex items-center justify-center text-sm text-blue-400 font-medium';
@@ -171,6 +173,8 @@
 	});
 
 	function statusLabel(r: AttendanceRecordDetail): string {
+		if (r.missingType === 'MISSING_CHECKIN') return 'Thiếu check-in';
+		if (r.missingType === 'MISSING_CHECKOUT') return 'Thiếu check-out';
 		if (r.status === 'PRESENT') return 'Đúng giờ';
 		if (r.status === 'LATE') return `Đến muộn ${formatMinutes(r.lateMinutes)}`;
 		if (r.status === 'ABSENT') return 'Vắng';
@@ -178,8 +182,9 @@
 		return r.status;
 	}
 
-	function statusBadgeClass(status: string): string {
-		switch (status) {
+	function statusBadgeClass(r: AttendanceRecordDetail): string {
+		if (r.missingType) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+		switch (r.status) {
 			case 'PRESENT':
 				return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
 			case 'LATE':
@@ -384,7 +389,7 @@
 									<div
 										v-if="recordsByDate.has(cell.dateStr)"
 										class="mt-1 w-1.5 h-1.5 rounded-full"
-										:class="statusDotColor(recordsByDate.get(cell.dateStr)!.status)"
+										:class="statusDotColor(recordsByDate.get(cell.dateStr)!)"
 									/>
 									<div v-else class="mt-1 w-1.5 h-1.5" />
 								</template>
@@ -401,6 +406,10 @@
 						<div class="flex items-center gap-1.5">
 							<span class="w-2 h-2 rounded-full bg-orange-400 inline-block" />
 							<span class="text-xs text-gray-500 dark:text-gray-400">Đến muộn</span>
+						</div>
+						<div class="flex items-center gap-1.5">
+							<span class="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+							<span class="text-xs text-gray-500 dark:text-gray-400">Thiếu chấm công</span>
 						</div>
 						<div class="flex items-center gap-1.5">
 							<span class="w-2 h-2 rounded-full bg-blue-400 inline-block" />
@@ -473,7 +482,7 @@
 						<div class="flex items-center gap-2">
 							<span
 								class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-								:class="statusBadgeClass(selectedRecord.status)"
+								:class="statusBadgeClass(selectedRecord)"
 							>
 								{{ statusLabel(selectedRecord) }}
 							</span>
@@ -587,16 +596,21 @@
 						<p class="text-xs text-amber-700 dark:text-amber-400">{{ selectedRecord.note }}</p>
 					</div>
 
-					<!-- Missing checkout / locked action -->
+					<!-- Missing checkin / checkout warning -->
 					<div
-						v-if="selectedRecord.isLocked && selectedRecord.missingType"
-						class="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30"
+						v-if="selectedRecord.missingType"
+						class="flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30"
 					>
 						<div>
-							<p class="text-xs font-medium text-red-700 dark:text-red-400">Chưa check-out</p>
-							<p class="text-xs text-red-500 dark:text-red-500 mt-0.5">Bản ghi đã bị khóa</p>
+							<p class="text-xs font-medium text-amber-700 dark:text-amber-400">
+								{{ selectedRecord.missingType === 'MISSING_CHECKIN' ? 'Thiếu check-in' : 'Thiếu check-out' }}
+							</p>
+							<p class="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+								{{ selectedRecord.isLocked ? 'Bản ghi đã bị khóa' : 'Chấm công không đầy đủ' }}
+							</p>
 						</div>
 						<NuxtLink
+							v-if="selectedRecord.missingType === 'MISSING_CHECKOUT'"
 							to="/attendance/makeup"
 							class="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline flex-shrink-0"
 						>
@@ -660,7 +674,7 @@
 
 					<!-- Violation actions -->
 					<div
-						v-if="selectedRecord.lateMinutes > 0 || selectedRecord.earlyMinutes > 0 || (selectedRecord.status === 'ABSENT' && selectedRecord.isLocked)"
+						v-if="selectedRecord.lateMinutes > 0 || selectedRecord.earlyMinutes > 0 || (selectedRecord.status === 'ABSENT' && selectedRecord.isLocked) || selectedRecord.missingType === 'MISSING_CHECKIN'"
 						class="border-t border-gray-100 dark:border-gray-700 pt-3 space-y-2"
 					>
 						<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -686,6 +700,18 @@
 								@click="openViolationModal('EARLY')"
 							>
 								<span>Giải trình về sớm</span>
+								<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+								</svg>
+							</button>
+
+							<button
+								v-if="selectedRecord.missingType === 'MISSING_CHECKIN'"
+								:disabled="violationModal.loading"
+								class="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								@click="openViolationModal('FORGOT_CHECKIN')"
+							>
+								<span>Giải trình thiếu check-in</span>
 								<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
 								</svg>
