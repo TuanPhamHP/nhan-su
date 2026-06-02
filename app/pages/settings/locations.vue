@@ -351,17 +351,28 @@ onUnmounted(() => {
 	<div class="flex -m-6 overflow-hidden" style="height: calc(100vh - 4rem)">
 		<!-- Left: location list -->
 		<div class="w-80 flex-shrink-0 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
-			<div class="flex items-center gap-2 px-4 pt-5 pb-3 flex-shrink-0">
-				<h1 class="text-base font-semibold text-gray-900 dark:text-white flex-1">Địa điểm chấm công</h1>
-				<button
-					class="w-8 h-8 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition-colors"
-					title="Thêm địa điểm"
-					@click="openAddModal"
+			<div class="flex flex-col px-4 pt-4 pb-3 flex-shrink-0 gap-1">
+				<NuxtLink
+					to="/settings"
+					class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
 				>
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+					<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
 					</svg>
-				</button>
+					Cài đặt
+				</NuxtLink>
+				<div class="flex items-center gap-2">
+					<h1 class="text-base font-semibold text-gray-900 dark:text-white flex-1">Địa điểm chấm công</h1>
+					<button
+						class="w-8 h-8 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition-colors"
+						title="Thêm địa điểm"
+						@click="openAddModal"
+					>
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
 			<div class="flex-1 overflow-y-auto px-3 pb-4 space-y-2">

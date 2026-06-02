@@ -52,6 +52,8 @@ export interface LeaveBalance {
 export interface MyStats {
 	isCheckedInToday: boolean;
 	checkedOutToday: boolean;
+	isLateToday?: boolean;
+	isEarlyLeaveToday?: boolean;
 	leaveBalance: LeaveBalance | null;
 	pendingLeaveRequests: number;
 	lateCountThisMonth: number;

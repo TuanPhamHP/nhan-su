@@ -86,24 +86,73 @@
 
 		if (isMyDashboard(d)) {
 			const s = d.stats;
-			let statusValue = 'Chưa check-in';
-			let statusCls = 'text-red-600 dark:text-red-400';
-			if (s.checkedOutToday) {
-				statusValue = 'Hoàn thành';
-				statusCls = 'text-green-600 dark:text-green-400';
-			} else if (s.isCheckedInToday) {
-				statusValue = 'Đã check-in';
-				statusCls = 'text-green-600 dark:text-green-400';
+
+			type StatusConfig = { value: string; sub: string; cls: string; iconBg: string };
+			let status: StatusConfig;
+
+			if (!s.isCheckedInToday && !s.checkedOutToday) {
+				status = {
+					value: 'Chưa check-in',
+					sub: 'Hôm nay chưa điểm danh',
+					cls: 'text-red-600 dark:text-red-400',
+					iconBg: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
+				};
+			} else if (s.isCheckedInToday && !s.checkedOutToday) {
+				if (s.isLateToday) {
+					status = {
+						value: 'Đi muộn',
+						sub: 'Check-in muộn hơn quy định',
+						cls: 'text-orange-600 dark:text-orange-400',
+						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+					};
+				} else {
+					status = {
+						value: 'Chưa check-out',
+						sub: 'Đang trong ca làm việc',
+						cls: 'text-amber-600 dark:text-amber-400',
+						iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+					};
+				}
+			} else if (s.checkedOutToday) {
+				if (s.isEarlyLeaveToday) {
+					status = {
+						value: 'Về sớm',
+						sub: 'Check-out sớm hơn quy định',
+						cls: 'text-orange-600 dark:text-orange-400',
+						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+					};
+				} else if (s.isLateToday) {
+					status = {
+						value: 'Đi muộn',
+						sub: 'Check-in muộn hơn quy định',
+						cls: 'text-orange-600 dark:text-orange-400',
+						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+					};
+				} else {
+					status = {
+						value: 'Hoàn thành',
+						sub: 'Đã check-in và check-out',
+						cls: 'text-green-600 dark:text-green-400',
+						iconBg: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+					};
+				}
+			} else {
+				status = {
+					value: 'Chưa check-in',
+					sub: 'Hôm nay chưa điểm danh',
+					cls: 'text-red-600 dark:text-red-400',
+					iconBg: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
+				};
 			}
 
 			return [
 				{
 					label: 'Trạng thái hôm nay',
-					value: statusValue,
-					sub: s.isCheckedInToday ? (s.checkedOutToday ? 'Đã check-out' : 'Chưa check-out') : 'Hôm nay chưa điểm danh',
+					value: status.value,
+					sub: status.sub,
 					iconPath: ICONS.checkCircle,
-					iconBg: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
-					valueCls: `text-xl font-bold ${statusCls}`,
+					iconBg: status.iconBg,
+					valueCls: `text-xl font-bold ${status.cls}`,
 				},
 				{
 					label: 'Phép còn lại',

@@ -280,6 +280,7 @@
 			await assignShift({ employeeId: cellTarget.value.employeeId, shiftId, date: cellTarget.value.date });
 			toast.success('Đã gán ca');
 			closeCellModal();
+			await loadCalendar();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi gán ca');
 		} finally {
@@ -294,6 +295,7 @@
 			await removeShift(cellTarget.value.employeeId, cellTarget.value.date);
 			toast.success('Đã xóa override ca');
 			closeCellModal();
+			await loadCalendar();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi xóa ca');
 		} finally {
@@ -445,6 +447,15 @@
 		<!-- Page header -->
 		<div class="flex items-center justify-between">
 			<div>
+				<NuxtLink
+					to="/settings"
+					class="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-1"
+				>
+					<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+					</svg>
+					Cài đặt
+				</NuxtLink>
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý ca làm việc</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tạo khuôn ca và phân ca cho nhân viên</p>
 			</div>
