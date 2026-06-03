@@ -8,6 +8,8 @@
 	import type { PositionSummary } from '~/types/position.types';
 	import EmployeeEmployeeStatusBadge from '@/components/modules/employee/EmployeeStatusBadge.vue';
 	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
+	import EmployeeContracts from '~/components/modules/employee/EmployeeContracts.vue';
+	import EmployeeSocialInsurance from '~/components/modules/employee/EmployeeSocialInsurance.vue';
 
 	definePageMeta({ title: 'Chi tiết nhân viên' });
 
@@ -43,7 +45,11 @@
 		}
 	}
 
-	const activeTab = ref<'info' | 'documents'>('info');
+	const validTabs = ['info', 'documents', 'contracts', 'social-insurance'] as const;
+	type TabId = (typeof validTabs)[number];
+	const activeTab = ref<TabId>(
+		validTabs.includes(route.query.tab as TabId) ? (route.query.tab as TabId) : 'info',
+	);
 	const isEditing = ref(route.query.edit === 'true');
 	const confirmDeactivate = ref(false);
 	const deactivating = ref(false);
@@ -236,7 +242,7 @@
 				Danh sách nhân viên
 			</NuxtLink>
 
-			<div v-if="currentEmployee && activeTab === 'info' && !isEditing" class="flex items-center gap-2">
+			<div v-if="currentEmployee && (activeTab === 'info') && !isEditing" class="flex items-center gap-2">
 				<CommonAppButton variant="primary" @click="startEditing">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
@@ -356,6 +362,36 @@
 						"
 					>
 						Tài liệu
+					</button>
+					<button
+						type="button"
+						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+						:class="
+							activeTab === 'contracts'
+								? 'border-brand-500 text-brand-600 dark:text-brand-400'
+								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+						"
+						@click="
+							activeTab = 'contracts';
+							isEditing = false;
+						"
+					>
+						Hợp đồng
+					</button>
+					<button
+						type="button"
+						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+						:class="
+							activeTab === 'social-insurance'
+								? 'border-brand-500 text-brand-600 dark:text-brand-400'
+								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+						"
+						@click="
+							activeTab = 'social-insurance';
+							isEditing = false;
+						"
+					>
+						BHXH &amp; Thuế
 					</button>
 				</nav>
 			</div>
@@ -532,6 +568,17 @@
 
 			<!-- Tab: Tài liệu -->
 			<EmployeeDocuments v-else-if="activeTab === 'documents'" :employee-id="id" :readonly="!canEdit" />
+
+			<!-- Tab: Hợp đồng -->
+			<div
+				v-else-if="activeTab === 'contracts'"
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6"
+			>
+				<EmployeeContracts :employee-id="id" />
+			</div>
+
+			<!-- Tab: BHXH & Thuế -->
+			<EmployeeSocialInsurance v-else-if="activeTab === 'social-insurance'" :employee-id="id" />
 		</template>
 
 		<!-- Confirm reset password modal -->

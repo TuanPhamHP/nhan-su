@@ -24,3 +24,5 @@ export * from './online-work-request.service';
 export * from './dashboard.service';
 export * from './payroll.service';
 export * from './log.service';
+export * from './contract.service';
+export * from './social-insurance.service';
