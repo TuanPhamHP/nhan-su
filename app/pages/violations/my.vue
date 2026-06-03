@@ -13,6 +13,12 @@
 	} from '~/types/violation.types';
 	import type { PaginatedMeta } from '~/types/api.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
+	import {
+		VIOLATION_TYPE_OPTIONS,
+		VIOLATION_STATUS_OPTIONS,
+		violationTypeLabel,
+		violationTypeClass,
+	} from '~/utils/violation.utils';
 
 	definePageMeta({ title: 'Đơn xin chỉnh công' });
 
@@ -33,20 +39,8 @@
 		[currentYear - 1, currentYear, currentYear + 1].map(y => ({ value: y, label: String(y) })),
 	);
 
-	const typeOptions: SelectOption[] = [
-		{ value: undefined, label: 'Tất cả loại' },
-		{ value: 'FORGOT_CHECKIN', label: 'Quên chấm công' },
-		{ value: 'LATE', label: 'Đi muộn' },
-		{ value: 'EARLY', label: 'Về sớm' },
-	];
-
-	const statusOptions: SelectOption[] = [
-		{ value: undefined, label: 'Tất cả trạng thái' },
-		{ value: 'PENDING', label: 'Chờ duyệt' },
-		{ value: 'APPROVED', label: 'Đã duyệt' },
-		{ value: 'REJECTED', label: 'Từ chối' },
-		{ value: 'CANCELLED', label: 'Đã thu hồi' },
-	];
+	const typeOptions = VIOLATION_TYPE_OPTIONS;
+	const statusOptions = VIOLATION_STATUS_OPTIONS;
 
 	// ─── My requests ──────────────────────────────────────────────────────────────
 	const myRequests = ref<ViolationRequest[]>([]);
@@ -137,17 +131,6 @@
 		return format(new Date(d), 'dd/MM/yyyy');
 	}
 
-	const typeLabelMap: Record<ViolationRequestType, string> = {
-		FORGOT_CHECKIN: 'Quên chấm công',
-		LATE: 'Đi muộn',
-		EARLY: 'Về sớm',
-	};
-
-	const typeClassMap: Record<ViolationRequestType, string> = {
-		FORGOT_CHECKIN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-		LATE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-		EARLY: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-	};
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────────
 	onMounted(() => {
@@ -301,8 +284,8 @@
 						>
 							<td class="px-4 py-3">
 								<div class="flex items-center gap-2 flex-wrap">
-									<span :class="['inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', typeClassMap[req.type]]">
-										{{ typeLabelMap[req.type] }}
+									<span :class="['inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', violationTypeClass(req.type)]">
+										{{ req.typeLabel || violationTypeLabel(req.type) }}
 									</span>
 									<span
 										v-if="req.isViolationFlagged"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import { formatVNTime, formatShiftDisplay, formatMinutes } from '~/utils/attendance.utils';
+	import { violationStatusLabel, violationStatusClass } from '~/utils/violation.utils';
 	import type { AttendanceRecordDetail } from '~/types/attendance.types';
 	import { useAttendanceService } from '~/services/attendance.service';
 	import { useViolationRequestService } from '~/services/violation-request.service';
@@ -200,31 +201,6 @@
 
 	// ─── Violation display helpers ────────────────────────────────────────────────
 
-	function violationStatusLabel(status: ViolationRequestStatus): string {
-		switch (status) {
-			case 'PENDING':
-				return 'Chờ duyệt';
-			case 'APPROVED':
-				return 'Đã duyệt';
-			case 'REJECTED':
-				return 'Từ chối';
-			case 'CANCELLED':
-				return 'Đã thu hồi';
-		}
-	}
-
-	function violationStatusBadgeClass(status: ViolationRequestStatus): string {
-		switch (status) {
-			case 'PENDING':
-				return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-			case 'APPROVED':
-				return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
-			case 'REJECTED':
-				return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
-			case 'CANCELLED':
-				return 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400';
-		}
-	}
 
 	// ─── Violation detail modal ───────────────────────────────────────────────────
 	const detailViolation = ref<ViolationDetailView | null>(null);
@@ -639,7 +615,7 @@
 									<div class="flex items-center gap-1 flex-shrink-0">
 										<span
 											class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
-											:class="violationStatusBadgeClass(vr.status)"
+											:class="violationStatusClass(vr.status)"
 										>
 											{{ violationStatusLabel(vr.status) }}
 										</span>

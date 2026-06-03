@@ -1,7 +1,8 @@
 <script setup lang="ts">
 	import { format, parseISO } from 'date-fns';
 	import ViolationStatusBadge from '~/components/modules/violation/ViolationStatusBadge.vue';
-	import type { ViolationDetailView, ViolationRequestType } from '~/types/violation.types';
+	import type { ViolationDetailView } from '~/types/violation.types';
+	import { violationTypeClass } from '~/utils/violation.utils';
 
 	const props = defineProps<{
 		violationRequest: ViolationDetailView;
@@ -10,12 +11,6 @@
 	const emit = defineEmits<{
 		close: [];
 	}>();
-
-	const typeClassMap: Record<ViolationRequestType, string> = {
-		FORGOT_CHECKIN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-		LATE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-		EARLY: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-	};
 
 	function formatDate(d: string | null | undefined) {
 		if (!d) return '—';
@@ -63,7 +58,7 @@
 						<span
 							:class="[
 								'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-								typeClassMap[violationRequest.type],
+								violationTypeClass(violationRequest.type),
 							]"
 						>
 							{{ violationRequest.typeLabel }}

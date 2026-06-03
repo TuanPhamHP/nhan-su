@@ -5,6 +5,7 @@
 	import { format, parseISO } from 'date-fns';
 	import { useViolationRequestService } from '~/services/violation-request.service';
 	import type { ViolationCounter, ViolationRequest, ViolationRequestType } from '~/types/violation.types';
+	import { VIOLATION_TYPE_LABEL } from '~/utils/violation.utils';
 
 	const props = defineProps<{
 		counter: ViolationCounter;
@@ -182,10 +183,7 @@
 							]"
 						>
 							<option value="">-- Chọn loại vi phạm --</option>
-							<option value="FORGOT_CHECKIN">Quên chấm công vào</option>
-							<option value="FORGOT_CHECKOUT">Quên chấm công ra</option>
-							<option value="LATE">Đi muộn</option>
-							<option value="EARLY">Về sớm</option>
+							<option v-for="(label, key) in VIOLATION_TYPE_LABEL" :key="key" :value="key">{{ label }}</option>
 						</select>
 						<p v-if="errors.type" class="text-xs text-red-500">{{ errors.type }}</p>
 					</div>

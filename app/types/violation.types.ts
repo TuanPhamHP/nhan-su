@@ -1,4 +1,4 @@
-export type ViolationRequestType = 'FORGOT_CHECKIN' | 'LATE' | 'EARLY';
+export type ViolationRequestType = 'FORGOT_CHECKIN' | 'FORGOT_CHECKOUT' | 'LATE' | 'EARLY';
 export type ViolationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export interface ViolationEmployeeRef {
