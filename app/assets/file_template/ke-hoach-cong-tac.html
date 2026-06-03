@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bản kế hoạch công tác - {{so_ke_hoach}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 13pt;
+      line-height: 1.5;
+      color: #000;
+      background: #e5e7eb;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 20px auto;
+      padding: 25mm 25mm 20mm 30mm;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    /* ── Header ── */
+    .header-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .header-left {
+      text-align: center;
+      width: 45%;
+    }
+
+    .header-right {
+      text-align: center;
+      width: 50%;
+    }
+
+    .header-quoc-hieu {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 13pt;
+    }
+
+    .header-doc-lap {
+      font-weight: bold;
+      font-size: 13pt;
+    }
+
+    .header-line {
+      letter-spacing: 2px;
+      font-size: 12pt;
+    }
+
+    .header-org {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 12pt;
+    }
+
+    .header-dept {
+      font-weight: bold;
+      font-size: 12pt;
+    }
+
+    .header-underline {
+      display: block;
+      width: 60%;
+      border-bottom: 1.5px solid #000;
+      margin: 2px auto 0;
+    }
+
+    .date-line {
+      text-align: right;
+      font-style: italic;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Tiêu đề ── */
+    .doc-title {
+      text-align: center;
+      font-weight: bold;
+      font-size: 14pt;
+      text-transform: uppercase;
+      margin: 20px 0 5px;
+      letter-spacing: 1px;
+    }
+
+    .doc-subtitle {
+      text-align: center;
+      font-size: 13pt;
+      margin-bottom: 5px;
+    }
+
+    .doc-number {
+      text-align: center;
+      margin-bottom: 15px;
+      font-size: 12pt;
+    }
+
+    .kinh-gui {
+      font-style: italic;
+      margin: 10px 0 15px;
+    }
+
+    /* ── Sections ── */
+    .section-title {
+      font-weight: bold;
+      margin: 15px 0 8px;
+      font-size: 13pt;
+    }
+
+    .content-block {
+      text-align: justify;
+      text-indent: 30px;
+      margin: 8px 0;
+    }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      font-size: 12pt;
+    }
+
+    th, td {
+      border: 1px solid #000;
+      padding: 6px 8px;
+      vertical-align: top;
+    }
+
+    th {
+      font-weight: bold;
+      text-align: center;
+      background: #f0f0f0;
+    }
+
+    td.center {
+      text-align: center;
+    }
+
+    .no-data-row td {
+      text-align: center;
+      font-style: italic;
+      color: #666;
+      padding: 12px;
+    }
+
+    /* ── Chữ ký ── */
+    .signature-section {
+      margin-top: 30px;
+    }
+
+    .signature-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .signature-table td {
+      border: none;
+      text-align: center;
+      vertical-align: top;
+      padding: 5px 5px;
+      width: 33.33%;
+    }
+
+    .signature-role {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 12pt;
+    }
+
+    .signature-note {
+      font-style: italic;
+      font-size: 11pt;
+      color: #333;
+    }
+
+    .signature-name {
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-top: 65px;
+      font-size: 13pt;
+    }
+
+    /* ── Preview badge ── */
+    .preview-badge {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #3b82f6;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 999;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    .preview-badge:hover {
+      background: #2563eb;
+    }
+
+    /* ── Print ── */
+    @media print {
+      body {
+        background: white;
+      }
+      .page {
+        width: 100%;
+        padding: 25mm 25mm 20mm 30mm;
+        box-shadow: none;
+        margin: 0;
+      }
+      .preview-badge {
+        display: none;
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <button class="preview-badge" onclick="window.print()">🖨️ In trang này</button>
+
+  <div class="page">
+    <!-- Header -->
+    <div class="header-wrapper">
+      <div class="header-left">
+        <div class="header-org">CÔNG TY {{ten_cong_ty}}</div>
+        <div class="header-dept">{{phong_ban}}</div>
+        <span class="header-underline"></span>
+      </div>
+      <div class="header-right">
+        <div class="header-quoc-hieu">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div class="header-doc-lap">Độc lập - Tự do - Hạnh Phúc</div>
+        <div class="header-line">─────────────────</div>
+      </div>
+    </div>
+
+    <!-- Ngày tháng -->
+    <div class="date-line">Hà Nội, ngày {{ngay}} tháng {{thang}} năm {{nam}}</div>
+
+    <!-- Tiêu đề -->
+    <div class="doc-title">BẢN KẾ HOẠCH CÔNG TÁC</div>
+    <div class="doc-subtitle">Mẫu BM01</div>
+    <div class="doc-number">Số: {{so_ke_hoach}}</div>
+
+    <!-- Kính gửi -->
+    <div class="kinh-gui">Kính gửi: Ban Giám đốc Công ty</div>
+
+    <!-- Mục tiêu công tác -->
+    <div class="section-title">I. MỤC TIÊU CÔNG TÁC</div>
+    <!-- MULTILINE:muc_tieu -->
+    <div class="content-block">{{muc_tieu}}</div>
+
+    <!-- Địa điểm và thời gian -->
+    <div class="section-title">II. ĐỊA ĐIỂM VÀ THỜI GIAN</div>
+    <div class="content-block">
+      - Địa điểm: {{dia_diem}}<br>
+      - Thời gian: Từ ngày {{ngay_bat_dau}} đến ngày {{ngay_ket_thuc}}
+    </div>
+
+    <!-- Thành phần công tác -->
+    <div class="section-title">III. THÀNH PHẦN CÔNG TÁC</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 8%">STT</th>
+          <th style="width: 32%">Họ và tên</th>
+          <th style="width: 30%">Chức danh</th>
+          <th style="width: 30%">Đơn vị</th>
+        </tr>
+      </thead>
+      <tbody id="thanh-phan-tbody">
+        <!-- TABLE_ROWS:thanh_phan_json -->
+        <!--
+          Client parses {{thanh_phan_json}} as JSON array of:
+          [{ "stt": 1, "hoTen": "Nguyễn Văn A", "chucDanh": "Nhân viên", "donVi": "Phòng IT" }]
+          Then injects <tr> rows into #thanh-phan-tbody
+        -->
+        <tr class="no-data-row"><td colspan="4">{{thanh_phan_json}}</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Kế hoạch làm việc -->
+    <div class="section-title">IV. KẾ HOẠCH LÀM VIỆC</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 22%">Ngày/tháng/năm</th>
+          <th style="width: 38%">Nội dung làm việc</th>
+          <th style="width: 22%">Địa điểm</th>
+          <th style="width: 18%">Phương tiện</th>
+        </tr>
+      </thead>
+      <tbody id="ke-hoach-tbody">
+        <!-- TABLE_ROWS:ke_hoach_json -->
+        <!--
+          Client parses {{ke_hoach_json}} as JSON array of:
+          [{ "ngay": "01/07/2026", "noiDung": "Họp đối tác", "diaDiem": "TP.HCM", "phuongTien": "Máy bay" }]
+          Then injects <tr> rows into #ke-hoach-tbody
+        -->
+        <tr class="no-data-row"><td colspan="4">{{ke_hoach_json}}</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Kinh phí dự kiến -->
+    <div class="section-title">V. KINH PHÍ DỰ KIẾN</div>
+    <div class="content-block">{{kinh_phi}}</div>
+
+    <!-- Ghi chú -->
+    <div class="section-title">VI. GHI CHÚ</div>
+    <!-- MULTILINE:ghi_chu -->
+    <div class="content-block">{{ghi_chu}}</div>
+
+    <!-- Chữ ký -->
+    <div class="signature-section">
+      <table class="signature-table">
+        <tr>
+          <td>
+            <div class="signature-role">Phê duyệt</div>
+            <div class="signature-note">(Ký, ghi rõ họ tên, đóng dấu)</div>
+            <div class="signature-name">&nbsp;</div>
+          </td>
+          <td>
+            <div class="signature-role">Quản lý</div>
+            <div class="signature-note">(Ký, ghi rõ họ tên)</div>
+            <div class="signature-name">{{ten_quan_ly}}</div>
+          </td>
+          <td>
+            <div class="signature-role">Người lập</div>
+            <div class="signature-note">(Ký, ghi rõ họ tên)</div>
+            <div class="signature-name">{{ten_nguoi_lap}}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Auto-render TABLE_ROWS khi load trong browser (demo/preview)
+    // Trong production, client replace trước khi inject vào window.open
+    function renderTableRows(tbodyId, jsonKey) {
+      const tbody = document.getElementById(tbodyId);
+      if (!tbody) return;
+      const placeholder = tbody.querySelector('.no-data-row td');
+      if (!placeholder) return;
+
+      const raw = placeholder.textContent.trim();
+      // Nếu chưa được replace (vẫn là {{key}}) thì bỏ qua
+      if (raw.startsWith('{{') && raw.endsWith('}}')) return;
+
+      try {
+        const rows = JSON.parse(raw);
+        tbody.innerHTML = '';
+
+        if (tbodyId === 'thanh-phan-tbody') {
+          rows.forEach((r, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="center">${i + 1}</td><td>${r.hoTen || ''}</td><td>${r.chucDanh || ''}</td><td>${r.donVi || ''}</td>`;
+            tbody.appendChild(tr);
+          });
+        } else if (tbodyId === 'ke-hoach-tbody') {
+          rows.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="center">${r.ngay || ''}</td><td>${r.noiDung || ''}</td><td>${r.diaDiem || ''}</td><td>${r.phuongTien || ''}</td>`;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {
+        // JSON parse fail — giữ nguyên raw text
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderTableRows('thanh-phan-tbody', 'thanh_phan_json');
+      renderTableRows('ke-hoach-tbody', 'ke_hoach_json');
+    });
+  </script>
+</body>
+</html>

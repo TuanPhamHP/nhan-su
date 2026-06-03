@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tờ trình - {{so_to_trinh}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 13pt;
+      line-height: 1.5;
+      color: #000;
+      background: #e5e7eb;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 20px auto;
+      padding: 25mm 25mm 20mm 30mm;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    /* ── Header quốc hiệu ── */
+    .header-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .header-left {
+      text-align: center;
+      width: 45%;
+    }
+
+    .header-right {
+      text-align: center;
+      width: 50%;
+    }
+
+    .header-quoc-hieu {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 13pt;
+    }
+
+    .header-doc-lap {
+      font-weight: bold;
+      font-size: 13pt;
+    }
+
+    .header-line {
+      letter-spacing: 2px;
+      font-size: 12pt;
+    }
+
+    .header-org {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 12pt;
+    }
+
+    .header-dept {
+      font-weight: bold;
+      font-size: 12pt;
+    }
+
+    .header-underline {
+      display: block;
+      width: 60%;
+      border-bottom: 1.5px solid #000;
+      margin: 2px auto 0;
+    }
+
+    .date-line {
+      text-align: right;
+      font-style: italic;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Tiêu đề văn bản ── */
+    .doc-title {
+      text-align: center;
+      font-weight: bold;
+      font-size: 14pt;
+      text-transform: uppercase;
+      margin: 20px 0 5px;
+      letter-spacing: 1px;
+    }
+
+    .doc-number {
+      text-align: center;
+      margin-bottom: 5px;
+      font-size: 12pt;
+    }
+
+    .doc-subject {
+      text-align: center;
+      font-style: italic;
+      margin-bottom: 20px;
+      font-size: 13pt;
+    }
+
+    .doc-subject strong {
+      font-style: normal;
+      font-weight: bold;
+    }
+
+    /* ── Kính trình ── */
+    .kinh-gui {
+      font-style: italic;
+      margin: 10px 0 15px;
+    }
+
+    /* ── Nội dung ── */
+    .section-title {
+      font-weight: bold;
+      margin: 15px 0 5px;
+      font-size: 13pt;
+    }
+
+    .content-block {
+      text-align: justify;
+      text-indent: 30px;
+      margin: 8px 0;
+    }
+
+    .can-cu-list {
+      margin: 8px 0 8px 20px;
+      list-style: none;
+      padding-left: 10px;
+    }
+
+    .can-cu-list li {
+      margin-bottom: 5px;
+      padding-left: 10px;
+      text-indent: 0;
+    }
+
+    .can-cu-list li::before {
+      content: "- ";
+    }
+
+    .kinh-trinh-text {
+      text-align: justify;
+      text-indent: 30px;
+      margin: 15px 0 5px;
+    }
+
+    /* ── Chữ ký ── */
+    .signature-section {
+      margin-top: 30px;
+    }
+
+    .signature-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .signature-table td {
+      border: none;
+      text-align: center;
+      vertical-align: top;
+      padding: 5px 10px;
+      width: 50%;
+    }
+
+    .signature-role {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 12pt;
+    }
+
+    .signature-note {
+      font-style: italic;
+      font-size: 11pt;
+      color: #333;
+    }
+
+    .signature-name {
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-top: 65px;
+      font-size: 13pt;
+    }
+
+    /* ── Preview badge ── */
+    .preview-badge {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #3b82f6;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 999;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    .preview-badge:hover {
+      background: #2563eb;
+    }
+
+    /* ── Print ── */
+    @media print {
+      body {
+        background: white;
+      }
+      .page {
+        width: 100%;
+        padding: 25mm 25mm 20mm 30mm;
+        box-shadow: none;
+        margin: 0;
+      }
+      .preview-badge {
+        display: none;
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <button class="preview-badge" onclick="window.print()">🖨️ In trang này</button>
+
+  <div class="page">
+    <!-- Quốc hiệu + Tên cơ quan -->
+    <div class="header-wrapper">
+      <div class="header-left">
+        <div class="header-org">CÔNG TY {{ten_cong_ty}}</div>
+        <div class="header-dept">{{phong_ban}}</div>
+        <span class="header-underline"></span>
+      </div>
+      <div class="header-right">
+        <div class="header-quoc-hieu">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div class="header-doc-lap">Độc lập - Tự do - Hạnh Phúc</div>
+        <div class="header-line">─────────────────</div>
+      </div>
+    </div>
+
+    <!-- Ngày tháng -->
+    <div class="date-line">Hà Nội, ngày {{ngay}} tháng {{thang}} năm {{nam}}</div>
+
+    <!-- Tiêu đề -->
+    <div class="doc-title">TỜ TRÌNH</div>
+    <div class="doc-number">Số: {{so_to_trinh}}</div>
+    <div class="doc-subject"><strong>V/v:</strong> {{ve_viec}}</div>
+
+    <!-- Kính trình -->
+    <div class="kinh-gui">Kính trình: Ban Giám đốc Công ty</div>
+
+    <!-- Căn cứ -->
+    <div class="section-title">I. CĂN CỨ</div>
+    <ul class="can-cu-list">
+      <li>{{can_cu_1}}</li>
+      <li>{{can_cu_2}}</li>
+      <li>{{can_cu_3}}</li>
+    </ul>
+
+    <!-- Nội dung tờ trình -->
+    <div class="section-title">II. NỘI DUNG TỜ TRÌNH</div>
+    <!-- MULTILINE:noi_dung -->
+    <div class="content-block">{{noi_dung}}</div>
+
+    <!-- Kính trình phê duyệt -->
+    <div class="kinh-trinh-text">
+      Kính trình Ban Giám đốc xem xét, phê duyệt.
+    </div>
+    <div class="content-block">
+      Trân trọng kính trình.
+    </div>
+
+    <!-- Chữ ký -->
+    <div class="signature-section">
+      <table class="signature-table">
+        <tr>
+          <td>
+            <div class="signature-role">Giám đốc</div>
+            <div class="signature-note">(Ký, ghi rõ họ tên, đóng dấu)</div>
+            <div class="signature-name">{{ten_giam_doc}}</div>
+          </td>
+          <td>
+            <div class="signature-role">Người đề nghị</div>
+            <div class="signature-note">(Ký, ghi rõ họ tên)</div>
+            <div class="signature-name">{{ten_nguoi_de_nghi}}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
