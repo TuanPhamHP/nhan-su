@@ -3,6 +3,8 @@ export type ApproverStepStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WAITING'
 
 export type FieldType = 'text' | 'textarea' | 'date' | 'number' | 'select' | 'checkbox';
 
+export type FieldDataSource = 'custom' | 'departments' | 'employees' | 'positions';
+
 export interface FieldDefinition {
 	key: string;
 	label: string;
@@ -11,6 +13,7 @@ export interface FieldDefinition {
 	placeholder?: string;
 	defaultValue?: string;
 	options?: string[];
+	dataSource?: FieldDataSource; // only for type === 'select'; 'custom' or undefined = manual options
 }
 
 export interface DocumentTemplateSummary {

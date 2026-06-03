@@ -3,7 +3,7 @@ import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
 import * as z from 'zod';
 import { useGeneralRequestService } from '~/services/general-request.service';
-import type { DocumentTemplateDetail, FieldDefinition, FieldType } from '~/types/general-request.types';
+import type { DocumentTemplateDetail, FieldDataSource, FieldDefinition, FieldType } from '~/types/general-request.types';
 
 const props = defineProps<{ editTarget?: DocumentTemplateDetail }>();
 const emit = defineEmits<{
@@ -20,6 +20,18 @@ const categoryOptions = [
 	{ value: 'REWARD', label: 'Khen thưởng' },
 	{ value: 'OTHER', label: 'Khác' },
 ];
+
+const dataSourceOptions: { value: FieldDataSource; label: string }[] = [
+	{ value: 'custom', label: 'Tùy chỉnh' },
+	{ value: 'departments', label: 'Phòng ban' },
+	{ value: 'employees', label: 'Nhân viên' },
+	{ value: 'positions', label: 'Vị trí' },
+];
+
+function onDataSourceChange(field: FieldDefinition, source: FieldDataSource) {
+	field.dataSource = source;
+	if (source !== 'custom') field.options = [];
+}
 
 const fieldTypeOptions: { value: FieldType; label: string }[] = [
 	{ value: 'text', label: 'Văn bản ngắn' },
@@ -206,15 +218,37 @@ const onSubmit = handleSubmit(async values => {
 									<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
 								</button>
 							</div>
-							<div v-if="field.type === 'select'" class="col-span-12 space-y-1">
-								<label class="block text-xs text-gray-500">Options (mỗi dòng 1 giá trị)</label>
-								<textarea
-									:value="(field.options ?? []).join('\n')"
-									rows="2"
-									placeholder="Option 1&#10;Option 2&#10;Option 3"
-									class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
-									@input="(e) => field.options = (e.target as HTMLTextAreaElement).value.split('\n').filter(Boolean)"
-								/>
+							<div v-if="field.type === 'select'" class="col-span-12 space-y-2">
+								<label class="block text-xs font-medium text-gray-500">Nguồn dữ liệu</label>
+								<div class="flex flex-wrap gap-4">
+									<label
+										v-for="src in dataSourceOptions"
+										:key="src.value"
+										class="flex items-center gap-1.5 cursor-pointer"
+									>
+										<input
+											type="radio"
+											:value="src.value"
+											:checked="(field.dataSource ?? 'custom') === src.value"
+											class="text-brand-600 focus:ring-brand-500"
+											@change="onDataSourceChange(field, src.value)"
+										/>
+										<span class="text-xs text-gray-600 dark:text-gray-400">{{ src.label }}</span>
+									</label>
+								</div>
+								<template v-if="!field.dataSource || field.dataSource === 'custom'">
+									<label class="block text-xs text-gray-500">Options (mỗi dòng 1 giá trị)</label>
+									<textarea
+										:value="(field.options ?? []).join('\n')"
+										rows="2"
+										placeholder="Option 1&#10;Option 2&#10;Option 3"
+										class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
+										@input="(e) => field.options = (e.target as HTMLTextAreaElement).value.split('\n').filter(Boolean)"
+									/>
+								</template>
+								<p v-else class="text-xs text-gray-400 italic py-0.5">
+									Danh sách sẽ được tải động từ hệ thống khi người dùng điền form.
+								</p>
 							</div>
 						</div>
 					</div>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useGeneralRequestService } from '~/services/general-request.service';
 import { useEmployeeService } from '~/services/employee.service';
-import type { DocumentTemplateDetail, FieldDefinition, SuggestedApprover } from '~/types/general-request.types';
+import { useDepartmentService } from '~/services/department.service';
+import { usePositionService } from '~/services/position.service';
+import type { DocumentTemplateDetail, FieldDataSource, SuggestedApprover } from '~/types/general-request.types';
 
 definePageMeta({ title: 'Tạo văn bản nội bộ' });
 
@@ -9,6 +11,8 @@ const toast = useToast();
 const router = useRouter();
 const service = useGeneralRequestService();
 const employeeService = useEmployeeService();
+const departmentService = useDepartmentService();
+const positionService = usePositionService();
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
 const step = ref<1 | 2 | 3>(1);
@@ -36,7 +40,7 @@ const groupedTemplates = computed(() => {
 	const groups: Record<string, DocumentTemplateDetail[]> = {};
 	templates.value.forEach(t => {
 		if (!groups[t.category]) groups[t.category] = [];
-		groups[t.category].push(t);
+		groups[t.category]!.push(t);
 	});
 	return groups;
 });
@@ -56,15 +60,57 @@ async function selectTemplate(t: DocumentTemplateDetail) {
 	try {
 		selectedTemplate.value = await service.findTemplate(t.id);
 		initFieldValues();
+		void loadSystemOptionsForTemplate();
 		step.value = 2;
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Lỗi tải chi tiết mẫu');
 	}
 }
 
+async function loadSystemOptionsForTemplate() {
+	if (!selectedTemplate.value) return;
+	const needed = new Set(
+		selectedTemplate.value.fields
+			.filter(f => f.type === 'select' && f.dataSource && f.dataSource !== 'custom')
+			.map(f => f.dataSource as FieldDataSource),
+	);
+
+	const tasks: Promise<void>[] = [];
+
+	if (needed.has('departments') && systemOptionsCache.departments.length === 0) {
+		tasks.push(
+			departmentService.findAll({ limit: 200 })
+				.then(res => { systemOptionsCache.departments = res.data.map(d => d.name); })
+				.catch(() => {}),
+		);
+	}
+	if (needed.has('positions') && systemOptionsCache.positions.length === 0) {
+		tasks.push(
+			positionService.findAll({ limit: 200 })
+				.then(res => { systemOptionsCache.positions = res.data.map(p => p.name); })
+				.catch(() => {}),
+		);
+	}
+	if (needed.has('employees') && systemOptionsCache.employees.length === 0) {
+		tasks.push(
+			employeeService.findAll({ status: 'ACTIVE', limit: 200 })
+				.then(res => { systemOptionsCache.employees = res.data.map(e => e.fullName); })
+				.catch(() => {}),
+		);
+	}
+
+	await Promise.all(tasks);
+}
+
 // ─── Step 2: Dynamic form ─────────────────────────────────────────────────────
 const title = ref('');
 const fieldValues = reactive<Record<string, unknown>>({});
+const systemOptionsCache = reactive<Record<FieldDataSource, string[]>>({
+	custom: [],
+	departments: [],
+	employees: [],
+	positions: [],
+});
 const fieldErrors = reactive<Record<string, string>>({});
 
 // Auto-save draft debounce
@@ -338,7 +384,16 @@ watch(step, s => {
 								@change="onFieldChange"
 							>
 								<option value="">Chọn...</option>
-								<option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+								<template v-if="!field.dataSource || field.dataSource === 'custom'">
+									<option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+								</template>
+								<template v-else>
+									<option
+										v-for="opt in systemOptionsCache[field.dataSource]"
+										:key="opt"
+										:value="opt"
+									>{{ opt }}</option>
+								</template>
 							</select>
 						</template>
 						<template v-else-if="field.type === 'checkbox'">
