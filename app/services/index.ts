@@ -26,3 +26,5 @@ export * from './payroll.service';
 export * from './log.service';
 export * from './contract.service';
 export * from './social-insurance.service';
+export * from './business-trip.service';
+export * from './general-request.service';
