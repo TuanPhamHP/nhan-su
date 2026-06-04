@@ -42,20 +42,43 @@ watch(
 );
 
 function onTextInput(e: Event) {
-	const raw = (e.target as HTMLInputElement).value;
-	const digits = raw.replace(/\D/g, '').slice(0, 8);
-	let formatted = '';
-	if (digits.length <= 2) {
-		formatted = digits;
-	} else if (digits.length <= 4) {
-		formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
-	} else {
-		formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-	}
+	const el = e.target as HTMLInputElement;
+	const cursorPos = el.selectionStart ?? 0;
+
+	// Count digits before cursor in the current raw value
+	const digitsBeforeCursor = el.value.slice(0, cursorPos).replace(/\D/g, '').length;
+
+	// Extract up to 8 digits and format as dd/mm/yyyy
+	const digits = el.value.replace(/\D/g, '').slice(0, 8);
+	let formatted = digits;
+	if (digits.length > 2) formatted = digits.slice(0, 2) + '/' + digits.slice(2);
+	if (digits.length > 4) formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
+
+	// Map digit count to formatted cursor position (accounting for inserted slashes)
+	let newCursor = digitsBeforeCursor;
+	if (digitsBeforeCursor > 2) newCursor++;
+	if (digitsBeforeCursor > 4) newCursor++;
+	newCursor = Math.min(newCursor, formatted.length);
+
+	// Update DOM directly (bypasses Vue batching for immediate visual feedback)
+	el.value = formatted;
+	el.setSelectionRange(newCursor, newCursor);
 	textValue.value = formatted;
 }
 
 function onTextKeydown(e: KeyboardEvent) {
+	if (e.key === 'Backspace') {
+		const el = inputRef.value;
+		if (!el) return;
+		const pos = el.selectionStart ?? 0;
+		const selEnd = el.selectionEnd ?? 0;
+		// Cursor right after a slash, no selection → skip back over the slash without deleting it
+		if (pos === selEnd && pos > 0 && textValue.value[pos - 1] === '/') {
+			e.preventDefault();
+			el.setSelectionRange(pos - 1, pos - 1);
+		}
+		return;
+	}
 	if (e.key === 'Enter') {
 		e.preventDefault();
 		parseAndEmit();
@@ -88,7 +111,7 @@ function parseAndEmit() {
 			return;
 		}
 	}
-	// Invalid input — reset display to last valid modelValue
+	// Invalid — reset to last valid modelValue
 	if (props.modelValue) {
 		const [y, m, d] = props.modelValue.split('-');
 		textValue.value = `${d}/${m}/${y}`;
@@ -102,7 +125,11 @@ function clearValue() {
 	emit('update:modelValue', undefined);
 }
 
-// ─── Calendar navigation ──────────────────────────────────────────────────────
+// ─── Calendar state ───────────────────────────────────────────────────────────
+
+type ViewMode = 'day' | 'month' | 'year';
+const viewMode = ref<ViewMode>('day');
+const yearRangeStart = ref(0);
 
 const today = new Date();
 const todayStr = toYMD(today);
@@ -125,8 +152,40 @@ const MONTHS = [
 	'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
 	'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12',
 ];
+const MONTHS_SHORT = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-const monthLabel = computed(() => `${MONTHS[currentMonthIdx.value]}, ${currentYear.value}`);
+
+const yearRange = computed(() => Array.from({ length: 12 }, (_, i) => yearRangeStart.value + i));
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+
+function prevNav() {
+	if (viewMode.value === 'year') { yearRangeStart.value -= 12; return; }
+	if (viewMode.value === 'month') { currentMonth.value -= 12; return; }
+	currentMonth.value--;
+}
+function nextNav() {
+	if (viewMode.value === 'year') { yearRangeStart.value += 12; return; }
+	if (viewMode.value === 'month') { currentMonth.value += 12; return; }
+	currentMonth.value++;
+}
+function prevNavFast() { if (viewMode.value === 'day') currentMonth.value -= 12; }
+function nextNavFast() { if (viewMode.value === 'day') currentMonth.value += 12; }
+
+function openYearView() {
+	yearRangeStart.value = Math.floor(currentYear.value / 12) * 12;
+	viewMode.value = 'year';
+}
+
+function selectYear(year: number) {
+	currentMonth.value = year * 12 + currentMonthIdx.value;
+	viewMode.value = 'month';
+}
+
+function selectMonth(monthIdx: number) {
+	currentMonth.value = currentYear.value * 12 + monthIdx;
+	viewMode.value = 'day';
+}
 
 // ─── Calendar grid ────────────────────────────────────────────────────────────
 
@@ -167,12 +226,16 @@ const cells = computed<DayCell[]>(() => {
 
 // ─── Selection ────────────────────────────────────────────────────────────────
 
-function isSelected(ds: string) {
-	return ds === props.modelValue;
-}
+function isSelected(ds: string) { return ds === props.modelValue; }
+function isToday(ds: string) { return ds === todayStr; }
 
-function isToday(ds: string) {
-	return ds === todayStr;
+function isSelectedYear(year: number) {
+	return props.modelValue ? Number(props.modelValue.split('-')[0]) === year : false;
+}
+function isSelectedMonth(monthIdx: number) {
+	if (!props.modelValue) return false;
+	const [y, m] = props.modelValue.split('-').map(Number);
+	return y === currentYear.value && (m - 1) === monthIdx;
 }
 
 function onSelect(ds: string) {
@@ -192,6 +255,7 @@ function goToToday() {
 function openCalendar() {
 	if (props.disabled) return;
 	currentMonth.value = initMonth();
+	viewMode.value = 'day';
 	updatePosition();
 	isOpen.value = true;
 }
@@ -207,22 +271,17 @@ function updatePosition() {
 	if (!wrapperRef.value) return;
 	const rect = wrapperRef.value.getBoundingClientRect();
 	const style: Record<string, string> = { position: 'fixed', zIndex: '9999' };
-
-	// Flip upward when not enough space below
 	const spaceBelow = window.innerHeight - rect.bottom - 4;
 	if (spaceBelow < DROPDOWN_H && rect.top >= DROPDOWN_H) {
 		style.bottom = `${window.innerHeight - rect.top + 4}px`;
 	} else {
 		style.top = `${rect.bottom + 4}px`;
 	}
-
-	// Prefer align-left, flip right if overflows
 	if (window.innerWidth - rect.left >= DROPDOWN_W) {
 		style.left = `${rect.left}px`;
 	} else {
 		style.right = `${window.innerWidth - rect.right}px`;
 	}
-
 	dropdownStyle.value = style;
 }
 
@@ -258,7 +317,7 @@ function toYMD(d: Date): string {
 			{{ label }}
 		</label>
 
-		<!-- Input + calendar icon trigger -->
+		<!-- Input row -->
 		<div
 			ref="wrapperRef"
 			:class="[
@@ -272,7 +331,6 @@ function toYMD(d: Date): string {
 						: 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-200 dark:focus-within:ring-brand-800',
 			]"
 		>
-			<!-- Calendar icon button -->
 			<button
 				type="button"
 				tabindex="-1"
@@ -285,11 +343,10 @@ function toYMD(d: Date): string {
 				</svg>
 			</button>
 
-			<!-- Text input -->
 			<input
 				:id="inputId"
 				ref="inputRef"
-				v-model="textValue"
+				:value="textValue"
 				type="text"
 				inputmode="numeric"
 				:placeholder="placeholder"
@@ -301,7 +358,6 @@ function toYMD(d: Date): string {
 				@focus="openCalendar"
 			/>
 
-			<!-- Clear button -->
 			<button
 				v-if="modelValue || textValue"
 				type="button"
@@ -331,20 +387,19 @@ function toYMD(d: Date): string {
 					:style="dropdownStyle"
 					class="w-[294px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden"
 				>
-					<!-- Month header -->
+					<!-- Header -->
 					<div class="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-700">
 						<div class="flex items-center gap-0.5">
 							<button
+								v-if="viewMode === 'day'"
 								type="button"
 								class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs font-bold"
-								@click="currentMonth -= 12"
-							>
-								«
-							</button>
+								@click="prevNavFast"
+							>«</button>
 							<button
 								type="button"
 								class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-								@click="currentMonth--"
+								@click="prevNav"
 							>
 								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
@@ -352,43 +407,63 @@ function toYMD(d: Date): string {
 							</button>
 						</div>
 
-						<span class="text-sm font-semibold text-gray-900 dark:text-white select-none">
-							{{ monthLabel }}
-						</span>
+						<!-- Title -->
+						<div class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-white">
+							<!-- Day view: clickable month + year -->
+							<template v-if="viewMode === 'day'">
+								<button
+									type="button"
+									class="rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+									@click="viewMode = 'month'"
+								>{{ MONTHS[currentMonthIdx] }}</button>
+								<button
+									type="button"
+									class="rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+									@click="openYearView"
+								>{{ currentYear }}</button>
+							</template>
+							<!-- Month view: clickable year -->
+							<template v-else-if="viewMode === 'month'">
+								<button
+									type="button"
+									class="rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+									@click="openYearView"
+								>{{ currentYear }}</button>
+							</template>
+							<!-- Year view: range label -->
+							<template v-else>
+								<span class="select-none">{{ yearRangeStart }} – {{ yearRangeStart + 11 }}</span>
+							</template>
+						</div>
 
 						<div class="flex items-center gap-0.5">
 							<button
 								type="button"
 								class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-								@click="currentMonth++"
+								@click="nextNav"
 							>
 								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
 								</svg>
 							</button>
 							<button
+								v-if="viewMode === 'day'"
 								type="button"
 								class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs font-bold"
-								@click="currentMonth += 12"
-							>
-								»
-							</button>
+								@click="nextNavFast"
+							>»</button>
 						</div>
 					</div>
 
-					<div class="p-2">
-						<!-- Weekday headers -->
+					<!-- Day view -->
+					<div v-if="viewMode === 'day'" class="p-2">
 						<div class="grid grid-cols-7 mb-1">
 							<div
 								v-for="d in WEEKDAYS"
 								:key="d"
 								class="h-8 flex items-center justify-center text-xs font-medium text-gray-400 dark:text-gray-500"
-							>
-								{{ d }}
-							</div>
+							>{{ d }}</div>
 						</div>
-
-						<!-- Day grid -->
 						<div class="grid grid-cols-7">
 							<button
 								v-for="(cell, i) in cells"
@@ -408,21 +483,51 @@ function toYMD(d: Date): string {
 													: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700',
 								]"
 								@click="onSelect(cell.dateStr)"
-							>
-								{{ cell.day }}
-							</button>
+							>{{ cell.day }}</button>
 						</div>
 					</div>
 
-					<!-- Footer -->
-					<div class="px-3 py-2 border-t border-gray-100 dark:border-gray-700 flex justify-center">
+					<!-- Month view -->
+					<div v-else-if="viewMode === 'month'" class="p-3 grid grid-cols-3 gap-2">
+						<button
+							v-for="(m, i) in MONTHS_SHORT"
+							:key="i"
+							type="button"
+							:class="[
+								'py-2.5 rounded-lg text-sm font-medium transition-colors',
+								isSelectedMonth(i)
+									? 'bg-brand-600 text-white'
+									: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700',
+							]"
+							@click="selectMonth(i)"
+						>{{ m }}</button>
+					</div>
+
+					<!-- Year view -->
+					<div v-else class="p-3 grid grid-cols-3 gap-2">
+						<button
+							v-for="year in yearRange"
+							:key="year"
+							type="button"
+							:class="[
+								'py-2.5 rounded-lg text-sm font-medium transition-colors',
+								isSelectedYear(year)
+									? 'bg-brand-600 text-white'
+									: year === currentYear
+										? 'border border-brand-400 text-brand-700 dark:text-brand-300 font-semibold hover:bg-brand-50 dark:hover:bg-brand-900/20'
+										: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700',
+							]"
+							@click="selectYear(year)"
+						>{{ year }}</button>
+					</div>
+
+					<!-- Footer (day view only) -->
+					<div v-if="viewMode === 'day'" class="px-3 py-2 border-t border-gray-100 dark:border-gray-700 flex justify-center">
 						<button
 							type="button"
 							class="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors"
 							@click="goToToday"
-						>
-							Hôm nay
-						</button>
+						>Hôm nay</button>
 					</div>
 				</div>
 			</Transition>

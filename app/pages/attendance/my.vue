@@ -244,7 +244,13 @@
 		}
 	}
 
-	onMounted(fetchMonth);
+	onMounted(async () => {
+		await fetchMonth();
+		// Auto-select today when loading the current month
+		if (viewYear.value === now.getFullYear() && viewMonth.value === now.getMonth()) {
+			selectedDate.value = todayStr.value;
+		}
+	});
 </script>
 
 <template>

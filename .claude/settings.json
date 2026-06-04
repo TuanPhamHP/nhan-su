@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-Item \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json\")",
+      "Bash(Select-Object -ExpandProperty Length)",
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern 'general.*request|template' -Context 3 | head -100\")",
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' -Raw | Select-String -Pattern 'templates' -AllMatches | measure\")",
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | head -30\")",
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | Select-String -Pattern 'request|document' \")",
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | tail -20\")",
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | Select-Object -Unique | Sort-Object\")"
+    ]
+  }
+}

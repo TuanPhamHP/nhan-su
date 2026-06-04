@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { format } from 'date-fns';
 import { useGeneralRequestService } from '~/services/general-request.service';
+import { useGeneralRequestStore } from '~/stores/generalRequest';
 import RequestStatusBadge from '~/components/modules/general-request/RequestStatusBadge.vue';
-import ApproverChain from '~/components/modules/general-request/ApproverChain.vue';
 import type { GeneralRequestResponse, GeneralRequestStatus } from '~/types/general-request.types';
 import type { PaginatedMeta } from '~/types/api.types';
 
@@ -12,13 +12,14 @@ const toast = useToast();
 const { user } = useAuth();
 const service = useGeneralRequestService();
 const { printRequest } = usePrint();
+const generalRequestStore = useGeneralRequestStore();
 
 const canManage = computed(() => ['ADMIN', 'MANAGER', 'CHIEF', 'HR'].includes(user.value?.role ?? ''));
 
-type Tab = 'all' | 'pending' | 'approved' | 'pending-for-me';
+type Tab = 'all' | 'pending' | 'approved' | 'cancelled' | 'pending-for-me';
 const activeTab = ref<Tab>('all');
 
-// ─── My requests (all tabs except pending-for-me) ─────────────────────────────
+// ─── My requests ──────────────────────────────────────────────────────────────
 const myRequests = ref<GeneralRequestResponse[]>([]);
 const myMeta = ref<PaginatedMeta | null>(null);
 const myLoading = ref(false);
@@ -31,14 +32,14 @@ async function fetchMyRequests() {
 			all: undefined,
 			pending: 'PENDING',
 			approved: 'APPROVED',
+			cancelled: 'CANCELLED',
 			'pending-for-me': undefined,
 		};
-		const params = {
+		const res = await service.findMe({
 			page: myFilter.page,
 			limit: 20,
 			status: statusMap[activeTab.value] ?? (myFilter.status || undefined),
-		};
-		const res = await service.findMe(params);
+		});
 		myRequests.value = res.data;
 		myMeta.value = res.meta;
 	} catch (e) {
@@ -63,58 +64,6 @@ async function fetchPendingForMe() {
 	}
 }
 
-// ─── Detail modal ─────────────────────────────────────────────────────────────
-const detailRequest = ref<GeneralRequestResponse | null>(null);
-const showApproveNote = ref(false);
-const approveNote = ref('');
-const showRejectNote = ref(false);
-const rejectNote = ref('');
-const actionLoading = ref(false);
-
-async function openDetail(req: GeneralRequestResponse) {
-	try {
-		const full = await service.findOne(req.id);
-		detailRequest.value = full;
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-	}
-}
-
-async function handleApprove(req: GeneralRequestResponse) {
-	actionLoading.value = true;
-	try {
-		const updated = await service.approve(req.id, approveNote.value ? { note: approveNote.value } : undefined);
-		toast.success('Đã duyệt');
-		replaceInList(updated);
-		detailRequest.value = updated;
-		showApproveNote.value = false;
-		approveNote.value = '';
-		fetchPendingForMe();
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-	} finally {
-		actionLoading.value = false;
-	}
-}
-
-async function handleReject(req: GeneralRequestResponse) {
-	if (!rejectNote.value.trim()) { toast.error('Vui lòng nhập lý do từ chối'); return; }
-	actionLoading.value = true;
-	try {
-		const updated = await service.reject(req.id, { note: rejectNote.value });
-		toast.success('Đã từ chối');
-		replaceInList(updated);
-		detailRequest.value = updated;
-		showRejectNote.value = false;
-		rejectNote.value = '';
-		fetchPendingForMe();
-	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-	} finally {
-		actionLoading.value = false;
-	}
-}
-
 async function handlePrint(req: GeneralRequestResponse) {
 	try {
 		await printRequest(req.id);
@@ -123,11 +72,76 @@ async function handlePrint(req: GeneralRequestResponse) {
 	}
 }
 
-function replaceInList(updated: GeneralRequestResponse) {
-	const idx = myRequests.value.findIndex(r => r.id === updated.id);
-	if (idx !== -1) myRequests.value.splice(idx, 1, updated);
-	const pIdx = pendingForMe.value.findIndex(r => r.id === updated.id);
-	if (pIdx !== -1) pendingForMe.value.splice(pIdx, 1, updated);
+function isMyTurnToApprove(req: GeneralRequestResponse) {
+	return req.status === 'PENDING' && req.currentApprover?.employeeId === user.value?.id;
+}
+
+// ─── Inline quick approve ──────────────────────────────────────────────────
+const approveLoadingId = ref<number | null>(null);
+
+async function handleQuickApprove(req: GeneralRequestResponse) {
+	approveLoadingId.value = req.id;
+	try {
+		await service.approve(req.id);
+		toast.success('Đã duyệt');
+		fetchMyRequests();
+		if (canManage.value) fetchPendingForMe();
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+	} finally {
+		approveLoadingId.value = null;
+	}
+}
+
+// ─── Inline cancel dialog ─────────────────────────────────────────────────────
+const cancelTarget = ref<GeneralRequestResponse | null>(null);
+const cancelLoading = ref(false);
+
+function openCancel(req: GeneralRequestResponse) {
+	cancelTarget.value = req;
+}
+
+async function confirmCancel() {
+	if (!cancelTarget.value) return;
+	cancelLoading.value = true;
+	try {
+		await service.cancel(cancelTarget.value.id);
+		toast.success('Đã thu hồi đơn');
+		cancelTarget.value = null;
+		fetchMyRequests();
+		if (canManage.value) fetchPendingForMe();
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+	} finally {
+		cancelLoading.value = false;
+	}
+}
+
+// ─── Inline reject dialog ─────────────────────────────────────────────────────
+const rejectTarget = ref<GeneralRequestResponse | null>(null);
+const rejectNote = ref('');
+const rejectLoading = ref(false);
+
+function openReject(req: GeneralRequestResponse) {
+	rejectTarget.value = req;
+	rejectNote.value = '';
+}
+
+async function confirmReject() {
+	if (!rejectTarget.value) return;
+	if (!rejectNote.value.trim()) { toast.error('Vui lòng nhập lý do từ chối'); return; }
+	rejectLoading.value = true;
+	try {
+		await service.reject(rejectTarget.value.id, { note: rejectNote.value });
+		toast.success('Đã từ chối');
+		rejectTarget.value = null;
+		fetchPendingForMe();
+		fetchMyRequests();
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+	} finally {
+		rejectLoading.value = false;
+	}
 }
 
 function fmtDate(d: string) {
@@ -152,12 +166,23 @@ const tabs: { key: Tab; label: string }[] = [
 	{ key: 'all', label: 'Tất cả' },
 	{ key: 'pending', label: 'Chờ duyệt' },
 	{ key: 'approved', label: 'Đã duyệt' },
+	{ key: 'cancelled', label: 'Đã thu hồi' },
 	...(canManage.value ? [{ key: 'pending-for-me' as Tab, label: 'Chờ tôi duyệt' }] : []),
 ];
 
 onMounted(() => {
 	fetchMyRequests();
 	if (canManage.value) fetchPendingForMe();
+});
+
+// Re-fetch khi nhận FCM general_request.*
+watch(() => generalRequestStore.refreshSignal, () => {
+	if (activeTab.value === 'pending-for-me') {
+		fetchPendingForMe();
+	} else {
+		fetchMyRequests();
+	}
+	if (canManage.value && activeTab.value !== 'pending-for-me') fetchPendingForMe();
 });
 
 watch(activeTab, tab => {
@@ -201,7 +226,7 @@ watch(activeTab, tab => {
 			</button>
 		</div>
 
-		<!-- List: my requests -->
+		<!-- My requests list -->
 		<template v-if="activeTab !== 'pending-for-me'">
 			<div v-if="myLoading" class="flex justify-center py-12">
 				<svg class="animate-spin w-6 h-6 text-brand-500" fill="none" viewBox="0 0 24 24">
@@ -224,7 +249,12 @@ watch(activeTab, tab => {
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-						<tr v-for="req in myRequests" :key="req.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+						<tr
+							v-for="req in myRequests"
+							:key="req.id"
+							class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+							@click="navigateTo(`/general-requests/${req.id}`)"
+						>
 							<td class="px-4 py-3">
 								<div class="flex items-center gap-2">
 									<span :class="['text-xs font-medium px-1.5 py-0.5 rounded', categoryColors[req.template.category] ?? categoryColors.OTHER]">
@@ -241,12 +271,40 @@ watch(activeTab, tab => {
 							<td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{{ req.currentApprover?.fullName ?? '—' }}</td>
 							<td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ fmtDate(req.createdAt) }}</td>
 							<td class="px-4 py-3">
-								<div class="flex items-center justify-end gap-1.5">
-									<button class="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors" title="Xem chi tiết" @click="openDetail(req)">
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-									</button>
-									<button v-if="req.canPrint" class="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="In / Xuất PDF" @click="handlePrint(req)">
+								<div class="flex items-center justify-end gap-1.5" @click.stop>
+									<template v-if="isMyTurnToApprove(req)">
+										<button
+											class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-200 dark:border-red-800"
+											@click="openReject(req)"
+										>
+											Từ chối
+										</button>
+										<button
+											class="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50"
+											:disabled="approveLoadingId === req.id"
+											@click="handleQuickApprove(req)"
+										>
+											<svg v-if="approveLoadingId === req.id" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+												<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+												<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+											</svg>
+											<span v-else>Duyệt</span>
+										</button>
+									</template>
+									<button
+										v-if="req.canPrint"
+										class="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+										title="In / Xuất PDF"
+										@click="handlePrint(req)"
+									>
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.056 48.056 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
+									</button>
+									<button
+										v-if="req.canCancel"
+										class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+										@click="openCancel(req)"
+									>
+										Thu hồi
 									</button>
 								</div>
 							</td>
@@ -287,7 +345,12 @@ watch(activeTab, tab => {
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-						<tr v-for="req in pendingForMe" :key="req.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+						<tr
+							v-for="req in pendingForMe"
+							:key="req.id"
+							class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+							@click="navigateTo(`/general-requests/${req.id}`)"
+						>
 							<td class="px-4 py-3">
 								<p class="font-medium text-gray-900 dark:text-white">{{ req.employee.fullName }}</p>
 								<p class="text-xs text-gray-400">{{ req.employee.employeeCode }}</p>
@@ -298,9 +361,12 @@ watch(activeTab, tab => {
 							</td>
 							<td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ fmtDate(req.createdAt) }}</td>
 							<td class="px-4 py-3">
-								<div class="flex items-center justify-end gap-1.5">
-									<button class="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors" title="Xem" @click="openDetail(req)">
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+								<div class="flex items-center justify-end gap-1.5" @click.stop>
+									<button
+										class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-200 dark:border-red-800"
+										@click="openReject(req)"
+									>
+										Từ chối
 									</button>
 									<NuxtLink :to="`/general-requests/${req.id}`">
 										<CommonAppButton size="sm" variant="primary">Duyệt</CommonAppButton>
@@ -314,67 +380,48 @@ watch(activeTab, tab => {
 		</template>
 	</div>
 
-	<!-- Detail modal -->
+	<!-- Cancel dialog -->
 	<Teleport to="body">
-		<div v-if="detailRequest" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-			<div class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-				<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-					<div class="flex items-center gap-3">
-						<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ detailRequest.title }}</h2>
-						<RequestStatusBadge :status="detailRequest.status" />
-					</div>
-					<button class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" @click="detailRequest = null">
-						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-					</button>
+		<div v-if="cancelTarget" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="cancelTarget = null">
+			<div class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md">
+				<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Thu hồi đơn</h2>
+					<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ cancelTarget.title }}</p>
 				</div>
-
-				<div class="flex-1 overflow-y-auto p-6 space-y-5">
-					<!-- Field values -->
-					<div class="space-y-3">
-						<h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nội dung</h3>
-						<div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3">
-							<div v-for="(value, key) in detailRequest.fieldValues" :key="key">
-								<p class="text-xs text-gray-500 dark:text-gray-400">{{ key }}</p>
-								<p class="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{{ String(value ?? '—') }}</p>
-							</div>
-						</div>
-					</div>
-
-					<!-- Approval chain -->
-					<div class="space-y-3">
-						<h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quy trình duyệt</h3>
-						<ApproverChain
-							:approvers="detailRequest.approvers"
-							:current-approver-index="detailRequest.currentApproverIndex"
-							:creator-name="detailRequest.employee.fullName"
-						/>
-					</div>
+				<div class="p-6">
+					<p class="text-sm text-gray-600 dark:text-gray-400">Xác nhận thu hồi đơn này? Toàn bộ người duyệt và HR sẽ nhận thông báo. Hành động này không thể hoàn tác.</p>
 				</div>
+				<div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+					<CommonAppButton variant="secondary" @click="cancelTarget = null">Hủy</CommonAppButton>
+					<CommonAppButton variant="danger" :loading="cancelLoading" @click="confirmCancel">Xác nhận thu hồi</CommonAppButton>
+				</div>
+			</div>
+		</div>
+	</Teleport>
 
-				<div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-					<div class="flex gap-2">
-						<template v-if="detailRequest.currentApprover?.employeeId === user?.id && detailRequest.status === 'PENDING'">
-							<template v-if="!showApproveNote && !showRejectNote">
-								<CommonAppButton variant="primary" @click="showApproveNote = true">Duyệt</CommonAppButton>
-								<CommonAppButton variant="danger" @click="showRejectNote = true">Từ chối</CommonAppButton>
-							</template>
-							<template v-else-if="showApproveNote">
-								<input v-model="approveNote" type="text" placeholder="Ghi chú (tùy chọn)" class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors w-52" />
-								<CommonAppButton variant="primary" :loading="actionLoading" @click="handleApprove(detailRequest)">Xác nhận duyệt</CommonAppButton>
-								<CommonAppButton variant="secondary" @click="showApproveNote = false; approveNote = ''">Hủy</CommonAppButton>
-							</template>
-							<template v-else-if="showRejectNote">
-								<input v-model="rejectNote" type="text" placeholder="Lý do từ chối *" class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors w-52" />
-								<CommonAppButton variant="danger" :loading="actionLoading" @click="handleReject(detailRequest)">Xác nhận từ chối</CommonAppButton>
-								<CommonAppButton variant="secondary" @click="showRejectNote = false; rejectNote = ''">Hủy</CommonAppButton>
-							</template>
-						</template>
-						<button v-if="detailRequest.canPrint" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors" @click="handlePrint(detailRequest)">
-							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.056 48.056 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
-							In / Xuất PDF
-						</button>
-					</div>
-					<CommonAppButton variant="secondary" @click="detailRequest = null">Đóng</CommonAppButton>
+	<!-- Reject dialog -->
+	<Teleport to="body">
+		<div v-if="rejectTarget" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="rejectTarget = null">
+			<div class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md">
+				<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Từ chối văn bản</h2>
+					<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ rejectTarget.title }}</p>
+				</div>
+				<div class="p-6 space-y-3">
+					<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+						Lý do từ chối <span class="text-red-500">*</span>
+					</label>
+					<textarea
+						v-model="rejectNote"
+						rows="3"
+						placeholder="Nhập lý do từ chối..."
+						class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+						autofocus
+					/>
+				</div>
+				<div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+					<CommonAppButton variant="secondary" @click="rejectTarget = null">Hủy</CommonAppButton>
+					<CommonAppButton variant="danger" :loading="rejectLoading" @click="confirmReject">Xác nhận từ chối</CommonAppButton>
 				</div>
 			</div>
 		</div>

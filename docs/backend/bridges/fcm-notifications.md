@@ -39,11 +39,13 @@ Content-Type: application/json
 ```
 
 **Response 201:**
+
 ```json
 { "success": true, "data": { "message": "Device token registered" } }
 ```
 
 ### Khi nào gọi?
+
 - Sau `signIn` thành công
 - Sau khi Firebase SDK refresh token (listener `onTokenRefresh`)
 - App foreground lại sau thời gian dài
@@ -60,6 +62,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Response 200:**
+
 ```json
 { "success": true, "data": { "message": "Device token unregistered" } }
 ```
@@ -71,65 +74,75 @@ Authorization: Bearer <access_token>
 Server gửi **data-only message** (không có `notification` field) để client tự kiểm soát hiển thị.
 
 ### Payload FCM data:
+
 ```json
 {
-  "type": "attendance.checkin",
-  "notificationId": "42",
-  "title": "Chấm công vào thành công",
-  "body": "Bạn đã check-in lúc 08:32",
-  "attendanceId": "123"
+	"type": "attendance.checkin",
+	"notificationId": "42",
+	"title": "Chấm công vào thành công",
+	"body": "Bạn đã check-in lúc 08:32",
+	"attendanceId": "123"
 }
 ```
 
 ### Các loại `type` hiện tại:
-| type | Trigger |
-|------|---------|
-| `attendance.checkin` | Employee check-in thành công |
-| `attendance.checkout` | Employee check-out thành công |
+
+| type                       | Trigger                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
+| `attendance.checkin`       | Employee check-in thành công                                       |
+| `attendance.checkout`      | Employee check-out thành công                                      |
+| `general_request.pending`  | Đơn văn bản được nộp — gửi đến người duyệt, người tạo, HR          |
+| `general_request.approved` | Đơn văn bản được duyệt hoàn tất — gửi đến người tạo, approvers, HR |
+| `general_request.rejected` | Đơn văn bản bị từ chối — gửi đến người tạo, approvers, HR          |
 
 ### Web (Nuxt / Vue) — Firebase JS SDK:
-```javascript
-import { getMessaging, onMessage, getToken } from 'firebase/messaging'
 
-const messaging = getMessaging()
+```javascript
+import { getMessaging, onMessage, getToken } from 'firebase/messaging';
+
+const messaging = getMessaging();
 
 // Foreground: app đang mở
-onMessage(messaging, (payload) => {
-  const { type, notificationId, title, body } = payload.data
+onMessage(messaging, payload => {
+	const { type, notificationId, title, body } = payload.data;
 
-  // Cập nhật badge/count ngay
-  notificationStore.incrementUnread()
+	// Cập nhật badge/count ngay
+	notificationStore.incrementUnread();
 
-  // Hoặc fetch lại từ API để đảm bảo đúng
-  notificationStore.fetchUnreadCount()
+	// Hoặc fetch lại từ API để đảm bảo đúng
+	notificationStore.fetchUnreadCount();
 
-  // Hiển thị toast/snackbar
-  showToast({ title, body })
-})
+	// Hiển thị toast/snackbar
+	showToast({ title, body });
+});
 
 // Background: app đang đóng → cần firebase-messaging-sw.js
 // Trong service worker, handle 'push' event và hiện Notification API
 ```
 
 **firebase-messaging-sw.js** (đặt ở public root):
+
 ```javascript
-importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-app-compat.js')
-importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-messaging-compat.js')
+importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-messaging-compat.js');
 
-firebase.initializeApp({ /* config */ })
-const messaging = firebase.messaging()
+firebase.initializeApp({
+	/* config */
+});
+const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((payload) => {
-  const { title, body, notificationId } = payload.data
-  self.registration.showNotification(title, {
-    body,
-    icon: '/icon-192x192.png',
-    data: { notificationId },
-  })
-})
+messaging.onBackgroundMessage(payload => {
+	const { title, body, notificationId } = payload.data;
+	self.registration.showNotification(title, {
+		body,
+		icon: '/icon-192x192.png',
+		data: { notificationId },
+	});
+});
 ```
 
 ### Mobile (Flutter):
+
 ```dart
 FirebaseMessaging.onMessage.listen((RemoteMessage message) {
   final data = message.data;
@@ -168,21 +181,22 @@ Authorization: Bearer <access_token>
 ```
 
 **Response:**
+
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": 42,
-      "type": "attendance.checkin",
-      "title": "Chấm công vào thành công",
-      "body": "Bạn đã check-in lúc 08:32",
-      "payload": { "attendanceId": 123, "lateMinutes": 0 },
-      "readAt": null,
-      "createdAt": "2025-05-15T01:32:00.000Z"
-    }
-  ],
-  "meta": { "page": 1, "limit": 20, "total": 5, "totalPages": 1 }
+	"success": true,
+	"data": [
+		{
+			"id": 42,
+			"type": "attendance.checkin",
+			"title": "Chấm công vào thành công",
+			"body": "Bạn đã check-in lúc 08:32",
+			"payload": { "attendanceId": 123, "lateMinutes": 0 },
+			"readAt": null,
+			"createdAt": "2025-05-15T01:32:00.000Z"
+		}
+	],
+	"meta": { "page": 1, "limit": 20, "total": 5, "totalPages": 1 }
 }
 ```
 
@@ -194,6 +208,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Response:**
+
 ```json
 { "success": true, "data": { "unreadCount": 3 } }
 ```
@@ -260,18 +275,20 @@ src/
 Để thêm push cho leave.approved, leave.rejected, v.v.:
 
 1. **Thêm event class** vào `notification.events.ts`:
+
 ```typescript
 export class LeaveApprovedEvent {
-  static readonly EVENT = 'leave.approved';
-  employeeId: number;
-  leaveId: number;
-  startDate: Date;
-  endDate: Date;
-  totalDays: number;
+	static readonly EVENT = 'leave.approved';
+	employeeId: number;
+	leaveId: number;
+	startDate: Date;
+	endDate: Date;
+	totalDays: number;
 }
 ```
 
 2. **Emit từ LeaveService** sau khi approve:
+
 ```typescript
 const event = new LeaveApprovedEvent();
 event.employeeId = leave.employeeId;
@@ -280,6 +297,7 @@ this.eventEmitter.emit(LeaveApprovedEvent.EVENT, event);
 ```
 
 3. **Thêm handler** trong `NotificationListener`:
+
 ```typescript
 @OnEvent(LeaveApprovedEvent.EVENT, { async: true })
 async handleLeaveApproved(event: LeaveApprovedEvent) {

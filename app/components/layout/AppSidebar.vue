@@ -17,9 +17,12 @@
 	const { user } = useAuth();
 	const route = useRoute();
 
-	watch(() => route.path, () => {
-		if (import.meta.client && window.innerWidth < 1024) close();
-	});
+	watch(
+		() => route.path,
+		() => {
+			if (import.meta.client && window.innerWidth < 1024) close();
+		},
+	);
 	const { isDark } = useColorMode();
 
 	const navSections: NavSection[] = [
@@ -87,47 +90,6 @@
 			],
 		},
 		{
-			label: 'Đơn từ',
-			items: [
-				{
-					label: 'Nghỉ phép',
-					route: '/leave',
-					icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				},
-				{
-					label: 'Làm thêm giờ',
-					route: '/overtime',
-					icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				},
-				{
-					label: 'Làm online',
-					route: '/online-work',
-					icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				},
-				{
-					label: 'Vi phạm chuyên cần',
-					route: '/violations',
-					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				},
-				{
-					label: 'Công tác',
-					route: '/business-trips',
-					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				},
-				{
-					label: 'Văn bản nội bộ',
-					route: '/general-requests',
-					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-			],
-		},
-		{
 			label: 'Đơn của tôi',
 			items: [
 				{
@@ -160,6 +122,53 @@
 					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
 					roles: ['EMPLOYEE'],
 				},
+				// {
+				// 	label: 'Tờ trình',
+				// 	route: '/general-requests',
+				// 	icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
+				// 	roles: ['EMPLOYEE'],
+				// },
+			],
+		},
+		{
+			label: 'Đơn từ',
+			items: [
+				{
+					label: 'Nghỉ phép',
+					route: '/leave',
+					icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				},
+				{
+					label: 'Làm thêm giờ',
+					route: '/overtime',
+					icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				},
+				{
+					label: 'Làm online',
+					route: '/online-work',
+					icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				},
+				{
+					label: 'Vi phạm chuyên cần',
+					route: '/violations',
+					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				},
+				{
+					label: 'Công tác',
+					route: '/business-trips',
+					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				},
+				// {
+				// 	label: 'Tờ trình',
+				// 	route: '/general-requests',
+				// 	icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
+				// 	roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				// },
 			],
 		},
 		{

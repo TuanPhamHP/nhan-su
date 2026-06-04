@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { useGeneralRequestService } from '~/services/general-request.service';
-import { useEmployeeService } from '~/services/employee.service';
-import { useDepartmentService } from '~/services/department.service';
-import { usePositionService } from '~/services/position.service';
+import { useDirectoryStore } from '~/stores/directory';
 import type { DocumentTemplateDetail, FieldDataSource, SuggestedApprover } from '~/types/general-request.types';
 
 definePageMeta({ title: 'Tạo văn bản nội bộ' });
@@ -10,9 +8,8 @@ definePageMeta({ title: 'Tạo văn bản nội bộ' });
 const toast = useToast();
 const router = useRouter();
 const service = useGeneralRequestService();
-const employeeService = useEmployeeService();
-const departmentService = useDepartmentService();
-const positionService = usePositionService();
+const directoryStore = useDirectoryStore();
+const { employees: directoryEmployees, departments: directoryDepartments, positions: directoryPositions, loading: directoryLoading } = storeToRefs(directoryStore);
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
 const step = ref<1 | 2 | 3>(1);
@@ -60,58 +57,28 @@ async function selectTemplate(t: DocumentTemplateDetail) {
 	try {
 		selectedTemplate.value = await service.findTemplate(t.id);
 		initFieldValues();
-		void loadSystemOptionsForTemplate();
+		const needsDirectory = selectedTemplate.value.fields.some(
+			f => f.type === 'select' && f.dataSource && f.dataSource !== 'custom',
+		);
+		if (needsDirectory) void loadDirectory();
 		step.value = 2;
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Lỗi tải chi tiết mẫu');
 	}
 }
 
-async function loadSystemOptionsForTemplate() {
-	if (!selectedTemplate.value) return;
-	const needed = new Set(
-		selectedTemplate.value.fields
-			.filter(f => f.type === 'select' && f.dataSource && f.dataSource !== 'custom')
-			.map(f => f.dataSource as FieldDataSource),
-	);
-
-	const tasks: Promise<void>[] = [];
-
-	if (needed.has('departments') && systemOptionsCache.departments.length === 0) {
-		tasks.push(
-			departmentService.findAll({ limit: 200 })
-				.then(res => { systemOptionsCache.departments = res.data.map(d => d.name); })
-				.catch(() => {}),
-		);
-	}
-	if (needed.has('positions') && systemOptionsCache.positions.length === 0) {
-		tasks.push(
-			positionService.findAll({ limit: 200 })
-				.then(res => { systemOptionsCache.positions = res.data.map(p => p.name); })
-				.catch(() => {}),
-		);
-	}
-	if (needed.has('employees') && systemOptionsCache.employees.length === 0) {
-		tasks.push(
-			employeeService.findAll({ status: 'ACTIVE', limit: 200 })
-				.then(res => { systemOptionsCache.employees = res.data.map(e => e.fullName); })
-				.catch(() => {}),
-		);
-	}
-
-	await Promise.all(tasks);
-}
-
 // ─── Step 2: Dynamic form ─────────────────────────────────────────────────────
 const title = ref('');
 const fieldValues = reactive<Record<string, unknown>>({});
-const systemOptionsCache = reactive<Record<FieldDataSource, string[]>>({
-	custom: [],
-	departments: [],
-	employees: [],
-	positions: [],
-});
 const fieldErrors = reactive<Record<string, string>>({});
+
+// Map dataSource key → display names derived from directoryStore
+const systemOptionsMap = computed<Record<FieldDataSource, string[]>>(() => ({
+	custom: [],
+	departments: directoryDepartments.value.map(d => d.name),
+	positions: directoryPositions.value.map(p => p.name),
+	employees: directoryEmployees.value.map(e => e.fullName),
+}));
 
 // Auto-save draft debounce
 let draftId: number | null = null;
@@ -177,33 +144,43 @@ async function goToStep3() {
 	step.value = 3;
 }
 
+// ─── Shared: directory loader ─────────────────────────────────────────────────
+async function loadDirectory() {
+	try {
+		await directoryStore.load();
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Không thể tải dữ liệu danh mục');
+	}
+}
+
 // ─── Step 3: Approvers ────────────────────────────────────────────────────────
 const suggestedApprovers = ref<SuggestedApprover[]>([]);
 const selectedApprovers = ref<{ employeeId: number; fullName: string; role?: string }[]>([]);
 const approverSearch = ref('');
 const showApproverDropdown = ref(false);
-const allEmployees = ref<{ id: number; fullName: string; employeeCode: string }[]>([]);
+const approverDropdownRef = ref<HTMLElement | null>(null);
 
-const filteredEmployees = computed(() =>
-	allEmployees.value.filter(e =>
-		!selectedApprovers.value.some(a => a.employeeId === e.id) &&
-		(e.fullName.toLowerCase().includes(approverSearch.value.toLowerCase()) ||
-			e.employeeCode.toLowerCase().includes(approverSearch.value.toLowerCase())),
-	).slice(0, 10),
-);
+function handleApproverClickOutside(e: MouseEvent) {
+	if (approverDropdownRef.value && !approverDropdownRef.value.contains(e.target as Node)) {
+		showApproverDropdown.value = false;
+	}
+}
+
+const filteredEmployees = computed(() => {
+	const q = approverSearch.value.toLowerCase();
+	return directoryEmployees.value
+		.filter(e =>
+			!selectedApprovers.value.some(a => a.employeeId === e.id) &&
+			(!q || e.fullName.toLowerCase().includes(q) || e.employeeCode.toLowerCase().includes(q)),
+		)
+		.slice(0, 10);
+});
 
 async function loadSuggestedApprovers() {
 	try {
 		const res = await service.findSuggestedApprovers();
 		suggestedApprovers.value = res;
 		selectedApprovers.value = res.map(a => ({ employeeId: a.employeeId, fullName: a.fullName, role: a.role }));
-	} catch { /* non-critical */ }
-}
-
-async function loadAllEmployees() {
-	try {
-		const res = await employeeService.findAll({ status: 'ACTIVE', limit: 200 });
-		allEmployees.value = res.data.map(e => ({ id: e.id, fullName: e.fullName, employeeCode: e.employeeCode }));
 	} catch { /* non-critical */ }
 }
 
@@ -277,12 +254,17 @@ async function saveDraftAndExit() {
 
 onMounted(() => {
 	loadTemplates();
+	document.addEventListener('mousedown', handleApproverClickOutside);
+});
+
+onUnmounted(() => {
+	document.removeEventListener('mousedown', handleApproverClickOutside);
 });
 
 watch(step, s => {
 	if (s === 3) {
 		loadSuggestedApprovers();
-		loadAllEmployees();
+		void loadDirectory();
 	}
 });
 </script>
@@ -378,23 +360,34 @@ watch(step, s => {
 							/>
 						</template>
 						<template v-else-if="field.type === 'select'">
-							<select
-								v-model="(fieldValues as Record<string, string>)[field.key]"
-								class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-								@change="onFieldChange"
-							>
-								<option value="">Chọn...</option>
-								<template v-if="!field.dataSource || field.dataSource === 'custom'">
-									<option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
-								</template>
-								<template v-else>
-									<option
-										v-for="opt in systemOptionsCache[field.dataSource]"
-										:key="opt"
-										:value="opt"
-									>{{ opt }}</option>
-								</template>
-							</select>
+							<div class="relative">
+								<select
+									v-model="(fieldValues as Record<string, string>)[field.key]"
+									:disabled="!!(field.dataSource && field.dataSource !== 'custom' && directoryLoading)"
+									class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+									@change="onFieldChange"
+								>
+									<option value="">
+										{{ field.dataSource && field.dataSource !== 'custom' && directoryLoading ? 'Đang tải...' : 'Chọn...' }}
+									</option>
+									<template v-if="!field.dataSource || field.dataSource === 'custom'">
+										<option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+									</template>
+									<template v-else>
+										<option
+											v-for="opt in systemOptionsMap[field.dataSource]"
+											:key="opt"
+											:value="opt"
+										>{{ opt }}</option>
+									</template>
+								</select>
+								<div v-if="field.dataSource && field.dataSource !== 'custom' && directoryLoading" class="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none">
+									<svg class="animate-spin w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+									</svg>
+								</div>
+							</div>
 						</template>
 						<template v-else-if="field.type === 'checkbox'">
 							<label class="flex items-center gap-2 cursor-pointer">
@@ -463,26 +456,41 @@ watch(step, s => {
 				</div>
 
 				<!-- Add approver -->
-				<div class="relative">
-					<input
-						v-model="approverSearch"
-						type="text"
-						placeholder="Tìm thêm người duyệt..."
-						class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-						@focus="showApproverDropdown = true"
-						@blur="setTimeout(() => showApproverDropdown = false, 150)"
-					/>
-					<div v-if="showApproverDropdown && approverSearch && filteredEmployees.length > 0" class="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
-						<button
-							v-for="emp in filteredEmployees"
-							:key="emp.id"
-							type="button"
-							class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-							@mousedown.prevent="addApprover(emp)"
-						>
-							<span class="font-medium text-gray-900 dark:text-white">{{ emp.fullName }}</span>
-							<span class="text-xs text-gray-400">{{ emp.employeeCode }}</span>
-						</button>
+				<div ref="approverDropdownRef" class="relative">
+					<div class="relative">
+						<input
+							v-model="approverSearch"
+							type="text"
+							placeholder="Tìm thêm người duyệt..."
+							class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors pr-8"
+							@focus="showApproverDropdown = true"
+						/>
+						<div v-if="directoryLoading" class="absolute right-2.5 top-1/2 -translate-y-1/2">
+							<svg class="animate-spin w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+							</svg>
+						</div>
+					</div>
+					<div v-if="showApproverDropdown" class="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden max-h-52 overflow-y-auto">
+						<template v-if="directoryLoading">
+							<div class="px-3 py-2.5 text-sm text-gray-400">Đang tải danh sách nhân viên...</div>
+						</template>
+						<template v-else-if="filteredEmployees.length > 0">
+							<button
+								v-for="emp in filteredEmployees"
+								:key="emp.id"
+								type="button"
+								class="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+								@mousedown.prevent="addApprover(emp)"
+							>
+								<span class="font-medium text-gray-900 dark:text-white">{{ emp.fullName }}</span>
+								<span class="text-xs text-gray-400">{{ emp.employeeCode }}</span>
+							</button>
+						</template>
+						<div v-else class="px-3 py-2.5 text-sm text-gray-400">
+							{{ approverSearch ? 'Không tìm thấy nhân viên phù hợp' : 'Nhập tên hoặc mã nhân viên để tìm kiếm' }}
+						</div>
 					</div>
 				</div>
 

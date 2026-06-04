@@ -1,4 +1,4 @@
-export type GeneralRequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+export type GeneralRequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type ApproverStepStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WAITING';
 
 export type FieldType = 'text' | 'textarea' | 'date' | 'number' | 'select' | 'checkbox';
@@ -76,6 +76,8 @@ export interface GeneralRequestResponse {
 	canEdit: boolean;
 	canSubmit: boolean;
 	canPrint: boolean;
+	canCancel: boolean;
+	cancelledAt: string | null;
 	createdAt: string;
 }
 

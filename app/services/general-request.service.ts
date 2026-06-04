@@ -119,5 +119,13 @@ export const useGeneralRequestService = () => {
 			});
 			return res.data;
 		},
+
+		async cancel(id: number): Promise<GeneralRequestResponse> {
+			const res = await authFetch<ApiResponse<GeneralRequestResponse>>(`/v1/general-requests/${id}/cancel`, {
+				method: 'PATCH',
+				body: {},
+			});
+			return res.data;
+		},
 	};
 };

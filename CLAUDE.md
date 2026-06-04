@@ -199,6 +199,23 @@ import EmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBad
 - Dùng `storeToRefs()` khi destructure state/getters
 - Store chỉ chứa state + actions gọi service — không chứa UI logic
 
+### Global Directory Data (employees / departments / positions)
+
+Khi cần danh sách nhân viên, phòng ban, vị trí để hiển thị trong dropdown/select, **luôn dùng `useDirectoryStore`** (`app/stores/directory.ts`) — không fetch riêng lẻ trong page/component.
+
+```ts
+const directoryStore = useDirectoryStore();
+const { employees, departments, positions, loading } = storeToRefs(directoryStore);
+
+// Gọi load() một lần — store tự guard không fetch lại nếu đã loaded
+await directoryStore.load();
+```
+
+- Store fetch với `pagination: false` — lấy toàn bộ records, không dùng `limit: N`
+- `load()` idempotent: gọi nhiều lần trên nhiều trang không gây re-fetch
+- Wrap `load()` trong `try/catch` + `toast.error` ở nơi gọi — store không tự handle lỗi UI
+- Dùng `directoryStore.reset()` khi cần force reload (ví dụ sau khi tạo/xóa department)
+
 ### Data Flow
 
 - Logic tái sử dụng → composable; shared state → store

@@ -53,6 +53,37 @@
 
 	const showEndDate = computed(() => contractType.value !== 'INDEFINITE');
 
+	// ─── Salary display (formatted input) ────────────────────────────────────────
+
+	const salaryDisplay = ref('');
+	let salaryDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function formatSalaryNumber(val: number | string | undefined | null): string {
+		if (val === '' || val === undefined || val === null) return '';
+		const num = Number(val);
+		if (isNaN(num) || num <= 0) return '';
+		return new Intl.NumberFormat('vi-VN').format(num);
+	}
+
+	function syncSalaryDisplay() {
+		salaryDisplay.value = formatSalaryNumber(baseSalary.value);
+	}
+
+	function handleSalaryInput(e: Event) {
+		const raw = (e.target as HTMLInputElement).value;
+		const digits = raw.replace(/\D/g, '');
+		const num = digits ? Number(digits) : '';
+
+		// Update vee-validate field immediately for validation
+		baseSalary.value = num as number | '';
+
+		// Debounce 100ms to format display
+		if (salaryDebounceTimer) clearTimeout(salaryDebounceTimer);
+		salaryDebounceTimer = setTimeout(() => {
+			salaryDisplay.value = formatSalaryNumber(num);
+		}, 100);
+	}
+
 	function openCreate() {
 		editingContract.value = null;
 		selectedFile.value = null;
@@ -67,6 +98,7 @@
 				note: '',
 			},
 		});
+		syncSalaryDisplay();
 		showContractModal.value = true;
 	}
 
@@ -84,6 +116,7 @@
 				note: contract.note ?? '',
 			},
 		});
+		syncSalaryDisplay();
 		showContractModal.value = true;
 	}
 
@@ -442,12 +475,13 @@
 						<div>
 							<label :class="labelCls">Lương cơ bản</label>
 							<input
-								v-model="baseSalary"
-								v-bind="baseSalaryAttrs"
-								type="number"
-								min="0"
+								:value="salaryDisplay"
+								type="text"
+								inputmode="numeric"
 								:class="[inputCls, errors.baseSalary ? 'border-red-400 focus:ring-red-300' : '']"
-								placeholder="VD: 15000000"
+								placeholder="VD: 15.000.000"
+								@input="handleSalaryInput"
+								@blur="salaryDisplay = formatSalaryNumber(baseSalary)"
 							/>
 							<p v-if="errors.baseSalary" class="mt-1 text-xs text-red-500">{{ errors.baseSalary }}</p>
 						</div>

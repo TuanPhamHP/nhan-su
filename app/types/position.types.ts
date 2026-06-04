@@ -37,6 +37,7 @@ export interface QueryPositionParams {
 	isActive?: boolean;
 	page?: number;
 	limit?: number;
+	pagination?: boolean;
 }
 
 /** @deprecated use QueryPositionParams */
