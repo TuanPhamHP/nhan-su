@@ -133,7 +133,7 @@
 		const id = Number(raw);
 		if (!id || Number.isNaN(id)) return;
 
-		router.replace({ path: '/violations' });
+		router.replace({ path: '/management/violations' });
 
 		try {
 			detailRequest.value = await violationService.findById(id);

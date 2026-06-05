@@ -35,7 +35,9 @@ app/
 │   ├── example.service.ts     # Example/reference service — đọc trước khi tạo service mới
 │   └── index.ts               # Re-exports all services
 └── stores/          # Pinia stores
-    └── auth.ts      # Auth state
+    ├── auth.ts      # Auth state (user, token, permissions)
+    ├── ui.ts        # UI state (previewRole — "view as" toggle)
+    └── directory.ts # Global directory data (employees, departments, positions)
 utils/               # Pure utility functions (non-Vue)
 docs/                # Project documentation
 ```
@@ -62,29 +64,39 @@ app/
 │   ├── useReport.ts
 │   └── usePayroll.ts
 ├── layouts/
-│   ├── default.vue           ← sidebar + topbar (auth required)
+│   ├── default.vue           ← layout quản trị (management sidebar + topbar)
+│   ├── employee.vue          ← layout nhân viên (employee sidebar + topbar)
 │   └── auth.vue              ← login page layout
 ├── middleware/
-│   ├── auth.ts               ← redirect /login nếu chưa có token
-│   └── role.ts               ← kiểm tra role, redirect nếu không đủ quyền
+│   ├── auth.global.ts        ← redirect /login nếu chưa có token
+│   └── role-layout.global.ts ← assign layout theo URL + role; block /management cho EMPLOYEE
 ├── pages/
 │   ├── login.vue
-│   ├── dashboard.vue
-│   ├── employees/
-│   │   ├── index.vue         ← danh sách
-│   │   └── [id].vue          ← chi tiết + edit
+│   ├── index.vue             ← Dashboard (tất cả roles)
 │   ├── attendance/
-│   │   ├── index.vue         ← bảng công hôm nay
-│   │   └── monthly.vue       ← bảng công tháng
+│   │   ├── my.vue            ← chấm công cá nhân (tất cả roles)
+│   │   └── check-in.vue
 │   ├── leave/
-│   │   ├── index.vue         ← danh sách đơn
-│   │   └── [id].vue          ← chi tiết + approve/reject
-│   ├── reports/
-│   │   └── index.vue
-│   ├── payroll/
-│   │   └── index.vue
-│   └── settings/
-│       └── index.vue
+│   │   └── create.vue        ← tạo đơn nghỉ (employee — back về /users/leave-requests)
+│   ├── overtime/
+│   │   ├── my.vue            ← OT cá nhân
+│   │   └── create.vue
+│   ├── violations/
+│   │   └── my.vue
+│   ├── business-trips/       ← shared: employee xem đơn cá nhân, management xem tất cả
+│   ├── users/
+│   │   └── leave-requests.vue ← danh sách đơn nghỉ của tôi (employee)
+│   └── management/           ← TẤT CẢ pages quản trị — chỉ ADMIN/HR/MANAGER/CHIEF truy cập
+│       ├── employees/         ← index, new, [id]
+│       ├── departments/       ← index, new, [id]
+│       ├── positions/, contracts/
+│       ├── attendance/        ← overview chấm công toàn bộ
+│       ├── leave/             ← quản lý tất cả đơn nghỉ
+│       ├── overtime/, online-work/, violations/, business-trips/
+│       ├── reports/, payroll/
+│       ├── roles/, settings/  ← settings có sub-pages: shifts, holidays, locations
+│       ├── system-logs/
+│       └── notifications/     ← test.vue
 ├── types/
 │   ├── api.types.ts          ← ApiResponse, PaginatedResponse
 │   ├── employee.types.ts
@@ -98,23 +110,40 @@ app/
     └── format.ts             ← currency, số, status label
 ```
 
-## Roles & Quyền truy cập trang
+## Layouts & Roles
 
-Authorization, ở đây chúng ra sẽ dùng mô hình roles & permissions, với logic như sau:
+Hệ thống có 2 layout chính, được tự động assign bởi `role-layout.global.ts` middleware:
 
-- Toàn bộ App sẽ có nhiều permissions.
-- Chúng ta có thể CRUD các role (hoặc vị trí), sau đó gán các quyền tương ứng cho vị trí.
-- Có 2 loại role là: default (có thể sửa, không thể xóa). custom (có thể sửa, xóa).
-- Tiếp theo có thể gán người dùng vào role (quan hệ người dùng và role là nhiều - nhiều). Một người sẽ nhận toàn bộ permissions của các roles mà họ có.
+- **`default` layout** (management): ADMIN, HR, MANAGER, CHIEF — có AppSidebar đầy đủ
+- **`employee` layout** (nhân viên): EMPLOYEE — có AppSidebarEmployee tối giản
 
-| Page          | ADMIN | HR  | MANAGER  | EMPLOYEE |
-| ------------- | ----- | --- | -------- | -------- |
-| `/employees`  | ✓     | ✓   | —        | —        |
-| `/attendance` | ✓     | ✓   | ✓ (team) | —        |
-| `/leave`      | ✓     | ✓   | ✓ (team) | —        |
-| `/reports`    | ✓     | ✓   | ✓ (team) | —        |
-| `/payroll`    | ✓     | ✓   | —        | —        |
-| `/settings`   | ✓     | —   | —        | —        |
+### URL-based rule
+
+- `/management/**` → luôn là `default` layout. EMPLOYEE bị block, redirect về `/`.
+- Root paths (`/`, `/attendance/my`, v.v.) → layout theo role của user.
+
+### "Xem theo vai trò khác"
+
+Management user có thể click **"Xem giao diện nhân viên"** trong AppHeader user dropdown để preview layout nhân viên (dùng `useUiStore().previewAs('EMPLOYEE')`). Không thay đổi quyền API.
+
+### Quyền truy cập theo URL prefix
+
+| URL prefix | ADMIN | HR | MANAGER | CHIEF | EMPLOYEE |
+|---|---|---|---|---|---|
+| `/management/employees` | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `/management/attendance` | ✓ | ✓ | ✓ (team) | ✓ | ✗ |
+| `/management/leave` | ✓ | ✓ | ✓ (team) | ✓ | ✗ |
+| `/management/reports` | ✓ | ✓ | ✓ (team) | ✓ | ✗ |
+| `/management/payroll` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `/management/settings` | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `/management/roles`, `/management/system-logs` | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Root paths (`/`, `/attendance/my`, v.v.) | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### Authorization model
+
+- App có nhiều permissions. CRUD được role (vị trí), sau đó gán permissions cho role.
+- 2 loại role: `default` (sửa được, không xóa), `custom` (sửa và xóa được).
+- User — Role là many-to-many. User nhận tất cả permissions của các roles mình có.
 
 ---
 

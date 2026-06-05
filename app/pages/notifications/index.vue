@@ -7,6 +7,7 @@
 
 	const router = useRouter();
 	const toast = useToast();
+	const { user } = useAuth();
 	const { unreadCount, markRead, markAllRead, deleteAll } = useNotifications();
 	const notifService = useNotificationService();
 
@@ -147,11 +148,18 @@
 			}
 		}
 		if (!notif.refType || notif.refId === null) return;
-		const routes: Record<string, string> = {
-			leave_request: `/leave?id=${notif.refId}`,
-			overtime_request: `/overtime?id=${notif.refId}`,
-			violation_request: `/violations?id=${notif.refId}`,
-		};
+		const isEmployee = user.value?.role === 'EMPLOYEE';
+		const routes: Record<string, string> = isEmployee
+			? {
+					leave_request: `/users/leave-requests`,
+					overtime_request: `/overtime/my`,
+					violation_request: `/violations/my`,
+				}
+			: {
+					leave_request: `/management/leave?id=${notif.refId}`,
+					overtime_request: `/management/overtime?id=${notif.refId}`,
+					violation_request: `/management/violations?id=${notif.refId}`,
+				};
 		const route = routes[notif.refType];
 		if (route) router.push(route);
 	}

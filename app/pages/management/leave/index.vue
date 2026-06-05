@@ -154,7 +154,7 @@
 		if (!id || Number.isNaN(id)) return;
 
 		// Clear query string trước để tránh F5 mở lại
-		router.replace({ path: '/leave' });
+		router.replace({ path: '/management/leave' });
 
 		try {
 			const req = await leaveRequestService.findOne(id);

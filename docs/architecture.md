@@ -38,22 +38,83 @@ Ba loại fetcher, chọn theo từng endpoint:
 
 ## State Management (Pinia)
 
-Hiện tại chỉ có `stores/auth.ts`. Khi thêm store mới:
+| Store | Mục đích |
+|---|---|
+| `stores/auth.ts` | Auth state: user, token, permissions |
+| `stores/ui.ts` | UI-only state: `previewRole` cho "view as" toggle |
+| `stores/directory.ts` | Global directory data: employees, departments, positions |
+| `stores/notification.ts` | Notification state + FCM |
 
-- Dùng **setup store** style (không dùng Options API style)
-- File đặt trong `app/stores/`
-- Tên: `useXxxStore`
+Khi thêm store mới: dùng **setup store** style, file đặt trong `app/stores/`, tên `useXxxStore`.
 
-## Routing
+## Routing — URL-based Layout
 
-File-based routing qua `app/pages/`. Hiện có:
+Toàn bộ pages quản trị nằm dưới prefix `/management/`, pages nhân viên/dùng chung nằm ở root.
 
-- `/` → `pages/index.vue` — trang chủ / booking form
-- `/login` → `pages/login.vue` — đăng nhập
+```
+/                           → Dashboard (tất cả roles)
+/attendance/my              → Chấm công cá nhân (tất cả roles)
+/overtime/my                → OT cá nhân
+/violations/my              → Chỉnh công cá nhân
+/leave/create               → Tạo đơn nghỉ (employee)
+/business-trips             → Công tác (shared — role filter trong page)
+/users/leave-requests       → Danh sách đơn nghỉ của tôi (employee)
+
+/management/employees       → Quản lý nhân viên
+/management/attendance      → Chấm công toàn bộ
+/management/leave           → Tất cả đơn nghỉ
+/management/overtime        → Tất cả đơn OT
+/management/violations      → Tất cả vi phạm
+/management/reports         → Báo cáo
+/management/settings        → Cài đặt hệ thống
+...
+```
+
+**Rule bất biến:** khi tạo page mới, xác định ngay nó thuộc prefix nào:
+- Xem/quản lý dữ liệu của người khác → `/management/`
+- Cá nhân (chỉ thao tác dữ liệu của chính mình) → root
+
+## Layouts & Middleware
+
+Có 2 layout chính và 1 auth layout:
+
+| Layout | File | Dùng cho |
+|---|---|---|
+| `default` | `layouts/default.vue` | Tất cả management pages + root pages cho management roles |
+| `employee` | `layouts/employee.vue` | Root pages khi EMPLOYEE đăng nhập |
+| `auth` | `layouts/auth.vue` | Login, forgot-password, reset-password |
+
+### role-layout.global.ts
+
+Middleware chạy sau `auth.global.ts`, tự động assign layout:
+
+```
+/management/** → setPageLayout('default'), block EMPLOYEE → redirect /
+root paths     → setPageLayout theo effectiveRole:
+                   ADMIN/HR/MANAGER/CHIEF → 'default'
+                   EMPLOYEE              → 'employee'
+```
+
+`effectiveRole = uiStore.previewRole ?? authStore.user.role`
+
+### "View as" (Xem theo vai trò khác)
+
+Management user có thể preview giao diện nhân viên qua button trong `AppHeader` user dropdown:
+
+- Click "Xem giao diện nhân viên" → `uiStore.previewAs('EMPLOYEE')` + navigate về `/`
+- Click "Về quản trị" → `uiStore.previewAs(null)` + navigate về `/management/employees`
+- Preview chỉ thay đổi layout/sidebar, không thay đổi quyền truy cập API
+
+### Sidebar components
+
+| Component | Layout | Nav items |
+|---|---|---|
+| `AppSidebar.vue` | `default` | Đầy đủ — filtered bởi `user.role` |
+| `AppSidebarEmployee.vue` | `employee` | Tối giản — chỉ dashboard + chấm công cá nhân + đơn của tôi |
 
 ## Auth Flow
 
-1. User login → gọi `auth.service.ts`
-2. Token lưu vào `stores/auth.ts`
-3. Các request tiếp theo dùng `auth.fetch.ts` tự động đính token
-4. Middleware trong `app/middleware/` guard các route cần auth
+1. Plugin `auth.ts` chạy khi app khởi động: `initFromCookie()` → `fetchMe()` (nếu có token)
+2. `auth.global.ts` middleware: redirect unauthenticated users → `/login`
+3. `role-layout.global.ts` middleware: assign layout + block management routes cho EMPLOYEE
+4. Các request dùng `auth.fetch.ts` tự động đính Bearer token

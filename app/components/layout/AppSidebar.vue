@@ -31,9 +31,15 @@
 			items: [
 				{
 					label: 'Dashboard',
+					route: '/management',
+					icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+				},
+				{
+					label: 'Dashboard',
 					route: '/',
 					icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
+					roles: ['EMPLOYEE'],
 				},
 			],
 		},
@@ -42,25 +48,25 @@
 			items: [
 				{
 					label: 'Nhân viên',
-					route: '/employees',
+					route: '/management/employees',
 					icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
 				{
 					label: 'Phòng ban',
-					route: '/departments',
+					route: '/management/departments',
 					icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
 				{
 					label: 'Chức vụ',
-					route: '/positions',
+					route: '/management/positions',
 					icon: 'M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3zM6 6h.008v.008H6V6z',
 					roles: ['ADMIN', 'HR'],
 				},
 				{
 					label: 'Hợp đồng',
-					route: '/contracts',
+					route: '/management/contracts',
 					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
@@ -71,63 +77,10 @@
 			items: [
 				{
 					label: 'Chấm công',
-					route: '/attendance',
+					route: '/management/attendance',
 					icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
-				{
-					label: 'Chấm công của tôi',
-					route: '/attendance/my',
-					icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-				{
-					label: 'Check-in / Check-out',
-					route: '/attendance/check-in',
-					icon: 'M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-			],
-		},
-		{
-			label: 'Đơn của tôi',
-			items: [
-				{
-					label: 'Đơn xin nghỉ phép',
-					route: '/users/leave-requests',
-					icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-				{
-					label: 'Đơn OT của tôi',
-					route: '/overtime/my',
-					icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-				{
-					label: 'Đơn Online của tôi',
-					route: '/online-work/my',
-					icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-				{
-					label: 'Đơn xin chỉnh công',
-					route: '/violations/my',
-					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF', 'EMPLOYEE'],
-				},
-				{
-					label: 'Đơn công tác của tôi',
-					route: '/business-trips',
-					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
-					roles: ['EMPLOYEE'],
-				},
-				// {
-				// 	label: 'Tờ trình',
-				// 	route: '/general-requests',
-				// 	icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-				// 	roles: ['EMPLOYEE'],
-				// },
 			],
 		},
 		{
@@ -135,25 +88,25 @@
 			items: [
 				{
 					label: 'Nghỉ phép',
-					route: '/leave',
+					route: '/management/leave',
 					icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
 				{
 					label: 'Làm thêm giờ',
-					route: '/overtime',
+					route: '/management/overtime',
 					icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
 				{
 					label: 'Làm online',
-					route: '/online-work',
+					route: '/management/online-work',
 					icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
 				{
 					label: 'Vi phạm chuyên cần',
-					route: '/violations',
+					route: '/management/violations',
 					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
@@ -163,12 +116,6 @@
 					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
-				// {
-				// 	label: 'Tờ trình',
-				// 	route: '/general-requests',
-				// 	icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-				// 	roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				// },
 			],
 		},
 		{
@@ -176,13 +123,13 @@
 			items: [
 				{
 					label: 'Báo cáo',
-					route: '/reports',
+					route: '/management/reports',
 					icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
 				},
 				{
 					label: 'Bảng lương',
-					route: '/payroll',
+					route: '/management/payroll',
 					icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
 					roles: ['ADMIN', 'HR'],
 				},
@@ -193,25 +140,25 @@
 			items: [
 				{
 					label: 'Phân quyền',
-					route: '/roles',
+					route: '/management/roles',
 					icon: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',
 					roles: ['ADMIN'],
 				},
 				{
 					label: 'Cài đặt',
-					route: '/settings',
+					route: '/management/settings',
 					icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
 					roles: ['ADMIN', 'HR'],
 				},
 				{
 					label: 'Logs',
-					route: '/system-logs',
+					route: '/management/system-logs',
 					icon: 'M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776',
 					roles: ['ADMIN'],
 				},
 				{
 					label: 'Test Notification',
-					route: '/notifications/test',
+					route: '/management/notifications/test',
 					icon: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M10.5 8.25h3l-3 4.5h3',
 					roles: ['ADMIN'],
 				},

@@ -64,7 +64,7 @@
 				...(values.managerId ? { managerId: values.managerId } : {}),
 			});
 			toast.success('Tạo phòng ban thành công');
-			await router.push(`/departments/${created.id}`);
+			await router.push(`/management/departments/${created.id}`);
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : 'Có lỗi xảy ra, vui lòng thử lại';
 			toast.error(msg);
@@ -76,7 +76,7 @@
 	<div class="space-y-5 max-w-2xl">
 		<!-- Back nav -->
 		<NuxtLink
-			to="/departments"
+			to="/management/departments"
 			class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
 		>
 			<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -198,7 +198,7 @@
 				<span v-else />
 
 				<div class="flex items-center gap-3">
-					<NuxtLink to="/departments">
+					<NuxtLink to="/management/departments">
 						<CommonAppButton type="button" variant="outline">Hủy</CommonAppButton>
 					</NuxtLink>
 					<CommonAppButton type="submit" :loading="isSubmitting" :disabled="meta.dirty && !meta.valid">

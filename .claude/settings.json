@@ -8,7 +8,23 @@
       "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | head -30\")",
       "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | Select-String -Pattern 'request|document' \")",
       "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | tail -20\")",
-      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | Select-Object -Unique | Sort-Object\")"
+      "Bash(powershell -Command \"Get-Content -Path 'T:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\docs\\\\api-endpoint.json' | Select-String -Pattern '^\\\\s*\\\\\"/v1/' | Select-Object -Unique | Sort-Object\")",
+      "Bash(xargs grep -l \"CreateEmployeeDto\\\\|create.*employee\" -i)",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\positions\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\attendance\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\overtime\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\online-work\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\reports\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\payroll\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\roles\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\system-logs\")",
+      "Bash(New-Item -ItemType Directory -Force \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\management\\\\notifications\")",
+      "Bash(Write-Host \"Directories created\")",
+      "Bash(rm -f \\\\ *)"
+    ],
+    "additionalDirectories": [
+      "t:\\my-gitlab\\hr-system\\hr-system-fe\\app\\pages\\employees"
     ]
   }
 }

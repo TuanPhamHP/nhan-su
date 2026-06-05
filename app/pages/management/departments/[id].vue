@@ -248,7 +248,7 @@
 		<!-- Header -->
 		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<NuxtLink
-				to="/departments"
+				to="/management/departments"
 				class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
 			>
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -298,7 +298,7 @@
 		<!-- Not found -->
 		<div v-else-if="!department && !loadingDept" class="flex flex-col items-center justify-center py-20">
 			<p class="text-gray-500 dark:text-gray-400">Không tìm thấy phòng ban</p>
-			<NuxtLink to="/departments" class="mt-3">
+			<NuxtLink to="/management/departments" class="mt-3">
 				<CommonAppButton variant="outline" size="sm">Quay lại danh sách</CommonAppButton>
 			</NuxtLink>
 		</div>

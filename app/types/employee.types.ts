@@ -13,6 +13,11 @@ export interface PositionSummary {
 	name: string;
 }
 
+export interface DefaultShiftSummary {
+	id: number;
+	name: string;
+}
+
 export interface EmployeeSummary {
 	id: number;
 	employeeCode: string;
@@ -49,6 +54,7 @@ export interface Employee {
 	department: DepartmentSummary | null;
 	position: PositionSummary | null;
 	manager: ManagerSummary | null;
+	defaultShift: DefaultShiftSummary | null;
 	createdAt: string;
 }
 
@@ -61,6 +67,7 @@ export interface CreateEmployeeDto {
 	departmentId?: number;
 	positionId?: number;
 	managerId?: number;
+	defaultShiftId?: number;
 	phone?: string;
 	dateOfBirth?: string;
 	gender?: EmployeeGender;

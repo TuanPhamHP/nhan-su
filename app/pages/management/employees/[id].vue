@@ -175,7 +175,7 @@
 			await deactivate(id);
 			toast.success('Đã vô hiệu hóa nhân viên');
 			confirmDeactivate.value = false;
-			navigateTo('/employees');
+			navigateTo('/management/employees');
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi vô hiệu hóa nhân viên');
 		} finally {
@@ -233,7 +233,7 @@
 		<!-- Back + actions header -->
 		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 			<NuxtLink
-				to="/employees"
+				to="/management/employees"
 				class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
 			>
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -303,7 +303,7 @@
 		<!-- Not found -->
 		<div v-else-if="!currentEmployee && !detailLoading" class="flex flex-col items-center justify-center py-20">
 			<p class="text-gray-500 dark:text-gray-400">Không tìm thấy nhân viên</p>
-			<NuxtLink to="/employees" class="mt-3">
+			<NuxtLink to="/management/employees" class="mt-3">
 				<CommonAppButton variant="outline" size="sm">Quay lại danh sách</CommonAppButton>
 			</NuxtLink>
 		</div>
@@ -439,7 +439,7 @@
 							<p :class="labelCls">Quản lý trực tiếp</p>
 							<NuxtLink
 								v-if="currentEmployee.manager"
-								:to="`/employees/${currentEmployee.manager.id}`"
+								:to="`/management/employees/${currentEmployee.manager.id}`"
 								class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
 							>
 								{{ currentEmployee.manager.fullName }}

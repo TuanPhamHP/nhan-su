@@ -24,11 +24,25 @@ export interface CompanyStats {
 	totalDepartments: number;
 	lateToday: number;
 	absentToday: number;
+	workingOnlineToday: number;
+}
+
+export interface HRAnalyticsData {
+	statusBreakdown: { status: 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE'; count: number }[];
+	byDepartment: { departmentId: number; departmentName: string; count: number }[];
+	genderBreakdown: { gender: string; count: number }[];
+	ageGroups: { range: string; count: number }[];
+	averageAge: number | null;
+	ageDataCoverage: number;
+	contractBreakdown: { contractType: 'PROBATION' | 'FIXED_TERM' | 'INDEFINITE' | 'SEASONAL'; count: number }[];
+	newHiresLast30Days: number;
+	expiringContractsNext30Days: number;
 }
 
 export interface CompanyDashboardResponse {
 	stats: CompanyStats;
 	recentActivity: ActivityItem[];
+	hrAnalytics: HRAnalyticsData;
 	generatedAt: string;
 }
 
@@ -40,6 +54,7 @@ export interface DepartmentStats extends CompanyStats {
 export interface DepartmentDashboardResponse {
 	stats: DepartmentStats;
 	recentActivity: ActivityItem[];
+	hrAnalytics: HRAnalyticsData;
 	generatedAt: string;
 }
 
@@ -68,3 +83,13 @@ export interface MyDashboardResponse {
 }
 
 export type DashboardResponse = CompanyDashboardResponse | DepartmentDashboardResponse | MyDashboardResponse;
+
+export interface NewHireEmployee {
+	id: number;
+	employeeCode: string;
+	fullName: string;
+	departmentName: string;
+	positionName: string;
+	joinDate: string;
+	avatarUrl: string | null;
+}

@@ -353,7 +353,7 @@ onUnmounted(() => {
 		<div class="w-80 flex-shrink-0 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
 			<div class="flex flex-col px-4 pt-4 pb-3 flex-shrink-0 gap-1">
 				<NuxtLink
-					to="/settings"
+					to="/management/settings"
 					class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
 				>
 					<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

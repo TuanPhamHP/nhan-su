@@ -292,7 +292,7 @@
 						>
 							<td class="px-4 py-3">
 								<NuxtLink
-									:to="`/employees/${c.employee.id}`"
+									:to="`/management/employees/${c.employee.id}`"
 									class="font-medium text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400"
 								>
 									{{ c.employee.fullName }}
@@ -337,7 +337,7 @@
 							</td>
 							<td class="px-4 py-3 text-right">
 								<NuxtLink
-									:to="`/employees/${c.employee.id}?tab=contracts`"
+									:to="`/management/employees/${c.employee.id}?tab=contracts`"
 									class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
 								>
 									Xem chi tiết

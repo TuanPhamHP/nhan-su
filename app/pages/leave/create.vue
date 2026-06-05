@@ -411,7 +411,7 @@
 		<!-- Header -->
 		<div class="flex items-center gap-3">
 			<NuxtLink
-				to="/leave"
+				to="/users/leave-requests"
 				class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-gray-300 transition-colors"
 				title="Quay lại"
 			>

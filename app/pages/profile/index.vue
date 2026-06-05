@@ -509,7 +509,7 @@
 						<p :class="labelCls">Phòng ban</p>
 						<p
 							:class="[valueCls, 'cursor-pointer hover:underline hover:text-blue-500']"
-							@click="router.push(`/departments/${profile.department?.id}`)"
+							@click="router.push(`/management/departments/${profile.department?.id}`)"
 						>
 							{{ profile.department?.name ?? '—' }}
 						</p>

@@ -3,7 +3,11 @@ import { useForm } from 'vee-validate';
 import type { CreateEmployeeDto, EmployeeGender } from '~/types/employee.types';
 import type { UserRole } from '~/types/auth.types';
 import { usePositionService } from '~/services/position.service';
+import { useWorkShiftService } from '~/services/work-shift.service';
+import { useCheckInLocationService } from '~/services/check-in-location.service';
 import type { PositionSummary } from '~/types/position.types';
+import type { WorkShiftResponse } from '~/types/shift.types';
+import type { CheckInLocation } from '~/types/check-in-location.types';
 
 definePageMeta({ title: 'Thêm nhân viên mới' });
 
@@ -11,8 +15,13 @@ const toast = useToast();
 const { create } = useEmployee();
 const { departments, fetchAll: fetchDepartments } = useDepartment();
 const positionService = usePositionService();
+const workShiftService = useWorkShiftService();
+const checkInLocationService = useCheckInLocationService();
 
 const positions = ref<PositionSummary[]>([]);
+const shifts = ref<WorkShiftResponse[]>([]);
+const checkInLocations = ref<CheckInLocation[]>([]);
+const selectedLocationId = ref<number | undefined>(undefined);
 
 async function loadPositions(departmentId?: number) {
 	try {
@@ -22,9 +31,27 @@ async function loadPositions(departmentId?: number) {
 	}
 }
 
+async function loadShifts() {
+	try {
+		shifts.value = await workShiftService.findAll();
+	} catch {
+		shifts.value = [];
+	}
+}
+
+async function loadCheckInLocations() {
+	try {
+		checkInLocations.value = await checkInLocationService.findAll();
+	} catch {
+		checkInLocations.value = [];
+	}
+}
+
 onMounted(() => {
 	fetchDepartments();
 	loadPositions();
+	loadShifts();
+	loadCheckInLocations();
 });
 
 const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
@@ -37,6 +64,7 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	role: UserRole;
 	departmentId: number | undefined;
 	positionId: number | undefined;
+	defaultShiftId: number | undefined;
 	gender: EmployeeGender | '';
 	dateOfBirth: string;
 	address: string;
@@ -62,6 +90,7 @@ const [joinDate] = defineField('joinDate');
 const [role] = defineField('role');
 const [departmentId] = defineField('departmentId');
 const [positionId] = defineField('positionId');
+const [defaultShiftId] = defineField('defaultShiftId');
 const [gender] = defineField('gender');
 
 watch(departmentId, val => {
@@ -81,14 +110,24 @@ const onSubmit = handleSubmit(async values => {
 		phone: values.phone || undefined,
 		departmentId: values.departmentId ? Number(values.departmentId) : undefined,
 		positionId: values.positionId ? Number(values.positionId) : undefined,
+		defaultShiftId: values.defaultShiftId ? Number(values.defaultShiftId) : undefined,
 		gender: (values.gender as EmployeeGender) || undefined,
 		dateOfBirth: values.dateOfBirth || undefined,
 		address: values.address || undefined,
 	};
 	try {
 		const emp = await create(payload);
+		if (selectedLocationId.value) {
+			try {
+				await checkInLocationService.assignEmployee(selectedLocationId.value, emp.id);
+			} catch {
+				toast.warning('Tạo nhân viên thành công nhưng không thể gán vị trí làm việc');
+				navigateTo(`/management/employees/${emp.id}`);
+				return;
+			}
+		}
 		toast.success('Thêm nhân viên thành công');
-		navigateTo(`/employees/${emp.id}`);
+		navigateTo(`/management/employees/${emp.id}`);
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Lỗi tạo nhân viên');
 	}
@@ -118,6 +157,20 @@ const positionOptions = computed(() => [
 	...positions.value.map(p => ({ value: p.id as number | undefined, label: p.name })),
 ]);
 
+const shiftOptions = computed(() => [
+	{ value: undefined as number | undefined, label: '-- Không gán ca --' },
+	...shifts.value
+		.filter(s => s.isActive)
+		.map(s => ({ value: s.id as number | undefined, label: s.name })),
+]);
+
+const locationOptions = computed(() => [
+	{ value: undefined as number | undefined, label: '-- Không gán vị trí --' },
+	...checkInLocations.value
+		.filter(l => l.isActive)
+		.map(l => ({ value: l.id as number | undefined, label: l.name })),
+]);
+
 const inputCls =
 	'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50';
 const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1';
@@ -128,7 +181,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 		<!-- Header -->
 		<div class="flex items-center gap-3">
 			<NuxtLink
-				to="/employees"
+				to="/management/employees"
 				class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
 			>
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -232,6 +285,16 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 						</div>
 
 						<div>
+							<label :class="labelCls">Ca làm việc mặc định</label>
+							<UiSelect v-model="defaultShiftId" :options="shiftOptions" />
+						</div>
+
+						<div>
+							<label :class="labelCls">Vị trí làm việc</label>
+							<UiSelect v-model="selectedLocationId" :options="locationOptions" />
+						</div>
+
+						<div>
 							<label :class="labelCls">Ngày vào làm <span class="text-red-500">*</span></label>
 							<UiDatePicker v-model="joinDate" />
 							<p v-if="errors.joinDate" class="mt-1 text-xs text-red-500">{{ errors.joinDate }}</p>
@@ -262,7 +325,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 			</div>
 
 			<div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
-				<NuxtLink to="/employees">
+				<NuxtLink to="/management/employees">
 					<CommonAppButton type="button" variant="outline">Hủy</CommonAppButton>
 				</NuxtLink>
 				<CommonAppButton type="submit" :loading="isSubmitting">Tạo nhân viên</CommonAppButton>

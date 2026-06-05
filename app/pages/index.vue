@@ -265,7 +265,7 @@
 
 		if (role === 'EMPLOYEE') {
 			return [
-				{ label: 'Xem lịch sử chấm công', route: '/attendance', iconPath: ICONS.checkCircle },
+				{ label: 'Xem lịch sử chấm công', route: '/attendance/my', iconPath: ICONS.checkCircle },
 				{ label: 'Xin nghỉ phép', route: '/leave/create', iconPath: ICONS.calendar },
 				{ label: 'Đăng ký tăng ca', route: '/overtime/create', iconPath: ICONS.clock },
 				{ label: 'Hồ sơ cá nhân', route: '/profile', iconPath: ICONS.users },
@@ -274,19 +274,19 @@
 
 		if (role === 'MANAGER') {
 			return [
-				{ label: 'Xem chấm công phòng ban', route: '/attendance', iconPath: ICONS.checkCircle },
-				{ label: 'Đơn nghỉ phép', route: '/leave', iconPath: ICONS.calendar },
-				{ label: 'Phiếu vi phạm', route: '/violations', iconPath: ICONS.alert },
-				{ label: 'Xem báo cáo', route: '/reports', iconPath: ICONS.reports },
+				{ label: 'Xem chấm công phòng ban', route: '/management/attendance', iconPath: ICONS.checkCircle },
+				{ label: 'Đơn nghỉ phép', route: '/management/leave', iconPath: ICONS.calendar },
+				{ label: 'Phiếu vi phạm', route: '/management/violations', iconPath: ICONS.alert },
+				{ label: 'Xem báo cáo', route: '/management/reports', iconPath: ICONS.reports },
 			];
 		}
 
 		// ADMIN, HR, CHIEF
 		return [
-			{ label: 'Thêm nhân viên', route: '/employees/new', iconPath: ICONS.addUser },
-			{ label: 'Xem chấm công', route: '/attendance', iconPath: ICONS.checkCircle },
-			{ label: 'Đơn nghỉ phép', route: '/leave', iconPath: ICONS.calendar },
-			{ label: 'Xem báo cáo', route: '/reports', iconPath: ICONS.reports },
+			{ label: 'Thêm nhân viên', route: '/management/employees/new', iconPath: ICONS.addUser },
+			{ label: 'Xem chấm công', route: '/management/attendance', iconPath: ICONS.checkCircle },
+			{ label: 'Đơn nghỉ phép', route: '/management/leave', iconPath: ICONS.calendar },
+			{ label: 'Xem báo cáo', route: '/management/reports', iconPath: ICONS.reports },
 		];
 	});
 
@@ -316,15 +316,19 @@
 	const recentActivity = computed(() => dashboard.value?.recentActivity ?? []);
 
 	function navigateActivity(item: ActivityItem) {
+		const role = user.value?.role;
 		switch (item.type) {
 			case 'leave':
-				router.push(`/leave?open_id=${item.targetId}`);
+				router.push(
+					role === 'EMPLOYEE'
+						? `/users/leave-requests?open_id=${item.targetId}`
+						: `/management/leave?open_id=${item.targetId}`,
+				);
 				break;
 
 			default:
 				break;
 		}
-		// router.push(targetUrl);
 	}
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -488,105 +492,144 @@
 		</div>
 
 		<!-- Recent activity -->
-		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-			<div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+			<div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
 				<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Hoạt động gần đây</h2>
+				<span v-if="recentActivity.length" class="text-xs text-gray-400 dark:text-gray-500">
+					{{ recentActivity.length }} hoạt động
+				</span>
 			</div>
 
 			<!-- Skeleton -->
-			<div v-if="loading" class="divide-y divide-gray-100 dark:divide-gray-700">
-				<div v-for="n in 4" :key="n" class="px-4 py-3 sm:px-5 sm:py-4 animate-pulse">
-					<!-- Mobile skeleton -->
-					<div class="sm:hidden">
-						<div class="flex items-center justify-between mb-2">
-							<div class="h-5 w-28 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-							<div class="h-5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+			<div v-if="loading" class="divide-y divide-gray-100 dark:divide-gray-800">
+				<div v-for="n in 5" :key="n" class="px-5 py-4 animate-pulse">
+					<div class="hidden sm:flex items-center gap-4">
+						<div class="h-6 w-36 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0"></div>
+						<div class="flex-1 space-y-2">
+							<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-44"></div>
+							<div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-60"></div>
 						</div>
-						<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-36 mb-1.5"></div>
-						<div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+						<div class="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0"></div>
+						<div class="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded flex-shrink-0"></div>
 					</div>
-					<!-- Desktop skeleton -->
-					<div class="hidden sm:flex items-center gap-3">
-						<div class="h-5 w-24 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0"></div>
-						<div class="flex-1">
-							<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-36 mb-1.5"></div>
-							<div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-48"></div>
+					<div class="sm:hidden space-y-2">
+						<div class="flex justify-between">
+							<div class="h-5 w-28 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+							<div class="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
 						</div>
-						<div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+						<div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-36"></div>
+						<div class="flex justify-between gap-4">
+							<div class="h-3 bg-gray-200 dark:bg-gray-700 rounded flex-1"></div>
 							<div class="h-5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-							<div class="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			<!-- Activity list -->
-			<div v-else-if="recentActivity.length" class="divide-y divide-gray-100 dark:divide-gray-700">
-				<button
-					v-for="item in recentActivity"
-					:key="item.id"
-					class="w-full px-4 py-3 sm:px-5 sm:py-4 flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-					@click="navigateActivity(item)"
+			<template v-else-if="recentActivity.length">
+				<!-- Desktop column headers -->
+				<div
+					class="hidden sm:grid grid-cols-[12rem_1fr_8rem_5.5rem] px-5 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40"
 				>
-					<!-- Row 1 on mobile: type badge (left) + status badge + time (right) -->
-					<!-- On desktop: just the type badge in the flex-row flow -->
-					<div class="flex items-center justify-between sm:block sm:flex-shrink-0">
-						<span
-							:class="[
-								'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium sm:mt-0.5',
-								activityTypeCls(item.type),
-							]"
-						>
-							{{ item.typeLabel }}
-						</span>
-						<!-- Mobile only: status + time beside type badge -->
-						<div class="flex items-center gap-2 sm:hidden">
+					<span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Loại đơn</span>
+					<span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Nhân viên</span>
+					<span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-right">
+						Trạng thái
+					</span>
+					<span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-right">
+						Thời gian
+					</span>
+				</div>
+
+				<div class="divide-y divide-gray-100 dark:divide-gray-800">
+					<button
+						v-for="item in recentActivity"
+						:key="item.id"
+						class="w-full hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors text-left"
+						@click="navigateActivity(item)"
+					>
+						<!-- Desktop row -->
+						<div class="hidden sm:grid grid-cols-[12rem_1fr_8rem_5.5rem] items-center px-5 py-3.5">
 							<span
 								:class="[
-									'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-									statusBadgeCls(item.status),
+									'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium w-fit max-w-[11rem] truncate',
+									activityTypeCls(item.type),
 								]"
 							>
-								{{ item.statusLabel }}
+								{{ item.typeLabel }}
 							</span>
-							<span class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+							<div class="min-w-0 pr-4">
+								<p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+									<span class="text-gray-400 dark:text-gray-500 text-xs font-normal mr-1.5">{{ item.employeeCode }}</span
+									>{{ item.employeeName }}
+								</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ item.action }}</p>
+							</div>
+							<div class="flex justify-end">
+								<span
+									:class="[
+										'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium',
+										statusBadgeCls(item.status),
+									]"
+								>
+									{{ item.statusLabel }}
+								</span>
+							</div>
+							<p class="text-xs text-gray-400 dark:text-gray-500 text-right whitespace-nowrap">
 								{{ formatRelativeTime(item.createdAt) }}
-							</span>
+							</p>
 						</div>
-					</div>
 
-					<!-- Content: employee name + action (full width on mobile) -->
-					<div class="flex-1 min-w-0">
-						<p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-							<span class="text-gray-500 dark:text-gray-400 mr-1">{{ item.employeeCode }}</span
-							>{{ item.employeeName }}
-						</p>
-						<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ item.action }}</p>
-					</div>
-
-					<!-- Desktop only: status + time column -->
-					<div class="hidden sm:flex flex-col items-end gap-1 flex-shrink-0">
-						<span
-							:class="[
-								'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-								statusBadgeCls(item.status),
-							]"
-						>
-							{{ item.statusLabel }}
-						</span>
-						<span class="text-xs text-gray-400 dark:text-gray-500">{{ formatRelativeTime(item.createdAt) }}</span>
-					</div>
-				</button>
-			</div>
+						<!-- Mobile row -->
+						<div class="sm:hidden px-4 py-3.5 space-y-1.5">
+							<div class="flex items-center justify-between gap-2">
+								<span
+									:class="[
+										'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+										activityTypeCls(item.type),
+									]"
+								>
+									{{ item.typeLabel }}
+								</span>
+								<span class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap flex-shrink-0">
+									{{ formatRelativeTime(item.createdAt) }}
+								</span>
+							</div>
+							<p class="text-sm font-medium text-gray-900 dark:text-white">
+								<span class="text-gray-400 dark:text-gray-500 text-xs font-normal mr-1">{{ item.employeeCode }}</span
+								>{{ item.employeeName }}
+							</p>
+							<div class="flex items-center justify-between gap-2">
+								<p class="text-xs text-gray-500 dark:text-gray-400 flex-1 truncate">{{ item.action }}</p>
+								<span
+									:class="[
+										'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
+										statusBadgeCls(item.status),
+									]"
+								>
+									{{ item.statusLabel }}
+								</span>
+							</div>
+						</div>
+					</button>
+				</div>
+			</template>
 
 			<!-- Empty state -->
-			<div v-else class="flex flex-col items-center justify-center py-12 text-center">
-				<div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-					<svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+			<div v-else class="flex flex-col items-center justify-center py-16 text-center">
+				<div class="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+					<svg
+						class="w-7 h-7 text-gray-300 dark:text-gray-600"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 					</svg>
 				</div>
-				<p class="text-sm text-gray-500 dark:text-gray-400">Chưa có hoạt động nào gần đây</p>
+				<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Chưa có hoạt động nào</p>
+				<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Hoạt động sẽ hiển thị khi bạn tạo đơn</p>
 			</div>
 		</div>
 	</div>
