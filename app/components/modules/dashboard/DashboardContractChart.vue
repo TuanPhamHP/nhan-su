@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Doughnut } from 'vue-chartjs';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip);
 
 type ContractType = 'PROBATION' | 'FIXED_TERM' | 'INDEFINITE' | 'SEASONAL';
 
@@ -26,6 +26,13 @@ const CONTRACT_COLOR: Record<ContractType, string> = {
 
 const totalContracts = computed(() => props.data.reduce((s, d) => s + d.count, 0));
 
+const legendItems = computed(() => props.data.map(d => ({
+	type: d.contractType,
+	label: CONTRACT_LABEL[d.contractType],
+	color: CONTRACT_COLOR[d.contractType],
+	count: d.count,
+})));
+
 const chartData = computed(() => ({
 	labels: props.data.map(d => CONTRACT_LABEL[d.contractType]),
 	datasets: [
@@ -44,21 +51,29 @@ const chartOptions = {
 	maintainAspectRatio: false,
 	cutout: '68%',
 	plugins: {
-		legend: { position: 'bottom' as const, labels: { padding: 12, font: { size: 11 } } },
+		legend: { display: false },
 		tooltip: { callbacks: { label: (ctx: { label: string; parsed: number }) => ` ${ctx.label}: ${ctx.parsed}` } },
 	},
 };
 </script>
 
 <template>
-	<div v-if="data.length" class="flex flex-col items-center h-full">
-		<div class="relative flex-1 w-full">
+	<div v-if="data.length" class="flex flex-col h-full gap-2">
+		<!-- Donut -->
+		<div class="relative flex-1 min-h-0">
 			<Doughnut :data="chartData" :options="chartOptions" />
-			<div class="absolute inset-0 flex items-center justify-center pointer-events-none" style="padding-bottom: 32px">
+			<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
 				<div class="text-center">
 					<p class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ totalContracts }}</p>
 					<p class="text-xs text-gray-500">hợp đồng</p>
 				</div>
+			</div>
+		</div>
+		<!-- Custom legend -->
+		<div class="flex flex-wrap justify-center gap-x-3 gap-y-1 flex-shrink-0">
+			<div v-for="item in legendItems" :key="item.type" class="flex items-center gap-1.5">
+				<span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" :style="{ backgroundColor: item.color }" />
+				<span class="text-[11px] text-gray-600 dark:text-gray-400">{{ item.label }}: {{ item.count }}</span>
 			</div>
 		</div>
 	</div>
