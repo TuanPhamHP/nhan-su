@@ -20,5 +20,11 @@ export default defineNuxtRouteMiddleware(to => {
 
 	// For root-level paths: use effectiveRole (supports "view as" preview)
 	const effectiveRole = uiStore.previewRole ?? role;
+
+	// Management users (not in employee preview) visiting "/" go straight to /management
+	if (to.path === '/' && MANAGEMENT_ROLES.includes(effectiveRole)) {
+		return navigateTo('/management');
+	}
+
 	setPageLayout(MANAGEMENT_ROLES.includes(effectiveRole) ? 'default' : 'employee');
 });
