@@ -28,7 +28,7 @@ export default defineNuxtConfig({
 		},
 	},
 	devServer: {
-		port: 4000,
+		port: 6001,
 	},
 	runtimeConfig: {
 		// Private keys (chỉ có ở Server-side)

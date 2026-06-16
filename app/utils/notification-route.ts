@@ -19,11 +19,7 @@ function isManagement(role: UserRole): boolean {
  *
  * Note: /violations handles both management and employee views internally via canManage.
  */
-export function resolveNotificationRoute(
-	refType: string | null,
-	refId: number | null,
-	role: UserRole,
-): string | null {
+export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
 	if (!refType) return null;
 
 	const manage = isManagement(role);
@@ -34,19 +30,19 @@ export function resolveNotificationRoute(
 			return id ? `/violations?open_id=${id}` : '/violations';
 
 		case 'leave_request':
-			if (manage) return id ? `/leave?open_id=${id}` : '/leave';
+			if (manage) return id ? `/management/leave?open_id=${id}` : '/leave';
 			return id ? `/users/leave-requests?open_id=${id}` : '/users/leave-requests';
 
 		case 'overtime_request':
-			if (manage) return id ? `/overtime?open_id=${id}` : '/overtime';
+			if (manage) return id ? `/management/overtime?open_id=${id}` : '/overtime';
 			return id ? `/overtime/my?open_id=${id}` : '/overtime/my';
 
 		case 'online_work_request':
-			if (manage) return id ? `/online-work?open_id=${id}` : '/online-work';
+			if (manage) return id ? `/management/online-work?open_id=${id}` : '/online-work';
 			return id ? `/online-work/my?open_id=${id}` : '/online-work/my';
 
 		case 'attendance':
-			return manage ? '/attendance' : '/attendance/my';
+			return manage ? '/management/attendance' : '/attendance/my';
 
 		default:
 			return null;
