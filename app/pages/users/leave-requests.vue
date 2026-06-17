@@ -137,18 +137,27 @@
 <template>
 	<div class="space-y-4">
 		<!-- Header -->
-		<div class="flex items-center gap-3">
+		<div class="flex items-center justify-between gap-3">
 			<div>
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Xin nghỉ phép</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách đơn của bạn</p>
 			</div>
+			<NuxtLink
+				to="/leave/create"
+				class="hidden sm:inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 dark:bg-brand-500 dark:hover:bg-brand-600 flex-shrink-0"
+			>
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+				</svg>
+				Tạo đơn
+			</NuxtLink>
 		</div>
 
 		<!-- Filters -->
 		<div class="flex flex-wrap gap-3">
 			<select
 				v-model="filterLeaveTypeId"
-				class="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
+				class="flex-1 min-w-[140px] max-w-xs px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
 			>
 				<option value="">Loại đơn</option>
 				<option v-for="lt in leaveTypes" :key="lt.id" :value="lt.id">{{ lt.name }}</option>
@@ -156,7 +165,7 @@
 
 			<select
 				v-model="filterStatus"
-				class="flex-1 min-w-[160px] px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
+				class="flex-1 min-w-[140px] max-w-xs px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
 			>
 				<option value="">Tất cả trạng thái</option>
 				<option value="PENDING">Chờ duyệt</option>
@@ -167,9 +176,9 @@
 		</div>
 
 		<!-- Loading skeleton -->
-		<div v-if="loading" class="space-y-3">
+		<div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 			<div
-				v-for="i in 4"
+				v-for="i in 8"
 				:key="i"
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse"
 			>
@@ -201,11 +210,11 @@
 		</div>
 
 		<!-- Card list -->
-		<div v-else class="space-y-3">
+		<div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 			<div
 				v-for="r in requests"
 				:key="r.id"
-				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-opacity"
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-opacity flex flex-col"
 				:class="{ 'opacity-60': cancellingId === r.id || removingId === r.id }"
 			>
 				<!-- Card header -->
@@ -376,8 +385,8 @@
 			/>
 		</div>
 
-		<!-- Bottom: Tạo đơn -->
-		<div class="pt-2 pb-1">
+		<!-- Bottom: Tạo đơn — chỉ hiện trên mobile (sm trở lên đã có nút ở header) -->
+		<div class="pt-2 pb-1 sm:hidden">
 			<NuxtLink
 				to="/leave/create"
 				class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 dark:bg-brand-500 dark:hover:bg-brand-600"
