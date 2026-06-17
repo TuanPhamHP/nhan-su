@@ -207,6 +207,10 @@
 		}
 	}
 
+	// ─── Tabs ─────────────────────────────────────────────────────────────────────
+	type DeptTab = 'members' | 'positions';
+	const activeTab = ref<DeptTab>('members');
+
 	// ─── Positions section ───────────────────────────────────────────────────────
 
 	const authStore = useAuthStore();
@@ -318,8 +322,20 @@
 
 	// ─── Row dropdown actions ─────────────────────────────────────────────────────
 
+	const router = useRouter();
+
 	function getMemberActions(emp: EmployeeSummary): DropdownMenuItem[] {
 		return [
+			{
+				label: 'Xem chi tiết',
+				icon: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+				action: () => router.push(`/management/employees/${emp.id}`),
+			},
+			{
+				label: 'Chỉnh sửa',
+				icon: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z',
+				action: () => router.push(`/management/employees/${emp.id}?edit=true`),
+			},
 			{
 				label: emp.status === 'INACTIVE' ? 'Kích hoạt' : 'Vô hiệu hóa',
 				icon:
@@ -348,11 +364,16 @@
 			loadMembers().catch((e: unknown) =>
 				toast.error(e instanceof Error ? e.message : 'Không tải được danh sách nhân viên'),
 			),
-			loadPositions().catch((e: unknown) =>
-				toast.error(e instanceof Error ? e.message : 'Không tải được danh sách chức danh'),
-			),
 		]);
 		if (isEditing.value && department.value) resetForm({ values: { name: department.value.name } });
+	});
+
+	watch(activeTab, tab => {
+		if (tab === 'positions' && positions.value.length === 0 && !loadingPositions.value) {
+			loadPositions().catch((e: unknown) =>
+				toast.error(e instanceof Error ? e.message : 'Không tải được danh sách chức danh'),
+			);
+		}
 	});
 </script>
 
@@ -524,8 +545,29 @@
 				</div>
 			</form>
 
+			<!-- Tab switcher -->
+			<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
+				<button
+					v-for="tab in [
+						{ key: 'members', label: 'Nhân sự' },
+						{ key: 'positions', label: 'Chức danh' },
+					] as const"
+					:key="tab.key"
+					class="px-4 py-1.5 text-sm font-medium rounded-lg transition-all"
+					:class="
+						activeTab === tab.key
+							? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+							: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+					"
+					@click="activeTab = tab.key"
+				>
+					{{ tab.label }}
+				</button>
+			</div>
+
 			<!-- Members section -->
 			<div
+				v-if="activeTab === 'members'"
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden"
 			>
 				<!-- Section header -->
@@ -595,6 +637,11 @@
 								<th
 									class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 								>
+									Chức danh
+								</th>
+								<th
+									class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+								>
 									Trạng thái
 								</th>
 								<th
@@ -629,6 +676,12 @@
 									</div>
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap">
+									<span v-if="emp.position" class="text-sm text-gray-700 dark:text-gray-300">
+										{{ emp.position.name }}
+									</span>
+									<span v-else class="text-sm text-gray-400 dark:text-gray-500">—</span>
+								</td>
+								<td class="px-6 py-4 whitespace-nowrap">
 									<EmployeeStatusBadge :status="emp.status" />
 								</td>
 								<td class="px-6 py-4 text-right">
@@ -641,7 +694,10 @@
 			</div>
 
 			<!-- Positions section -->
-			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+			<div
+				v-if="activeTab === 'positions'"
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden"
+			>
 				<!-- Section header -->
 				<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3">
 					<div>
