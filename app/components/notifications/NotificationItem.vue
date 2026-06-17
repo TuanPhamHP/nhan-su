@@ -1,7 +1,7 @@
 <script setup lang="ts">
-	import { format, parseISO } from 'date-fns';
 	import type { NotificationResponse } from '~/types/notification.types';
 	import { resolveNotificationRoute } from '~/utils/notification-route';
+	import { formatTimeAgo } from '~/utils/date';
 
 	const props = defineProps<{ notification: NotificationResponse }>();
 	const emit = defineEmits<{
@@ -20,14 +20,6 @@
 	const isLoading = ref(false);
 	const isActioned = ref(false);
 	const actionedMessage = ref('');
-
-	function formatVNTime(iso: string): string {
-		try {
-			return format(parseISO(iso), 'HH:mm');
-		} catch {
-			return '';
-		}
-	}
 
 	const handleClick = async () => {
 		if (!props.notification.isRead) {
@@ -114,7 +106,7 @@
 					</p>
 					<div class="flex items-center gap-1 flex-shrink-0 ml-2">
 						<span class="text-xs text-gray-400 whitespace-nowrap">
-							{{ formatVNTime(notification.createdAt) }}
+							{{ formatTimeAgo(notification.createdAt) }}
 						</span>
 						<div v-if="!notification.isRead" class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
 					</div>
