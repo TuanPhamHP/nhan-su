@@ -75,7 +75,7 @@
 	const requestFilter = reactive({
 		departmentId: undefined as number | undefined,
 		leaveTypeId: undefined as number | undefined,
-		status: undefined as LeaveStatus | undefined,
+		status: 'PENDING' as LeaveStatus | undefined,
 		startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
 		endDate: format(endOfMonth(today), 'yyyy-MM-dd'),
 		page: 1,
@@ -454,7 +454,7 @@
 						:model-value="requestFilter.departmentId ?? 0"
 						:options="departmentOptions"
 						placeholder="Tất cả phòng ban"
-						@update:model-value="requestFilter.departmentId = $event === 0 ? undefined : ($event as number)"
+						@update:model-value="(v) => { requestFilter.departmentId = v === 0 ? undefined : (v as number); applyRequestFilter(); }"
 					/>
 				</div>
 				<div class="w-full sm:w-44">
@@ -462,7 +462,7 @@
 						:model-value="requestFilter.leaveTypeId"
 						:options="leaveTypeOptions"
 						placeholder="Tất cả loại đơn"
-						@update:model-value="requestFilter.leaveTypeId = $event as number | undefined"
+						@update:model-value="(v) => { requestFilter.leaveTypeId = v as number | undefined; applyRequestFilter(); }"
 					/>
 				</div>
 				<div class="w-full sm:w-44">
@@ -470,7 +470,7 @@
 						:model-value="requestFilter.status"
 						:options="statusOptions"
 						placeholder="Tất cả trạng thái"
-						@update:model-value="requestFilter.status = $event as LeaveStatus | undefined"
+						@update:model-value="(v) => { requestFilter.status = v as LeaveStatus | undefined; applyRequestFilter(); }"
 					/>
 				</div>
 				<div class="flex items-center gap-2">
@@ -478,24 +478,16 @@
 						v-model="requestFilter.startDate"
 						type="date"
 						class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+						@change="applyRequestFilter"
 					/>
 					<span class="text-gray-400 text-sm">→</span>
 					<input
 						v-model="requestFilter.endDate"
 						type="date"
 						class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+						@change="applyRequestFilter"
 					/>
 				</div>
-				<CommonAppButton :loading="requestsLoading" @click="applyRequestFilter">
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-						/>
-					</svg>
-					Tìm kiếm
-				</CommonAppButton>
 			</div>
 
 			<!-- Table -->
