@@ -6,6 +6,7 @@
 
 	const toast = useToast();
 	const router = useRouter();
+	const directoryStore = useDirectoryStore();
 
 	const deptService = useDepartmentService();
 	const empService = useEmployeeService();
@@ -63,6 +64,7 @@
 				name: values.name.trim(),
 				...(values.managerId ? { managerId: values.managerId } : {}),
 			});
+			directoryStore.reset();
 			toast.success('Tạo phòng ban thành công');
 			await router.push(`/management/departments/${created.id}`);
 		} catch (e) {

@@ -14,6 +14,7 @@ definePageMeta({ title: 'Thêm nhân viên mới' });
 const toast = useToast();
 const { create } = useEmployee();
 const { departments, fetchAll: fetchDepartments } = useDepartment();
+const directoryStore = useDirectoryStore();
 const positionService = usePositionService();
 const workShiftService = useWorkShiftService();
 const checkInLocationService = useCheckInLocationService();
@@ -121,11 +122,13 @@ const onSubmit = handleSubmit(async values => {
 			try {
 				await checkInLocationService.assignEmployee(selectedLocationId.value, emp.id);
 			} catch {
+				directoryStore.reset();
 				toast.warning('Tạo nhân viên thành công nhưng không thể gán vị trí làm việc');
 				navigateTo(`/management/employees/${emp.id}`);
 				return;
 			}
 		}
+		directoryStore.reset();
 		toast.success('Thêm nhân viên thành công');
 		navigateTo(`/management/employees/${emp.id}`);
 	} catch (e) {

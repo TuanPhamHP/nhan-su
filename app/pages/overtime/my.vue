@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { useOvertimeRequestService } from '~/services/overtime-request.service';
 import OvertimeStatusBadge from '~/components/modules/overtime/OvertimeStatusBadge.vue';
 import OvertimeDetailModal from '~/components/modules/overtime/OvertimeDetailModal.vue';
+import OvertimeRequestCard from '~/components/modules/overtime/OvertimeRequestCard.vue';
 import type { OvertimeRequestResponse, OvertimeStatus, QueryOvertimeParams } from '~/types/overtime.types';
 import type { PaginatedMeta } from '~/types/api.types';
 import type { SelectOption } from '~/components/ui/Select.vue';
@@ -118,14 +119,16 @@ onMounted(fetchRequests);
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn OT của tôi</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và quản lý các đơn làm thêm giờ của bạn</p>
 			</div>
-			<NuxtLink to="/overtime/create">
-				<CommonAppButton>
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-					</svg>
-					Tạo đơn OT
-				</CommonAppButton>
-			</NuxtLink>
+			<div class="hidden sm:block">
+				<NuxtLink to="/overtime/create">
+					<CommonAppButton>
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+						</svg>
+						Tạo đơn OT
+					</CommonAppButton>
+				</NuxtLink>
+			</div>
 		</div>
 
 		<!-- Summary cards -->
@@ -201,8 +204,52 @@ onMounted(fetchRequests);
 			</CommonAppButton>
 		</div>
 
-		<!-- Table -->
-		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+		<!-- Card list — mobile only -->
+		<div class="sm:hidden space-y-3 min-h-[75vh]">
+			<!-- Loading -->
+			<div v-if="loading" class="space-y-3">
+				<div
+					v-for="i in 4"
+					:key="i"
+					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse space-y-3"
+				>
+					<div class="flex justify-between">
+						<div class="space-y-1.5">
+							<div class="h-3 w-16 bg-gray-100 dark:bg-gray-800 rounded" />
+							<div class="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+						</div>
+						<div class="h-5 w-20 bg-gray-200 dark:bg-gray-700 rounded-full" />
+					</div>
+					<div class="h-3 w-40 bg-gray-100 dark:bg-gray-800 rounded" />
+					<div class="h-3 w-3/4 bg-gray-100 dark:bg-gray-800 rounded" />
+				</div>
+			</div>
+
+			<!-- Empty -->
+			<div v-else-if="requests.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+				<div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+					<svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+				</div>
+				<p class="text-sm font-medium text-gray-600 dark:text-gray-300">Chưa có đơn OT nào</p>
+				<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">trong tháng này</p>
+			</div>
+
+			<!-- Cards -->
+			<OvertimeRequestCard
+				v-for="req in requests"
+				v-else
+				:key="req.id"
+				:request="req"
+				:cancelling="cancellingId === req.id"
+				@cancel="handleCancel(req)"
+				@view="detailTarget = req"
+			/>
+		</div>
+
+		<!-- Table — desktop only -->
+		<div class="hidden sm:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
 			<div class="overflow-x-auto">
 				<table class="w-full text-sm">
 					<thead>
@@ -332,5 +379,16 @@ onMounted(fetchRequests);
 	<!-- Modal -->
 	<Teleport to="body">
 		<OvertimeDetailModal v-if="detailTarget" :request="detailTarget" @close="detailTarget = null" />
+
+		<!-- FAB mobile -->
+		<NuxtLink
+			to="/overtime/create"
+			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+			aria-label="Tạo đơn OT"
+		>
+			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+			</svg>
+		</NuxtLink>
 	</Teleport>
 </template>

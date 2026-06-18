@@ -186,12 +186,14 @@
 		<!-- Header & create button -->
 		<div class="flex items-center justify-between">
 			<h2 class="text-base font-semibold text-gray-900 dark:text-white">Danh sách phiếu của tôi</h2>
-			<CommonAppButton :disabled="counter?.isBlocked" @click="openCreateModal">
-				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-				</svg>
-				Tạo phiếu
-			</CommonAppButton>
+			<div class="hidden sm:block">
+				<CommonAppButton :disabled="counter?.isBlocked" @click="openCreateModal">
+					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+					</svg>
+					Tạo phiếu
+				</CommonAppButton>
+			</div>
 		</div>
 
 		<!-- Filter -->
@@ -241,7 +243,7 @@
 		</div>
 
 		<!-- Table -->
-		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[75vh] sm:min-h-0">
 			<div class="overflow-x-auto">
 				<table class="w-full text-sm">
 					<thead>
@@ -377,5 +379,17 @@
 			:violation-request="detailRequest"
 			@close="detailRequest = null"
 		/>
+
+		<!-- FAB mobile — ẩn khi bị blocked -->
+		<button
+			v-if="!counter?.isBlocked"
+			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+			aria-label="Tạo phiếu chỉnh công"
+			@click="openCreateModal"
+		>
+			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+			</svg>
+		</button>
 	</Teleport>
 </template>

@@ -8,7 +8,13 @@
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import { useLeaveBalanceService } from '~/services/leave-balance.service';
 	import { useEmployeeService } from '~/services/employee.service';
-	import type { LeaveType, LeaveBalance, HalfDayPeriod, CreateLeaveRequestDto, LeavePreviewResponse } from '~/types/leave.types';
+	import type {
+		LeaveType,
+		LeaveBalance,
+		HalfDayPeriod,
+		CreateLeaveRequestDto,
+		LeavePreviewResponse,
+	} from '~/types/leave.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
 
 	definePageMeta({ title: 'Tạo đơn nghỉ phép' });
@@ -428,7 +434,7 @@
 		<!-- Content -->
 		<div class="flex flex-col lg:flex-row gap-6 items-start">
 			<!-- ── Left: Form ─────────────────────────────────────────────────── -->
-			<div class="flex-1 min-w-0">
+			<div class="flex-1 w-full min-w-0 md:w-normal">
 				<form
 					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5"
 					@submit.prevent="onSubmit"
@@ -614,9 +620,7 @@
 											<span class="text-amber-700 dark:text-amber-400">Nghỉ không lương (KL):</span>
 											<span class="font-medium text-amber-900 dark:text-amber-200">{{ preview.unpaidDays }} ngày</span>
 										</div>
-										<div
-											class="border-t border-amber-200 dark:border-amber-700 pt-1 flex justify-between text-sm"
-										>
+										<div class="border-t border-amber-200 dark:border-amber-700 pt-1 flex justify-between text-sm">
 											<span class="text-amber-700 dark:text-amber-400">Số dư còn lại sau duyệt:</span>
 											<span class="font-medium text-amber-900 dark:text-amber-200">0 ngày</span>
 										</div>
@@ -890,7 +894,12 @@
 
 					<!-- Submit -->
 					<div class="pt-1">
-						<CommonAppButton type="submit" class="w-full justify-center" :loading="isSubmitting" :disabled="isOverLimit">
+						<CommonAppButton
+							type="submit"
+							class="w-full justify-center"
+							:loading="isSubmitting"
+							:disabled="isOverLimit"
+						>
 							<svg
 								v-if="!isSubmitting"
 								class="w-4 h-4"
@@ -1020,7 +1029,9 @@
 			class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
 			@click.self="showConfirmDialog = false"
 		>
-			<div class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl border border-gray-200 dark:border-gray-700">
+			<div
+				class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl border border-gray-200 dark:border-gray-700"
+			>
 				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Xác nhận gửi đơn</h3>
 
 				<!-- Kịch bản KL -->

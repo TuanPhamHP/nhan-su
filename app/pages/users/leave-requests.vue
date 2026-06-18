@@ -385,17 +385,18 @@
 			/>
 		</div>
 
-		<!-- Bottom: Tạo đơn — chỉ hiện trên mobile (sm trở lên đã có nút ở header) -->
-		<div class="pt-2 pb-1 sm:hidden">
-			<NuxtLink
-				to="/leave/create"
-				class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 dark:bg-brand-500 dark:hover:bg-brand-600"
-			>
-				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-				</svg>
-				Tạo đơn
-			</NuxtLink>
-		</div>
 	</div>
+
+	<!-- FAB Tạo đơn — chỉ hiện trên mobile -->
+	<Teleport to="body">
+		<NuxtLink
+			to="/leave/create"
+			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+			aria-label="Tạo đơn nghỉ phép"
+		>
+			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+			</svg>
+		</NuxtLink>
+	</Teleport>
 </template>

@@ -124,14 +124,16 @@ watch(activeTab, tab => {
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Công tác</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quản lý đơn công tác</p>
 			</div>
-			<NuxtLink to="/business-trips/create">
-				<CommonAppButton>
-					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-					</svg>
-					Tạo đơn công tác
-				</CommonAppButton>
-			</NuxtLink>
+			<div class="hidden sm:block">
+				<NuxtLink to="/business-trips/create">
+					<CommonAppButton>
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+						</svg>
+						Tạo đơn công tác
+					</CommonAppButton>
+				</NuxtLink>
+			</div>
 		</div>
 
 		<!-- Tabs -->
@@ -250,7 +252,7 @@ watch(activeTab, tab => {
 			<div v-else-if="pendingTrips.length === 0" class="py-16 text-center text-sm text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
 				Không có đơn nào chờ bạn duyệt
 			</div>
-			<div v-else class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+			<div v-else class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[75vh] sm:min-h-0">
 				<table class="w-full text-sm">
 					<thead>
 						<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
@@ -293,6 +295,17 @@ watch(activeTab, tab => {
 	</div>
 
 	<Teleport to="body">
+		<!-- FAB mobile -->
+		<NuxtLink
+			to="/business-trips/create"
+			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+			aria-label="Tạo đơn công tác"
+		>
+			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+			</svg>
+		</NuxtLink>
+
 		<TripDetailModal
 			v-if="detailTrip"
 			:trip="detailTrip"

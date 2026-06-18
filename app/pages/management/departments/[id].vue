@@ -12,6 +12,7 @@
 	const route = useRoute();
 	const toast = useToast();
 	const id = Number(route.params.id);
+	const directoryStore = useDirectoryStore();
 
 	const {
 		department,
@@ -51,6 +52,7 @@
 	const onSubmit = handleSubmit(async values => {
 		try {
 			await updateDept({ name: values.name.trim() });
+			directoryStore.reset();
 			toast.success('Đã cập nhật tên phòng ban');
 			isEditing.value = false;
 		} catch (e) {
@@ -101,6 +103,7 @@
 		addingId.value = emp.id;
 		try {
 			await assignMember(emp.id);
+			directoryStore.reset();
 			availableEmployees.value = availableEmployees.value.filter(e => e.id !== emp.id);
 			toast.success(`Đã thêm ${emp.fullName} vào phòng ban`);
 		} catch (e) {
@@ -120,6 +123,7 @@
 		removing.value = true;
 		try {
 			await removeMember(confirmRemove.value.id);
+			directoryStore.reset();
 			toast.success(`Đã xóa ${confirmRemove.value.fullName} khỏi phòng ban`);
 			confirmRemove.value = null;
 		} catch (e) {
@@ -141,9 +145,11 @@
 		try {
 			if (emp.status === 'INACTIVE') {
 				await activateMember(emp.id);
+				directoryStore.reset();
 				toast.success(`Đã kích hoạt ${emp.fullName}`);
 			} else {
 				await deactivateMember(emp.id);
+				directoryStore.reset();
 				toast.success(`Đã vô hiệu hóa ${emp.fullName}`);
 			}
 			confirmToggle.value = null;
@@ -269,9 +275,11 @@
 		try {
 			if (editingPosition.value) {
 				await positionService.update(editingPosition.value.id, { name: values.name.trim() });
+				directoryStore.reset();
 				toast.success('Đã cập nhật chức danh');
 			} else {
 				await positionService.create({ name: values.name.trim(), departmentId: id });
+				directoryStore.reset();
 				toast.success('Đã tạo chức danh mới');
 			}
 			showPositionModal.value = false;
@@ -290,6 +298,7 @@
 		deactivatingPosition.value = true;
 		try {
 			await positionService.deactivate(confirmDeactivatePosition.value.id);
+			directoryStore.reset();
 			toast.success(`Đã vô hiệu hóa "${confirmDeactivatePosition.value.name}"`);
 			confirmDeactivatePosition.value = null;
 			await loadPositions();

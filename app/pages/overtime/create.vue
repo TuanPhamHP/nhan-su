@@ -121,11 +121,11 @@ const today = format(new Date(), 'yyyy-MM-dd');
 			</div>
 		</div>
 
-		<div class="flex flex-col lg:flex-row gap-6 items-start">
+		<div class="flex flex-col lg:flex-row gap-6 lg:items-start">
 			<!-- ── Left: Form ──────────────────────────────────────────────────── -->
 			<div class="flex-1 min-w-0">
 				<form
-					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5"
+					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 space-y-5"
 					@submit.prevent="onSubmit"
 				>
 					<!-- Ngày OT -->
@@ -257,8 +257,8 @@ const today = format(new Date(), 'yyyy-MM-dd');
 				</form>
 			</div>
 
-			<!-- ── Right: Info panel ──────────────────────────────────────────── -->
-			<div class="w-full lg:w-72 space-y-4">
+			<!-- ── Right: Info panel — desktop only ─────────────────────────── -->
+			<div class="hidden lg:block lg:w-72 space-y-4">
 				<!-- Quy định OT -->
 				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
 					<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
