@@ -25,7 +25,8 @@
       "PowerShell(Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null } | Select-Object Name, @{N='UsedGB';E={[math]::Round\\($_.Used/1GB,2\\)}}, @{N='FreeGB';E={[math]::Round\\($_.Free/1GB,2\\)}}, @{N='Total';E={[math]::Round\\(\\($_.Used+$_.Free\\)/1GB,2\\)}} | Format-Table -AutoSize)",
       "Bash(Select-Object -Last 25)",
       "Bash(npx @vite-pwa/assets-generator --preset minimal-2023 public/app-logo-dark-mode.svg)",
-      "Bash(yarn build *)"
+      "Bash(yarn build *)",
+      "Bash(yarn generate *)"
     ],
     "additionalDirectories": [
       "t:\\my-gitlab\\hr-system\\hr-system-fe\\app\\pages\\employees"
