@@ -7,6 +7,7 @@ import TripReportModal from '~/components/modules/business-trip/TripReportModal.
 import RejectTripModal from '~/components/modules/business-trip/RejectTripModal.vue';
 import type { BusinessTripResponse, BusinessTripStatus, QueryBusinessTripsParams } from '~/types/business-trip.types';
 import type { PaginatedMeta } from '~/types/api.types';
+import type { SelectOption } from '~/components/ui/Select.vue';
 
 definePageMeta({ title: 'Đơn công tác' });
 
@@ -96,8 +97,8 @@ function fmtDate(d: string) {
 	return format(new Date(d), 'dd/MM/yyyy');
 }
 
-const statusOptions: { value: BusinessTripStatus | ''; label: string }[] = [
-	{ value: '', label: 'Tất cả trạng thái' },
+const statusOptions: SelectOption[] = [
+	{ value: undefined, label: 'Tất cả trạng thái' },
 	{ value: 'DRAFT', label: 'Nháp' },
 	{ value: 'PENDING', label: 'Chờ duyệt' },
 	{ value: 'APPROVED', label: 'Đã duyệt' },
@@ -105,6 +106,12 @@ const statusOptions: { value: BusinessTripStatus | ''; label: string }[] = [
 	{ value: 'COMPLETED', label: 'Hoàn thành' },
 	{ value: 'REJECTED', label: 'Từ chối' },
 ];
+
+function onStatusChange(value: BusinessTripStatus | undefined) {
+	myFilter.status = value;
+	myFilter.page = 1;
+	fetchMyTrips();
+}
 
 onMounted(() => {
 	fetchMyTrips();
@@ -158,13 +165,14 @@ watch(activeTab, tab => {
 		<template v-if="activeTab === 'my'">
 			<!-- Filter -->
 			<div class="flex flex-wrap items-center gap-3">
-				<select
-					v-model="myFilter.status"
-					class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-					@change="myFilter.page = 1; fetchMyTrips()"
-				>
-					<option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-				</select>
+				<div class="w-44">
+					<UiSelect
+						:model-value="myFilter.status"
+						:options="statusOptions"
+						placeholder="Tất cả trạng thái"
+						@update:model-value="onStatusChange($event as BusinessTripStatus | undefined)"
+					/>
+				</div>
 				<CommonAppButton variant="secondary" :loading="myLoading" @click="fetchMyTrips">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />

@@ -7,7 +7,11 @@
 
 	const { user } = useAuth();
 	const router = useRouter();
+	const uiStore = useUiStore();
+	const { previewRole } = storeToRefs(uiStore);
 	const { dashboard, loading, error, fetchDashboard } = useDashboard();
+
+	const effectiveRole = computed(() => previewRole.value ?? user.value?.role);
 
 	// ─── Greeting ────────────────────────────────────────────────────────────────
 
@@ -260,13 +264,13 @@
 	}
 
 	const quickActions = computed((): QuickAction[] => {
-		const role = user.value?.role;
+		const role = effectiveRole.value;
 		if (!role) return [];
 
 		if (role === 'EMPLOYEE') {
 			return [
 				{ label: 'Xem lịch sử chấm công', route: '/attendance/my', iconPath: ICONS.checkCircle },
-				{ label: 'Xin nghỉ phép', route: '/leave/create', iconPath: ICONS.calendar },
+				{ label: 'Xin nghỉ phép', route: '/users/leave-requests/create', iconPath: ICONS.calendar },
 				{ label: 'Đăng ký tăng ca', route: '/overtime/create', iconPath: ICONS.clock },
 				{ label: 'Hồ sơ cá nhân', route: '/profile', iconPath: ICONS.users },
 			];
@@ -316,7 +320,7 @@
 	const recentActivity = computed(() => dashboard.value?.recentActivity ?? []);
 
 	function navigateActivity(item: ActivityItem) {
-		const role = user.value?.role;
+		const role = effectiveRole.value;
 		switch (item.type) {
 			case 'leave':
 				router.push(

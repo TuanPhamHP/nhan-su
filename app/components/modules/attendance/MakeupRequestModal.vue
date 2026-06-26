@@ -138,21 +138,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 			<form class="px-6 pb-6 pt-2 space-y-4" @submit.prevent="onSubmit">
 				<div class="flex flex-col gap-1.5">
 					<label class="text-sm font-medium text-gray-700 dark:text-gray-300">Giờ check-in đề nghị (giờ VN)</label>
-					<input
+					<UiDateTimePickerV2
 						v-model="requestedCheckIn"
 						v-bind="requestedCheckInAttrs"
-						type="datetime-local"
-						class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+						placeholder="Chọn giờ check-in"
 					/>
 				</div>
 
 				<div class="flex flex-col gap-1.5">
 					<label class="text-sm font-medium text-gray-700 dark:text-gray-300">Giờ check-out đề nghị (giờ VN)</label>
-					<input
+					<UiDateTimePickerV2
 						v-model="requestedCheckOut"
 						v-bind="requestedCheckOutAttrs"
-						type="datetime-local"
-						class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+						placeholder="Chọn giờ check-out"
 					/>
 				</div>
 

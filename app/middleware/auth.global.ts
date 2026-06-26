@@ -6,10 +6,10 @@ export default defineNuxtRouteMiddleware(to => {
 	const isPublicRoute = PUBLIC_ROUTES.includes(to.path);
 
 	if (isPublicRoute && store.isAuthenticated) {
-		return navigateTo('/');
+		return navigateTo('/', { replace: true });
 	}
 
 	if (!isPublicRoute && !store.isAuthenticated) {
-		return navigateTo('/login');
+		return navigateTo('/login', { replace: true });
 	}
 });

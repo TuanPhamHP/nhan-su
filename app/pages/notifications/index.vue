@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import { format, parseISO } from 'date-fns';
 	import { useNotificationService } from '~/services';
+	import { resolveNotificationRoute } from '~/utils/notification-route';
 	import type { NotificationCategory, NotificationResponse, NotificationListMeta, QueryNotificationsParams } from '~/types/notification.types';
 
 	definePageMeta({ title: 'Thông báo' });
@@ -147,20 +148,8 @@
 				// non-critical
 			}
 		}
-		if (!notif.refType || notif.refId === null) return;
-		const isEmployee = user.value?.role === 'EMPLOYEE';
-		const routes: Record<string, string> = isEmployee
-			? {
-					leave_request: `/users/leave-requests`,
-					overtime_request: `/overtime/my`,
-					violation_request: `/violations/my`,
-				}
-			: {
-					leave_request: `/management/leave?id=${notif.refId}`,
-					overtime_request: `/management/overtime?id=${notif.refId}`,
-					violation_request: `/management/violations?id=${notif.refId}`,
-				};
-		const route = routes[notif.refType];
+		if (!notif.refType || !user.value) return;
+		const route = resolveNotificationRoute(notif.refType, notif.refId, user.value.role);
 		if (route) router.push(route);
 	}
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 	import type { SelectOption } from '~/components/ui/Select.vue';
-	import type { AttendanceReportResponse } from '~/types/report.types';
+	import type { AttendanceReportResponse, LeaveReportResponse } from '~/types/report.types';
 	import EmployeeAttendanceDetailModal from '~/components/modules/attendance/EmployeeAttendanceDetailModal.vue';
+	import EmployeeLeaveReportModal from '~/components/modules/report/EmployeeLeaveReportModal.vue';
 
 	definePageMeta({ title: 'Báo cáo' });
 
@@ -24,6 +25,11 @@
 
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
 	const { leaveTypes, fetchLeaveTypes } = useLeaveTypes();
+
+	const authStore = useAuthStore();
+	const { user } = storeToRefs(authStore);
+	const isManager = computed(() => user.value?.role === 'MANAGER');
+	const managerDepartmentId = computed(() => user.value?.department?.id);
 
 	// ─── Tabs ──────────────────────────────────────────────────────────────────
 	type Tab = 'attendance' | 'leave';
@@ -51,10 +57,16 @@
 		...monthOptions.value,
 	]);
 
-	const departmentOptions = computed(() => [
-		{ value: 0, label: 'Tất cả phòng ban' },
-		...departments.value.map(d => ({ value: d.id, label: d.name })),
-	]);
+	const departmentOptions = computed(() => {
+		if (isManager.value && managerDepartmentId.value) {
+			const dep = departments.value.find(d => d.id === managerDepartmentId.value);
+			return dep ? [{ value: dep.id, label: dep.name }] : [];
+		}
+		return [
+			{ value: 0, label: 'Tất cả phòng ban' },
+			...departments.value.map(d => ({ value: d.id, label: d.name })),
+		];
+	});
 
 	const leaveTypeOptions = computed<SelectOption[]>(() => [
 		{ value: undefined, label: 'Tất cả loại phép' },
@@ -70,7 +82,7 @@
 	const attendanceFilter = reactive({
 		year: currentYear,
 		month: currentMonth,
-		departmentId: undefined as number | undefined,
+		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
 	});
 
 	watch(attendanceFilter, () => {
@@ -154,7 +166,7 @@
 	const leaveFilter = reactive({
 		year: currentYear,
 		month: undefined as number | undefined,
-		departmentId: undefined as number | undefined,
+		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
 		leaveTypeId: undefined as number | undefined,
 	});
 
@@ -162,8 +174,49 @@
 		if (leaveFetched.value) leaveDirty.value = true;
 	});
 
-	const leaveRows = computed(() => leaveReport.value.slice(0, DISPLAY_LIMIT));
-	const leaveOverflow = computed(() => leaveReport.value.length > DISPLAY_LIMIT);
+	interface LeaveEmployeeGroup {
+		employeeId: number;
+		employeeCode: string;
+		fullName: string;
+		departmentName: string | null;
+		rows: LeaveReportResponse[];
+		totalRequests: number;
+		approvedRequests: number;
+		pendingRequests: number;
+		totalDaysApproved: number;
+	}
+
+	const leaveGroups = computed<LeaveEmployeeGroup[]>(() => {
+		const map = new Map<number, LeaveEmployeeGroup>();
+		for (const row of leaveReport.value) {
+			let group = map.get(row.employeeId);
+			if (!group) {
+				group = {
+					employeeId: row.employeeId,
+					employeeCode: row.employeeCode,
+					fullName: row.fullName,
+					departmentName: row.departmentName,
+					rows: [],
+					totalRequests: 0,
+					approvedRequests: 0,
+					pendingRequests: 0,
+					totalDaysApproved: 0,
+				};
+				map.set(row.employeeId, group);
+			}
+			group.rows.push(row);
+			group.totalRequests += row.totalRequests;
+			group.approvedRequests += row.approvedRequests;
+			group.pendingRequests += row.pendingRequests;
+			group.totalDaysApproved += row.totalDaysApproved;
+		}
+		return Array.from(map.values());
+	});
+
+	const leaveRows = computed(() => leaveGroups.value.slice(0, DISPLAY_LIMIT));
+	const leaveOverflow = computed(() => leaveGroups.value.length > DISPLAY_LIMIT);
+
+	const detailLeaveEmployee = ref<LeaveEmployeeGroup | null>(null);
 
 	async function viewLeaveReport() {
 		try {
@@ -191,12 +244,6 @@
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi xuất Excel nghỉ phép');
 		}
-	}
-
-	function remainingClass(days: number): string {
-		if (days < 2) return 'text-red-600 dark:text-red-400 font-semibold';
-		if (days <= 5) return 'text-orange-500 dark:text-orange-400 font-medium';
-		return 'text-green-600 dark:text-green-400 font-medium';
 	}
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────
@@ -258,6 +305,7 @@
 					<UiSelectInput
 						:model-value="attendanceFilter.departmentId ?? 0"
 						:options="departmentOptions"
+						:disabled="isManager"
 						placeholder="Tất cả phòng ban"
 						@update:model-value="attendanceFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
@@ -551,6 +599,7 @@
 					<UiSelectInput
 						:model-value="leaveFilter.departmentId ?? 0"
 						:options="departmentOptions"
+						:disabled="isManager"
 						placeholder="Tất cả phòng ban"
 						@update:model-value="leaveFilter.departmentId = $event === 0 ? undefined : ($event as number)"
 					/>
@@ -623,7 +672,7 @@
 						d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
 					/>
 				</svg>
-				Đang hiển thị {{ DISPLAY_LIMIT }}/{{ leaveReport.length }} bản ghi. Xuất Excel để xem đầy đủ.
+				Đang hiển thị {{ DISPLAY_LIMIT }}/{{ leaveGroups.length }} nhân viên. Xuất Excel để xem đầy đủ.
 			</div>
 
 			<!-- Table -->
@@ -648,9 +697,9 @@
 									Phòng ban
 								</th>
 								<th
-									class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 								>
-									Loại phép
+									Số loại phép
 								</th>
 								<th
 									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
@@ -665,12 +714,12 @@
 								<th
 									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 								>
-									Tổng ngày đã dùng
+									Chờ duyệt
 								</th>
 								<th
 									class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 								>
-									Còn lại
+									Tổng ngày đã dùng
 								</th>
 							</tr>
 						</thead>
@@ -714,28 +763,37 @@
 								</td>
 							</tr>
 
-							<!-- Data rows -->
+							<!-- Data rows — grouped by employee -->
 							<tr
-								v-for="(row, idx) in leaveRows"
-								:key="`${row.employeeId}-${row.leaveTypeCode}-${idx}`"
-								class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+								v-for="group in leaveRows"
+								:key="group.employeeId"
+								class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+								@click="detailLeaveEmployee = group"
 							>
 								<td class="px-4 py-3">
-									<span class="font-mono text-xs text-gray-500 dark:text-gray-400">{{ row.employeeCode }}</span>
+									<span class="font-mono text-xs text-gray-500 dark:text-gray-400">{{ group.employeeCode }}</span>
 								</td>
-								<td class="px-4 py-3 font-bold text-gray-900 dark:text-white whitespace-nowrap">{{ row.fullName }}</td>
+								<td class="px-4 py-3 font-bold text-gray-900 dark:text-white whitespace-nowrap">
+									{{ group.fullName }}
+								</td>
 								<td class="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-									{{ row.departmentName ?? '—' }}
+									{{ group.departmentName ?? '—' }}
 								</td>
-								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">{{ row.leaveTypeName }}</td>
-								<td class="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{{ row.totalRequests }}</td>
-								<td class="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{{ row.approvedRequests }}</td>
+								<td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{{ group.rows.length }}</td>
+								<td class="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{{ group.totalRequests }}</td>
+								<td class="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{{ group.approvedRequests }}</td>
+								<td
+									class="px-4 py-3 text-right"
+									:class="
+										group.pendingRequests > 0
+											? 'text-orange-500 dark:text-orange-400 font-medium'
+											: 'text-gray-500 dark:text-gray-400'
+									"
+								>
+									{{ group.pendingRequests }}
+								</td>
 								<td class="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">
-									{{ row.totalDaysApproved }}
-								</td>
-								<td class="px-4 py-3 text-right">
-									<span v-if="row.remainingBalance === null" class="text-gray-400 dark:text-gray-500">—</span>
-									<span v-else :class="remainingClass(row.remainingBalance)">{{ row.remainingBalance }}</span>
+									{{ group.totalDaysApproved }}
 								</td>
 							</tr>
 						</tbody>
@@ -754,6 +812,17 @@
 			:initial-year="attendanceFilter.year"
 			:initial-month="attendanceFilter.month"
 			@close="detailEmployee = null"
+		/>
+		<EmployeeLeaveReportModal
+			v-if="detailLeaveEmployee"
+			:employee-id="detailLeaveEmployee.employeeId"
+			:employee-code="detailLeaveEmployee.employeeCode"
+			:full-name="detailLeaveEmployee.fullName"
+			:department-name="detailLeaveEmployee.departmentName"
+			:rows="detailLeaveEmployee.rows"
+			:year="leaveFilter.year"
+			:month="leaveFilter.month"
+			@close="detailLeaveEmployee = null"
 		/>
 	</Teleport>
 </template>

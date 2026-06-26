@@ -6,6 +6,7 @@
 	import { useViolationRequestService } from '~/services/violation-request.service';
 	import ViolationRequestModal from '~/components/modules/violation/ViolationRequestModal.vue';
 	import ViolationDetailModal from '~/components/modules/violation/ViolationDetailModal.vue';
+	import MakeupRequestModal from '~/components/modules/attendance/MakeupRequestModal.vue';
 	import type { ViolationCounter, ViolationRequestType, ViolationRequestStatus, ViolationDetailView } from '~/types/violation.types';
 
 	definePageMeta({ title: 'Chấm công của tôi' });
@@ -242,6 +243,19 @@
 		} finally {
 			violationModal.loading = false;
 		}
+	}
+
+	// ─── Makeup request modal ─────────────────────────────────────────────────────
+
+	const makeupModalRecord = ref<AttendanceRecordDetail | null>(null);
+
+	function openMakeupModal() {
+		if (selectedRecord.value) makeupModalRecord.value = selectedRecord.value;
+	}
+
+	async function onMakeupSubmitted() {
+		makeupModalRecord.value = null;
+		await fetchMonth();
 	}
 
 	onMounted(async () => {
@@ -591,13 +605,14 @@
 								{{ selectedRecord.isLocked ? 'Bản ghi đã bị khóa' : 'Chấm công không đầy đủ' }}
 							</p>
 						</div>
-						<NuxtLink
+						<button
 							v-if="selectedRecord.missingType === 'MISSING_CHECKOUT'"
-							to="/attendance/makeup"
+							type="button"
 							class="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline flex-shrink-0"
+							@click="openMakeupModal"
 						>
 							Tạo đơn bù công
-						</NuxtLink>
+						</button>
 					</div>
 
 					<!-- Linked violation requests -->
@@ -730,6 +745,12 @@
 			v-if="detailViolation"
 			:violation-request="detailViolation"
 			@close="detailViolation = null"
+		/>
+		<MakeupRequestModal
+			v-if="makeupModalRecord"
+			:record="makeupModalRecord"
+			@submitted="onMakeupSubmitted"
+			@close="makeupModalRecord = null"
 		/>
 	</Teleport>
 </template>

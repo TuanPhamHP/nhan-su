@@ -26,7 +26,8 @@
       "Bash(Select-Object -Last 25)",
       "Bash(npx @vite-pwa/assets-generator --preset minimal-2023 public/app-logo-dark-mode.svg)",
       "Bash(yarn build *)",
-      "Bash(yarn generate *)"
+      "Bash(yarn generate *)",
+      "PowerShell($src = \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\users\\\\leave-requests.vue\"; $newDir = \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\users\\\\leave-requests\"; New-Item -ItemType Directory -Path $newDir -Force | Out-Null; Move-Item -Path $src -Destination \\(Join-Path $newDir \"index.vue\"\\) -Force; Move-Item -Path \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\leave\\\\create.vue\" -Destination \\(Join-Path $newDir \"create.vue\"\\) -Force; Remove-Item -Path \"t:\\\\my-gitlab\\\\hr-system\\\\hr-system-fe\\\\app\\\\pages\\\\leave\" -Recurse -Force; Get-ChildItem $newDir | Select-Object Name)"
     ],
     "additionalDirectories": [
       "t:\\my-gitlab\\hr-system\\hr-system-fe\\app\\pages\\employees"

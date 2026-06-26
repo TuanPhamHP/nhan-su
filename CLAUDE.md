@@ -76,8 +76,6 @@ app/
 │   ├── attendance/
 │   │   ├── my.vue            ← chấm công cá nhân (tất cả roles)
 │   │   └── check-in.vue
-│   ├── leave/
-│   │   └── create.vue        ← tạo đơn nghỉ (employee — back về /users/leave-requests)
 │   ├── overtime/
 │   │   ├── my.vue            ← OT cá nhân
 │   │   └── create.vue
@@ -85,7 +83,7 @@ app/
 │   │   └── my.vue
 │   ├── business-trips/       ← shared: employee xem đơn cá nhân, management xem tất cả
 │   ├── users/
-│   │   └── leave-requests.vue ← danh sách đơn nghỉ của tôi (employee)
+│   │   └── leave-requests/    ← index.vue (list) + create.vue (tạo đơn nghỉ employee)
 │   └── management/           ← TẤT CẢ pages quản trị — chỉ ADMIN/HR/MANAGER/CHIEF truy cập
 │       ├── employees/         ← index, new, [id]
 │       ├── departments/       ← index, new, [id]

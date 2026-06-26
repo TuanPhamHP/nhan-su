@@ -56,9 +56,9 @@ Toàn bộ pages quản trị nằm dưới prefix `/management/`, pages nhân v
 /attendance/my              → Chấm công cá nhân (tất cả roles)
 /overtime/my                → OT cá nhân
 /violations/my              → Chỉnh công cá nhân
-/leave/create               → Tạo đơn nghỉ (employee)
 /business-trips             → Công tác (shared — role filter trong page)
 /users/leave-requests       → Danh sách đơn nghỉ của tôi (employee)
+/users/leave-requests/create → Tạo đơn nghỉ (employee)
 
 /management/employees       → Quản lý nhân viên
 /management/attendance      → Chấm công toàn bộ

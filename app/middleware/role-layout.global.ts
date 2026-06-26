@@ -13,7 +13,7 @@ export default defineNuxtRouteMiddleware(to => {
 
 	if (isManagementPath) {
 		// Block employees from /management/** entirely
-		if (role === 'EMPLOYEE') return navigateTo('/');
+		if (role === 'EMPLOYEE') return navigateTo('/', { replace: true });
 		setPageLayout('default');
 		return;
 	}
@@ -23,7 +23,7 @@ export default defineNuxtRouteMiddleware(to => {
 
 	// Management users (not in employee preview) visiting "/" go straight to /management
 	if (to.path === '/' && MANAGEMENT_ROLES.includes(effectiveRole)) {
-		return navigateTo('/management');
+		return navigateTo('/management', { replace: true });
 	}
 
 	setPageLayout(MANAGEMENT_ROLES.includes(effectiveRole) ? 'default' : 'employee');

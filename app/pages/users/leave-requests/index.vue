@@ -143,7 +143,7 @@
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách đơn của bạn</p>
 			</div>
 			<NuxtLink
-				to="/leave/create"
+				to="/users/leave-requests/create"
 				class="hidden sm:inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 dark:bg-brand-500 dark:hover:bg-brand-600 flex-shrink-0"
 			>
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -390,7 +390,7 @@
 	<!-- FAB Tạo đơn — chỉ hiện trên mobile -->
 	<Teleport to="body">
 		<NuxtLink
-			to="/leave/create"
+			to="/users/leave-requests/create"
 			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
 			aria-label="Tạo đơn nghỉ phép"
 		>
