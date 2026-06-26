@@ -252,6 +252,7 @@
 					</button> -->
 					<!-- Default accounts -->
 					<div
+						v-if="false"
 						class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-800/50"
 					>
 						<p class="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Tài khoản login nhanh:</p>
