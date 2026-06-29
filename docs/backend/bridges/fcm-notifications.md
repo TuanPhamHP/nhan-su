@@ -71,56 +71,89 @@ Authorization: Bearer <access_token>
 
 ## 3. Nhận FCM Message (client-side)
 
-Server gửi **data-only message** (không có `notification` field) để client tự kiểm soát hiển thị.
+Server gửi **cả `notification` field VÀ `data` field**:
 
-### Payload FCM data:
+- **`notification`** (OS-level): khi app **background/killed**, hệ điều hành tự render notification trên status bar/lock screen. User tap → mở app.
+- **`data`**: dùng để client (mobile/web) parse và quyết định:
+  - Khi **foreground**: render in-app banner thủ công (OS không hiện noti khi app đang mở)
+  - Khi user **tap notification**: dùng `category` / `refType` / `id` để navigate đến màn hình tương ứng
+  - Gọi API `PATCH /v1/notifications/:notificationId/read` để mark as read (dùng `notificationId`, không phải `id`)
+
+### Shape FCM message:
 
 ```json
 {
-	"type": "attendance.checkin",
-	"notificationId": "42",
-	"title": "Chấm công vào thành công",
-	"body": "Bạn đã check-in lúc 08:32",
-	"attendanceId": "123"
+	"notification": {
+		"title": "Chấm công vào thành công",
+		"body": "Bạn đã check-in lúc 08:32"
+	},
+	"data": {
+		"category": "ATTENDANCE",
+		"type": "CHECK_IN",
+		"refType": "attendance_record",
+		"id": "123",
+		"notificationId": "42",
+		"title": "Chấm công vào thành công",
+		"body": "Bạn đã check-in lúc 08:32"
+	}
 }
 ```
 
-### Các loại `type` hiện tại:
+### Field semantics trong `data`:
 
-| type                       | Trigger                                                            |
-| -------------------------- | ------------------------------------------------------------------ |
-| `attendance.checkin`       | Employee check-in thành công                                       |
-| `attendance.checkout`      | Employee check-out thành công                                      |
-| `general_request.pending`  | Đơn văn bản được nộp — gửi đến người duyệt, người tạo, HR          |
-| `general_request.approved` | Đơn văn bản được duyệt hoàn tất — gửi đến người tạo, approvers, HR |
-| `general_request.rejected` | Đơn văn bản bị từ chối — gửi đến người tạo, approvers, HR          |
+| Field | Kiểu | Ý nghĩa |
+| --- | --- | --- |
+| `category` | `NotificationCategory` enum | `EVENT` / `ATTENDANCE` / `LEAVE` / `REQUEST` — mobile route đến tab tương ứng |
+| `type` | `NotificationType` enum | event chi tiết, vd. `LEAVE_APPROVED`, `CHECK_IN`, `TEST` |
+| `refType` | string | tên entity, vd. `leave_request`, `attendance_record`. `''` nếu không có |
+| `id` | string | **ID entity gốc** để mobile navigate (vd. mở màn hình LeaveDetail/123). `''` nếu không có |
+| `notificationId` | string | **ID record Notification** trong DB để mark read. `'0'` nếu là test (không có DB record) |
+| `title`, `body` | string | bản sao của `notification.title/body` — foreground in-app banner dùng |
+
+### Foreground vs background flow:
+
+```
+Background/killed → OS render notification.title/body → user tap
+                     → app mở → RemoteMessage chứa cả `data` → dùng category/refType/id navigate
+
+Foreground (app đang mở) → OS KHÔNG hiện noti → SDK fire onMessage()
+                     → app dùng data.title/body để show in-app banner
+                     → fetch /v1/notifications/unread-count cập nhật badge
+```
+
+### Các giá trị `type` thường gặp:
+
+| type                       | category     | refType             | Trigger                                       |
+| -------------------------- | ------------ | ------------------- | --------------------------------------------- |
+| `CHECK_IN`                 | `ATTENDANCE` | `attendance_record` | Employee check-in thành công                  |
+| `CHECK_OUT`                | `ATTENDANCE` | `attendance_record` | Employee check-out thành công                 |
+| `LATE`                     | `ATTENDANCE` | `attendance_record` | Đi muộn                                       |
+| `LEAVE_APPROVED`           | `LEAVE`      | `leave_request`     | Đơn phép được duyệt                           |
+| `LEAVE_REJECTED`           | `LEAVE`      | `leave_request`     | Đơn phép bị từ chối                           |
+| `GENERAL_REQUEST_PENDING`  | `REQUEST`    | `general_request`   | Đơn văn bản được nộp                          |
+| `GENERAL_REQUEST_APPROVED` | `REQUEST`    | `general_request`   | Đơn văn bản duyệt xong                        |
+| `GENERAL_REQUEST_REJECTED` | `REQUEST`    | `general_request`   | Đơn văn bản bị từ chối                        |
+| `TEST`                     | `EVENT`      | `''`                | Gọi từ admin qua `/v1/notifications/test-fcm` |
+
+Xem full enum: `prisma/schema.prisma → enum NotificationType`.
 
 ### Web (Nuxt / Vue) — Firebase JS SDK:
 
 ```javascript
-import { getMessaging, onMessage, getToken } from 'firebase/messaging';
+import { getMessaging, onMessage } from 'firebase/messaging';
 
 const messaging = getMessaging();
 
-// Foreground: app đang mở
+// Foreground: app đang mở → OS không hiện noti, mình tự render từ data
 onMessage(messaging, payload => {
-	const { type, notificationId, title, body } = payload.data;
+	const { category, type, refType, id, notificationId, title, body } = payload.data;
 
-	// Cập nhật badge/count ngay
-	notificationStore.incrementUnread();
-
-	// Hoặc fetch lại từ API để đảm bảo đúng
 	notificationStore.fetchUnreadCount();
-
-	// Hiển thị toast/snackbar
-	showToast({ title, body });
+	showToast({ title, body, onClick: () => navigate({ category, refType, id }) });
 });
-
-// Background: app đang đóng → cần firebase-messaging-sw.js
-// Trong service worker, handle 'push' event và hiện Notification API
 ```
 
-**firebase-messaging-sw.js** (đặt ở public root):
+**firebase-messaging-sw.js** (background — không cần tự render notification vì server đã gửi field `notification`, OS xử lý sẵn):
 
 ```javascript
 importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-app-compat.js');
@@ -129,42 +162,47 @@ importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-messaging-comp
 firebase.initializeApp({
 	/* config */
 });
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage(payload => {
-	const { title, body, notificationId } = payload.data;
-	self.registration.showNotification(title, {
-		body,
-		icon: '/icon-192x192.png',
-		data: { notificationId },
-	});
-});
+firebase.messaging();
+// Không cần onBackgroundMessage handler vì server gửi sẵn notification field
 ```
 
 ### Mobile (Flutter):
 
 ```dart
+// Foreground: OS không hiện noti → app tự render
 FirebaseMessaging.onMessage.listen((RemoteMessage message) {
   final data = message.data;
-  final type = data['type'];
-  final notificationId = data['notificationId'];
-
-  // Foreground: hiện in-app notification bar
-  _showInAppNotification(data['title'], data['body']);
-
-  // Cập nhật badge
+  _showInAppBanner(data['title'], data['body']);
   ref.read(notificationProvider.notifier).fetchUnreadCount();
 });
 
-// Background / terminated → Flutter tự handle qua onBackgroundMessage
-FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-// Khi user tap notification
+// Khi user tap notification (cả background/killed)
 FirebaseMessaging.onMessageOpenedApp.listen((message) {
-  final notificationId = message.data['notificationId'];
-  // Navigate đến màn hình liên quan
-  _navigateFromNotification(message.data['type'], notificationId);
+  _navigateFromPayload(message.data);
 });
+
+// Cold start: app được mở từ trạng thái killed do tap notification
+FirebaseMessaging.instance.getInitialMessage().then((message) {
+  if (message != null) _navigateFromPayload(message.data);
+});
+
+void _navigateFromPayload(Map<String, dynamic> data) {
+  final category = data['category'];   // "ATTENDANCE" / "LEAVE" / "REQUEST" / "EVENT"
+  final refType  = data['refType'];    // "leave_request" / "attendance_record" / ...
+  final id       = data['id'];         // "123" — entity ID để navigate
+  final notificationId = data['notificationId'];  // mark as read sau khi navigate
+
+  switch (refType) {
+    case 'leave_request':       Navigator.pushNamed(context, '/leave/$id'); break;
+    case 'attendance_record':   Navigator.pushNamed(context, '/attendance/$id'); break;
+    case 'general_request':     Navigator.pushNamed(context, '/general-requests/$id'); break;
+    default:                    Navigator.pushNamed(context, '/notifications'); break;
+  }
+
+  if (notificationId != '0') {
+    api.markNotificationRead(int.parse(notificationId));
+  }
+}
 ```
 
 ---
@@ -261,12 +299,13 @@ src/
 │   │   └── dto/register-device-token.dto.ts
 │   └── notifications/
 │       ├── notification.events.ts        ← AttendanceCheckinEvent, AttendanceCheckoutEvent
-│       ├── notification.listener.ts      ← @OnEvent handlers → DB + queue
+│       ├── notification.listener.ts      ← @OnEvent handlers → NotificationCenterService
 │       ├── notification.repository.ts    ← CRUD Notification table
-│       ├── fcm.processor.ts              ← BullMQ worker gọi FirebaseService
 │       ├── dto/query-notification.dto.ts
 │       └── transformers/notification.transformer.ts
 ```
+
+> **Note**: FCM gửi đồng bộ trong `NotificationCenterService.sendFcm()` (không qua BullMQ queue). Trước đây có `fcm.processor.ts` BullMQ worker nhưng là dead code đã xoá — không có producer nào enqueue.
 
 ---
 

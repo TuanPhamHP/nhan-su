@@ -1,8 +1,11 @@
 // firebase-messaging-sw.js
-// Xử lý push notification khi app đang đóng hoặc chạy nền.
+// FCM Service Worker — chỉ khởi tạo Firebase Messaging và xử lý click vào notification.
 //
-// SETUP: Điền Firebase config bên dưới (Firebase Console → Project Settings → General → Your apps).
-// Đây là client config (public), không phải Admin SDK key — an toàn để commit.
+// Lưu ý: KHÔNG cài onBackgroundMessage handler. Server gửi cả `notification` field
+// nên Firebase tự render notification ở background — gắn thêm onBackgroundMessage sẽ
+// tạo ra noti trùng lặp. Xem docs/backend/bridges/fcm-notifications.md mục 3.
+//
+// SETUP: Firebase config bên dưới là client config (public), an toàn để commit.
 
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
@@ -17,31 +20,24 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+firebase.messaging();
 
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage(payload => {
-	const data = payload.data || {};
-	const title = data.title || 'Thông báo';
-	const body = data.body || '';
-
-	self.registration.showNotification(title, {
-		body,
-		icon: '/favicon.ico',
-		badge: '/favicon.ico',
-		data: { notificationId: data.notificationId, type: data.type },
-	});
-});
-
-// Khi user click vào notification → focus tab hoặc mở app
+// Khi user click notification (background/killed) → focus tab hiện có hoặc mở /notifications.
+// SW không biết role nên không tự navigate đến trang chi tiết — danh sách /notifications
+// sẽ tự dùng resolveNotificationRoute() để đi đúng URL theo role khi user click item.
 self.addEventListener('notificationclick', event => {
 	event.notification.close();
+	const targetUrl = '/notifications';
+
 	event.waitUntil(
 		clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-			if (clientList.length > 0) {
-				return clientList[0].focus();
+			for (const client of clientList) {
+				if ('focus' in client) {
+					client.postMessage({ type: 'fcm-notification-click', data: event.notification.data ?? {} });
+					return client.focus();
+				}
 			}
-			return clients.openWindow('/');
+			return clients.openWindow(targetUrl);
 		}),
 	);
 });

@@ -41,7 +41,11 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 			return id ? `/online-work/my?open_id=${id}` : '/online-work/my';
 
 		case 'attendance':
+		case 'attendance_record':
 			return manage ? '/management/attendance' : '/attendance/my';
+
+		case 'general_request':
+			return id ? `/general-requests/${id}` : '/general-requests';
 
 		default:
 			return null;

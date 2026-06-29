@@ -1,4 +1,4 @@
-export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE';
+export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE' | 'REQUEST';
 
 export type NotificationActionType = 'NAVIGATE_ONLY' | 'APPROVE_REJECT' | null;
 
@@ -8,6 +8,8 @@ export type NotificationType =
 	| 'LATE'
 	| 'ABSENT'
 	| 'MISSING_CHECKOUT'
+	| 'CHECKIN_REMINDER'
+	| 'CHECKOUT_REMINDER'
 	| 'LEAVE_CREATED'
 	| 'LEAVE_APPROVED'
 	| 'LEAVE_REJECTED'
@@ -20,7 +22,24 @@ export type NotificationType =
 	| 'OT_AUTO_CANCELLED'
 	| 'VIOLATION_CREATED'
 	| 'VIOLATION_APPROVED'
-	| 'VIOLATION_REJECTED';
+	| 'VIOLATION_REJECTED'
+	| 'ONLINE_WORK_CREATED'
+	| 'ONLINE_WORK_APPROVED'
+	| 'ONLINE_WORK_REJECTED'
+	| 'ONLINE_WORK_CANCELLED'
+	| 'ONLINE_WORK_COMPLETED'
+	| 'MAKEUP_CREATED'
+	| 'MAKEUP_APPROVED'
+	| 'MAKEUP_REJECTED'
+	| 'CONTRACT_EXPIRY_WARNING'
+	| 'BUSINESS_TRIP_PENDING'
+	| 'BUSINESS_TRIP_APPROVED'
+	| 'BUSINESS_TRIP_REJECTED'
+	| 'GENERAL_REQUEST_PENDING'
+	| 'GENERAL_REQUEST_APPROVED'
+	| 'GENERAL_REQUEST_REJECTED'
+	| 'GENERAL_REQUEST_CANCELLED'
+	| 'TEST';
 
 export interface NotificationActionPayload {
 	approveEndpoint: string;
@@ -69,6 +88,20 @@ export interface QueryNotificationsParams {
 export interface RegisterDeviceTokenDto {
 	token: string;
 	platform: 'WEB' | 'ANDROID' | 'IOS';
+}
+
+/**
+ * Payload trong `data` field của FCM message (mọi value đều là string vì FCM ép kiểu).
+ * Tham khảo: docs/backend/bridges/fcm-notifications.md mục 3.
+ */
+export interface FcmDataPayload {
+	category: NotificationCategory | string;
+	type: NotificationType | string;
+	refType: string;
+	id: string;
+	notificationId: string;
+	title: string;
+	body: string;
 }
 
 // ─── Notification Testing ──────────────────────────────────────────────────────
