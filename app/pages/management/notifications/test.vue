@@ -7,7 +7,50 @@
 		TestNotificationResult,
 		FcmTestResult,
 		NotificationPlatform,
+		NotificationType,
+		NotificationCategory,
 	} from '~/types/notification.types';
+
+	// Tất cả NotificationType enum (khớp backend prisma schema).
+	// Xem docs/backend/fcm-notification-routing.json để biết mapping → category/refType.
+	const NOTIFICATION_TYPES: NotificationType[] = [
+		'CHECK_IN', 'CHECK_OUT', 'LATE', 'ABSENT', 'MISSING_CHECKOUT',
+		'CHECKIN_REMINDER', 'CHECKOUT_REMINDER',
+		'LEAVE_CREATED', 'LEAVE_APPROVED', 'LEAVE_REJECTED', 'LEAVE_CANCELLED', 'LEAVE_AUTO_CANCELLED',
+		'OT_CREATED', 'OT_APPROVED', 'OT_REJECTED', 'OT_CANCELLED', 'OT_AUTO_CANCELLED',
+		'VIOLATION_CREATED', 'VIOLATION_APPROVED', 'VIOLATION_REJECTED',
+		'ONLINE_WORK_CREATED', 'ONLINE_WORK_APPROVED', 'ONLINE_WORK_REJECTED', 'ONLINE_WORK_CANCELLED', 'ONLINE_WORK_COMPLETED',
+		'MAKEUP_CREATED', 'MAKEUP_APPROVED', 'MAKEUP_REJECTED',
+		'CONTRACT_EXPIRY_WARNING',
+		'BUSINESS_TRIP_PENDING', 'BUSINESS_TRIP_APPROVED', 'BUSINESS_TRIP_REJECTED',
+		'GENERAL_REQUEST_PENDING', 'GENERAL_REQUEST_APPROVED', 'GENERAL_REQUEST_REJECTED', 'GENERAL_REQUEST_CANCELLED',
+		'TEST',
+	];
+
+	const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['EVENT', 'ATTENDANCE', 'LEAVE', 'REQUEST'];
+
+	// Preset auto-fill — khớp với mapping trong fcm-notification-routing.json
+	interface FcmPreset {
+		label: string;
+		type: NotificationType;
+		category: NotificationCategory;
+		refType: string;
+		title: string;
+		body: string;
+		idExample: string;
+	}
+
+	const FCM_PRESETS: FcmPreset[] = [
+		{ label: 'Đi muộn (LATE)', type: 'LATE', category: 'ATTENDANCE', refType: '', title: 'Bạn đã đi muộn', body: 'Check-in lúc 09:15, muộn 15 phút', idExample: '' },
+		{ label: 'Quên check-out', type: 'MISSING_CHECKOUT', category: 'ATTENDANCE', refType: '', title: 'Quên check-out', body: 'Hôm qua bạn chưa check-out', idExample: '' },
+		{ label: 'Đơn nghỉ được duyệt', type: 'LEAVE_APPROVED', category: 'LEAVE', refType: 'leave_request', title: 'Đơn nghỉ đã được duyệt', body: 'Đơn nghỉ ngày 30/06 đã được duyệt', idExample: '123' },
+		{ label: 'Đơn OT được tạo', type: 'OT_CREATED', category: 'EVENT', refType: 'overtime_request', title: 'Đơn OT mới', body: 'NV Nguyễn A vừa gửi đơn OT', idExample: '45' },
+		{ label: 'Đơn vi phạm bị từ chối', type: 'VIOLATION_REJECTED', category: 'EVENT', refType: 'violation_request', title: 'Đơn giải trình bị từ chối', body: 'Vui lòng kiểm tra lý do từ chối', idExample: '12' },
+		{ label: 'Đơn làm online được duyệt', type: 'ONLINE_WORK_APPROVED', category: 'LEAVE', refType: 'online_work_request', title: 'Đơn làm online đã duyệt', body: 'L1 đã duyệt, chờ L2', idExample: '78' },
+		{ label: 'Đi công tác — chờ duyệt', type: 'BUSINESS_TRIP_PENDING', category: 'REQUEST', refType: 'business_trip', title: 'Đơn công tác mới', body: 'NV X vừa submit đơn đi công tác', idExample: '9' },
+		{ label: 'HĐ sắp hết hạn', type: 'CONTRACT_EXPIRY_WARNING', category: 'EVENT', refType: 'contract', title: 'Hợp đồng sắp hết hạn', body: 'HĐ của bạn còn 15 ngày', idExample: '101' },
+		{ label: 'Test generic (TEST)', type: 'TEST', category: 'EVENT', refType: '', title: 'Test FCM Push', body: 'Đây là test notification', idExample: '' },
+	];
 
 	definePageMeta({
 		title: 'Test Notification Pipeline',
@@ -108,7 +151,10 @@
 			employeeId: z.coerce.number({ invalid_type_error: 'Nhập ID nhân viên' }).int().positive('ID phải là số dương'),
 			title: z.string().min(1, 'Tiêu đề không được trống'),
 			body: z.string().min(1, 'Nội dung không được trống'),
-			type: z.string().optional(),
+			type: z.enum(NOTIFICATION_TYPES as [NotificationType, ...NotificationType[]], { errorMap: () => ({ message: 'Chọn type hợp lệ' }) }),
+			category: z.enum(NOTIFICATION_CATEGORIES as [NotificationCategory, ...NotificationCategory[]]).optional(),
+			refType: z.string().optional(),
+			id: z.string().optional(),
 		}),
 	);
 
@@ -117,15 +163,40 @@
 		defineField: defineFcm,
 		errors: fcmErrors,
 		isSubmitting: fcmSubmitting,
+		setFieldValue: setFcmField,
 	} = useForm({
 		validationSchema: fcmSchema,
-		initialValues: { employeeId: undefined as unknown as number, title: '', body: '', type: 'test.manual' },
+		initialValues: {
+			employeeId: undefined as unknown as number,
+			title: '',
+			body: '',
+			type: 'TEST' as NotificationType,
+			category: undefined as NotificationCategory | undefined,
+			refType: '',
+			id: '',
+		},
 	});
 
 	const [fcmEmployeeId, fcmEmployeeIdAttrs] = defineFcm('employeeId');
 	const [fcmTitle, fcmTitleAttrs] = defineFcm('title');
 	const [fcmBody, fcmBodyAttrs] = defineFcm('body');
 	const [fcmType, fcmTypeAttrs] = defineFcm('type');
+	const [fcmCategory, fcmCategoryAttrs] = defineFcm('category');
+	const [fcmRefType, fcmRefTypeAttrs] = defineFcm('refType');
+	const [fcmId, fcmIdAttrs] = defineFcm('id');
+
+	const selectedPreset = ref('');
+
+	function applyPreset(label: string) {
+		const preset = FCM_PRESETS.find(p => p.label === label);
+		if (!preset) return;
+		setFcmField('type', preset.type);
+		setFcmField('category', preset.category);
+		setFcmField('refType', preset.refType);
+		setFcmField('id', preset.idExample);
+		setFcmField('title', preset.title);
+		setFcmField('body', preset.body);
+	}
 
 	const fcmResult = ref<FcmTestResult | null>(null);
 
@@ -136,7 +207,10 @@
 				employeeId: values.employeeId,
 				title: values.title,
 				body: values.body,
-				type: values.type || undefined,
+				type: values.type,
+				category: values.category || undefined,
+				refType: values.refType || undefined,
+				id: values.id || undefined,
 			});
 			fcmResult.value = result;
 			toast.success('FCM test đã gửi');
@@ -324,6 +398,19 @@
 			</div>
 
 			<form class="space-y-4" @submit.prevent="onFcmSubmit">
+				<!-- Preset auto-fill -->
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quick preset <span class="text-xs text-gray-400 font-normal">(auto-fill các field bên dưới)</span></label>
+					<select
+						v-model="selectedPreset"
+						class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+						@change="applyPreset(selectedPreset)"
+					>
+						<option value="">— Chọn preset hoặc nhập tay —</option>
+						<option v-for="p in FCM_PRESETS" :key="p.label" :value="p.label">{{ p.label }}</option>
+					</select>
+				</div>
+
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
 						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Employee ID <span class="text-red-500">*</span></label>
@@ -338,14 +425,15 @@
 						<p v-if="fcmErrors.employeeId" class="mt-1 text-xs text-red-500">{{ fcmErrors.employeeId }}</p>
 					</div>
 					<div>
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
-						<input
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type <span class="text-red-500">*</span></label>
+						<select
 							v-model="fcmType"
 							v-bind="fcmTypeAttrs"
-							type="text"
-							placeholder="test.manual"
 							class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
-						/>
+						>
+							<option v-for="t in NOTIFICATION_TYPES" :key="t" :value="t">{{ t }}</option>
+						</select>
+						<p v-if="fcmErrors.type" class="mt-1 text-xs text-red-500">{{ fcmErrors.type }}</p>
 					</div>
 				</div>
 				<div>
@@ -370,6 +458,48 @@
 					/>
 					<p v-if="fcmErrors.body" class="mt-1 text-xs text-red-500">{{ fcmErrors.body }}</p>
 				</div>
+
+				<!-- Navigation payload (optional) -->
+				<div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-4 space-y-3">
+					<div class="flex items-baseline justify-between">
+						<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Navigation payload <span class="text-xs font-normal text-gray-500">(optional)</span></h3>
+						<span class="text-xs text-gray-400">Mobile/web dùng để route khi user tap notification</span>
+					</div>
+					<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+						<div>
+							<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
+							<select
+								v-model="fcmCategory"
+								v-bind="fcmCategoryAttrs"
+								class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+							>
+								<option :value="undefined">—</option>
+								<option v-for="c in NOTIFICATION_CATEGORIES" :key="c" :value="c">{{ c }}</option>
+							</select>
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">refType</label>
+							<input
+								v-model="fcmRefType"
+								v-bind="fcmRefTypeAttrs"
+								type="text"
+								placeholder="leave_request"
+								class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+							/>
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">id</label>
+							<input
+								v-model="fcmId"
+								v-bind="fcmIdAttrs"
+								type="text"
+								placeholder="123"
+								class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+							/>
+						</div>
+					</div>
+				</div>
+
 				<button
 					type="submit"
 					:disabled="fcmSubmitting"

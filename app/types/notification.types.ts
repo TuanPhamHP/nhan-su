@@ -141,6 +141,9 @@ export interface TestFcmDto {
 	title: string;
 	body: string;
 	type?: string;
+	category?: NotificationCategory;
+	refType?: string;
+	id?: string;
 }
 
 export interface TestEmailResult {
