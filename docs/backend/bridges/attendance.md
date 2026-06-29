@@ -15,6 +15,7 @@
 | GET | `/v1/attendance/me/stats` | `EMPLOYEE` | Thống kê chấm công theo tháng |
 | GET | `/v1/attendance/photo-url` | `EMPLOYEE` | Presigned URL ảnh check-in/check-out từ S3 |
 | GET | `/v1/attendance/today-info` | `EMPLOYEE` | Thông tin hôm nay: ca, địa điểm, bản ghi |
+| GET | `/v1/attendance/statuses` | Mọi user đã đăng nhập | Danh sách trạng thái chấm công kèm nhãn tiếng Việt |
 | GET | `/v1/attendance/me` | `EMPLOYEE` | Lịch sử chấm công cá nhân (có phân trang) |
 | GET | `/v1/attendance` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Toàn bộ chấm công (có phân trang + filter) |
 | PATCH | `/v1/attendance/:id` | `ADMIN`, `HR` | Chỉnh sửa thủ công bản ghi |
@@ -27,7 +28,7 @@
 
 ```typescript
 // types/attendance.types.ts
-export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'HALF_DAY' | 'ON_LEAVE';
+export type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT' | 'HALF_DAY' | 'ON_LEAVE' | 'HOLIDAY';
 
 export interface AttendanceLocationDto {
 	id: number;
@@ -74,7 +75,7 @@ export interface AttendanceRecordDetail {
 	isManual: boolean; // true nếu HR chỉnh sửa thủ công
 	note: string | null;
 	workType: AttendanceWorkType; // null = offline bình thường; 'ONLINE_APPROVED' = WFH được duyệt
-	distance: number | null; // khoảng cách GPS khi check-in (mét), null nếu isManual
+	distance: number | null; // khoảng cách GPS khi check-in (mét). null nếu: isManual, hoặc shift.requiresLocationCheck=false
 	effectiveStart: string | null; // ISO 8601 epoch-based — xem ghi chú ⚠️ bên dưới
 	effectiveEnd: string | null; // ISO 8601 epoch-based — xem ghi chú ⚠️ bên dưới
 	isHalfDay: boolean; // true nếu ngày này có EffectiveShiftOverride
@@ -125,7 +126,8 @@ export interface TodayShiftDto {
 	name: string;
 	checkInTime: string; // "HH:mm" UTC
 	checkOutTime: string; // "HH:mm" UTC
-	isOnline: boolean; // true nếu ca online
+	isOnline: boolean; // true → ca online tự ghi PRESENT, FE ẩn nút check-in
+	requiresLocationCheck: boolean; // false → FE bỏ qua xin GPS permission, gửi check-in không cần lat/long thật
 }
 
 export interface TodayLocationDto {
@@ -176,6 +178,7 @@ export interface ManualEditAttendanceDto {
 
 // Query params cho GET /me và GET /
 export interface QueryAttendanceParams {
+	pagination?: boolean; // default true — false = trả toàn bộ bản ghi, bỏ qua phân trang (chỉ áp dụng cho GET /me)
 	page?: number; // default 1
 	limit?: number; // default 20, max 100
 	date?: string; // "YYYY-MM-DD" — lọc đúng ngày
@@ -349,7 +352,44 @@ Server lấy `checkOutAt = thời điểm nhận request`.
 
 **Query params:** `?page=1&limit=20&startDate=2026-05-01&endDate=2026-05-31&status=LATE`
 
-**Response:** `ApiPaginated<AttendanceRecordDetail>`
+Truyền `?pagination=false` để lấy toàn bộ bản ghi (không phân trang). Khi đó response không có `meta`:
+
+```json
+{ "success": true, "data": [...] }
+```
+
+**Response mặc định (có phân trang):** `ApiPaginated<AttendanceRecordDetail>`
+
+---
+
+## GET /v1/attendance/statuses — Danh sách trạng thái
+
+Trả về tất cả các giá trị `AttendanceStatus` kèm nhãn tiếng Việt. Dùng để render dropdown filter.
+
+**Response 200:**
+
+```json
+{
+	"success": true,
+	"data": [
+		{ "value": "PRESENT", "label": "Có mặt" },
+		{ "value": "ABSENT", "label": "Vắng mặt" },
+		{ "value": "LATE", "label": "Đi muộn" },
+		{ "value": "HALF_DAY", "label": "Nửa ngày" },
+		{ "value": "ON_LEAVE", "label": "Nghỉ phép" },
+		{ "value": "HOLIDAY", "label": "Ngày nghỉ lễ" }
+	]
+}
+```
+
+**TypeScript type:**
+
+```typescript
+export interface AttendanceStatusItem {
+	value: AttendanceStatus;
+	label: string;
+}
+```
 
 ---
 
@@ -435,6 +475,8 @@ export function useAttendance() {
 	const manualEdit = (id: number, dto: ManualEditAttendanceDto) =>
 		patch<AttendanceRecordDetail>(`/v1/attendance/${id}`, dto);
 
+	const fetchStatuses = () => get<AttendanceStatusItem[]>('/v1/attendance/statuses');
+
 	return {
 		checkIn,
 		checkOut,
@@ -445,6 +487,7 @@ export function useAttendance() {
 		fetchMyHistory,
 		fetchAll,
 		manualEdit,
+		fetchStatuses,
 	};
 }
 ```
@@ -705,7 +748,8 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 | GPS accuracy > 100m | Server không validate — frontend nên tự kiểm tra `coords.accuracy < 100` trước khi gọi |
 | `isHalfDay: true` | `effectiveStart`/`effectiveEnd` khác giờ ca gốc — hiển thị "Ca rút gọn", không dùng `shift.checkInTime/checkOutTime` |
 | Parse `effectiveStart`/`effectiveEnd` | Dùng `new Date(val).getUTCHours()` — **không** dùng `getHours()` |
-| `distance: null` | Bản ghi được edit thủ công (`isManual: true`) — không có khoảng cách GPS |
+| `distance: null` | Bản ghi được edit thủ công (`isManual: true`) HOẶC ca có `requiresLocationCheck: false` (remote toàn thời gian) |
+| `location: null` + `distance: null` khi check-in thủ công | Ca có `shift.requiresLocationCheck = false` — server không validate GPS |
 | `EMPLOYEE` gọi `GET /attendance` | 403 Forbidden |
 | `EMPLOYEE` gọi `PATCH /attendance/:id` | 403 Forbidden |
 | Lọc `?date=X` kết hợp `startDate`/`endDate` | Nên dùng một trong hai, không nên kết hợp |
@@ -717,6 +761,7 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 | `GET /check-attendance` trả `canCheckIn: false` | GPS ngoài bán kính, ngoài time window, đã check-in/out, hoặc bị lock |
 | `GET /check-attendance` trả `checkInWindow: null` | Không có ca hôm nay hoặc ca online — không cần check-in thủ công |
 | `GET /check-attendance` — hiển thị window khi chưa đến giờ | `canCheckIn: false` nhưng `checkInWindow` vẫn có → dùng để hiện "Check-in từ HH:MM" |
+| `GET /me?pagination=false` | Response chỉ có `data`, không có `meta` |
 | `GET /me/stats` tháng chưa kết thúc | `workedDays` tính đến hôm nay; `totalWorkingDays` vẫn tính cả tháng |
 | `GET /photo-url` với URL hết hạn | Lấy presigned URL mới — không cache |
 | `GET /today-info` ngày lễ | `isHoliday: true`, `hasShift: false`, `shift: null` |

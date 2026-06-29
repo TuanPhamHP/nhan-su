@@ -49,7 +49,8 @@ export interface WorkShiftResponse {
 	lateThresholdMin: number; // Số phút trễ được phép, mặc định 15
 	earlyThresholdMin: number; // Số phút về sớm được phép, mặc định 15
 	workDays: number[]; // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
-	isOnline: boolean; // true = ca online, không yêu cầu GPS check-in
+	isOnline: boolean; // true = ca online, hệ thống tự ghi công, KHÔNG cho check-in thủ công
+	requiresLocationCheck: boolean; // false = remote/online toàn thời gian — check-in thủ công nhưng KHÔNG check GPS
 	isActive: boolean;
 	createdAt: string; // ISO 8601
 }
@@ -63,6 +64,7 @@ export interface CreateWorkShiftDto {
 	earlyThresholdMin?: number; // 0–60, mặc định 15
 	workDays: number[]; // 0=CN, 1=T2, ..., 6=T7
 	isOnline?: boolean; // mặc định false
+	requiresLocationCheck?: boolean; // mặc định true
 }
 
 // PATCH /work-shifts/:id — mọi field đều optional
@@ -532,6 +534,47 @@ Xóa override ca của một ngày cụ thể. Sau khi xóa, hệ thống fallba
 ```json
 { "success": false, "error": { "code": "NOT_FOUND", "message": "Lịch ca không tồn tại" } }
 ```
+
+---
+
+## Phân biệt `isOnline` vs `requiresLocationCheck`
+
+Hai field này điều khiển 2 chế độ "remote" hoàn toàn khác nhau — đừng nhầm:
+
+| Chế độ | `isOnline` | `requiresLocationCheck` | Check-in thủ công | GPS check | Ai chấm công |
+| --- | --- | --- | --- | --- | --- |
+| Ca offline bình thường | `false` | `true` | ✅ | ✅ | Nhân viên bấm nút check-in |
+| Ca online (vd. T7 WFH) | `true` | bất kỳ | ❌ (bị block) | — | Cron tự ghi PRESENT cuối ngày |
+| **Remote toàn thời gian (mới)** | `false` | `false` | ✅ | ❌ | Nhân viên bấm nút check-in |
+
+**Hai field ĐỘC LẬP** — `isOnline` ưu tiên hơn: nếu `isOnline = true` thì check-in thủ công luôn bị từ chối kể cả khi `requiresLocationCheck = false`.
+
+### Frontend phải làm gì với `requiresLocationCheck`?
+
+Khi gọi `GET /v1/attendance/today-info`, response trả về `shift.requiresLocationCheck`:
+
+- `true` (default) → FE xin GPS permission, gửi `latitude/longitude` thật trong check-in
+- `false` → FE **không cần** xin GPS permission, có thể gửi `latitude: 0, longitude: 0` (server không validate). Khuyến nghị FE vẫn gửi GPS nếu có sẵn để lưu lại làm audit log, nhưng không bị reject nếu không có.
+
+Mobile app **bắt buộc** check field này trước khi prompt location — vì nếu nhân sự remote bị app yêu cầu cấp GPS sẽ rất khó chịu (họ không cần và có thể không có GPS).
+
+### Tạo shift remote toàn thời gian
+
+HR gọi:
+
+```http
+POST /v1/work-shifts
+{
+  "name": "Online toàn thời gian",
+  "checkInTime": "08:00",
+  "checkOutTime": "17:00",
+  "workDays": [1, 2, 3, 4, 5, 6],
+  "isOnline": false,
+  "requiresLocationCheck": false
+}
+```
+
+Rồi gán cho nhân sự remote qua `PATCH /v1/shift-schedules/employees/:id/default-shift`.
 
 ---
 

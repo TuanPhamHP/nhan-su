@@ -82,6 +82,8 @@
 			checkOutTime: '17:00',
 			lateThresholdMin: 15,
 			earlyThresholdMin: 15,
+			isOnline: false,
+			requiresLocationCheck: true,
 		},
 	});
 
@@ -90,13 +92,29 @@
 	const [checkOutTime, checkOutTimeAttrs] = defineField('checkOutTime');
 	const [lateThresholdMin, lateAttrs] = defineField('lateThresholdMin');
 	const [earlyThresholdMin, earlyAttrs] = defineField('earlyThresholdMin');
+	const [isOnline] = defineField('isOnline');
+	const [requiresLocationCheck] = defineField('requiresLocationCheck');
+
+	// `isOnline = true` override mọi setting GPS — cron sẽ ghi PRESENT, không cho check-in thủ công.
+	// Khi bật online, lock `requiresLocationCheck` về true để khỏi gây nhầm lẫn cho HR (giá trị không có tác dụng).
+	watch(isOnline, online => {
+		if (online) requiresLocationCheck.value = true;
+	});
 
 	function openCreateModal() {
 		editingShift.value = null;
 		selectedWorkDays.value = [1, 2, 3, 4, 5];
 		workDaysError.value = '';
 		resetForm({
-			values: { name: '', checkInTime: '08:00', checkOutTime: '17:00', lateThresholdMin: 15, earlyThresholdMin: 15 },
+			values: {
+				name: '',
+				checkInTime: '08:00',
+				checkOutTime: '17:00',
+				lateThresholdMin: 15,
+				earlyThresholdMin: 15,
+				isOnline: false,
+				requiresLocationCheck: true,
+			},
 		});
 		showShiftModal.value = true;
 	}
@@ -111,6 +129,8 @@
 			checkOutTime: shift.checkOutTime,
 			lateThresholdMin: shift.lateThresholdMin,
 			earlyThresholdMin: shift.earlyThresholdMin,
+			isOnline: shift.isOnline,
+			requiresLocationCheck: shift.requiresLocationCheck,
 		});
 		showShiftModal.value = true;
 	}
@@ -560,9 +580,34 @@
 					</p>
 
 					<!-- Thresholds -->
-					<p class="text-xs text-gray-400 dark:text-gray-500 mb-3">
+					<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">
 						Trễ ≤ {{ shift.lateThresholdMin }}&thinsp;phút · Về sớm ≤ {{ shift.earlyThresholdMin }}&thinsp;phút
 					</p>
+
+					<!-- Mode badges -->
+					<div class="flex flex-wrap gap-1 mb-3">
+						<span
+							v-if="shift.isOnline"
+							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+							title="Cron tự ghi PRESENT, không cho check-in thủ công"
+						>
+							🖥️ Online
+						</span>
+						<span
+							v-else-if="!shift.requiresLocationCheck"
+							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+							title="Check-in thủ công nhưng không kiểm tra GPS"
+						>
+							🌐 Không GPS
+						</span>
+						<span
+							v-else
+							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+							title="Check-in thủ công + validate GPS"
+						>
+							📍 GPS
+						</span>
+					</div>
 
 					<!-- Work days pills -->
 					<div class="flex flex-wrap gap-1">
@@ -902,6 +947,44 @@
 								</button>
 							</div>
 							<p v-if="workDaysError" class="mt-1.5 text-xs text-red-500">{{ workDaysError }}</p>
+						</div>
+
+						<!-- Chế độ ca làm việc -->
+						<div class="space-y-3 pt-1">
+							<label class="flex items-start gap-3 cursor-pointer">
+								<input
+									v-model="isOnline"
+									type="checkbox"
+									class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+								/>
+								<div class="flex-1 min-w-0">
+									<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Ca online (hệ thống tự ghi công)</p>
+									<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+										Cron tự ghi PRESENT cuối ngày, nhân viên KHÔNG cần check-in thủ công (vd: ca T7 WFH).
+									</p>
+								</div>
+							</label>
+
+							<label
+								class="flex items-start gap-3"
+								:class="isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+							>
+								<input
+									v-model="requiresLocationCheck"
+									type="checkbox"
+									:disabled="!!isOnline"
+									class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 disabled:cursor-not-allowed"
+								/>
+								<div class="flex-1 min-w-0">
+									<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check vị trí GPS</p>
+									<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+										Tắt nếu nhân sự làm remote toàn thời gian — vẫn check-in/out thủ công nhưng không kiểm tra GPS.
+									</p>
+									<p v-if="isOnline" class="text-xs text-amber-600 dark:text-amber-400 mt-1 leading-snug">
+										Ca online luôn override — không cho check-in thủ công, GPS không có tác dụng.
+									</p>
+								</div>
+							</label>
 						</div>
 
 						<!-- Actions -->

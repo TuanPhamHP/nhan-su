@@ -5,22 +5,26 @@
 export interface WorkShiftResponse {
 	id: number;
 	name: string;
-	checkInTime: string;        // "HH:mm" UTC
-	checkOutTime: string;       // "HH:mm" UTC
+	checkInTime: string;            // "HH:mm" UTC
+	checkOutTime: string;           // "HH:mm" UTC
 	lateThresholdMin: number;
 	earlyThresholdMin: number;
-	workDays: number[];         // 0=CN, 1=T2, ..., 6=T7
+	workDays: number[];             // 0=CN, 1=T2, ..., 6=T7
+	isOnline: boolean;              // true = cron tự ghi PRESENT, ẩn nút check-in
+	requiresLocationCheck: boolean; // false = remote toàn thời gian — check-in thủ công, không validate GPS
 	isActive: boolean;
-	createdAt: string;          // ISO 8601
+	createdAt: string;              // ISO 8601
 }
 
 export interface CreateWorkShiftDto {
 	name: string;
-	checkInTime: string;        // "HH:mm"
-	checkOutTime: string;       // "HH:mm"
+	checkInTime: string;            // "HH:mm"
+	checkOutTime: string;           // "HH:mm"
 	lateThresholdMin?: number;
 	earlyThresholdMin?: number;
 	workDays: number[];
+	isOnline?: boolean;             // mặc định false
+	requiresLocationCheck?: boolean; // mặc định true
 }
 
 export type UpdateWorkShiftDto = Partial<CreateWorkShiftDto>;
