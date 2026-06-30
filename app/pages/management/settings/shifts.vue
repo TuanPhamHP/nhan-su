@@ -211,12 +211,24 @@
 		currentWeekStart.value = startOfWeek(new Date(), { weekStartsOn: 1 });
 	}
 
-	// ─── Department filter ───
+	// ─── Department + search filter ───
 	const filterDepartmentId = ref<number | undefined>(undefined);
+	const searchQuery = ref('');
+
+	function normalizeSearch(s: string) {
+		return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+	}
 
 	const filteredEmployees = computed<EmployeeSummary[]>(() => {
-		if (!filterDepartmentId.value) return directoryStore.employees;
-		return directoryStore.employees.filter(e => e.department?.id === filterDepartmentId.value);
+		const q = normalizeSearch(searchQuery.value.trim());
+		return directoryStore.employees.filter(e => {
+			if (filterDepartmentId.value && e.department?.id !== filterDepartmentId.value) return false;
+			if (!q) return true;
+			return (
+				normalizeSearch(e.fullName).includes(q) ||
+				normalizeSearch(e.employeeCode).includes(q)
+			);
+		});
 	});
 
 	// ─── Calendar lookup map: "employeeId:date" → CalendarDayEmployee ───
@@ -644,7 +656,7 @@
 			<div class="flex flex-wrap items-center gap-3 mb-4">
 				<!-- Week navigation -->
 				<div
-					class="flex items-center gap-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-1"
+					class="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg p-1"
 				>
 					<button
 						class="w-8 h-8 flex items-center justify-center rounded text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -677,6 +689,35 @@
 					:options="departmentOptions"
 					@update:model-value="onDeptFilter"
 				/>
+
+				<!-- Search by name / employee code -->
+				<div class="relative min-w-[240px]">
+					<svg
+						class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+					</svg>
+					<input
+						v-model="searchQuery"
+						type="text"
+						placeholder="Tìm theo tên hoặc mã NV..."
+						class="w-full h-10 pl-9 pr-9 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-800 focus:border-brand-500"
+					/>
+					<button
+						v-if="searchQuery"
+						type="button"
+						class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+						@click="searchQuery = ''"
+					>
+						<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
 
 				<div class="ml-auto">
 					<CommonAppButton variant="outline" @click="openBulkModal">
