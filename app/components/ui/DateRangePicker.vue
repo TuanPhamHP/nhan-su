@@ -417,7 +417,7 @@
 		background: #fff;
 		font-size: $font-size-sm;
 		cursor: pointer;
-		height: 38px;
+		height: 40px;
 		transition: border-color 150ms ease;
 
 		&:hover {
