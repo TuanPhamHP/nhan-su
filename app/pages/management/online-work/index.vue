@@ -78,19 +78,33 @@ const statusOptions: SelectOption[] = [
 const approvingId = ref<number | null>(null);
 const rejectTarget = ref<OnlineWorkRequestResponse | null>(null);
 
-async function handleApprove(req: OnlineWorkRequestResponse) {
+async function handleApprove(req: OnlineWorkRequestResponse): Promise<boolean> {
 	const label = req.statusLabel;
-	if (!confirm(`Duyệt đơn làm online của ${req.employee.fullName} (${label})?`)) return;
+	if (!confirm(`Duyệt đơn làm online của ${req.employee.fullName} (${label})?`)) return false;
 	approvingId.value = req.id;
 	try {
 		await approve(req.id);
 		toast.success('Đã duyệt đơn thành công');
 		await fetchPendingForMe();
+		return true;
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+		return false;
 	} finally {
 		approvingId.value = null;
 	}
+}
+
+async function handleApproveFromDetail() {
+	if (!detailTarget.value) return;
+	const ok = await handleApprove(detailTarget.value);
+	if (ok) detailTarget.value = null;
+}
+
+function handleRejectFromDetail() {
+	if (!detailTarget.value) return;
+	rejectTarget.value = detailTarget.value;
+	detailTarget.value = null;
 }
 
 function onRejected() {
@@ -599,6 +613,9 @@ watch(activeTab, tab => {
 		<OnlineWorkDetailModal
 			v-if="detailTarget"
 			:request="detailTarget"
+			:approving="approvingId === detailTarget.id"
+			@approve="handleApproveFromDetail"
+			@reject="handleRejectFromDetail"
 			@close="detailTarget = null"
 		/>
 	</Teleport>

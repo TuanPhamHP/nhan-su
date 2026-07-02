@@ -4,8 +4,27 @@ import { vi } from 'date-fns/locale';
 import LeaveStatusBadge from '~/components/modules/leave/LeaveStatusBadge.vue';
 import type { LeaveRequest } from '~/types/leave.types';
 
-const props = defineProps<{ leaveRequest: LeaveRequest }>();
-const emit = defineEmits<{ close: [] }>();
+const props = withDefaults(
+	defineProps<{
+		leaveRequest: LeaveRequest;
+		approving?: boolean;
+	}>(),
+	{ approving: false },
+);
+const emit = defineEmits<{
+	close: [];
+	approve: [];
+	reject: [];
+}>();
+
+const { user } = useAuth();
+
+const canReview = computed(
+	() =>
+		props.leaveRequest.status === 'PENDING' &&
+		!!user.value &&
+		props.leaveRequest.assignedApprover?.id === user.value.id,
+);
 
 function formatDate(d: string) {
 	return format(new Date(d), 'dd/MM/yyyy');
@@ -209,7 +228,12 @@ const timelineSteps = computed(() => {
 
 			<!-- Footer -->
 			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-				<CommonAppButton variant="outline" full-width @click="emit('close')">Đóng</CommonAppButton>
+				<div v-if="canReview" class="flex items-center gap-2">
+					<CommonAppButton variant="outline" class="flex-1" @click="emit('close')">Đóng</CommonAppButton>
+					<CommonAppButton variant="danger" @click="emit('reject')">Từ chối</CommonAppButton>
+					<CommonAppButton variant="primary" :loading="approving" @click="emit('approve')">Duyệt</CommonAppButton>
+				</div>
+				<CommonAppButton v-else variant="outline" full-width @click="emit('close')">Đóng</CommonAppButton>
 			</div>
 		</div>
 	</div>

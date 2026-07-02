@@ -119,8 +119,8 @@
 	// ─── Approve ──────────────────────────────────────────────────────────────────
 	const approvingId = ref<number | null>(null);
 
-	async function handleApprove(req: LeaveRequest) {
-		if (!confirm(`Duyệt đơn nghỉ phép của ${req.employee.fullName}?`)) return;
+	async function handleApprove(req: LeaveRequest): Promise<boolean> {
+		if (!confirm(`Duyệt đơn nghỉ phép của ${req.employee.fullName}?`)) return false;
 		approvingId.value = req.id;
 		try {
 			const updated = await leaveRequestService.approve(req.id);
@@ -128,11 +128,25 @@
 			if (idx !== -1) requests.value.splice(idx, 1, updated);
 			toast.success('Đã duyệt đơn nghỉ phép');
 			fetchSummary();
+			return true;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+			return false;
 		} finally {
 			approvingId.value = null;
 		}
+	}
+
+	async function handleApproveFromDetail() {
+		if (!detailTarget.value) return;
+		const ok = await handleApprove(detailTarget.value);
+		if (ok) detailTarget.value = null;
+	}
+
+	function handleRejectFromDetail() {
+		if (!detailTarget.value) return;
+		rejectTarget.value = detailTarget.value;
+		detailTarget.value = null;
 	}
 
 	// ─── Reject ───────────────────────────────────────────────────────────────────
@@ -985,7 +999,14 @@
 			@rejected="onRejected"
 			@close="rejectTarget = null"
 		/>
-		<LeaveDetailModal v-if="detailTarget" :leave-request="detailTarget" @close="detailTarget = null" />
+		<LeaveDetailModal
+			v-if="detailTarget"
+			:leave-request="detailTarget"
+			:approving="approvingId === detailTarget.id"
+			@approve="handleApproveFromDetail"
+			@reject="handleRejectFromDetail"
+			@close="detailTarget = null"
+		/>
 		<LeaveTypeFormModal
 			v-if="showLeaveTypeForm"
 			:edit-target="leaveTypeFormTarget"

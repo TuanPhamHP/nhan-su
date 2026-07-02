@@ -4,13 +4,30 @@
 	import type { ViolationDetailView } from '~/types/violation.types';
 	import { violationTypeClass } from '~/utils/violation.utils';
 
-	const props = defineProps<{
-		violationRequest: ViolationDetailView;
-	}>();
+	const props = withDefaults(
+		defineProps<{
+			violationRequest: ViolationDetailView;
+			approving?: boolean;
+		}>(),
+		{ approving: false },
+	);
 
 	const emit = defineEmits<{
 		close: [];
+		approve: [];
+		reject: [];
 	}>();
+
+	const { user } = useAuth();
+
+	const canReview = computed(() => {
+		if (props.violationRequest.status !== 'PENDING') return false;
+		if (!user.value) return false;
+		if (props.violationRequest.assignedReviewer !== null) {
+			return props.violationRequest.assignedReviewer.id === user.value.id;
+		}
+		return ['HR', 'ADMIN'].includes(user.value.role);
+	});
 
 	function formatDate(d: string | null | undefined) {
 		if (!d) return '—';
@@ -189,7 +206,12 @@
 
 			<!-- Footer -->
 			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-				<CommonAppButton variant="outline" class="w-full justify-center" @click="emit('close')">Đóng</CommonAppButton>
+				<div v-if="canReview" class="flex items-center gap-2">
+					<CommonAppButton variant="outline" class="flex-1 justify-center" @click="emit('close')">Đóng</CommonAppButton>
+					<CommonAppButton variant="danger" @click="emit('reject')">Từ chối</CommonAppButton>
+					<CommonAppButton variant="primary" :loading="approving" @click="emit('approve')">Duyệt</CommonAppButton>
+				</div>
+				<CommonAppButton v-else variant="outline" class="w-full justify-center" @click="emit('close')">Đóng</CommonAppButton>
 			</div>
 		</div>
 	</div>

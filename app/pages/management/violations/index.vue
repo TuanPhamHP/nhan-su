@@ -109,19 +109,33 @@
 	// ─── Approve ──────────────────────────────────────────────────────────────────
 	const approvingId = ref<number | null>(null);
 
-	async function handleApprove(req: ViolationRequest) {
-		if (!confirm(`Duyệt phiếu vi phạm của ${req.employee.fullName}?`)) return;
+	async function handleApprove(req: ViolationRequest): Promise<boolean> {
+		if (!confirm(`Duyệt phiếu vi phạm của ${req.employee.fullName}?`)) return false;
 		approvingId.value = req.id;
 		try {
 			const updated = await violationService.approve(req.id);
 			const idx = allRequests.value.findIndex(r => r.id === updated.id);
 			if (idx !== -1) allRequests.value.splice(idx, 1, updated);
 			toast.success('Đã duyệt phiếu vi phạm');
+			return true;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+			return false;
 		} finally {
 			approvingId.value = null;
 		}
+	}
+
+	async function handleApproveFromDetail() {
+		if (!detailRequest.value) return;
+		const ok = await handleApprove(detailRequest.value);
+		if (ok) detailRequest.value = null;
+	}
+
+	function handleRejectFromDetail() {
+		if (!detailRequest.value) return;
+		rejectTarget.value = detailRequest.value;
+		detailRequest.value = null;
 	}
 
 	// ─── Detail modal ─────────────────────────────────────────────────────────────
@@ -430,6 +444,9 @@
 		<ViolationDetailModal
 			v-if="detailRequest"
 			:violation-request="detailRequest"
+			:approving="approvingId === detailRequest.id"
+			@approve="handleApproveFromDetail"
+			@reject="handleRejectFromDetail"
 			@close="detailRequest = null"
 		/>
 	</Teleport>

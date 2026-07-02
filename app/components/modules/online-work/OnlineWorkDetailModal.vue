@@ -4,8 +4,20 @@ import { vi } from 'date-fns/locale';
 import OnlineWorkStatusBadge from '~/components/modules/online-work/OnlineWorkStatusBadge.vue';
 import type { OnlineWorkRequestResponse } from '~/types/online-work-request.types';
 
-const props = defineProps<{ request: OnlineWorkRequestResponse }>();
-const emit = defineEmits<{ close: [] }>();
+const props = withDefaults(
+	defineProps<{
+		request: OnlineWorkRequestResponse;
+		approving?: boolean;
+	}>(),
+	{ approving: false },
+);
+const emit = defineEmits<{
+	close: [];
+	approve: [];
+	reject: [];
+}>();
+
+const { user } = useAuth();
 
 function formatDate(d: string) {
 	return format(new Date(d), 'dd/MM/yyyy');
@@ -69,6 +81,13 @@ const isTerminal = computed(() =>
 	props.request.status === 'COMPLETED' ||
 	props.request.status === 'REJECTED' ||
 	props.request.status === 'CANCELLED',
+);
+
+const canReview = computed(
+	() =>
+		!isTerminal.value &&
+		!!user.value &&
+		props.request.canBeApprovedBy?.includes(user.value.id) === true,
 );
 </script>
 
@@ -263,7 +282,12 @@ const isTerminal = computed(() =>
 
 			<!-- Footer -->
 			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-				<CommonAppButton variant="outline" full-width @click="emit('close')">Đóng</CommonAppButton>
+				<div v-if="canReview" class="flex items-center gap-2">
+					<CommonAppButton variant="outline" class="flex-1" @click="emit('close')">Đóng</CommonAppButton>
+					<CommonAppButton variant="danger" @click="emit('reject')">Từ chối</CommonAppButton>
+					<CommonAppButton variant="primary" :loading="approving" @click="emit('approve')">Duyệt</CommonAppButton>
+				</div>
+				<CommonAppButton v-else variant="outline" full-width @click="emit('close')">Đóng</CommonAppButton>
 			</div>
 		</div>
 	</div>
