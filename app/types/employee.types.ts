@@ -30,6 +30,7 @@ export interface EmployeeSummary {
 		name: string;
 		id: number;
 	} | null;
+	avatarUrl?: string | null;
 }
 
 export interface ManagerSummary {

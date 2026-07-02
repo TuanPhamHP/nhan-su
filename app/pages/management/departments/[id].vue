@@ -671,7 +671,14 @@
 								</td>
 								<td class="px-6 py-4">
 									<div class="flex items-center gap-3">
+										<img
+											v-if="emp.avatarUrl"
+											:src="emp.avatarUrl"
+											:alt="emp.fullName"
+											class="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-gray-200 dark:border-gray-700"
+										/>
 										<div
+											v-else
 											class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
 										>
 											<span class="text-sm font-semibold text-brand-600 dark:text-brand-400">
