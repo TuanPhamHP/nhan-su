@@ -312,7 +312,14 @@
 			<!-- Profile header card -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
 				<div class="flex flex-col sm:flex-row sm:items-center gap-4">
+					<img
+						v-if="currentEmployee.avatarUrl"
+						:src="currentEmployee.avatarUrl"
+						:alt="currentEmployee.fullName"
+						class="w-16 h-16 rounded-full object-cover flex-shrink-0 border border-gray-200 dark:border-gray-700"
+					/>
 					<div
+						v-else
 						class="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
 					>
 						<span class="text-2xl font-bold text-brand-600 dark:text-brand-400">
