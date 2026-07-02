@@ -14,6 +14,8 @@
 	definePageMeta({ title: 'Đơn bù công của tôi' });
 
 	const toast = useToast();
+	const route = useRoute();
+	const router = useRouter();
 	const service = useMakeupAttendanceService();
 
 	const today = new Date();
@@ -102,9 +104,31 @@
 		return text.length > len ? text.slice(0, len) + '…' : text;
 	}
 
+	// ─── Auto-open detail from ?open_id ───────────────────────────────────────
+	// BE không expose GET /:id → chỉ tra trong list vừa fetch. Nếu record không nằm
+	// trong page/filter hiện tại, mở rộng khoảng thời gian rồi thử lại 1 lần.
+	async function openByQueryId() {
+		const raw = route.query.open_id;
+		if (!raw) return;
+		const targetId = String(raw);
+		router.replace({ path: '/makeup-attendance/my' });
+
+		let hit = requests.value.find(r => String(r.id) === targetId);
+		if (!hit) {
+			try {
+				const res = await service.findMyRequests({ page: 1, limit: 100 });
+				hit = res.data.find(r => String(r.id) === targetId);
+			} catch {
+				// non-critical
+			}
+		}
+		if (hit) detailTarget.value = hit;
+	}
+
 	// ─── Lifecycle ────────────────────────────────────────────────────────────
-	onMounted(() => {
-		fetchMyRequests();
+	onMounted(async () => {
+		await fetchMyRequests();
+		openByQueryId();
 	});
 </script>
 

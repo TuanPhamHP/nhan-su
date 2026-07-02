@@ -17,6 +17,8 @@
 	definePageMeta({ title: 'Quản lý bù công' });
 
 	const toast = useToast();
+	const route = useRoute();
+	const router = useRouter();
 	const { user } = useAuth();
 	const service = useMakeupAttendanceService();
 	const directoryStore = useDirectoryStore();
@@ -144,6 +146,27 @@
 		return text.length > len ? text.slice(0, len) + '…' : text;
 	}
 
+	// ─── Auto-open detail from ?open_id ───────────────────────────────────────
+	// BE không expose GET /:id → tra trong list vừa fetch. Nếu không thấy, thử fetch
+	// rộng hơn (bỏ status filter, page 1, limit 100) rồi thử lại 1 lần.
+	async function openByQueryId() {
+		const raw = route.query.open_id;
+		if (!raw) return;
+		const targetId = String(raw);
+		router.replace({ path: '/management/makeup-attendance' });
+
+		let hit = requests.value.find(r => String(r.id) === targetId);
+		if (!hit) {
+			try {
+				const res = await service.findAll({ page: 1, limit: 100 });
+				hit = res.data.find(r => String(r.id) === targetId);
+			} catch {
+				// non-critical
+			}
+		}
+		if (hit) detailTarget.value = hit;
+	}
+
 	// ─── Lifecycle ────────────────────────────────────────────────────────────
 	onMounted(async () => {
 		if (!canManage.value) {
@@ -155,7 +178,8 @@
 				// non-critical
 			});
 		}
-		fetchRequests();
+		await fetchRequests();
+		openByQueryId();
 	});
 </script>
 

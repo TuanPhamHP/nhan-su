@@ -6,7 +6,12 @@ function isManagement(role: UserRole): boolean {
 
 /**
  * Resolves the in-app navigation route for a notification based on refType, refId, and
- * the current user's role. Returns null if navigation is not applicable.
+ * an effective role. Returns null if navigation is not applicable.
+ *
+ * `role` should be the *effective* role that reflects the UI the user is currently in
+ * (`uiStore.previewRole ?? user.role`), NOT the raw user.role — so that a management
+ * user previewing the employee interface stays on employee pages when clicking a
+ * notification.
  *
  * Route table:
  * | refType              | Management (ADMIN/HR/MANAGER/CHIEF)      | EMPLOYEE                          |
@@ -16,6 +21,7 @@ function isManagement(role: UserRole): boolean {
  * | overtime_request     | /management/overtime?open_id=:id         | /overtime/my?open_id=:id          |
  * | online_work_request  | /management/online-work?open_id=:id      | /online-work/my?open_id=:id       |
  * | attendance           | /management/attendance                   | /attendance/my                    |
+ * | makeup_attendance_request | /management/makeup-attendance?open_id=:id | /makeup-attendance/my?open_id=:id |
  */
 export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
 	if (!refType) return null;
@@ -43,6 +49,10 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 		case 'attendance':
 		case 'attendance_record':
 			return manage ? '/management/attendance' : '/attendance/my';
+
+		case 'makeup_attendance_request':
+			if (manage) return id ? `/management/makeup-attendance?open_id=${id}` : '/management/makeup-attendance';
+			return id ? `/makeup-attendance/my?open_id=${id}` : '/makeup-attendance/my';
 
 		case 'general_request':
 			return id ? `/general-requests/${id}` : '/general-requests';

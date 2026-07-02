@@ -9,6 +9,7 @@
 	const router = useRouter();
 	const toast = useToast();
 	const { user } = useAuth();
+	const uiStore = useUiStore();
 	const { unreadCount, markRead, markAllRead, deleteAll } = useNotifications();
 	const notifService = useNotificationService();
 
@@ -149,7 +150,9 @@
 			}
 		}
 		if (!notif.refType || !user.value) return;
-		const route = resolveNotificationRoute(notif.refType, notif.refId, user.value.role);
+		// Respect "view as" preview — điều hướng theo giao diện đang hiển thị.
+		const effectiveRole = uiStore.previewRole ?? user.value.role;
+		const route = resolveNotificationRoute(notif.refType, notif.refId, effectiveRole);
 		if (route) router.push(route);
 	}
 

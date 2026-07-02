@@ -12,6 +12,7 @@
 
 	const { markRead, quickApprove, quickReject } = useNotifications();
 	const { user } = useAuth();
+	const uiStore = useUiStore();
 	const router = useRouter();
 	const toast = useToast();
 
@@ -37,10 +38,13 @@
 
 	const handleNavigate = () => {
 		if (!user.value) return;
+		// Respect "view as" preview — nếu management user đang xem giao diện nhân viên,
+		// notification click sẽ điều hướng sang page của giao diện đó.
+		const effectiveRole = uiStore.previewRole ?? user.value.role;
 		const route = resolveNotificationRoute(
 			props.notification.refType,
 			props.notification.refId,
-			user.value.role,
+			effectiveRole,
 		);
 		if (route) {
 			router.push(route);
