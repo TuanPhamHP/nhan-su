@@ -49,5 +49,12 @@ export const useMakeupAttendanceService = () => {
 			});
 			return res.data;
 		},
+
+		async cancel(id: string): Promise<MakeupRequestResponse> {
+			const res = await authFetch<ApiResponse<MakeupRequestResponse>>(`/v1/makeup-attendance/${id}/cancel`, {
+				method: 'PATCH',
+			});
+			return res.data;
+		},
 	};
 };

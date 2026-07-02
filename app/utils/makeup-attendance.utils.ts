@@ -5,12 +5,14 @@ export const MAKEUP_STATUS_LABEL: Record<MakeupRequestStatus, string> = {
 	PENDING: 'Chờ duyệt',
 	APPROVED: 'Đã duyệt',
 	REJECTED: 'Từ chối',
+	CANCELLED: 'Đã thu hồi',
 };
 
 export const MAKEUP_STATUS_CLASS: Record<MakeupRequestStatus, string> = {
 	PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 	APPROVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
 	REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+	CANCELLED: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 };
 
 export const MAKEUP_STATUS_OPTIONS: SelectOption[] = [
@@ -18,6 +20,7 @@ export const MAKEUP_STATUS_OPTIONS: SelectOption[] = [
 	{ value: 'PENDING', label: MAKEUP_STATUS_LABEL.PENDING },
 	{ value: 'APPROVED', label: MAKEUP_STATUS_LABEL.APPROVED },
 	{ value: 'REJECTED', label: MAKEUP_STATUS_LABEL.REJECTED },
+	{ value: 'CANCELLED', label: MAKEUP_STATUS_LABEL.CANCELLED },
 ];
 
 export function makeupStatusLabel(status: MakeupRequestStatus): string {

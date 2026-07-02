@@ -6,13 +6,16 @@ import type { MakeupRequestResponse } from '~/types/makeup-attendance.types';
 const props = defineProps<{
 	request: MakeupRequestResponse;
 	canReview?: boolean;
+	canCancel?: boolean;
 	approving?: boolean;
+	cancelling?: boolean;
 }>();
 
 const emit = defineEmits<{
 	close: [];
 	approve: [];
 	reject: [];
+	cancel: [];
 }>();
 
 function formatDate(d: string | null | undefined) {
@@ -124,17 +127,25 @@ function formatTime(iso: string | null) {
 							</div>
 						</div>
 
-						<!-- Reviewed -->
+						<!-- Reviewed / Cancelled -->
 						<div v-if="request.status !== 'PENDING'" class="flex items-start gap-2.5">
 							<div
 								class="ml-1.5 mt-0.5 w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-white dark:ring-gray-900 z-10"
-								:class="request.status === 'APPROVED' ? 'bg-green-500' : 'bg-red-500'"
+								:class="{
+									'bg-green-500': request.status === 'APPROVED',
+									'bg-red-500': request.status === 'REJECTED',
+									'bg-gray-400': request.status === 'CANCELLED',
+								}"
 							/>
 							<div class="space-y-0.5">
 								<p class="text-xs font-medium text-gray-700 dark:text-gray-300">
 									<span v-if="request.status === 'APPROVED'">Đã duyệt</span>
-									<span v-else>Từ chối</span>
-									<span v-if="request.reviewedBy" class="font-normal text-gray-500 dark:text-gray-400">
+									<span v-else-if="request.status === 'REJECTED'">Từ chối</span>
+									<span v-else>Đã thu hồi</span>
+									<span
+										v-if="request.status !== 'CANCELLED' && request.reviewedBy"
+										class="font-normal text-gray-500 dark:text-gray-400"
+									>
 										bởi {{ request.reviewedBy.fullName }}
 									</span>
 								</p>
@@ -166,6 +177,10 @@ function formatTime(iso: string | null) {
 					<CommonAppButton variant="outline" @click="emit('close')">Đóng</CommonAppButton>
 					<CommonAppButton variant="danger" @click="emit('reject')">Từ chối</CommonAppButton>
 					<CommonAppButton variant="primary" :loading="approving" @click="emit('approve')">Duyệt</CommonAppButton>
+				</div>
+				<div v-else-if="canCancel && request.status === 'PENDING'" class="flex items-center justify-end gap-3">
+					<CommonAppButton variant="outline" @click="emit('close')">Đóng</CommonAppButton>
+					<CommonAppButton variant="danger_outline" :loading="cancelling" @click="emit('cancel')">Thu hồi đơn</CommonAppButton>
 				</div>
 				<CommonAppButton v-else variant="outline" class="w-full justify-center" @click="emit('close')">Đóng</CommonAppButton>
 			</div>

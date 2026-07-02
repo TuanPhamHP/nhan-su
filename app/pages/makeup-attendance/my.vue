@@ -67,6 +67,26 @@
 	// ─── Detail modal ─────────────────────────────────────────────────────────
 	const detailTarget = ref<MakeupRequestResponse | null>(null);
 
+	// ─── Cancel (withdraw) ────────────────────────────────────────────────────
+	const cancellingId = ref<string | null>(null);
+
+	async function handleCancel(req: MakeupRequestResponse) {
+		if (req.status !== 'PENDING') return;
+		if (!confirm(`Bạn có chắc muốn thu hồi đơn bù công ngày ${formatDate(req.attendanceDate)}?`)) return;
+		cancellingId.value = req.id;
+		try {
+			const updated = await service.cancel(req.id);
+			const idx = requests.value.findIndex(r => r.id === updated.id);
+			if (idx !== -1) requests.value.splice(idx, 1, updated);
+			if (detailTarget.value?.id === updated.id) detailTarget.value = updated;
+			toast.success('Đã thu hồi đơn bù công');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Không thể thu hồi đơn');
+		} finally {
+			cancellingId.value = null;
+		}
+	}
+
 	// ─── Helpers ──────────────────────────────────────────────────────────────
 	function formatDate(d: string) {
 		return format(new Date(d), 'dd/MM/yyyy');
@@ -224,7 +244,7 @@
 								{{ req.reviewedBy?.fullName ?? '—' }}
 							</td>
 							<td class="px-4 py-3">
-								<div class="flex items-center justify-end">
+								<div class="flex items-center justify-end gap-1.5">
 									<button
 										class="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/10 transition-colors"
 										title="Xem chi tiết"
@@ -239,6 +259,15 @@
 											<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 										</svg>
 									</button>
+									<CommonAppButton
+										v-if="req.status === 'PENDING'"
+										size="sm"
+										variant="danger_outline"
+										:loading="cancellingId === req.id"
+										@click="handleCancel(req)"
+									>
+										Thu hồi
+									</CommonAppButton>
 								</div>
 							</td>
 						</tr>
@@ -265,6 +294,9 @@
 		<MakeupDetailModal
 			v-if="detailTarget"
 			:request="detailTarget"
+			:can-cancel="detailTarget.status === 'PENDING'"
+			:cancelling="cancellingId === detailTarget.id"
+			@cancel="handleCancel(detailTarget)"
 			@close="detailTarget = null"
 		/>
 	</Teleport>

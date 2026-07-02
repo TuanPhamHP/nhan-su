@@ -1,4 +1,4 @@
-export type MakeupRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type MakeupRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export interface MakeupRequestEmployee {
 	id: number;
