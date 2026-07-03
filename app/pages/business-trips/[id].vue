@@ -25,6 +25,10 @@ const reportOpen = ref(false);
 const transportRoute = ref<TripRouteResponse | null>(null);
 
 const isHrOrAdmin = computed(() => !!user.value && ['HR', 'ADMIN'].includes(user.value.role));
+const isAdmin = computed(() => user.value?.role === 'ADMIN');
+
+const canApproveNow = computed(() => !!trip.value && (trip.value.canApprove || (isAdmin.value && trip.value.status === 'PENDING')));
+const canCancelNow = computed(() => !!trip.value && (trip.value.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(trip.value.status))));
 
 const transportLabels: Record<string, string> = {
 	PLANE: 'Máy bay',
@@ -146,12 +150,12 @@ watch(tripId, loadTrip);
 					</div>
 
 					<div class="flex flex-wrap gap-2">
-						<CommonAppButton v-if="trip.canApprove" variant="primary" @click="handleApprove">Duyệt</CommonAppButton>
-						<CommonAppButton v-if="trip.canApprove" variant="danger" @click="openReject">Từ chối</CommonAppButton>
+						<CommonAppButton v-if="canApproveNow" variant="primary" @click="handleApprove">Duyệt</CommonAppButton>
+						<CommonAppButton v-if="canApproveNow" variant="danger" @click="openReject">Từ chối</CommonAppButton>
 						<CommonAppButton v-if="trip.canAddReport" @click="reportOpen = true">
 							{{ trip.report ? 'Cập nhật báo cáo' : 'Nộp báo cáo kết quả' }}
 						</CommonAppButton>
-						<CommonAppButton v-if="trip.canCancel" variant="danger" @click="handleCancel">Huỷ đơn</CommonAppButton>
+						<CommonAppButton v-if="canCancelNow" variant="danger" @click="handleCancel">Huỷ đơn</CommonAppButton>
 					</div>
 				</div>
 			</div>

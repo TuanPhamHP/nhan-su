@@ -16,6 +16,7 @@ const { user } = useAuth();
 const service = useBusinessTripService();
 
 const canApprove = computed(() => ['ADMIN', 'MANAGER', 'CHIEF', 'HR'].includes(user.value?.role ?? ''));
+const isAdmin = computed(() => user.value?.role === 'ADMIN');
 
 type Tab = 'my' | 'pending';
 const activeTab = ref<Tab>((route.query.tab === 'pending' && canApprove.value) ? 'pending' : 'my');
@@ -235,7 +236,7 @@ watch(activeTab, tab => {
 							Xem chi tiết
 						</NuxtLink>
 						<button
-							v-if="trip.canCancel"
+							v-if="trip.canCancel || (isAdmin && ['DRAFT', 'PENDING'].includes(trip.status))"
 							class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
 							@click="handleCancel(trip)"
 						>
@@ -288,7 +289,7 @@ watch(activeTab, tab => {
 						<span class="text-brand-600 dark:text-brand-400 font-medium">· {{ trip.totalDays }} ngày</span>
 					</div>
 
-					<div v-if="trip.canApprove" class="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800" @click.stop>
+					<div v-if="trip.canApprove || (isAdmin && trip.status === 'PENDING')" class="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800" @click.stop>
 						<CommonAppButton size="sm" variant="primary" class="flex-1" @click="handleApprove(trip)">Duyệt</CommonAppButton>
 						<CommonAppButton size="sm" variant="danger" class="flex-1" @click="rejectTarget = trip">Từ chối</CommonAppButton>
 					</div>

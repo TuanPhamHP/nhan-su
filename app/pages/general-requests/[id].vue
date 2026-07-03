@@ -28,9 +28,15 @@ const rejectNote = ref('');
 const showCancelConfirm = ref(false);
 const actionLoading = ref(false);
 
+const isAdmin = computed(() => user.value?.role === 'ADMIN');
+
 const isCurrentApprover = computed(() =>
-	request.value?.currentApprover?.employeeId === user.value?.id &&
+	(request.value?.currentApprover?.employeeId === user.value?.id || isAdmin.value) &&
 	request.value?.status === 'PENDING',
+);
+
+const canCancelNow = computed(() =>
+	!!request.value && (request.value.canCancel || (isAdmin.value && request.value.status === 'PENDING')),
 );
 
 const renderedHtml = computed(() => {
@@ -274,7 +280,7 @@ watch(() => generalRequestStore.refreshSignal, () => {
 					</div>
 
 					<!-- Cancel action -->
-					<div v-if="request.canCancel" class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+					<div v-if="canCancelNow" class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
 						<h2 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thu hồi đơn</h2>
 						<template v-if="!showCancelConfirm">
 							<p class="text-xs text-gray-500 dark:text-gray-400">Đơn đang ở trạng thái <strong>{{ request.statusLabel }}</strong>. Bạn có thể thu hồi nếu chưa được duyệt hoàn tất.</p>

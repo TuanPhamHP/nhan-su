@@ -23,7 +23,7 @@ const canReview = computed(
 	() =>
 		props.leaveRequest.status === 'PENDING' &&
 		!!user.value &&
-		props.leaveRequest.assignedApprover?.id === user.value.id,
+		(props.leaveRequest.assignedApprover?.id === user.value.id || user.value.role === 'ADMIN'),
 );
 
 function formatDate(d: string) {

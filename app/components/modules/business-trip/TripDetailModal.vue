@@ -13,6 +13,11 @@ const emit = defineEmits<{
 	cancel: [trip: BusinessTripResponse];
 }>();
 
+const { user } = useAuth();
+const isAdmin = computed(() => user.value?.role === 'ADMIN');
+const canApproveNow = computed(() => props.trip.canApprove || (isAdmin.value && props.trip.status === 'PENDING'));
+const canCancelNow = computed(() => props.trip.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(props.trip.status)));
+
 const transportLabels: Record<string, string> = {
 	PLANE: 'Máy bay',
 	TRAIN: 'Tàu hỏa',
@@ -241,12 +246,12 @@ function fmtCurrency(n: number) {
 
 			<div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
 				<div class="flex gap-2">
-					<CommonAppButton v-if="trip.canApprove" variant="primary" @click="emit('approve', trip)">Duyệt</CommonAppButton>
-					<CommonAppButton v-if="trip.canApprove" variant="danger" @click="emit('reject', trip)">Từ chối</CommonAppButton>
+					<CommonAppButton v-if="canApproveNow" variant="primary" @click="emit('approve', trip)">Duyệt</CommonAppButton>
+					<CommonAppButton v-if="canApproveNow" variant="danger" @click="emit('reject', trip)">Từ chối</CommonAppButton>
 					<CommonAppButton v-if="trip.canAddReport" @click="emit('addReport', trip)">
 						{{ trip.report ? 'Cập nhật báo cáo' : 'Thêm báo cáo' }}
 					</CommonAppButton>
-					<CommonAppButton v-if="trip.canCancel" variant="danger" @click="emit('cancel', trip)">Huỷ đơn</CommonAppButton>
+					<CommonAppButton v-if="canCancelNow" variant="danger" @click="emit('cancel', trip)">Huỷ đơn</CommonAppButton>
 				</div>
 				<CommonAppButton variant="secondary" @click="emit('close')">Đóng</CommonAppButton>
 			</div>

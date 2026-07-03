@@ -202,10 +202,11 @@
 
 	function canReview(req: ViolationRequest): boolean {
 		if (!user.value) return false;
+		if (user.value.role === 'ADMIN') return true;
 		if (req.assignedReviewer !== null) {
 			return req.assignedReviewer.id === user.value.id;
 		}
-		return ['HR', 'ADMIN'].includes(user.value.role);
+		return user.value.role === 'HR';
 	}
 
 

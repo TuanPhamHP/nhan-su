@@ -632,7 +632,7 @@
 								<!-- Thao tác -->
 								<td class="px-4 py-3">
 									<div class="flex items-center justify-end gap-1.5">
-										<template v-if="req.status === 'PENDING' && req.assignedApprover?.id === user?.id">
+										<template v-if="req.status === 'PENDING' && (req.assignedApprover?.id === user?.id || user?.role === 'ADMIN')">
 											<CommonAppButton
 												size="sm"
 												variant="primary"

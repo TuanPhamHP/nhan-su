@@ -23,10 +23,11 @@
 	const canReview = computed(() => {
 		if (props.violationRequest.status !== 'PENDING') return false;
 		if (!user.value) return false;
+		if (user.value.role === 'ADMIN') return true;
 		if (props.violationRequest.assignedReviewer !== null) {
 			return props.violationRequest.assignedReviewer.id === user.value.id;
 		}
-		return ['HR', 'ADMIN'].includes(user.value.role);
+		return user.value.role === 'HR';
 	});
 
 	function formatDate(d: string | null | undefined) {
