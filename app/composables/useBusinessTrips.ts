@@ -52,6 +52,14 @@ export function useBusinessTrips() {
 		return service.updateRouteTransport(routeId, dto);
 	}
 
+	async function uploadTripTicket(routeId: number, file: File): Promise<string> {
+		return service.uploadRouteTicket(routeId, file);
+	}
+
+	async function uploadTripAttachments(tripId: number, files: File[]): Promise<string[]> {
+		return service.uploadTripAttachments(tripId, files);
+	}
+
 	return {
 		myTrips,
 		myTripsMeta,
@@ -64,5 +72,7 @@ export function useBusinessTrips() {
 		reject,
 		cancelTrip,
 		updateRouteTransport,
+		uploadTripTicket,
+		uploadTripAttachments,
 	};
 }

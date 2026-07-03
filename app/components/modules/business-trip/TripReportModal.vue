@@ -16,6 +16,10 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const service = useBusinessTripService();
+const { uploadTripAttachments } = useBusinessTrips();
+
+const MAX_ATTACHMENTS = 10;
+const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
 
 const schema = toTypedSchema(z.object({
 	summary: z.string().min(20, 'Tóm tắt phải ít nhất 20 ký tự'),
@@ -47,8 +51,30 @@ onMounted(() => {
 	}
 });
 
-function addAttachment() {
-	attachmentUrls.value.push('');
+const attachmentInput = ref<HTMLInputElement | null>(null);
+const uploadingAttachments = ref(false);
+
+async function handleAttachmentUpload(e: Event) {
+	const input = e.target as HTMLInputElement;
+	const files = Array.from(input.files ?? []);
+	if (files.length === 0) return;
+
+	if (attachmentUrls.value.length + files.length > MAX_ATTACHMENTS) {
+		toast.error(`Tối đa ${MAX_ATTACHMENTS} file đính kèm`);
+		input.value = '';
+		return;
+	}
+
+	uploadingAttachments.value = true;
+	try {
+		const urls = await uploadTripAttachments(props.tripId, files);
+		attachmentUrls.value.push(...urls);
+	} catch (err) {
+		toast.error(err instanceof Error ? err.message : 'Upload thất bại. Vui lòng thử lại.');
+	} finally {
+		uploadingAttachments.value = false;
+		input.value = '';
+	}
 }
 
 function removeAttachment(index: number) {
@@ -172,38 +198,58 @@ const onSubmit = handleSubmit(async values => {
 				</div>
 
 				<div class="space-y-2">
-					<div class="flex items-center justify-between">
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tệp đính kèm (URL)</label>
-						<button
-							v-if="isDraft"
-							type="button"
-							class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
-							@click="addAttachment"
-						>
-							+ Thêm URL
-						</button>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tệp đính kèm</label>
+
+					<div v-if="attachmentUrls.length > 0" class="flex flex-wrap gap-2">
+						<div v-for="(url, idx) in attachmentUrls" :key="idx" class="relative group">
+							<img
+								v-if="isImage(url)"
+								:src="url"
+								:alt="`Đính kèm ${idx + 1}`"
+								class="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+							/>
+							<a
+								v-else
+								:href="url"
+								target="_blank"
+								rel="noopener"
+								class="inline-flex items-center gap-1 h-16 px-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-brand-600 dark:text-brand-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+							>
+								📄 File {{ idx + 1 }}
+							</a>
+							<button
+								v-if="isDraft"
+								type="button"
+								class="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center shadow-sm hover:bg-red-600 transition-colors"
+								@click="removeAttachment(idx)"
+							>
+								×
+							</button>
+						</div>
 					</div>
-					<div v-if="attachmentUrls.length === 0" class="text-xs text-gray-400 italic">
-						Chưa có tệp đính kèm
-					</div>
-					<div v-for="(_url, idx) in attachmentUrls" :key="idx" class="flex items-center gap-2">
+					<div v-else class="text-xs text-gray-400 italic">Chưa có tệp đính kèm</div>
+
+					<div v-if="isDraft">
 						<input
-							v-model="attachmentUrls[idx]"
-							type="url"
-							:disabled="!isDraft"
-							placeholder="https://..."
-							class="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+							ref="attachmentInput"
+							type="file"
+							accept=".jpg,.jpeg,.png,.pdf,.docx"
+							multiple
+							class="hidden"
+							@change="handleAttachmentUpload"
 						/>
 						<button
-							v-if="isDraft"
 							type="button"
-							class="p-2 text-gray-400 hover:text-red-500 transition-colors"
-							@click="removeAttachment(idx)"
+							:disabled="uploadingAttachments || attachmentUrls.length >= MAX_ATTACHMENTS"
+							class="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+							@click="attachmentInput?.click()"
 						>
-							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-							</svg>
+							<span v-if="uploadingAttachments">Đang upload…</span>
+							<span v-else>📎 Thêm file đính kèm</span>
 						</button>
+						<p class="text-xs text-gray-400 mt-1">
+							JPG, PNG, PDF, DOCX · tối đa 10MB/file · tối đa {{ MAX_ATTACHMENTS }} files
+						</p>
 					</div>
 				</div>
 			</form>

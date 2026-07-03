@@ -15,6 +15,9 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const service = useBusinessTripService();
+const { uploadTripTicket } = useBusinessTrips();
+
+const isImage = (url: string) => /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
 
 const transportOptions: { value: TransportType; label: string }[] = [
 	{ value: 'PLANE', label: 'Máy bay' },
@@ -98,6 +101,28 @@ function removeTransport(index: number) {
 }
 
 const saving = ref(false);
+const ticketInputRefs = ref<Array<HTMLInputElement | null>>([]);
+const uploadingTicket = reactive<Record<number, boolean>>({});
+
+async function handleTicketUpload(e: Event, transportIndex: number) {
+	const input = e.target as HTMLInputElement;
+	const file = input.files?.[0];
+	if (!file) return;
+	uploadingTicket[transportIndex] = true;
+	try {
+		const url = await uploadTripTicket(props.route.id, file);
+		transports.value[transportIndex]!.ticketImageUrl = url;
+	} catch (err) {
+		toast.error(err instanceof Error ? err.message : 'Upload thất bại. Vui lòng thử lại.');
+	} finally {
+		uploadingTicket[transportIndex] = false;
+		input.value = '';
+	}
+}
+
+function clearTicket(transportIndex: number) {
+	transports.value[transportIndex]!.ticketImageUrl = '';
+}
 
 async function save() {
 	saving.value = true;
@@ -235,10 +260,53 @@ async function save() {
 							</div>
 						</div>
 
-						<div class="space-y-1 pt-2 border-t border-gray-100 dark:border-gray-800">
-							<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">URL ảnh vé / chứng từ</label>
-							<input v-model="t.ticketImageUrl" type="url" placeholder="https://..." class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors" />
-							<p class="text-xs text-gray-400">Dán URL ảnh đã upload lên storage (BE sẽ tự sign khi hiển thị).</p>
+						<div class="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+							<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Ảnh vé / chứng từ</label>
+
+							<div v-if="t.ticketImageUrl" class="flex items-center gap-2">
+								<img
+									v-if="isImage(t.ticketImageUrl)"
+									:src="t.ticketImageUrl"
+									alt="Ảnh vé"
+									class="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+								/>
+								<a
+									v-else
+									:href="t.ticketImageUrl"
+									target="_blank"
+									rel="noopener"
+									class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+								>
+									📄 Xem file đính kèm
+								</a>
+								<button
+									type="button"
+									class="text-xs text-red-500 hover:text-red-700"
+									@click="clearTicket(idx)"
+								>
+									Xoá
+								</button>
+							</div>
+
+							<div v-else>
+								<input
+									:ref="el => { ticketInputRefs[idx] = el as HTMLInputElement | null; }"
+									type="file"
+									accept=".jpg,.jpeg,.png,.pdf"
+									class="hidden"
+									@change="e => handleTicketUpload(e, idx)"
+								/>
+								<button
+									type="button"
+									:disabled="uploadingTicket[idx]"
+									class="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+									@click="ticketInputRefs[idx]?.click()"
+								>
+									<span v-if="uploadingTicket[idx]">Đang upload…</span>
+									<span v-else>📎 Chọn ảnh vé</span>
+								</button>
+								<p class="text-xs text-gray-400 mt-1">JPG, PNG, PDF · tối đa 10MB</p>
+							</div>
 						</div>
 					</div>
 				</div>

@@ -115,5 +115,25 @@ export const useBusinessTripService = () => {
 			});
 			return res.data;
 		},
+
+		async uploadRouteTicket(routeId: number, file: File): Promise<string> {
+			const form = new FormData();
+			form.append('file', file);
+			const res = await authFetch<ApiResponse<{ url: string }>>(
+				`/v1/business-trips/routes/${routeId}/upload-ticket`,
+				{ method: 'POST', body: form },
+			);
+			return res.data.url;
+		},
+
+		async uploadTripAttachments(tripId: number, files: File[]): Promise<string[]> {
+			const form = new FormData();
+			for (const f of files) form.append('files', f);
+			const res = await authFetch<ApiResponse<{ urls: string[] }>>(
+				`/v1/business-trips/${tripId}/upload-attachment`,
+				{ method: 'POST', body: form },
+			);
+			return res.data.urls;
+		},
 	};
 };
