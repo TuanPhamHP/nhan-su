@@ -71,10 +71,8 @@
 			name: (v: string) => (v && v.trim().length >= 2) || 'Tên ca phải có ít nhất 2 ký tự',
 			checkInTime: (v: string) => /^\d{2}:\d{2}$/.test(v) || 'Định dạng HH:mm',
 			checkOutTime: (v: string) => /^\d{2}:\d{2}$/.test(v) || 'Định dạng HH:mm',
-			lateThresholdMin: (v: number) =>
-				(Number.isInteger(v) && v >= 0 && v <= 120) || 'Từ 0 đến 120 phút',
-			earlyThresholdMin: (v: number) =>
-				(Number.isInteger(v) && v >= 0 && v <= 120) || 'Từ 0 đến 120 phút',
+			lateThresholdMin: (v: number) => (Number.isInteger(v) && v >= 0 && v <= 120) || 'Từ 0 đến 120 phút',
+			earlyThresholdMin: (v: number) => (Number.isInteger(v) && v >= 0 && v <= 120) || 'Từ 0 đến 120 phút',
 		},
 		initialValues: {
 			name: '',
@@ -224,10 +222,7 @@
 		return directoryStore.employees.filter(e => {
 			if (filterDepartmentId.value && e.department?.id !== filterDepartmentId.value) return false;
 			if (!q) return true;
-			return (
-				normalizeSearch(e.fullName).includes(q) ||
-				normalizeSearch(e.employeeCode).includes(q)
-			);
+			return normalizeSearch(e.fullName).includes(q) || normalizeSearch(e.employeeCode).includes(q);
 		});
 	});
 
@@ -401,7 +396,8 @@
 	}
 
 	const allBulkSelected = computed(
-		() => bulkFilteredEmployees.value.length > 0 && bulkSelectedEmployees.value.size === bulkFilteredEmployees.value.length,
+		() =>
+			bulkFilteredEmployees.value.length > 0 && bulkSelectedEmployees.value.size === bulkFilteredEmployees.value.length,
 	);
 
 	function toggleAllBulkEmployees() {
@@ -699,7 +695,11 @@
 						stroke="currentColor"
 						stroke-width="2"
 					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"
+						/>
 					</svg>
 					<input
 						v-model="searchQuery"
@@ -749,7 +749,11 @@
 						@click="openOnlineSetupModal"
 					>
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3"
+							/>
 						</svg>
 						Cấu hình T7 Online
 					</button>
@@ -824,9 +828,12 @@
 								</td>
 
 								<!-- Day cells — 4 trạng thái: online T7 (xanh nhạt) / override (brand) / mặc định (xám) / không có ca (đỏ nhạt) -->
-								<td v-for="(date) in weekDateStrings" :key="date" class="px-2 py-2 text-center">
+								<td v-for="date in weekDateStrings" :key="date" class="px-2 py-2 text-center">
 									<button
-										:class="['w-full min-h-[40px] rounded-lg border text-xs font-medium px-2 py-1.5 transition-colors leading-tight', getCellStyle(emp.id, date)]"
+										:class="[
+											'w-full min-h-[40px] rounded-lg border text-xs font-medium px-2 py-1.5 transition-colors leading-tight',
+											getCellStyle(emp.id, date),
+										]"
 										@click="openCellModal(emp, date)"
 									>
 										<template v-if="getSchedule(emp.id, date)?.isOnline">
@@ -834,7 +841,9 @@
 										</template>
 										<template v-else-if="getSchedule(emp.id, date)?.shift">
 											<span class="block truncate">{{ getSchedule(emp.id, date)!.shift!.name }}</span>
-											<span v-if="getSchedule(emp.id, date)?.isDefault" class="block text-[10px] opacity-60">mặc định</span>
+											<span v-if="getSchedule(emp.id, date)?.isDefault" class="block text-[10px] opacity-60"
+												>mặc định</span
+											>
 										</template>
 										<span v-else>—</span>
 									</button>
@@ -914,22 +923,14 @@
 								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
 									Giờ vào <span class="text-red-500">*</span>
 								</label>
-								<UiTimeInput
-									v-model="checkInTime"
-									v-bind="checkInTimeAttrs"
-									:error="errors.checkInTime"
-								/>
+								<UiTimeInput v-model="checkInTime" v-bind="checkInTimeAttrs" :error="errors.checkInTime" />
 								<p v-if="errors.checkInTime" class="mt-1 text-xs text-red-500">{{ errors.checkInTime }}</p>
 							</div>
 							<div>
 								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
 									Giờ ra <span class="text-red-500">*</span>
 								</label>
-								<UiTimeInput
-									v-model="checkOutTime"
-									v-bind="checkOutTimeAttrs"
-									:error="errors.checkOutTime"
-								/>
+								<UiTimeInput v-model="checkOutTime" v-bind="checkOutTimeAttrs" :error="errors.checkOutTime" />
 								<p v-if="errors.checkOutTime" class="mt-1 text-xs text-red-500">{{ errors.checkOutTime }}</p>
 							</div>
 						</div>
@@ -1181,7 +1182,10 @@
 						</button>
 
 						<!-- Remove override — chỉ hiện khi là explicit override (không phải ca mặc định) -->
-						<div v-if="cellTarget.current?.shift && !cellTarget.current.isDefault" class="pt-2 border-t border-gray-100 dark:border-gray-800 mt-2">
+						<div
+							v-if="cellTarget.current?.shift && !cellTarget.current.isDefault"
+							class="pt-2 border-t border-gray-100 dark:border-gray-800 mt-2"
+						>
 							<button
 								:disabled="assigningCell"
 								class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
