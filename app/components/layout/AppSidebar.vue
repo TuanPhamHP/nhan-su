@@ -6,6 +6,8 @@
 		route: string;
 		icon: string;
 		roles: UserRole[];
+		dataTour?: string;
+		matchQuery?: Record<string, string>;
 	}
 
 	interface NavSection {
@@ -84,6 +86,18 @@
 			],
 		},
 		{
+			label: 'Đơn của tôi',
+			items: [
+				{
+					label: 'Đơn công tác của tôi',
+					route: '/business-trips',
+					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
+					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					dataTour: 'nav-my-business-trips',
+				},
+			],
+		},
+		{
 			label: 'Đơn từ',
 			items: [
 				{
@@ -118,9 +132,11 @@
 				},
 				{
 					label: 'Công tác',
-					route: '/business-trips',
+					route: '/business-trips?tab=pending',
 					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
 					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					dataTour: 'nav-business-trips',
+					matchQuery: { tab: 'pending' },
 				},
 			],
 		},
@@ -182,14 +198,35 @@
 			.filter(section => section.items.length > 0);
 	});
 
-	function isActive(itemRoute: string) {
-		if (itemRoute === '/') return route.path === '/';
-		if (route.path === itemRoute) return true;
-		if (!route.path.startsWith(itemRoute + '/')) return false;
-		// Don't activate a parent when a more-specific sibling nav item also matches
-		const allRoutes = navSections.flatMap(s => s.items.map(i => i.route));
-		return !allRoutes.some(
-			r => r !== itemRoute && r.startsWith(itemRoute + '/') && (route.path === r || route.path.startsWith(r + '/')),
+	function itemPath(itemRoute: string) {
+		const idx = itemRoute.indexOf('?');
+		return idx >= 0 ? itemRoute.slice(0, idx) : itemRoute;
+	}
+
+	function isActive(item: NavItem) {
+		const path = itemPath(item.route);
+		if (path === '/') return route.path === '/';
+		if (route.path === path) {
+			// If item is scoped to a query filter, require the query to match
+			if (item.matchQuery) {
+				return Object.entries(item.matchQuery).every(([k, v]) => route.query[k] === v);
+			}
+			// If another sibling requires a query and this one doesn't, this one is active only when no scoped query matches
+			const siblings = navSections
+				.flatMap(s => s.items)
+				.filter(i => i !== item && itemPath(i.route) === path && i.matchQuery);
+			if (siblings.length > 0) {
+				const anyScopedActive = siblings.some(s =>
+					Object.entries(s.matchQuery!).every(([k, v]) => route.query[k] === v),
+				);
+				return !anyScopedActive;
+			}
+			return true;
+		}
+		if (!route.path.startsWith(path + '/')) return false;
+		const allPaths = navSections.flatMap(s => s.items.map(i => itemPath(i.route)));
+		return !allPaths.some(
+			p => p !== path && p.startsWith(path + '/') && (route.path === p || route.path.startsWith(p + '/')),
 		);
 	}
 
@@ -269,10 +306,11 @@
 						v-for="item in section.items"
 						:key="item.route"
 						:to="item.route"
+						:data-tour="item.dataTour"
 						:class="[
 							'group flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
 							!isOpen && 'justify-center',
-							isActive(item.route)
+							isActive(item)
 								? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
 								: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200',
 						]"
@@ -282,7 +320,7 @@
 						<svg
 							:class="[
 								'w-5 h-5 flex-shrink-0 transition-colors',
-								isActive(item.route)
+								isActive(item)
 									? 'text-brand-600 dark:text-brand-400'
 									: 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300',
 							]"

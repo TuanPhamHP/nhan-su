@@ -8,6 +8,7 @@ import type {
 	RejectBusinessTripDto,
 	CreateTripReportDto,
 	UpdateTripReportDto,
+	UpdateRouteTransportDto,
 	QueryBusinessTripsParams,
 } from '~/types/business-trip.types';
 
@@ -71,6 +72,24 @@ export const useBusinessTripService = () => {
 				method: 'PATCH',
 				body: dto,
 			});
+			return res.data;
+		},
+
+		async cancel(id: number): Promise<BusinessTripResponse> {
+			const res = await authFetch<ApiResponse<BusinessTripResponse>>(`/v1/business-trips/${id}/cancel`, {
+				method: 'PATCH',
+			});
+			return res.data;
+		},
+
+		async updateRouteTransport(routeId: number, dto: UpdateRouteTransportDto): Promise<BusinessTripResponse> {
+			const res = await authFetch<ApiResponse<BusinessTripResponse>>(
+				`/v1/business-trips/routes/${routeId}/transport`,
+				{
+					method: 'PATCH',
+					body: dto,
+				},
+			);
 			return res.data;
 		},
 

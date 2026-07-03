@@ -31,6 +31,8 @@ const [results, resultsAttrs] = defineField('results');
 const [actualCost, actualCostAttrs] = defineField('actualCost');
 const [issues, issuesAttrs] = defineField('issues');
 
+const attachmentUrls = ref<string[]>([]);
+
 const isDraft = computed(() => !props.existingReport || props.existingReport.status === 'DRAFT');
 
 onMounted(() => {
@@ -41,11 +43,30 @@ onMounted(() => {
 			actualCost: props.existingReport.actualCost ?? undefined,
 			issues: props.existingReport.issues ?? undefined,
 		});
+		attachmentUrls.value = [...(props.existingReport.attachmentUrls ?? [])];
 	}
 });
 
+function addAttachment() {
+	attachmentUrls.value.push('');
+}
+
+function removeAttachment(index: number) {
+	attachmentUrls.value.splice(index, 1);
+}
+
+function buildPayload(base: { summary: string; results: string; actualCost?: number; issues?: string }) {
+	const cleaned = attachmentUrls.value.map(u => u.trim()).filter(Boolean);
+	return { ...base, attachmentUrls: cleaned };
+}
+
 async function saveDraft() {
-	const values = { summary: summary.value ?? '', results: results.value ?? '', actualCost: actualCost.value, issues: issues.value };
+	const values = buildPayload({
+		summary: summary.value ?? '',
+		results: results.value ?? '',
+		actualCost: actualCost.value,
+		issues: issues.value,
+	});
 	try {
 		let updated: BusinessTripResponse;
 		if (props.existingReport) {
@@ -61,13 +82,14 @@ async function saveDraft() {
 }
 
 const onSubmit = handleSubmit(async values => {
+	const payload = buildPayload(values);
 	try {
 		let updated: BusinessTripResponse;
 		if (props.existingReport) {
-			await service.updateReport(props.tripId, values);
+			await service.updateReport(props.tripId, payload);
 			updated = await service.submitReport(props.tripId);
 		} else {
-			await service.createReport(props.tripId, values);
+			await service.createReport(props.tripId, payload);
 			updated = await service.submitReport(props.tripId);
 		}
 		toast.success('Đã nộp báo cáo công tác');
@@ -147,6 +169,42 @@ const onSubmit = handleSubmit(async values => {
 						placeholder="Ghi chú các vấn đề phát sinh trong chuyến đi (nếu có)..."
 						class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors resize-none disabled:opacity-60 disabled:cursor-not-allowed"
 					/>
+				</div>
+
+				<div class="space-y-2">
+					<div class="flex items-center justify-between">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tệp đính kèm (URL)</label>
+						<button
+							v-if="isDraft"
+							type="button"
+							class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+							@click="addAttachment"
+						>
+							+ Thêm URL
+						</button>
+					</div>
+					<div v-if="attachmentUrls.length === 0" class="text-xs text-gray-400 italic">
+						Chưa có tệp đính kèm
+					</div>
+					<div v-for="(_url, idx) in attachmentUrls" :key="idx" class="flex items-center gap-2">
+						<input
+							v-model="attachmentUrls[idx]"
+							type="url"
+							:disabled="!isDraft"
+							placeholder="https://..."
+							class="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+						/>
+						<button
+							v-if="isDraft"
+							type="button"
+							class="p-2 text-gray-400 hover:text-red-500 transition-colors"
+							@click="removeAttachment(idx)"
+						>
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
 				</div>
 			</form>
 

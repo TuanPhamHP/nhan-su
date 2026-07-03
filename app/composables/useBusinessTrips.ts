@@ -2,6 +2,7 @@ import { useBusinessTripService } from '~/services/business-trip.service';
 import type {
 	BusinessTripResponse,
 	QueryBusinessTripsParams,
+	UpdateRouteTransportDto,
 } from '~/types/business-trip.types';
 import type { PaginatedMeta } from '~/types/api.types';
 
@@ -43,6 +44,14 @@ export function useBusinessTrips() {
 		return service.reject(id, { note });
 	}
 
+	async function cancelTrip(id: number): Promise<BusinessTripResponse> {
+		return service.cancel(id);
+	}
+
+	async function updateRouteTransport(routeId: number, dto: UpdateRouteTransportDto): Promise<BusinessTripResponse> {
+		return service.updateRouteTransport(routeId, dto);
+	}
+
 	return {
 		myTrips,
 		myTripsMeta,
@@ -53,5 +62,7 @@ export function useBusinessTrips() {
 		fetchPendingForMe,
 		approve,
 		reject,
+		cancelTrip,
+		updateRouteTransport,
 	};
 }
