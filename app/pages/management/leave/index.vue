@@ -466,12 +466,11 @@
 
 			<!-- Filter bar -->
 			<div class="flex flex-col sm:flex-row flex-wrap gap-3">
-				<div class="w-full sm:w-44">
+				<div v-if="!isManager" class="w-full sm:w-44">
 					<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Phòng ban</label>
 					<UiSelectInput
 						:model-value="requestFilter.departmentId ?? 0"
 						:options="departmentOptions"
-						:disabled="isManager"
 						placeholder="Tất cả phòng ban"
 						@update:model-value="(v) => { requestFilter.departmentId = v === 0 ? undefined : (v as number); applyRequestFilter(); }"
 					/>
@@ -654,7 +653,6 @@
 											<CommonAppButton size="sm" variant="danger" @click="rejectTarget = req">Từ chối</CommonAppButton>
 										</template>
 										<button
-											v-else
 											class="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
 											title="Xem chi tiết"
 											@click="detailTarget = req"
@@ -869,12 +867,11 @@
 					</div>
 
 					<!-- Department filter -->
-					<div class="w-44">
+					<div v-if="!isManager" class="w-44">
 						<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Phòng ban</label>
 						<UiSelectInput
 							:model-value="balanceFilter.departmentId ?? 0"
 							:options="departmentOptions"
-							:disabled="isManager"
 							placeholder="Tất cả phòng ban"
 							@update:model-value="(v) => { balanceFilter.departmentId = v === 0 ? undefined : (v as number); applyBalanceFilter(); }"
 						/>
