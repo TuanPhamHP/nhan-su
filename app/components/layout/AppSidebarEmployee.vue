@@ -3,6 +3,8 @@ const { isOpen, close } = useSidebar();
 const { user } = useAuth();
 const route = useRoute();
 const { isDark } = useColorMode();
+const metaDataStore = useMetaDataStore();
+const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
 
 watch(
 	() => route.path,
@@ -219,7 +221,7 @@ function hideTooltip() {
 				>
 					<div v-if="isOpen" class="flex-1 min-w-0">
 						<p class="text-xs font-medium text-gray-900 dark:text-white truncate">{{ user?.fullName }}</p>
-						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ user?.role }}</p>
+						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ userRoleLabel }}</p>
 					</div>
 				</Transition>
 			</div>

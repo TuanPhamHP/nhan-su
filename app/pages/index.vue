@@ -9,6 +9,8 @@
 	const router = useRouter();
 	const uiStore = useUiStore();
 	const { previewRole } = storeToRefs(uiStore);
+	const metaDataStore = useMetaDataStore();
+	const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
 	const { dashboard, loading, error, fetchDashboard } = useDashboard();
 
 	const effectiveRole = computed(() => previewRole.value ?? user.value?.role);
@@ -220,7 +222,7 @@
 			];
 		}
 
-		// CompanyDashboard — ADMIN / HR / CHIEF
+		// CompanyDashboard — mọi role management không phải MANAGER (HR/ADMIN/CHIEF/DIRECTOR)
 		const s = d.stats;
 		const pendingTotal = s.pendingLeave + s.pendingOT + s.pendingViolation + s.pendingOnlineWork;
 		return [
@@ -285,7 +287,7 @@
 			];
 		}
 
-		// ADMIN, HR, CHIEF
+		// Management không phải MANAGER (ADMIN/HR/CHIEF/DIRECTOR)
 		return [
 			{ label: 'Thêm nhân viên', route: '/management/employees/new', iconPath: ICONS.addUser },
 			{ label: 'Xem chấm công', route: '/management/attendance', iconPath: ICONS.checkCircle },
@@ -350,7 +352,7 @@
 				<div>
 					<p class="text-brand-200 text-sm mb-1 capitalize">{{ todayFormatted }}</p>
 					<h1 class="text-2xl font-bold mb-1">{{ greeting }}</h1>
-					<p class="text-brand-200 text-sm">{{ user?.employeeCode }} · {{ user?.role }}</p>
+					<p class="text-brand-200 text-sm">{{ user?.employeeCode }} · {{ userRoleLabel }}</p>
 				</div>
 				<div class="flex items-center gap-2 flex-shrink-0">
 					<button

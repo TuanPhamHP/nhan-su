@@ -1,6 +1,4 @@
-import type { UserRole } from '~/types/auth.types';
-
-const MANAGEMENT_ROLES: UserRole[] = ['ADMIN', 'HR', 'MANAGER', 'CHIEF'];
+import { isEmployeeRole, isManagementRole } from '~/utils/role';
 
 export default defineNuxtRouteMiddleware(to => {
 	const authStore = useAuthStore();
@@ -13,7 +11,7 @@ export default defineNuxtRouteMiddleware(to => {
 
 	if (isManagementPath) {
 		// Block employees from /management/** entirely
-		if (role === 'EMPLOYEE') return navigateTo('/', { replace: true });
+		if (isEmployeeRole(role)) return navigateTo('/', { replace: true });
 		setPageLayout('default');
 		return;
 	}
@@ -22,9 +20,9 @@ export default defineNuxtRouteMiddleware(to => {
 	const effectiveRole = uiStore.previewRole ?? role;
 
 	// Management users (not in employee preview) visiting "/" go straight to /management
-	if (to.path === '/' && MANAGEMENT_ROLES.includes(effectiveRole)) {
+	if (to.path === '/' && isManagementRole(effectiveRole)) {
 		return navigateTo('/management', { replace: true });
 	}
 
-	setPageLayout(MANAGEMENT_ROLES.includes(effectiveRole) ? 'default' : 'employee');
+	setPageLayout(isManagementRole(effectiveRole) ? 'default' : 'employee');
 });

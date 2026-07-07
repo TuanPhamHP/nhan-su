@@ -13,6 +13,7 @@
 	const toast = useToast();
 	const { updateProfile, uploadAvatar, uploadingAvatar } = useProfile();
 	const authStore = useAuthStore();
+	const metaDataStore = useMetaDataStore();
 
 	const router = useRouter();
 	// ─── Load profile ─────────────────────────────────────────────────────────────
@@ -503,7 +504,7 @@
 					</div>
 					<div>
 						<p :class="labelCls">Vai trò</p>
-						<p :class="valueCls">{{ profile.role }}</p>
+						<p :class="valueCls">{{ metaDataStore.labelForRole(profile.role) }}</p>
 					</div>
 					<div>
 						<p :class="labelCls">Phòng ban</p>

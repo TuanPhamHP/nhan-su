@@ -2,17 +2,21 @@
 import { format } from 'date-fns';
 import { useBusinessTripService } from '~/services/business-trip.service';
 import TripStatusBadge from '~/components/modules/business-trip/TripStatusBadge.vue';
+import RejectTripModal from '~/components/modules/business-trip/RejectTripModal.vue';
 import type { BusinessTripResponse, BusinessTripStatus, QueryBusinessTripsParams } from '~/types/business-trip.types';
 import type { PaginatedMeta } from '~/types/api.types';
 import type { SelectOption } from '~/components/ui/Select.vue';
 
-definePageMeta({ title: 'Đơn công tác của tôi' });
+definePageMeta({ title: 'Quản lý đơn công tác' });
 
 const toast = useToast();
 const router = useRouter();
+const { user } = useAuth();
 const service = useBusinessTripService();
 const metaDataStore = useMetaDataStore();
 const { businessTripStatuses } = storeToRefs(metaDataStore);
+
+const isAdmin = computed(() => user.value?.role === 'ADMIN');
 
 const trips = ref<BusinessTripResponse[]>([]);
 const meta = ref<PaginatedMeta | null>(null);
@@ -22,14 +26,34 @@ const filter = reactive<QueryBusinessTripsParams>({ page: 1, limit: 20, status: 
 async function fetchTrips() {
 	loading.value = true;
 	try {
-		const res = await service.findMe({ ...filter, status: filter.status || undefined });
+		const res = await service.findAll({ ...filter, status: filter.status || undefined });
 		trips.value = res.data;
 		meta.value = res.meta;
 	} catch (e) {
-		toast.error(e instanceof Error ? e.message : 'Lỗi tải đơn công tác');
+		toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách đơn công tác');
 	} finally {
 		loading.value = false;
 	}
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+const rejectTarget = ref<BusinessTripResponse | null>(null);
+
+async function handleApprove(trip: BusinessTripResponse) {
+	if (!confirm(`Duyệt đơn công tác "${trip.title}"?`)) return;
+	try {
+		const updated = await service.approve(trip.id);
+		toast.success('Đã duyệt đơn công tác');
+		replaceInList(updated);
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+	}
+}
+
+function onRejected(updated: BusinessTripResponse) {
+	rejectTarget.value = null;
+	replaceInList(updated);
+	toast.success('Đã từ chối đơn công tác');
 }
 
 async function handleCancel(trip: BusinessTripResponse) {
@@ -37,11 +61,15 @@ async function handleCancel(trip: BusinessTripResponse) {
 	try {
 		const updated = await service.cancel(trip.id);
 		toast.success('Đã huỷ đơn công tác');
-		const idx = trips.value.findIndex(t => t.id === updated.id);
-		if (idx !== -1) trips.value.splice(idx, 1, updated);
+		replaceInList(updated);
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 	}
+}
+
+function replaceInList(updated: BusinessTripResponse) {
+	const idx = trips.value.findIndex(t => t.id === updated.id);
+	if (idx !== -1) trips.value.splice(idx, 1, updated);
 }
 
 function fmtDate(d: string) {
@@ -80,8 +108,8 @@ onMounted(() => {
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn công tác của tôi</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách các đơn công tác bạn đã tạo</p>
+				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý đơn công tác</h1>
+				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách toàn bộ đơn công tác trong hệ thống</p>
 			</div>
 			<div class="hidden sm:block">
 				<NuxtLink to="/business-trips/create">
@@ -135,6 +163,9 @@ onMounted(() => {
 					<div class="flex-1 min-w-0">
 						<p class="text-sm font-semibold text-gray-900 dark:text-white truncate">{{ trip.title }}</p>
 						<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ firstRouteSummary(trip) }}</p>
+						<p class="text-xs text-gray-400 mt-1">
+							{{ trip.employee.fullName }} · {{ trip.employee.employeeCode }}
+						</p>
 					</div>
 					<TripStatusBadge :status="trip.status" />
 				</div>
@@ -147,22 +178,27 @@ onMounted(() => {
 					<span class="text-brand-600 dark:text-brand-400 font-medium">· {{ trip.totalDays }} ngày</span>
 				</div>
 
+				<!-- Actions: Approve/Reject nếu có quyền duyệt -->
 				<div
-					v-if="trip.canAddReport"
-					class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+					v-if="trip.canApprove || (isAdmin && trip.status === 'PENDING')"
+					class="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800"
+					@click.stop
 				>
-					<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-					</svg>
-					Cần nộp báo cáo
+					<CommonAppButton size="sm" variant="primary" class="flex-1" @click="handleApprove(trip)">Duyệt</CommonAppButton>
+					<CommonAppButton size="sm" variant="danger" class="flex-1" @click="rejectTarget = trip">Từ chối</CommonAppButton>
 				</div>
 
-				<div class="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800" @click.stop>
+				<!-- Actions: Xem chi tiết + Huỷ (khi HR/Admin có quyền huỷ) -->
+				<div
+					v-else
+					class="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800"
+					@click.stop
+				>
 					<NuxtLink :to="`/business-trips/${trip.id}`" class="flex-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline">
 						Xem chi tiết
 					</NuxtLink>
 					<button
-						v-if="trip.canCancel"
+						v-if="trip.canCancel || (isAdmin && ['DRAFT', 'PENDING'].includes(trip.status))"
 						class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
 						@click="handleCancel(trip)"
 					>
@@ -193,6 +229,13 @@ onMounted(() => {
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
 				</svg>
 			</NuxtLink>
+
+			<RejectTripModal
+				v-if="rejectTarget"
+				:trip="rejectTarget"
+				@rejected="onRejected"
+				@close="rejectTarget = null"
+			/>
 		</Teleport>
 	</div>
 </template>

@@ -165,7 +165,10 @@ function formatTime(iso: string | null) {
 						<!-- Pending -->
 						<div v-else class="flex items-start gap-2.5">
 							<div class="ml-1.5 mt-0.5 w-3 h-3 rounded-full bg-amber-400 flex-shrink-0 ring-2 ring-white dark:ring-gray-900 z-10 animate-pulse" />
-							<p class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">Đang chờ duyệt...</p>
+							<div>
+								<p class="text-xs font-medium text-amber-600 dark:text-amber-400 mt-0.5">Đang chờ duyệt</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Người duyệt: HR</p>
+							</div>
 						</div>
 					</div>
 				</div>

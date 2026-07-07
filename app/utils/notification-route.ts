@@ -1,8 +1,5 @@
 import type { UserRole } from '~/types/auth.types';
-
-function isManagement(role: UserRole): boolean {
-	return role === 'ADMIN' || role === 'HR' || role === 'MANAGER' || role === 'CHIEF';
-}
+import { isManagementRole } from '~/utils/role';
 
 /**
  * Resolves the in-app navigation route for a notification based on refType, refId, and
@@ -14,7 +11,7 @@ function isManagement(role: UserRole): boolean {
  * notification.
  *
  * Route table:
- * | refType              | Management (ADMIN/HR/MANAGER/CHIEF)      | EMPLOYEE                          |
+ * | refType              | Management (mọi role !== EMPLOYEE)       | EMPLOYEE                          |
  * |----------------------|------------------------------------------|-----------------------------------|
  * | violation_request    | /management/violations?open_id=:id       | /violations/my                    |
  * | leave_request        | /management/leave?open_id=:id            | /users/leave-requests?open_id=:id |
@@ -26,7 +23,7 @@ function isManagement(role: UserRole): boolean {
 export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
 	if (!refType) return null;
 
-	const manage = isManagement(role);
+	const manage = isManagementRole(role);
 	const id = refId ?? null;
 
 	switch (refType) {

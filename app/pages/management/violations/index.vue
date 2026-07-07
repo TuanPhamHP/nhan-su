@@ -14,6 +14,7 @@
 	import type { DepartmentSummary } from '~/types/department.types';
 	import type { PaginatedMeta } from '~/types/api.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
+	import { isManagementRole } from '~/utils/role';
 	import {
 		VIOLATION_TYPE_OPTIONS,
 		VIOLATION_STATUS_OPTIONS,
@@ -30,7 +31,7 @@
 	const violationService = useViolationRequestService();
 	const departmentService = useDepartmentService();
 
-	const canManage = computed(() => ['HR', 'ADMIN', 'MANAGER', 'CHIEF'].includes(user.value?.role ?? ''));
+	const canManage = computed(() => isManagementRole(user.value?.role));
 
 	// ─── Options ──────────────────────────────────────────────────────────────────
 	const today = new Date();

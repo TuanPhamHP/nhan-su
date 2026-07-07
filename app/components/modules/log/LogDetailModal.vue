@@ -10,6 +10,8 @@
 		close: [];
 	}>();
 
+	const metaDataStore = useMetaDataStore();
+
 	const actionColorMap: Record<string, string> = {
 		auth: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
 		employee: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
@@ -196,7 +198,7 @@
 									v-if="log.actor.role"
 									class="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
 								>
-									{{ log.actor.role }}
+									{{ metaDataStore.labelForRole(log.actor.role) }}
 								</span>
 							</div>
 							<p v-if="log.actor.email" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">

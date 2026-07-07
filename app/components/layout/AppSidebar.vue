@@ -1,11 +1,15 @@
 ﻿<script setup lang="ts">
 	import type { UserRole } from '~/types/auth.types';
+	import { isManagementRole } from '~/utils/role';
 
 	interface NavItem {
 		label: string;
 		route: string;
 		icon: string;
-		roles: UserRole[];
+		/** Explicit role allowlist. Bỏ qua nếu dùng `management: true`. */
+		roles?: UserRole[];
+		/** Hiện cho tất cả role !== 'EMPLOYEE'. */
+		management?: boolean;
 		dataTour?: string;
 		matchQuery?: Record<string, string>;
 	}
@@ -18,6 +22,8 @@
 	const { isOpen, close } = useSidebar();
 	const { user } = useAuth();
 	const route = useRoute();
+	const metaDataStore = useMetaDataStore();
+	const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
 
 	watch(
 		() => route.path,
@@ -35,7 +41,7 @@
 					label: 'Dashboard',
 					route: '/management',
 					icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Dashboard',
@@ -52,13 +58,13 @@
 					label: 'Nhân viên',
 					route: '/management/employees',
 					icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Phòng ban',
 					route: '/management/departments',
 					icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Chức vụ',
@@ -70,7 +76,7 @@
 					label: 'Hợp đồng',
 					route: '/management/contracts',
 					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 			],
 		},
@@ -81,19 +87,7 @@
 					label: 'Chấm công',
 					route: '/management/attendance',
 					icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-				},
-			],
-		},
-		{
-			label: 'Đơn của tôi',
-			items: [
-				{
-					label: 'Đơn công tác của tôi',
-					route: '/business-trips',
-					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
-					dataTour: 'nav-my-business-trips',
+					management: true,
 				},
 			],
 		},
@@ -104,39 +98,38 @@
 					label: 'Nghỉ phép',
 					route: '/management/leave',
 					icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Làm thêm giờ',
 					route: '/management/overtime',
 					icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Làm online',
 					route: '/management/online-work',
 					icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Vi phạm chuyên cần',
 					route: '/management/violations',
 					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Bù công',
 					route: '/management/makeup-attendance',
 					icon: 'M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Công tác',
-					route: '/business-trips?tab=pending',
+					route: '/management/business-trips',
 					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 					dataTour: 'nav-business-trips',
-					matchQuery: { tab: 'pending' },
 				},
 			],
 		},
@@ -147,7 +140,7 @@
 					label: 'Báo cáo',
 					route: '/management/reports',
 					icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-					roles: ['ADMIN', 'HR', 'MANAGER', 'CHIEF'],
+					management: true,
 				},
 				{
 					label: 'Bảng lương',
@@ -193,7 +186,11 @@
 		return navSections
 			.map(section => ({
 				...section,
-				items: section.items.filter(item => item.roles.includes(user.value!.role)),
+				items: section.items.filter(item => {
+					if (item.management) return isManagementRole(user.value!.role);
+					if (item.roles) return item.roles.includes(user.value!.role);
+					return true;
+				}),
 			}))
 			.filter(section => section.items.length > 0);
 	});
@@ -364,7 +361,7 @@
 				>
 					<div v-if="isOpen" class="flex-1 min-w-0">
 						<p class="text-xs font-medium text-gray-900 dark:text-white truncate">{{ user?.fullName }}</p>
-						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ user?.role }}</p>
+						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ userRoleLabel }}</p>
 					</div>
 				</Transition>
 			</div>

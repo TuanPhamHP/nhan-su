@@ -10,6 +10,7 @@ const router = useRouter();
 const service = useGeneralRequestService();
 const directoryStore = useDirectoryStore();
 const { employees: directoryEmployees, departments: directoryDepartments, positions: directoryPositions, loading: directoryLoading } = storeToRefs(directoryStore);
+const metaDataStore = useMetaDataStore();
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
 const step = ref<1 | 2 | 3>(1);
@@ -439,7 +440,7 @@ watch(step, s => {
 						<div class="flex-shrink-0 w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-xs font-bold text-brand-700 dark:text-brand-400">{{ idx + 1 }}</div>
 						<div class="flex-1">
 							<p class="text-sm font-medium text-gray-900 dark:text-white">{{ a.fullName }}</p>
-							<p v-if="a.role" class="text-xs text-gray-400">{{ a.role }}</p>
+							<p v-if="a.role" class="text-xs text-gray-400">{{ metaDataStore.labelForRole(a.role) }}</p>
 						</div>
 						<div class="flex gap-1">
 							<button type="button" class="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700" @click="moveApproverUp(idx)">

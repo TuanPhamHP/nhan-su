@@ -7,6 +7,7 @@ import RejectOnlineWorkModal from '~/components/modules/online-work/RejectOnline
 import type { OnlineWorkRequestResponse, OnlineWorkStatus, QueryOnlineWorkParams } from '~/types/online-work-request.types';
 import type { DepartmentSummary } from '~/types/department.types';
 import type { SelectOption } from '~/components/ui/Select.vue';
+import { isManagementRole } from '~/utils/role';
 
 definePageMeta({ title: 'Làm việc online' });
 
@@ -22,12 +23,8 @@ const {
 const departmentService = useDepartmentService();
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
-const canApprove = computed(() =>
-	['ADMIN', 'MANAGER', 'CHIEF'].includes(user.value?.role ?? ''),
-);
-const canViewAll = computed(() =>
-	['ADMIN', 'HR', 'MANAGER', 'CHIEF'].includes(user.value?.role ?? ''),
-);
+const canApprove = computed(() => isManagementRole(user.value?.role));
+const canViewAll = computed(() => isManagementRole(user.value?.role));
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 type Tab = 'pending' | 'all' | 'report';

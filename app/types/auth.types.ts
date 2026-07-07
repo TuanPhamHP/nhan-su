@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'CHIEF' | 'HR' | 'MANAGER' | 'EMPLOYEE';
+export type UserRole = 'ADMIN' | 'CHIEF' | 'DIRECTOR' | 'HR' | 'MANAGER' | 'EMPLOYEE';
 
 export type Gender = 'Nam' | 'Nữ' | 'Khác';
 

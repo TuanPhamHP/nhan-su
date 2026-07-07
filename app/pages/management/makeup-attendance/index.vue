@@ -13,6 +13,7 @@
 	import type { PaginatedMeta } from '~/types/api.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
 	import { MAKEUP_STATUS_OPTIONS } from '~/utils/makeup-attendance.utils';
+	import { isManagementRole } from '~/utils/role';
 
 	definePageMeta({ title: 'Quản lý bù công' });
 
@@ -24,11 +25,11 @@
 	const directoryStore = useDirectoryStore();
 	const { departments } = storeToRefs(directoryStore);
 
-	const canManage = computed(() => ['HR', 'ADMIN', 'MANAGER', 'CHIEF'].includes(user.value?.role ?? ''));
+	const canManage = computed(() => isManagementRole(user.value?.role));
 	const isManager = computed(() => user.value?.role === 'MANAGER');
-	const canApprove = computed(() => ['ADMIN', 'MANAGER'].includes(user.value?.role ?? ''));
-	// HR/Admin/Chief thấy filter phòng ban (xem toàn công ty). Manager bị ẩn — backend tự lock theo phòng ban.
-	const showDepartmentFilter = computed(() => ['HR', 'ADMIN', 'CHIEF'].includes(user.value?.role ?? ''));
+	const canApprove = computed(() => isManagementRole(user.value?.role));
+	// Manager bị ẩn filter phòng ban — backend tự lock theo phòng ban của họ.
+	const showDepartmentFilter = computed(() => isManagementRole(user.value?.role) && user.value?.role !== 'MANAGER');
 
 	// ─── Filters ──────────────────────────────────────────────────────────────
 	const today = new Date();
@@ -218,7 +219,7 @@
 				/>
 			</div>
 
-			<!-- Department (HR/Admin/Chief only) -->
+			<!-- Department filter — management users trừ MANAGER (backend tự lock Manager theo phòng ban) -->
 			<div v-if="showDepartmentFilter" class="w-full sm:w-52">
 				<UiSelectInput
 					:model-value="filter.departmentId ?? 0"

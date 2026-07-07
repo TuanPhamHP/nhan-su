@@ -48,6 +48,8 @@ export const useAuthStore = defineStore('auth', () => {
 		await loadPermissions();
 		const { load: loadDirectory } = useDirectoryStore();
 		loadDirectory();
+		const { load: loadMetadata } = useMetaDataStore();
+		loadMetadata();
 	}
 
 	async function fetchMe() {
@@ -67,6 +69,8 @@ export const useAuthStore = defineStore('auth', () => {
 			await loadPermissions();
 			const { load: loadDirectory } = useDirectoryStore();
 			loadDirectory();
+			const { load: loadMetadata } = useMetaDataStore();
+			loadMetadata();
 		} catch {
 			await logout();
 		}

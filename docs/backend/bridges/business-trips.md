@@ -19,11 +19,40 @@
 | PATCH | `/v1/business-trips/:id/reject` | `MANAGER`, `CHIEF`, `HR`, `ADMIN` | Từ chối đơn |
 | PATCH | `/v1/business-trips/:id/cancel` | Chủ nhân, `HR`, `ADMIN` (khi `DRAFT` hoặc `PENDING`) | Huỷ đơn |
 | PATCH | `/v1/business-trips/routes/:routeId/transport` | `HR`, `ADMIN` (trip phải `APPROVED`) | HR cập nhật phương tiện cho một lộ trình, hoặc đánh dấu tự túc |
+| POST | `/v1/business-trips/routes/:routeId/upload-ticket` | `HR`, `ADMIN` | Upload 1 ảnh vé — trả URL gốc để đặt vào `UpdateRouteTransportDto.transports[].ticketImageUrl` |
+| POST | `/v1/business-trips/:id/upload-attachment` | Chủ đơn, `HR`, `ADMIN` | Upload tối đa 10 file đính kèm báo cáo — trả mảng URLs gốc để đặt vào `CreateTripReportDto.attachmentUrls` |
 | POST | `/v1/business-trips/:id/report` | Chủ nhân (khi `APPROVED` hoặc `IN_PROGRESS`) | Tạo báo cáo công tác (đính kèm ảnh) |
 | PATCH | `/v1/business-trips/:id/report` | Chủ nhân (báo cáo đang `DRAFT`) | Cập nhật báo cáo |
 | PATCH | `/v1/business-trips/:id/report/submit` | Chủ nhân | Nộp báo cáo → chuyến công tác thành `COMPLETED` |
 
 > **Lưu ý thứ tự route:** `/business-trips/me`, `/business-trips/pending-for-me`, và `/business-trips/routes/:routeId/transport` được khai báo **trước** hoặc song song với `/:id`. FE không cần lo, chỉ dùng path đúng.
+
+---
+
+## Meta — Danh sách trạng thái (dùng cho filter / badge)
+
+`GET /v1/meta-data/business-trip-statuses` (mọi user đã đăng nhập) trả về đúng thứ tự dùng cho dropdown filter và mapping `status → statusLabel`. FE **nên gọi endpoint này** thay vì hardcode label để giữ đồng bộ với BE.
+
+**Response 200:**
+
+```json
+{
+	"success": true,
+	"data": [
+		{ "value": "DRAFT", "label": "Nháp" },
+		{ "value": "PENDING", "label": "Chờ duyệt" },
+		{ "value": "APPROVED", "label": "Đã duyệt" },
+		{ "value": "REJECTED", "label": "Bị từ chối" },
+		{ "value": "IN_PROGRESS", "label": "Đang công tác" },
+		{ "value": "COMPLETED", "label": "Hoàn thành" },
+		{ "value": "CANCELLED", "label": "Đã huỷ" }
+	]
+}
+```
+
+- `value` khớp `BusinessTripStatus` trong response chi tiết đơn (field `status`).
+- `label` khớp đúng chuỗi `statusLabel` mà BE trả trong response chi tiết đơn — dùng chung 1 nguồn nên không lệch nhau.
+- Kết quả tĩnh, an toàn để cache in-memory ở FE cho toàn phiên đăng nhập.
 
 ---
 
@@ -711,6 +740,68 @@ Không cần request body. Sau khi nộp:
 
 ---
 
+## File Upload Endpoints
+
+Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id/report` (attachments), FE **upload file trước** qua 2 endpoint dưới để nhận URL gốc rồi gán vào body payload tương ứng. BE tự sign URL khi trả về trip detail — xem [Presigned URLs](#presigned-urls--ảnhfile-đã-được-sign-dùng-trực-tiếp).
+
+### POST /v1/business-trips/routes/:routeId/upload-ticket — Upload ảnh vé
+
+- **Roles:** `HR`, `ADMIN`
+- **Content-Type:** `multipart/form-data`
+- **Field:** `file` (single)
+- **Allowed mime:** `image/jpeg`, `image/png`, `application/pdf`
+- **Size max:** 10 MB
+- **Path R2:** `trip-transport/{tripId}/tickets/{uuid}.{ext}` (tripId lấy từ route)
+
+**Response 201:**
+
+```json
+{ "success": true, "data": { "url": "https://hr-documents.s3.example.com/trip-transport/42/tickets/abc.jpg" } }
+```
+
+`url` là **URL gốc chưa sign** — FE gán vào field `ticketImageUrl` của một phần tử trong `UpdateRouteTransportDto.transports[]` khi gọi `PATCH /routes/:routeId/transport`.
+
+**Errors:**
+
+- 400: File thiếu hoặc sai mime/size
+- 403: Không phải HR/ADMIN
+- 404: Lộ trình không tồn tại
+
+---
+
+### POST /v1/business-trips/:id/upload-attachment — Upload file đính kèm báo cáo
+
+- **Roles:** Chủ đơn (bao gồm `createdForEmployeeId`), `HR`, `ADMIN`
+- **Content-Type:** `multipart/form-data`
+- **Field:** `files` (array, tối đa 10 file)
+- **Allowed mime:** `image/jpeg`, `image/png`, `application/pdf`, DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`)
+- **Size max:** 10 MB / file
+- **Path R2:** `trip-report/{tripId}/attachments/{uuid}.{ext}`
+
+**Response 201:**
+
+```json
+{
+	"success": true,
+	"data": {
+		"urls": [
+			"https://hr-documents.s3.example.com/trip-report/42/attachments/photo1.jpg",
+			"https://hr-documents.s3.example.com/trip-report/42/attachments/contract.pdf"
+		]
+	}
+}
+```
+
+`urls[]` là mảng **URL gốc chưa sign** — FE gán trực tiếp vào `CreateTripReportDto.attachmentUrls` hoặc `UpdateTripReportDto.attachmentUrls`.
+
+**Errors:**
+
+- 400: Không có file, sai mime/size, hoặc > 10 file
+- 403: Không phải chủ đơn / HR / ADMIN
+- 404: Đơn không tồn tại
+
+---
+
 ## Composable — useBusinessTrips
 
 ```typescript
@@ -758,6 +849,18 @@ export function useBusinessTrips() {
 	const updateRouteTransport = (routeId: number, dto: UpdateRouteTransportDto) =>
 		patch<BusinessTripResponse>(`/v1/business-trips/routes/${routeId}/transport`, dto);
 
+	const uploadTripTicket = (routeId: number, file: File) => {
+		const form = new FormData();
+		form.append('file', file);
+		return post<{ url: string }>(`/v1/business-trips/routes/${routeId}/upload-ticket`, form);
+	};
+
+	const uploadTripAttachments = (tripId: number, files: File[]) => {
+		const form = new FormData();
+		files.forEach(f => form.append('files', f));
+		return post<{ urls: string[] }>(`/v1/business-trips/${tripId}/upload-attachment`, form);
+	};
+
 	const createReport = (id: number, dto: CreateTripReportDto) =>
 		post<BusinessTripResponse>(`/v1/business-trips/${id}/report`, dto);
 
@@ -778,6 +881,8 @@ export function useBusinessTrips() {
 		rejectTrip,
 		cancelTrip,
 		updateRouteTransport,
+		uploadTripTicket,
+		uploadTripAttachments,
 		createReport,
 		updateReport,
 		submitReport,

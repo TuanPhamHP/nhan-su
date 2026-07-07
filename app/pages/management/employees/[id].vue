@@ -185,12 +185,9 @@
 
 	// ─── Static options ───────────────────────────────────────────────────────────
 
-	const roleOptions: { value: UserRole; label: string }[] = [
-		{ value: 'EMPLOYEE', label: 'Nhân viên' },
-		{ value: 'MANAGER', label: 'Quản lý' },
-		{ value: 'HR', label: 'Nhân sự' },
-		{ value: 'ADMIN', label: 'Quản trị viên' },
-	];
+	const metaDataStore = useMetaDataStore();
+	metaDataStore.load().catch(() => { /* metadata not critical */ });
+	const { roles: roleOptions } = storeToRefs(metaDataStore);
 
 	const genderOptions = [
 		{ value: undefined, label: '-- Không rõ --' },
@@ -219,7 +216,7 @@
 	const roleLabel = computed(() => {
 		const emp = currentEmployee.value;
 		if (!emp) return '—';
-		return roleOptions.find(r => r.value === emp.role)?.label ?? emp.role;
+		return metaDataStore.labelForRole(emp.role);
 	});
 
 	const inputCls =

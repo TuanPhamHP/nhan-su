@@ -5,6 +5,7 @@ import { useGeneralRequestStore } from '~/stores/generalRequest';
 import RequestStatusBadge from '~/components/modules/general-request/RequestStatusBadge.vue';
 import type { GeneralRequestResponse, GeneralRequestStatus } from '~/types/general-request.types';
 import type { PaginatedMeta } from '~/types/api.types';
+import { isManagementRole } from '~/utils/role';
 
 definePageMeta({ title: 'Văn bản nội bộ' });
 
@@ -14,7 +15,7 @@ const service = useGeneralRequestService();
 const { printRequest } = usePrint();
 const generalRequestStore = useGeneralRequestStore();
 
-const canManage = computed(() => ['ADMIN', 'MANAGER', 'CHIEF', 'HR'].includes(user.value?.role ?? ''));
+const canManage = computed(() => isManagementRole(user.value?.role));
 const isAdmin = computed(() => user.value?.role === 'ADMIN');
 const canCancelRow = (req: GeneralRequestResponse) => req.canCancel || (isAdmin.value && req.status === 'PENDING');
 

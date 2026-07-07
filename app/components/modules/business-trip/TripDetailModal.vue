@@ -186,6 +186,7 @@ function fmtCurrency(n: number) {
 								{{ trip.approver.fullName }}
 								<span v-if="trip.autoApproved" class="text-xs font-normal text-emerald-600 dark:text-emerald-400">(auto-approve)</span>
 							</p>
+							<p v-if="trip.status === 'PENDING'" class="text-xs text-amber-600 dark:text-amber-400">Đang chờ duyệt</p>
 							<p v-if="trip.approvedAt" class="text-xs text-gray-400">Duyệt lúc {{ fmtDateTime(trip.approvedAt) }}</p>
 							<p v-if="trip.rejectedAt" class="text-xs text-red-500">Từ chối lúc {{ fmtDateTime(trip.rejectedAt) }}</p>
 						</template>

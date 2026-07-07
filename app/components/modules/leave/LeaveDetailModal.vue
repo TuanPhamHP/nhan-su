@@ -62,7 +62,14 @@ const timelineSteps = computed(() => {
 			done: true,
 		});
 	} else {
-		steps.push({ label: 'Chờ duyệt', at: null, by: null, icon: 'PENDING', done: false });
+		const approver = props.leaveRequest.assignedApprover;
+		steps.push({
+			label: 'Chờ duyệt',
+			at: null,
+			by: approver ? { id: approver.id, fullName: approver.fullName, position: null } : null,
+			icon: 'PENDING',
+			done: false,
+		});
 	}
 
 	return steps;
@@ -137,6 +144,10 @@ const timelineSteps = computed(() => {
 					<div v-if="leaveRequest.reason" class="flex justify-between gap-4">
 						<span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Lý do</span>
 						<span class="font-medium text-gray-900 dark:text-white text-right">{{ leaveRequest.reason }}</span>
+					</div>
+					<div v-if="leaveRequest.status === 'PENDING' && leaveRequest.assignedApprover" class="flex justify-between">
+						<span class="text-gray-500 dark:text-gray-400">Người duyệt</span>
+						<span class="font-medium text-gray-900 dark:text-white">{{ leaveRequest.assignedApprover.fullName }}</span>
 					</div>
 					<div v-if="leaveRequest.rejectNote" class="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2.5">
 						<p class="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Lý do từ chối</p>

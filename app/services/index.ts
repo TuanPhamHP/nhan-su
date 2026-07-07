@@ -28,3 +28,4 @@ export * from './contract.service';
 export * from './social-insurance.service';
 export * from './business-trip.service';
 export * from './general-request.service';
+export * from './meta-data.service';

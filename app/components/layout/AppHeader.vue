@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import NotificationPanel from '~/components/notifications/NotificationPanel.vue';
-	import type { UserRole } from '~/types/auth.types';
+	import { isManagementRole } from '~/utils/role';
 
 	const { toggle } = useSidebar();
 	const { isDark, toggle: toggleDark } = useColorMode();
@@ -15,8 +15,7 @@
 	const showUserMenu = ref(false);
 	const showNotifPanel = ref(false);
 
-	const MANAGEMENT_ROLES: UserRole[] = ['ADMIN', 'HR', 'MANAGER', 'CHIEF'];
-	const isManagementUser = computed(() => user.value && MANAGEMENT_ROLES.includes(user.value.role));
+	const isManagementUser = computed(() => !!user.value && isManagementRole(user.value.role));
 	const isPreviewingAsEmployee = computed(() => previewRole.value === 'EMPLOYEE');
 
 	function toggleViewAs() {

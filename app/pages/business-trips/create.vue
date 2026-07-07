@@ -16,6 +16,7 @@ const router = useRouter();
 const service = useBusinessTripService();
 const employeeService = useEmployeeService();
 const { user } = useAuth();
+const metaDataStore = useMetaDataStore();
 
 const isHrOrAdmin = computed(() => !!user.value && ['HR', 'ADMIN'].includes(user.value.role));
 
@@ -565,7 +566,7 @@ onMounted(() => {
 									@click="selectedApproverId = a.id"
 								>
 									{{ a.fullName }}
-									<span v-if="a.role" class="text-xs text-gray-400 ml-1">({{ a.role }})</span>
+									<span v-if="a.role" class="text-xs text-gray-400 ml-1">({{ metaDataStore.labelForRole(a.role) }})</span>
 								</button>
 							</div>
 						</div>

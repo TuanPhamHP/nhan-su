@@ -7,6 +7,7 @@ import RejectOvertimeModal from '~/components/modules/overtime/RejectOvertimeMod
 import type { OvertimeRequestResponse, OvertimeStatus, QueryOvertimeParams } from '~/types/overtime.types';
 import type { DepartmentSummary } from '~/types/department.types';
 import type { SelectOption } from '~/components/ui/Select.vue';
+import { isManagementRole } from '~/utils/role';
 
 definePageMeta({ title: 'Quản lý OT' });
 
@@ -25,7 +26,7 @@ const {
 } = useOvertimeRequests();
 const departmentService = useDepartmentService();
 
-const canApprove = computed(() => user.value?.role === 'ADMIN' || user.value?.role === 'MANAGER' || user.value?.role === 'CHIEF');
+const canApprove = computed(() => isManagementRole(user.value?.role));
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 type Tab = 'requests' | 'report';
