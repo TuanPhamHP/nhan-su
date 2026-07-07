@@ -76,7 +76,7 @@
 
 	const today = new Date();
 	const requestFilter = reactive({
-		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
+		departmentId: undefined as number | undefined,
 		leaveTypeId: undefined as number | undefined,
 		status: 'PENDING' as LeaveStatus | undefined,
 		startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
