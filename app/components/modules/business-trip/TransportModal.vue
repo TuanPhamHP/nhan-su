@@ -228,11 +228,11 @@ async function save() {
 						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 							<div class="space-y-1">
 								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Giờ đón</label>
-								<input v-model="t.pickupTime" type="datetime-local" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors" />
+								<UiDateTimePickerV2 v-model="t.pickupTime" placeholder="Chọn giờ đón" />
 							</div>
 							<div class="space-y-1">
 								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Giờ đến</label>
-								<input v-model="t.dropTime" type="datetime-local" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors" />
+								<UiDateTimePickerV2 v-model="t.dropTime" placeholder="Chọn giờ đến" />
 							</div>
 						</div>
 
@@ -244,7 +244,7 @@ async function save() {
 							</div>
 							<div class="space-y-1">
 								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Giờ check-in</label>
-								<input v-model="t.checkInTime" type="datetime-local" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors" />
+								<UiDateTimePickerV2 v-model="t.checkInTime" placeholder="Chọn giờ check-in" />
 							</div>
 						</div>
 
