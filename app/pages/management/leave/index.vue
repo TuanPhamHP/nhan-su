@@ -36,6 +36,9 @@
 	const leaveBalanceService = useLeaveBalanceService();
 	const departmentService = useDepartmentService();
 
+	const isManager = computed(() => user.value?.role === 'MANAGER');
+	const managerDepartmentId = computed(() => user.value?.department?.id);
+
 	// ─── Tabs ─────────────────────────────────────────────────────────────────────
 	type Tab = 'requests' | 'types' | 'balances';
 	const activeTab = ref<Tab>('requests');
@@ -73,7 +76,7 @@
 
 	const today = new Date();
 	const requestFilter = reactive({
-		departmentId: undefined as number | undefined,
+		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
 		leaveTypeId: undefined as number | undefined,
 		status: 'PENDING' as LeaveStatus | undefined,
 		startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
@@ -261,7 +264,7 @@
 
 	const balanceFilter = reactive({
 		year: currentYear,
-		departmentId: undefined as number | undefined,
+		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
 		search: '',
 		page: 1,
 	});
@@ -464,14 +467,17 @@
 			<!-- Filter bar -->
 			<div class="flex flex-col sm:flex-row flex-wrap gap-3">
 				<div class="w-full sm:w-44">
+					<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Phòng ban</label>
 					<UiSelectInput
 						:model-value="requestFilter.departmentId ?? 0"
 						:options="departmentOptions"
+						:disabled="isManager"
 						placeholder="Tất cả phòng ban"
 						@update:model-value="(v) => { requestFilter.departmentId = v === 0 ? undefined : (v as number); applyRequestFilter(); }"
 					/>
 				</div>
 				<div class="w-full sm:w-44">
+					<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Loại đơn</label>
 					<UiSelect
 						:model-value="requestFilter.leaveTypeId"
 						:options="leaveTypeOptions"
@@ -480,6 +486,7 @@
 					/>
 				</div>
 				<div class="w-full sm:w-44">
+					<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trạng thái</label>
 					<UiSelect
 						:model-value="requestFilter.status"
 						:options="statusOptions"
@@ -487,20 +494,23 @@
 						@update:model-value="(v) => { requestFilter.status = v as LeaveStatus | undefined; applyRequestFilter(); }"
 					/>
 				</div>
-				<div class="flex items-center gap-2">
-					<input
-						v-model="requestFilter.startDate"
-						type="date"
-						class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-						@change="applyRequestFilter"
-					/>
-					<span class="text-gray-400 text-sm">→</span>
-					<input
-						v-model="requestFilter.endDate"
-						type="date"
-						class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-						@change="applyRequestFilter"
-					/>
+				<div>
+					<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Khoảng thời gian</label>
+					<div class="flex items-center gap-2">
+						<input
+							v-model="requestFilter.startDate"
+							type="date"
+							class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+							@change="applyRequestFilter"
+						/>
+						<span class="text-gray-400 text-sm">→</span>
+						<input
+							v-model="requestFilter.endDate"
+							type="date"
+							class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+							@change="applyRequestFilter"
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -834,55 +844,63 @@
 			<!-- Header & controls -->
 			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 				<h2 class="text-base font-semibold text-gray-900 dark:text-white">Số dư phép năm {{ balanceFilter.year }}</h2>
-				<div class="flex flex-wrap items-center gap-2">
+				<div class="flex flex-wrap items-end gap-2">
 					<!-- Search -->
-					<div class="relative">
-						<svg
-							class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							stroke-width="2"
-						>
-							<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-						</svg>
-						<input
-							v-model="balanceFilter.search"
-							type="text"
-							placeholder="Tìm nhân viên..."
-							class="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-44 focus:outline-none focus:ring-1 focus:ring-brand-400"
-							@input="onBalanceSearchInput"
-						/>
+					<div>
+						<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tìm kiếm</label>
+						<div class="relative">
+							<svg
+								class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+							</svg>
+							<input
+								v-model="balanceFilter.search"
+								type="text"
+								placeholder="Tìm nhân viên..."
+								class="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-44 focus:outline-none focus:ring-1 focus:ring-brand-400"
+								@input="onBalanceSearchInput"
+							/>
+						</div>
 					</div>
 
 					<!-- Department filter -->
 					<div class="w-44">
+						<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Phòng ban</label>
 						<UiSelectInput
 							:model-value="balanceFilter.departmentId ?? 0"
 							:options="departmentOptions"
+							:disabled="isManager"
 							placeholder="Tất cả phòng ban"
 							@update:model-value="(v) => { balanceFilter.departmentId = v === 0 ? undefined : (v as number); applyBalanceFilter(); }"
 						/>
 					</div>
 
 					<!-- Year selector -->
-					<div class="flex gap-1">
-						<button
-							v-for="yr in yearOptions"
-							:key="yr"
-							:class="[
-								'px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors',
-								balanceFilter.year === yr
-									? 'bg-brand-600 text-white border-brand-600'
-									: 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-brand-400 hover:text-brand-600',
-							]"
-							@click="
-								balanceFilter.year = yr;
-								applyBalanceFilter();
-							"
-						>
-							{{ yr }}
-						</button>
+					<div>
+						<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Năm</label>
+						<div class="flex gap-1">
+							<button
+								v-for="yr in yearOptions"
+								:key="yr"
+								:class="[
+									'px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors',
+									balanceFilter.year === yr
+										? 'bg-brand-600 text-white border-brand-600'
+										: 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-brand-400 hover:text-brand-600',
+								]"
+								@click="
+									balanceFilter.year = yr;
+									applyBalanceFilter();
+								"
+							>
+								{{ yr }}
+							</button>
+						</div>
 					</div>
 
 					<CommonAppButton variant="secondary" @click="showBulkInit = true">

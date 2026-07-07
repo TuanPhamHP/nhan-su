@@ -145,10 +145,6 @@ const timelineSteps = computed(() => {
 						<span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Lý do</span>
 						<span class="font-medium text-gray-900 dark:text-white text-right">{{ leaveRequest.reason }}</span>
 					</div>
-					<div v-if="leaveRequest.status === 'PENDING' && leaveRequest.assignedApprover" class="flex justify-between">
-						<span class="text-gray-500 dark:text-gray-400">Người duyệt</span>
-						<span class="font-medium text-gray-900 dark:text-white">{{ leaveRequest.assignedApprover.fullName }}</span>
-					</div>
 					<div v-if="leaveRequest.rejectNote" class="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2.5">
 						<p class="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Lý do từ chối</p>
 						<p class="text-sm text-red-700 dark:text-red-300">{{ leaveRequest.rejectNote }}</p>
@@ -223,14 +219,14 @@ const timelineSteps = computed(() => {
 								<p class="text-sm font-medium text-gray-900 dark:text-white">{{ step.label }}</p>
 								<template v-if="step.by">
 									<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-										{{ step.by.fullName }}
+										<span v-if="!step.done">Người duyệt: </span>{{ step.by.fullName }}
 										<span v-if="step.by.position" class="text-gray-400"> · {{ step.by.position }}</span>
 									</p>
 								</template>
 								<p v-if="step.at" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
 									{{ formatDateTime(step.at) }}
 								</p>
-								<p v-else-if="!step.done" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Đang chờ xử lý</p>
+								<p v-else-if="!step.done && !step.by" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Đang chờ xử lý</p>
 							</div>
 						</div>
 					</div>

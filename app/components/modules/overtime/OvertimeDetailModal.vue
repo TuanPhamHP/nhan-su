@@ -103,11 +103,6 @@ const timelineSteps = computed(() => {
 						<span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Lý do</span>
 						<span class="font-medium text-gray-900 dark:text-white text-right">{{ request.reason }}</span>
 					</div>
-					<div v-if="request.assignedApprover" class="flex justify-between">
-						<span class="text-gray-500 dark:text-gray-400">Người duyệt</span>
-						<span class="font-medium text-gray-900 dark:text-white">{{ request.assignedApprover.fullName }}</span>
-					</div>
-
 					<!-- Expire warning -->
 					<div
 						v-if="daysUntilExpire !== null"
@@ -202,9 +197,11 @@ const timelineSteps = computed(() => {
 
 							<div class="pb-4 flex-1 min-w-0">
 								<p class="text-sm font-medium text-gray-900 dark:text-white">{{ step.label }}</p>
-								<p v-if="step.by" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ step.by }}</p>
+								<p v-if="step.by" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+									<span v-if="!step.done">Người duyệt: </span>{{ step.by }}
+								</p>
 								<p v-if="step.at" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ formatDateTime(step.at) }}</p>
-								<p v-else-if="!step.done" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Đang chờ xử lý</p>
+								<p v-else-if="!step.done && !step.by" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Đang chờ xử lý</p>
 							</div>
 						</div>
 					</div>
