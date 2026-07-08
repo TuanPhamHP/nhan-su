@@ -103,6 +103,15 @@ function removeTransport(index: number) {
 const saving = ref(false);
 const ticketInputRefs = ref<Array<HTMLInputElement | null>>([]);
 const uploadingTicket = reactive<Record<number, boolean>>({});
+const ticketLocalPreviews = reactive<Record<number, { url: string; isImage: boolean } | undefined>>({});
+
+function revokeLocalPreview(transportIndex: number) {
+	const preview = ticketLocalPreviews[transportIndex];
+	if (preview) {
+		URL.revokeObjectURL(preview.url);
+		ticketLocalPreviews[transportIndex] = undefined;
+	}
+}
 
 async function handleTicketUpload(e: Event, transportIndex: number) {
 	const input = e.target as HTMLInputElement;
@@ -112,6 +121,11 @@ async function handleTicketUpload(e: Event, transportIndex: number) {
 	try {
 		const url = await uploadTripTicket(props.route.id, file);
 		transports.value[transportIndex]!.ticketImageUrl = url;
+		revokeLocalPreview(transportIndex);
+		ticketLocalPreviews[transportIndex] = {
+			url: URL.createObjectURL(file),
+			isImage: file.type.startsWith('image/'),
+		};
 	} catch (err) {
 		toast.error(err instanceof Error ? err.message : 'Upload thất bại. Vui lòng thử lại.');
 	} finally {
@@ -122,7 +136,14 @@ async function handleTicketUpload(e: Event, transportIndex: number) {
 
 function clearTicket(transportIndex: number) {
 	transports.value[transportIndex]!.ticketImageUrl = '';
+	revokeLocalPreview(transportIndex);
 }
+
+onBeforeUnmount(() => {
+	for (const key of Object.keys(ticketLocalPreviews)) {
+		revokeLocalPreview(Number(key));
+	}
+});
 
 async function save() {
 	saving.value = true;
@@ -264,21 +285,37 @@ async function save() {
 							<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Ảnh vé / chứng từ</label>
 
 							<div v-if="t.ticketImageUrl" class="flex items-center gap-2">
-								<img
-									v-if="isImage(t.ticketImageUrl)"
-									:src="t.ticketImageUrl"
-									alt="Ảnh vé"
-									class="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
-								/>
-								<a
-									v-else
-									:href="t.ticketImageUrl"
-									target="_blank"
-									rel="noopener"
-									class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
-								>
-									📄 Xem file đính kèm
-								</a>
+								<template v-if="ticketLocalPreviews[idx]">
+									<img
+										v-if="ticketLocalPreviews[idx]!.isImage"
+										:src="ticketLocalPreviews[idx]!.url"
+										alt="Ảnh vé"
+										class="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+									/>
+									<span
+										v-else
+										class="text-sm text-brand-600 dark:text-brand-400"
+									>
+										📄 Đã tải lên
+									</span>
+								</template>
+								<template v-else>
+									<img
+										v-if="isImage(t.ticketImageUrl)"
+										:src="t.ticketImageUrl"
+										alt="Ảnh vé"
+										class="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+									/>
+									<a
+										v-else
+										:href="t.ticketImageUrl"
+										target="_blank"
+										rel="noopener"
+										class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+									>
+										📄 Xem file đính kèm
+									</a>
+								</template>
 								<button
 									type="button"
 									class="text-xs text-red-500 hover:text-red-700"
