@@ -113,9 +113,13 @@ function onKeyDown(e: KeyboardEvent) {
 			close();
 			break;
 		case 'ArrowLeft':
+		case 'ArrowUp':
+			e.preventDefault();
 			goPrev();
 			break;
 		case 'ArrowRight':
+		case 'ArrowDown':
+			e.preventDefault();
 			goNext();
 			break;
 		case '+':
