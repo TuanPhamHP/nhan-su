@@ -33,5 +33,6 @@ onMounted(() => {
 		</div>
 
 		<ClientOnly><CommonAppToastContainer /></ClientOnly>
+		<ClientOnly><CommonAppImageViewer /></ClientOnly>
 	</div>
 </template>

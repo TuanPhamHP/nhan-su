@@ -15,6 +15,9 @@ const router = useRouter();
 const toast = useToast();
 const service = useBusinessTripService();
 const { user } = useAuth();
+const imageViewer = useImageViewerStore();
+
+const isImageUrl = (url: string) => /\.(jpg|jpeg|png|webp|gif|bmp|svg)(\?|$)/i.test(url);
 
 const tripId = computed(() => Number(route.params.id));
 
@@ -29,6 +32,41 @@ const isAdmin = computed(() => user.value?.role === 'ADMIN');
 
 const canApproveNow = computed(() => !!trip.value && (trip.value.canApprove || (isAdmin.value && trip.value.status === 'PENDING')));
 const canCancelNow = computed(() => !!trip.value && (trip.value.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(trip.value.status))));
+
+const allTicketImageUrls = computed<string[]>(() => {
+	if (!trip.value) return [];
+	const urls: string[] = [];
+	for (const r of trip.value.routes) {
+		for (const t of r.transports) {
+			if (t.ticketImageUrl && isImageUrl(t.ticketImageUrl)) urls.push(t.ticketImageUrl);
+		}
+	}
+	return urls;
+});
+
+const reportImageUrls = computed<string[]>(() =>
+	(trip.value?.report?.attachmentUrls ?? []).filter(isImageUrl),
+);
+
+function openTicket(url: string) {
+	if (!isImageUrl(url)) {
+		window.open(url, '_blank', 'noopener');
+		return;
+	}
+	const list = allTicketImageUrls.value;
+	const idx = list.indexOf(url);
+	imageViewer.open(list, idx >= 0 ? idx : 0);
+}
+
+function openAttachment(url: string) {
+	if (!isImageUrl(url)) {
+		window.open(url, '_blank', 'noopener');
+		return;
+	}
+	const list = reportImageUrls.value;
+	const idx = list.indexOf(url);
+	imageViewer.open(list, idx >= 0 ? idx : 0);
+}
 
 const transportLabels: Record<string, string> = {
 	PLANE: 'Máy bay',
@@ -286,19 +324,18 @@ watch(tripId, loadTrip);
 										<template v-if="tp.licensePlate">Biển số: {{ tp.licensePlate }}</template>
 										<template v-if="tp.driverPhone"> · SĐT tài xế: {{ tp.driverPhone }}</template>
 									</p>
-									<a
+									<button
 										v-if="tp.ticketImageUrl"
-										:href="tp.ticketImageUrl"
-										target="_blank"
-										rel="noopener"
+										type="button"
 										class="inline-flex items-center gap-1 mt-1 text-xs text-brand-600 dark:text-brand-400 hover:underline"
+										@click="openTicket(tp.ticketImageUrl!)"
 									>
 										<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 											<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
 											<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 										</svg>
 										Xem ảnh vé
-									</a>
+									</button>
 									<p v-if="tp.note" class="text-xs text-gray-500 dark:text-gray-400 italic">{{ tp.note }}</p>
 								</div>
 							</div>
@@ -361,13 +398,12 @@ watch(tripId, loadTrip);
 					<div v-if="trip.report.attachmentUrls?.length">
 						<p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Ảnh / tài liệu đính kèm</p>
 						<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-							<a
+							<button
 								v-for="(url, idx) in trip.report.attachmentUrls"
 								:key="idx"
-								:href="url"
-								target="_blank"
-								rel="noopener"
+								type="button"
 								class="block aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-brand-400 transition-colors group"
+								@click="openAttachment(url)"
 							>
 								<img
 									:src="url"
@@ -375,7 +411,7 @@ watch(tripId, loadTrip);
 									class="w-full h-full object-cover group-hover:scale-105 transition-transform"
 									@error="($event.target as HTMLImageElement).style.display = 'none'"
 								/>
-							</a>
+							</button>
 						</div>
 					</div>
 				</div>
