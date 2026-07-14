@@ -24,7 +24,7 @@ export interface ApprovedByRef {
 export interface TimelineActor {
 	id: number;
 	fullName: string;
-	position: string | null;
+	position: { id: number; name: string } | null;
 }
 
 export interface LeaveTimeline {

@@ -41,7 +41,7 @@ const timelineSteps = computed(() => {
 	const steps: Array<{
 		label: string;
 		at: string | null;
-		by: { id: number; fullName: string; position: string | null } | null;
+		by: { id: number; fullName: string; position: { id: number; name: string } | null } | null;
 		icon: string;
 		done: boolean;
 	}> = [
@@ -220,7 +220,7 @@ const timelineSteps = computed(() => {
 								<template v-if="step.by">
 									<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
 										<span v-if="!step.done">Người duyệt: </span>{{ step.by.fullName }}
-										<span v-if="step.by.position" class="text-gray-400"> · {{ step.by.position }}</span>
+										<span v-if="step.by.position?.name" class="text-gray-400"> · {{ step.by.position.name }}</span>
 									</p>
 								</template>
 								<p v-if="step.at" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
