@@ -314,27 +314,15 @@
 			<!-- Profile header card -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
 				<div class="flex flex-col sm:flex-row sm:items-center gap-4">
-					<button
-						v-if="currentEmployee.avatarUrl"
-						type="button"
-						class="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700 hover:ring-2 hover:ring-brand-400 transition-shadow"
+					<CommonAppAvatar
+						:src="currentEmployee.avatarUrl"
+						:name="currentEmployee.fullName"
+						size="xl"
+						bordered
+						clickable
 						:title="`Xem ảnh ${currentEmployee.fullName}`"
-						@click="openAvatar(currentEmployee.avatarUrl)"
-					>
-						<img
-							:src="currentEmployee.avatarUrl"
-							:alt="currentEmployee.fullName"
-							class="w-full h-full object-cover"
-						/>
-					</button>
-					<div
-						v-else
-						class="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
-					>
-						<span class="text-2xl font-bold text-brand-600 dark:text-brand-400">
-							{{ currentEmployee.fullName.charAt(0).toUpperCase() }}
-						</span>
-					</div>
+						@click="openAvatar"
+					/>
 					<div class="flex-1 min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
 							<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentEmployee.fullName }}</h2>

@@ -131,14 +131,7 @@
 					class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
 					@click.stop="showUserMenu = !showUserMenu"
 				>
-					<div
-						class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center overflow-hidden"
-					>
-						<img v-if="user?.avatarUrl" :src="user.avatarUrl" :alt="user.fullName" class="w-full h-full object-cover" />
-						<span v-else class="text-xs font-semibold text-brand-700 dark:text-brand-300">
-							{{ user?.fullName?.charAt(0)?.toUpperCase() ?? '?' }}
-						</span>
-					</div>
+					<CommonAppAvatar :src="user?.avatarUrl" :name="user?.fullName" size="sm" />
 					<div class="hidden sm:block text-left">
 						<p class="text-sm font-medium text-gray-800 dark:text-gray-200 leading-tight">{{ user?.fullName }}</p>
 						<p class="text-xs text-gray-500 dark:text-gray-400 leading-tight">{{ user?.employeeCode }}</p>

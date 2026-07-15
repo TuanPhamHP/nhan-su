@@ -135,10 +135,6 @@
 	];
 
 	const currentAvatarUrl = computed(() => profile.value?.avatarUrl ?? authStore.user?.avatarUrl ?? null);
-	const initials = computed(() => {
-		const name = profile.value?.fullName ?? authStore.user?.fullName ?? '';
-		return name.charAt(0).toUpperCase();
-	});
 
 	const inputCls =
 		'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50';
@@ -230,19 +226,7 @@
 				<div class="flex flex-col sm:flex-row sm:items-center gap-5">
 					<!-- Avatar -->
 					<div class="relative flex-shrink-0 group">
-						<div
-							class="w-20 h-20 rounded-full overflow-hidden bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center ring-2 ring-gray-200 dark:ring-gray-700"
-						>
-							<img
-								v-if="currentAvatarUrl"
-								:src="currentAvatarUrl"
-								:alt="profile.fullName"
-								class="w-full h-full object-cover"
-							/>
-							<span v-else class="text-3xl font-bold text-brand-600 dark:text-brand-400">
-								{{ initials }}
-							</span>
-						</div>
+						<CommonAppAvatar :src="currentAvatarUrl" :name="profile.fullName" size="2xl" ring />
 						<!-- Upload overlay -->
 						<button
 							type="button"

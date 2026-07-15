@@ -666,25 +666,15 @@
 								:key="emp.id"
 								class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
 							>
-								<td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+								<td
+									class="px-6 py-4 font-mono text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap hover:cursor-pointer hover:underline"
+									@click="router.push(`/management/employees/${emp.id}`)"
+								>
 									{{ emp.employeeCode }}
 								</td>
 								<td class="px-6 py-4">
 									<div class="flex items-center gap-3">
-										<img
-											v-if="emp.avatarUrl"
-											:src="emp.avatarUrl"
-											:alt="emp.fullName"
-											class="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-gray-200 dark:border-gray-700"
-										/>
-										<div
-											v-else
-											class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
-										>
-											<span class="text-sm font-semibold text-brand-600 dark:text-brand-400">
-												{{ emp.fullName.charAt(0).toUpperCase() }}
-											</span>
-										</div>
+										<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" bordered />
 										<div class="min-w-0">
 											<p class="font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
 											<p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{{ emp.email }}</p>
@@ -769,13 +759,19 @@
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-								<th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+								<th
+									class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+								>
 									Tên chức danh
 								</th>
-								<th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
+								<th
+									class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+								>
 									Nhân viên
 								</th>
-								<th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
+								<th
+									class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+								>
 									Trạng thái
 								</th>
 								<th
@@ -1333,8 +1329,16 @@
 						class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200 dark:border-gray-700"
 					>
 						<div class="flex items-start gap-4">
-							<div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-								<svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<div
+								class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0"
+							>
+								<svg
+									class="w-5 h-5 text-red-600 dark:text-red-400"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+								>
 									<path
 										stroke-linecap="round"
 										stroke-linejoin="round"
@@ -1353,8 +1357,18 @@
 									v-if="confirmDeactivatePosition.employeeCount > 0"
 									class="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 px-3 py-2.5"
 								>
-									<svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+									<svg
+										class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+										/>
 									</svg>
 									<p class="text-xs text-amber-700 dark:text-amber-400">
 										Hiện có

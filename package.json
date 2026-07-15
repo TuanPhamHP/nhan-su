@@ -4,9 +4,11 @@
 	"private": true,
 	"scripts": {
 		"build": "nuxt build",
-		"dev": "nuxt dev",
-		"dev:prod": "nuxt dev --dotenv .env.product",
-		"dev:ngrok": "nuxt dev --dotenv .env.ngrok",
+		"start": "nuxt dev",
+		"start:local": "nuxt dev --dotenv .env.local",
+		"start:dev": "nuxt dev --dotenv .env.develop",
+		"start:prod": "nuxt dev --dotenv .env.product",
+		"start:ngrok": "nuxt dev --dotenv .env.ngrok",
 		"generate": "nuxt generate",
 		"preview": "nuxt preview",
 		"postinstall": "nuxt prepare"

@@ -9,6 +9,9 @@
 	const router = useRouter();
 	const route = useRoute();
 
+	const authStore = useAuthStore();
+	const { user } = storeToRefs(authStore);
+
 	const { departments, meta, loading, fetchList } = useDepartment();
 
 	const searchInput = ref(String(route.query.search || ''));
@@ -162,10 +165,20 @@
 							class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
 						>
 							<td
-								class="px-6 py-4 font-medium text-gray-900 dark:text-white cursor-pointer hover:underline"
-								@click="router.push(`/management/departments/${dept.id}`)"
+								class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap"
 							>
-								{{ dept.name }}
+								<span
+									class="cursor-pointer hover:underline"
+									@click="router.push(`/management/departments/${dept.id}`)"
+								>
+									{{ dept.name }}
+								</span>
+								<span
+									v-if="user?.department?.id === dept.id"
+									class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+								>
+									Của tôi
+								</span>
 							</td>
 							<td class="px-6 py-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">
 								{{ dept.employeeCount }} nhân viên

@@ -41,10 +41,6 @@ watch(() => props.open, (val) => {
 	if (val) load();
 });
 
-function initials(name: string) {
-	return name.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase();
-}
-
 function formatJoinDate(iso: string) {
 	return format(new Date(iso), 'dd/MM/yyyy', { locale: vi });
 }
@@ -112,12 +108,7 @@ function formatJoinDate(iso: string) {
 									class="flex items-center gap-3 px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
 								>
 									<!-- Avatar -->
-									<div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-indigo-100 dark:bg-indigo-900/30">
-										<img v-if="emp.avatarUrl" :src="emp.avatarUrl" :alt="emp.fullName" class="w-full h-full object-cover" />
-										<span v-else class="text-sm font-semibold text-indigo-600 dark:text-indigo-400">
-											{{ initials(emp.fullName) }}
-										</span>
-									</div>
+									<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="md" />
 
 									<!-- Info -->
 									<div class="flex-1 min-w-0">

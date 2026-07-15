@@ -44,6 +44,8 @@
 		lateDays: records.value.filter(r => r.lateMinutes > 0).length,
 		earlyOutDays: records.value.filter(r => r.earlyMinutes > 0).length,
 		noRecord: records.value.filter(r => r.status === 'ABSENT').length,
+		missingCheckIn: records.value.filter(r => r.missingType === 'MISSING_CHECKIN').length,
+		missingCheckOut: records.value.filter(r => r.missingType === 'MISSING_CHECKOUT').length,
 	}));
 
 	// ─── Calendar helpers ─────────────────────────────────────────────────────────
@@ -276,7 +278,7 @@
 		</div>
 
 		<!-- Stats row -->
-		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+		<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
 			<div
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 text-center"
 			>
@@ -294,6 +296,18 @@
 			>
 				<p class="text-2xl font-bold text-yellow-500">{{ loading ? '—' : stats.earlyOutDays }}</p>
 				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Về sớm</p>
+			</div>
+			<div
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 text-center"
+			>
+				<p class="text-2xl font-bold text-amber-500">{{ loading ? '—' : stats.missingCheckIn }}</p>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Thiếu check-in</p>
+			</div>
+			<div
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 text-center"
+			>
+				<p class="text-2xl font-bold text-amber-500">{{ loading ? '—' : stats.missingCheckOut }}</p>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Thiếu check-out</p>
 			</div>
 			<div
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 text-center"
