@@ -7,7 +7,7 @@
 ## Endpoints
 
 | Method | Path | Ai được gọi | Ghi chú |
-|--------|------|-------------|---------|
+| --- | --- | --- | --- |
 | GET | `/v1/leave-requests/me` | `EMPLOYEE` | Đơn của bản thân (có phân trang) |
 | GET | `/v1/leave-requests` | `HR`, `ADMIN`, `MANAGER` | Toàn bộ đơn (có filter) |
 | GET | `/v1/approval/leave-requests` | Bất kỳ ai được assign làm approver | **Inbox** đơn chờ tôi duyệt — xem [approval.md](./approval.md) |
@@ -27,7 +27,7 @@
 ## Hình thức đơn — 4 loại (phân biệt qua `leaveType.code`)
 
 | `leaveType.code` | Tên | Fields bắt buộc thêm | `totalDays` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `ANNUAL` | Nghỉ cả ngày | `startDate` + `endDate` (có thể nhiều ngày) | Số ngày làm việc thực tế (trừ cuối tuần + ngày lễ) |
 | `HALF_DAY` | Nghỉ nửa ngày | `startDate === endDate` + `halfDayPeriod` (`MORNING`/`AFTERNOON`) | `0.5` |
 | `LATE` | Đi muộn | `startDate === endDate` + `lateMinutes` (1–**120** phút) | `0` — không trừ phép |
@@ -35,6 +35,7 @@
 | `UNPAID` | Nghỉ không lương | `startDate` + `endDate` | Số ngày làm việc thực tế — `leaveCode` luôn là `'KL'` |
 
 **Quy tắc chọn form phía frontend:**
+
 1. Gọi `GET /v1/leave-types` để lấy danh sách loại phép.
 2. Khi user chọn loại phép, dựa vào `leaveType.code` để hiện đúng fields phụ:
    - `ANNUAL` → date range picker (startDate ≤ endDate)
@@ -56,6 +57,7 @@ Khi employee tạo đơn, server tự xác định `assignedApprover` theo thứ
 > Không có manager nào → HR nhận đơn.
 
 Email notification:
+
 - Có `assignedApprover` → gửi cho approver, CC cho HR/ADMIN
 - Fallback → gửi riêng cho từng HR/ADMIN, không CC
 
@@ -100,6 +102,7 @@ remainingAfter = 2
 ```
 
 > **Lưu ý:**
+>
 > - ANNUAL không còn trả lỗi `LEAVE_INSUFFICIENT_BALANCE` — đơn luôn được tạo, server tự split.
 > - UNPAID luôn `leaveCode = 'KL'`, `paidDays = 0`, không check balance.
 > - HALF_DAY / LATE / EARLY luôn `leaveCode = 'P'` (không trừ ngày phép hoặc isPaid = true).
@@ -111,38 +114,41 @@ remainingAfter = 2
 Body giống `CreateLeaveRequestDto`. Không tạo đơn, chỉ tính toán và trả về kết quả.
 
 **Ví dụ request:**
+
 ```json
 {
-  "leaveTypeId": 1,
-  "startDate": "2026-06-02",
-  "endDate": "2026-06-04"
+	"leaveTypeId": 1,
+	"startDate": "2026-06-02",
+	"endDate": "2026-06-04"
 }
 ```
 
 **Response 200:** `ApiSuccess<LeavePreviewResponse>`
+
 ```json
 {
-  "success": true,
-  "data": {
-    "totalDays": 3,
-    "paidDays": 1,
-    "unpaidDays": 2,
-    "leaveCode": "P+KL",
-    "warningMessage": "Số dư phép năm còn lại 1 ngày. 1 ngày đầu hưởng lương (P), 2 ngày còn lại không hưởng lương (KL).",
-    "remainingAfter": 0,
-    "currentBalance": 1
-  }
+	"success": true,
+	"data": {
+		"totalDays": 3,
+		"paidDays": 1,
+		"unpaidDays": 2,
+		"leaveCode": "P+KL",
+		"warningMessage": "Số dư phép năm còn lại 1 ngày. 1 ngày đầu hưởng lương (P), 2 ngày còn lại không hưởng lương (KL).",
+		"remainingAfter": 0,
+		"currentBalance": 1
+	}
 }
 ```
 
 **Pattern gọi preview trước khi submit:**
+
 ```typescript
 // Gọi preview khi user chọn ngày xong, trước khi bấm "Gửi đơn"
 const preview = ref<LeavePreviewResponse | null>(null);
 
 async function onDateChanged() {
-  if (!form.leaveTypeId || !form.startDate || !form.endDate) return;
-  preview.value = await previewRequest(form);
+	if (!form.leaveTypeId || !form.startDate || !form.endDate) return;
+	preview.value = await previewRequest(form);
 }
 
 // Hiển thị warning nếu có split
@@ -161,103 +167,103 @@ export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type HalfDayPeriod = 'MORNING' | 'AFTERNOON';
 
 export interface LeaveEmployeeRef {
-  id: number;
-  fullName: string;
-  employeeCode: string;
+	id: number;
+	fullName: string;
+	employeeCode: string;
 }
 
 export interface LeaveTypeRef {
-  id: number;
-  name: string;
-  code: 'ANNUAL' | 'HALF_DAY' | 'LATE' | 'EARLY' | string;
+	id: number;
+	name: string;
+	code: 'ANNUAL' | 'HALF_DAY' | 'LATE' | 'EARLY' | string;
 }
 
 export interface ApprovedByRef {
-  id: number;
-  fullName: string;
+	id: number;
+	fullName: string;
 }
 
 export interface AssignedApproverRef {
-  id: number;
-  fullName: string;
-  email: string;
+	id: number;
+	fullName: string;
+	email: string;
 }
 
 export interface TimelineActor {
-  id: number;
-  fullName: string;
-  position: string | null;  // tên chức vụ, null nếu chưa gán
+	id: number;
+	fullName: string;
+	position: string | null; // tên chức vụ, null nếu chưa gán
 }
 
 export interface LeaveTimeline {
-  submittedAt: string;                        // ISO 8601 — thời điểm tạo đơn
-  submittedBy: TimelineActor;                 // người tạo đơn
-  reviewedAt: string | null;                  // thời điểm approve/reject/cancel; null khi PENDING
-  reviewedBy: TimelineActor | null;           // người xử lý; null khi PENDING
-  action: 'APPROVED' | 'REJECTED' | 'CANCELLED' | null;  // null khi PENDING
+	submittedAt: string; // ISO 8601 — thời điểm tạo đơn
+	submittedBy: TimelineActor; // người tạo đơn
+	reviewedAt: string | null; // thời điểm approve/reject/cancel; null khi PENDING
+	reviewedBy: TimelineActor | null; // người xử lý; null khi PENDING
+	action: 'APPROVED' | 'REJECTED' | 'CANCELLED' | null; // null khi PENDING
 }
 
 export interface LeaveRequest {
-  id: number;
-  employee: LeaveEmployeeRef;
-  leaveType: LeaveTypeRef;
-  startDate: string;            // "YYYY-MM-DD"
-  endDate: string;              // "YYYY-MM-DD"
-  totalDays: number;            // 0 với LATE/EARLY, 0.5 với HALF_DAY, ≥1 với ANNUAL/UNPAID
-  paidDays: number;             // số ngày hưởng lương (P)
-  unpaidDays: number;           // số ngày không hưởng lương (KL)
-  leaveCode: 'P' | 'KL' | 'P+KL' | null;  // null với đơn cũ trước khi deploy tính năng này
-  reason: string | null;
-  status: LeaveStatus;
-  halfDayPeriod: HalfDayPeriod | null;  // chỉ có khi code = HALF_DAY
-  lateMinutes: number | null;           // chỉ có khi code = LATE (tối đa 120 phút)
-  earlyMinutes: number | null;          // chỉ có khi code = EARLY (tối đa 120 phút)
-  approvedBy: ApprovedByRef | null;
-  approvedAt: string | null;            // ISO 8601 full datetime
-  rejectNote: string | null;
-  assignedApprover: AssignedApproverRef | null;  // người được server chỉ định duyệt khi tạo đơn
-  createdAt: string;                    // ISO 8601 full datetime
-  // Computed fields — dùng để điều khiển hiển thị button
-  canBeRevoked: boolean;    // true khi status === PENDING → hiện nút "Thu hồi"
-  canBeRemoved: boolean;    // true khi status === PENDING → hiện nút "Xóa"
-  timeline: LeaveTimeline | null;
+	id: number;
+	employee: LeaveEmployeeRef;
+	leaveType: LeaveTypeRef;
+	startDate: string; // "YYYY-MM-DD"
+	endDate: string; // "YYYY-MM-DD"
+	totalDays: number; // 0 với LATE/EARLY, 0.5 với HALF_DAY, ≥1 với ANNUAL/UNPAID
+	paidDays: number; // số ngày hưởng lương (P)
+	unpaidDays: number; // số ngày không hưởng lương (KL)
+	leaveCode: 'P' | 'KL' | 'P+KL' | null; // null với đơn cũ trước khi deploy tính năng này
+	reason: string | null;
+	status: LeaveStatus;
+	halfDayPeriod: HalfDayPeriod | null; // chỉ có khi code = HALF_DAY
+	lateMinutes: number | null; // chỉ có khi code = LATE (tối đa 120 phút)
+	earlyMinutes: number | null; // chỉ có khi code = EARLY (tối đa 120 phút)
+	approvedBy: ApprovedByRef | null;
+	approvedAt: string | null; // ISO 8601 full datetime
+	rejectNote: string | null;
+	assignedApprover: AssignedApproverRef | null; // người được server chỉ định duyệt khi tạo đơn
+	createdAt: string; // ISO 8601 full datetime
+	// Computed fields — dùng để điều khiển hiển thị button
+	canBeRevoked: boolean; // true khi status === PENDING → hiện nút "Thu hồi"
+	canBeRemoved: boolean; // true khi status === PENDING → hiện nút "Xóa"
+	timeline: LeaveTimeline | null;
 }
 
 // Request DTOs
 export interface CreateLeaveRequestDto {
-  leaveTypeId: number;
-  startDate: string;              // "YYYY-MM-DD"
-  endDate: string;                // "YYYY-MM-DD"
-  reason?: string;
-  halfDayPeriod?: HalfDayPeriod;  // bắt buộc nếu code = HALF_DAY
-  lateMinutes?: number;           // bắt buộc nếu code = LATE (1–120)
-  earlyMinutes?: number;          // bắt buộc nếu code = EARLY (1–120)
+	leaveTypeId: number;
+	startDate: string; // "YYYY-MM-DD"
+	endDate: string; // "YYYY-MM-DD"
+	reason?: string;
+	halfDayPeriod?: HalfDayPeriod; // bắt buộc nếu code = HALF_DAY
+	lateMinutes?: number; // bắt buộc nếu code = LATE (1–120)
+	earlyMinutes?: number; // bắt buộc nếu code = EARLY (1–120)
 }
 
 // Preview — dùng cùng body với CreateLeaveRequestDto, không tạo đơn
 export interface LeavePreviewResponse {
-  totalDays: number;              // tổng ngày làm việc trong khoảng startDate–endDate
-  paidDays: number;               // số ngày hưởng lương (P)
-  unpaidDays: number;             // số ngày không hưởng lương (KL)
-  leaveCode: 'P' | 'KL' | 'P+KL';
-  warningMessage: string | null;  // null nếu đủ balance; có nội dung nếu split hoặc hết phép
-  remainingAfter: number;         // số ngày phép còn lại sau khi trừ (0 nếu KL hoặc P+KL)
-  currentBalance: number | null;  // số dư hiện tại trước khi submit; null với loại không có balance
+	totalDays: number; // tổng ngày làm việc trong khoảng startDate–endDate
+	paidDays: number; // số ngày hưởng lương (P)
+	unpaidDays: number; // số ngày không hưởng lương (KL)
+	leaveCode: 'P' | 'KL' | 'P+KL';
+	warningMessage: string | null; // null nếu đủ balance; có nội dung nếu split hoặc hết phép
+	remainingAfter: number; // số ngày phép còn lại sau khi trừ (0 nếu KL hoặc P+KL)
+	currentBalance: number | null; // số dư hiện tại trước khi submit; null với loại không có balance
 }
 
 export interface RejectLeaveRequestDto {
-  rejectNote: string;             // tối thiểu 1 ký tự
+	rejectNote: string; // tối thiểu 1 ký tự
 }
 
 export interface QueryLeaveRequestParams {
-  page?: number;          // default 1
-  limit?: number;         // default 20, max 100
-  employeeId?: number;    // chỉ HR/Manager dùng
-  departmentId?: number;  // chỉ HR/Manager dùng
-  status?: LeaveStatus;
-  leaveTypeId?: number;
-  startDate?: string;     // "YYYY-MM-DD" — lọc đơn bắt đầu từ ngày này
-  endDate?: string;       // "YYYY-MM-DD" — lọc đơn kết thúc trước ngày này
+	page?: number; // default 1
+	limit?: number; // default 20, max 100
+	employeeId?: number; // chỉ HR/Manager dùng
+	departmentId?: number; // chỉ HR/Manager dùng
+	status?: LeaveStatus;
+	leaveTypeId?: number;
+	startDate?: string; // "YYYY-MM-DD" — lọc đơn bắt đầu từ ngày này
+	endDate?: string; // "YYYY-MM-DD" — lọc đơn kết thúc trước ngày này
 }
 ```
 
@@ -267,14 +273,15 @@ export interface QueryLeaveRequestParams {
 
 Hai fields này do backend tính sẵn, frontend không cần tự suy ra:
 
-| Field | Giá trị `true` khi | Nút tương ứng | API gọi |
-|---|---|---|---|
-| `canBeRevoked` | `status === 'PENDING'` | "Thu hồi" | `PATCH /:id/cancel` |
-| `canBeRemoved` | `status === 'PENDING'` | "Xóa" | `DELETE /:id` |
+| Field          | Giá trị `true` khi     | Nút tương ứng | API gọi             |
+| -------------- | ---------------------- | ------------- | ------------------- |
+| `canBeRevoked` | `status === 'PENDING'` | "Thu hồi"     | `PATCH /:id/cancel` |
+| `canBeRemoved` | `status === 'PENDING'` | "Xóa"         | `DELETE /:id`       |
 
 Hiện tại cả hai cùng logic (`PENDING`), nhưng được tách riêng để sau này có thể diverge (ví dụ ADMIN có thể remove đơn REJECTED, employee không thể).
 
 **Pattern dùng trong template:**
+
 ```vue
 <button v-if="leave.canBeRevoked" @click="revokeRequest(leave.id)">Thu hồi</button>
 <button v-if="leave.canBeRemoved" @click="removeRequest(leave.id)">Xóa</button>
@@ -285,7 +292,7 @@ Hiện tại cả hai cùng logic (`PENDING`), nhưng được tách riêng đ�
 ## Xóa vs Thu hồi — khác nhau quan trọng
 
 | Hành động | API | Kết quả DB | Xuất hiện trong lịch sử | Điều kiện |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **Xóa** | `DELETE /:id` | Hard delete — xóa hẳn record | Không | Chỉ khi `PENDING` + chính chủ |
 | **Thu hồi** | `PATCH /:id/cancel` | Soft — set `status = CANCELLED` | Có (có timeline) | Chỉ khi `PENDING` + chính chủ |
 
@@ -298,78 +305,81 @@ Khi thu hồi: backend stamp `approvedAt` (thời điểm thu hồi) và `approv
 `timeline` luôn có trong response (không null nếu employee tồn tại). Dùng để vẽ timeline phê duyệt.
 
 ### PENDING — chờ xử lý
+
 ```json
 {
-  "timeline": {
-    "submittedAt": "2026-05-19T07:30:00.000Z",
-    "submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
-    "reviewedAt": null,
-    "reviewedBy": null,
-    "action": null
-  }
+	"timeline": {
+		"submittedAt": "2026-05-19T07:30:00.000Z",
+		"submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
+		"reviewedAt": null,
+		"reviewedBy": null,
+		"action": null
+	}
 }
 ```
 
 ### APPROVED — đã duyệt
+
 ```json
 {
-  "timeline": {
-    "submittedAt": "2026-05-19T07:30:00.000Z",
-    "submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
-    "reviewedAt": "2026-05-19T09:15:00.000Z",
-    "reviewedBy": { "id": 3, "fullName": "Lê Văn Manager", "position": "CTO" },
-    "action": "APPROVED"
-  }
+	"timeline": {
+		"submittedAt": "2026-05-19T07:30:00.000Z",
+		"submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
+		"reviewedAt": "2026-05-19T09:15:00.000Z",
+		"reviewedBy": { "id": 3, "fullName": "Lê Văn Manager", "position": "CTO" },
+		"action": "APPROVED"
+	}
 }
 ```
 
 ### REJECTED — từ chối
+
 ```json
 {
-  "timeline": {
-    "submittedAt": "2026-05-19T07:30:00.000Z",
-    "submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
-    "reviewedAt": "2026-05-19T10:00:00.000Z",
-    "reviewedBy": { "id": 2, "fullName": "Trần Thị HR", "position": "HR Manager" },
-    "action": "REJECTED"
-  }
+	"timeline": {
+		"submittedAt": "2026-05-19T07:30:00.000Z",
+		"submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
+		"reviewedAt": "2026-05-19T10:00:00.000Z",
+		"reviewedBy": { "id": 2, "fullName": "Trần Thị HR", "position": "HR Manager" },
+		"action": "REJECTED"
+	}
 }
 ```
 
 ### CANCELLED — thu hồi (chính chủ)
+
 ```json
 {
-  "timeline": {
-    "submittedAt": "2026-05-19T07:30:00.000Z",
-    "submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
-    "reviewedAt": "2026-05-19T08:00:00.000Z",
-    "reviewedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
-    "action": "CANCELLED"
-  }
+	"timeline": {
+		"submittedAt": "2026-05-19T07:30:00.000Z",
+		"submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
+		"reviewedAt": "2026-05-19T08:00:00.000Z",
+		"reviewedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
+		"action": "CANCELLED"
+	}
 }
 ```
 
 > Lưu ý: CANCELLED — `reviewedBy` là chính người nộp đơn (họ tự thu hồi).
 
 **Gợi ý render:**
+
 ```typescript
 const timelineSteps = computed(() => {
-  if (!leave.timeline) return [];
-  const steps = [
-    { label: 'Đã nộp', at: leave.timeline.submittedAt, by: leave.timeline.submittedBy, done: true },
-  ];
-  if (leave.timeline.action) {
-    const labelMap = { APPROVED: 'Đã duyệt', REJECTED: 'Từ chối', CANCELLED: 'Thu hồi' };
-    steps.push({
-      label: labelMap[leave.timeline.action],
-      at: leave.timeline.reviewedAt,
-      by: leave.timeline.reviewedBy,
-      done: true,
-    });
-  } else {
-    steps.push({ label: 'Chờ duyệt', at: null, by: null, done: false });
-  }
-  return steps;
+	if (!leave.timeline) return [];
+	const steps = [{ label: 'Đã nộp', at: leave.timeline.submittedAt, by: leave.timeline.submittedBy, done: true }];
+	if (leave.timeline.action) {
+		const labelMap = { APPROVED: 'Đã duyệt', REJECTED: 'Từ chối', CANCELLED: 'Thu hồi' };
+		steps.push({
+			label: labelMap[leave.timeline.action],
+			at: leave.timeline.reviewedAt,
+			by: leave.timeline.reviewedBy,
+			done: true,
+		});
+	} else {
+		steps.push({ label: 'Chờ duyệt', at: null, by: null, done: false });
+	}
+	return steps;
 });
 ```
 
@@ -383,36 +393,36 @@ const timelineSteps = computed(() => {
 
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
-      "leaveType": { "id": 1, "name": "Nghỉ cả ngày", "code": "ANNUAL" },
-      "startDate": "2026-06-02",
-      "endDate": "2026-06-04",
-      "totalDays": 3,
-      "reason": "Nghỉ phép năm",
-      "status": "PENDING",
-      "halfDayPeriod": null,
-      "lateMinutes": null,
-      "earlyMinutes": null,
-      "approvedBy": null,
-      "approvedAt": null,
-      "rejectNote": null,
-      "createdAt": "2026-05-19T07:30:00.000Z",
-      "canBeRevoked": true,
-      "canBeRemoved": true,
-      "timeline": {
-        "submittedAt": "2026-05-19T07:30:00.000Z",
-        "submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
-        "reviewedAt": null,
-        "reviewedBy": null,
-        "action": null
-      }
-    }
-  ],
-  "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
+	"success": true,
+	"data": [
+		{
+			"id": 1,
+			"employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
+			"leaveType": { "id": 1, "name": "Nghỉ cả ngày", "code": "ANNUAL" },
+			"startDate": "2026-06-02",
+			"endDate": "2026-06-04",
+			"totalDays": 3,
+			"reason": "Nghỉ phép năm",
+			"status": "PENDING",
+			"halfDayPeriod": null,
+			"lateMinutes": null,
+			"earlyMinutes": null,
+			"approvedBy": null,
+			"approvedAt": null,
+			"rejectNote": null,
+			"createdAt": "2026-05-19T07:30:00.000Z",
+			"canBeRevoked": true,
+			"canBeRemoved": true,
+			"timeline": {
+				"submittedAt": "2026-05-19T07:30:00.000Z",
+				"submittedBy": { "id": 4, "fullName": "Nguyễn Văn An", "position": "Software Engineer" },
+				"reviewedAt": null,
+				"reviewedBy": null,
+				"action": null
+			}
+		}
+	],
+	"meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
 }
 ```
 
@@ -429,43 +439,47 @@ Tất cả params đều optional. Response shape giống `/me`.
 ## POST /v1/leave-requests — Tạo đơn
 
 ### Ví dụ: Nghỉ cả ngày (ANNUAL)
+
 ```json
 {
-  "leaveTypeId": 1,
-  "startDate": "2026-06-02",
-  "endDate": "2026-06-04",
-  "reason": "Nghỉ phép năm"
+	"leaveTypeId": 1,
+	"startDate": "2026-06-02",
+	"endDate": "2026-06-04",
+	"reason": "Nghỉ phép năm"
 }
 ```
 
 ### Ví dụ: Nghỉ nửa ngày buổi sáng (HALF_DAY)
+
 ```json
 {
-  "leaveTypeId": 2,
-  "startDate": "2026-06-02",
-  "endDate": "2026-06-02",
-  "halfDayPeriod": "MORNING"
+	"leaveTypeId": 2,
+	"startDate": "2026-06-02",
+	"endDate": "2026-06-02",
+	"halfDayPeriod": "MORNING"
 }
 ```
 
 ### Ví dụ: Đi muộn 30 phút (LATE)
+
 ```json
 {
-  "leaveTypeId": 3,
-  "startDate": "2026-06-02",
-  "endDate": "2026-06-02",
-  "lateMinutes": 30,
-  "reason": "Kẹt xe"
+	"leaveTypeId": 3,
+	"startDate": "2026-06-02",
+	"endDate": "2026-06-02",
+	"lateMinutes": 30,
+	"reason": "Kẹt xe"
 }
 ```
 
 ### Ví dụ: Về sớm 45 phút (EARLY)
+
 ```json
 {
-  "leaveTypeId": 4,
-  "startDate": "2026-06-02",
-  "endDate": "2026-06-02",
-  "earlyMinutes": 45
+	"leaveTypeId": 4,
+	"startDate": "2026-06-02",
+	"endDate": "2026-06-02",
+	"earlyMinutes": 45
 }
 ```
 
@@ -474,11 +488,49 @@ Tất cả params đều optional. Response shape giống `/me`.
 **Lỗi có thể gặp:**
 
 | HTTP | Mô tả |
-|------|-------|
+| --- | --- |
 | 400 | `lateMinutes` / `earlyMinutes` bắt buộc theo code; LATE/EARLY chỉ 1 ngày; `endDate` < `startDate` |
 | 400 | `LEAVE_INSUFFICIENT_BALANCE` — hết ngày phép (chỉ với loại phép tuỳ chỉnh có `daysPerYear`, không áp dụng với ANNUAL — ANNUAL tự split P/KL) |
-| 409 | `LEAVE_OVERLAP` — đã có đơn PENDING/APPROVED trùng ngày |
+| 400 | `halfDayPeriod` được set nhưng ca ngày đó **không có `breakStartTime`/`breakEndTime`** → _"Ca làm việc của ngày này không hỗ trợ nghỉ nửa ngày vì chưa cấu hình giờ nghỉ trưa"_ |
+| 400 | `halfDayPeriod` được set nhưng ngày đó **không có ca** (employee thiếu `defaultShift` và không có schedule) → _"Không tìm thấy ca làm việc cho ngày này"_ |
+| 409 | `LEAVE_OVERLAP` — đã có đơn PENDING/APPROVED **trùng buổi** (xem §"Overlap semantics" bên dưới) |
 | 404 | Loại phép không tồn tại |
+
+### Overlap semantics (409 CONFLICT)
+
+Overlap **KHÔNG** chặn theo ngày trùng thuần túy — mà theo **buổi (slot AM/PM)**:
+
+| Đơn cũ \ Đơn mới   | Full-day | Half-MORNING | Half-AFTERNOON | LATE | EARLY |
+| ------------------ | :------: | :----------: | :------------: | :--: | :---: |
+| **Full-day**       |    ❌    |      ❌      |       ❌       |  ❌  |  ❌   |
+| **Half-MORNING**   |    ❌    |      ❌      |       ✅       |  ❌  |  ✅   |
+| **Half-AFTERNOON** |    ❌    |      ✅      |       ❌       |  ✅  |  ❌   |
+| **LATE**           |    ❌    |      ❌      |       ✅       |  ❌  |  ✅   |
+| **EARLY**          |    ❌    |      ✅      |       ❌       |  ✅  |  ❌   |
+
+Ví dụ cho phép (✅):
+
+- `LATE` sáng 16/07 + `EARLY` chiều 16/07 — 2 slot khác nhau
+- Half-MORNING (nghỉ sáng) 16/07 + `EARLY` (về sớm chiều) 16/07
+
+Ví dụ chặn (❌):
+
+- 2 `LATE` cùng ngày (không thể đi muộn 2 lần)
+- Full-day 15–17/07 + `LATE` 16/07
+
+Message 409 sẽ nêu rõ loại phép, buổi, và khoảng ngày của đơn cũ để user hiểu:
+
+```json
+{
+	"success": false,
+	"error": {
+		"code": "CONFLICT",
+		"message": "Bạn đã có đơn \"Phép năm\" đã được duyệt ngày 2026-07-16 (buổi sáng) trùng buổi với đơn này."
+	}
+}
+```
+
+Chi tiết đầy đủ tại [`docs/leave-request-rules.md`](../leave-request-rules.md).
 
 ---
 
@@ -493,6 +545,7 @@ Nếu `halfDayPeriod` được set → backend tự tạo `EffectiveShiftOverrid
 **Response 200:** `ApiSuccess<LeaveRequest>` (status = `APPROVED`)
 
 **400** nếu đơn không ở PENDING:
+
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Chỉ có thể duyệt đơn đang chờ xử lý" } }
 ```
@@ -502,6 +555,7 @@ Nếu `halfDayPeriod` được set → backend tự tạo `EffectiveShiftOverrid
 ## PATCH /v1/leave-requests/:id/reject
 
 **Request body:**
+
 ```json
 { "rejectNote": "Không đủ nhân sự trong thời gian này" }
 ```
@@ -529,6 +583,7 @@ Không cần body. Chỉ chính chủ gọi được. Chỉ xóa được khi `s
 **Response 204 No Content**
 
 **400** nếu không phải PENDING:
+
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Chỉ được xóa đơn đang chờ duyệt" } }
 ```
@@ -540,57 +595,51 @@ Không cần body. Chỉ chính chủ gọi được. Chỉ xóa được khi `s
 ```typescript
 // composables/useLeaveRequests.ts
 import type {
-  LeaveRequest,
-  CreateLeaveRequestDto,
-  RejectLeaveRequestDto,
-  QueryLeaveRequestParams,
+	LeaveRequest,
+	CreateLeaveRequestDto,
+	RejectLeaveRequestDto,
+	QueryLeaveRequestParams,
 } from '~/types/leave.types';
 
 export function useLeaveRequests() {
-  const { get, list, post, patch, del } = useFetch();
+	const { get, list, post, patch, del } = useFetch();
 
-  /** EMPLOYEE: lấy đơn của bản thân */
-  const fetchMyRequests = (params?: QueryLeaveRequestParams) =>
-    list<LeaveRequest>('/v1/leave-requests/me', { params });
+	/** EMPLOYEE: lấy đơn của bản thân */
+	const fetchMyRequests = (params?: QueryLeaveRequestParams) => list<LeaveRequest>('/v1/leave-requests/me', { params });
 
-  /** HR/Admin/Manager: lấy toàn bộ đơn */
-  const fetchAllRequests = (params?: QueryLeaveRequestParams) =>
-    list<LeaveRequest>('/v1/leave-requests', { params });
+	/** HR/Admin/Manager: lấy toàn bộ đơn */
+	const fetchAllRequests = (params?: QueryLeaveRequestParams) => list<LeaveRequest>('/v1/leave-requests', { params });
 
-  /** EMPLOYEE: tạo đơn mới */
-  const submitRequest = (dto: CreateLeaveRequestDto) =>
-    post<LeaveRequest>('/v1/leave-requests', dto);
+	/** EMPLOYEE: tạo đơn mới */
+	const submitRequest = (dto: CreateLeaveRequestDto) => post<LeaveRequest>('/v1/leave-requests', dto);
 
-  /**
-   * Duyệt đơn — 403 nếu user không phải assignedApprover và không có role HR/ADMIN.
-   * MANAGER chỉ duyệt được đơn mà mình là assignedApprover; HR/ADMIN bypass check này.
-   */
-  const approveRequest = (id: number) =>
-    patch<LeaveRequest>(`/v1/leave-requests/${id}/approve`);
+	/**
+	 * Duyệt đơn — 403 nếu user không phải assignedApprover và không có role HR/ADMIN.
+	 * MANAGER chỉ duyệt được đơn mà mình là assignedApprover; HR/ADMIN bypass check này.
+	 */
+	const approveRequest = (id: number) => patch<LeaveRequest>(`/v1/leave-requests/${id}/approve`);
 
-  /**
-   * Từ chối đơn — cùng điều kiện quyền với approveRequest.
-   */
-  const rejectRequest = (id: number, dto: RejectLeaveRequestDto) =>
-    patch<LeaveRequest>(`/v1/leave-requests/${id}/reject`, dto);
+	/**
+	 * Từ chối đơn — cùng điều kiện quyền với approveRequest.
+	 */
+	const rejectRequest = (id: number, dto: RejectLeaveRequestDto) =>
+		patch<LeaveRequest>(`/v1/leave-requests/${id}/reject`, dto);
 
-  /** EMPLOYEE (chính chủ): thu hồi → CANCELLED, giữ lịch sử */
-  const revokeRequest = (id: number) =>
-    patch<LeaveRequest>(`/v1/leave-requests/${id}/cancel`);
+	/** EMPLOYEE (chính chủ): thu hồi → CANCELLED, giữ lịch sử */
+	const revokeRequest = (id: number) => patch<LeaveRequest>(`/v1/leave-requests/${id}/cancel`);
 
-  /** EMPLOYEE (chính chủ): xóa hẳn khỏi DB */
-  const removeRequest = (id: number) =>
-    del(`/v1/leave-requests/${id}`);
+	/** EMPLOYEE (chính chủ): xóa hẳn khỏi DB */
+	const removeRequest = (id: number) => del(`/v1/leave-requests/${id}`);
 
-  return {
-    fetchMyRequests,
-    fetchAllRequests,
-    submitRequest,
-    approveRequest,
-    rejectRequest,
-    revokeRequest,
-    removeRequest,
-  };
+	return {
+		fetchMyRequests,
+		fetchAllRequests,
+		submitRequest,
+		approveRequest,
+		rejectRequest,
+		revokeRequest,
+		removeRequest,
+	};
 }
 ```
 
@@ -599,7 +648,7 @@ export function useLeaveRequests() {
 ## Edge cases
 
 | Tình huống | Kết quả |
-|---|---|
+| --- | --- |
 | EMPLOYEE gọi `GET /leave-requests` (không phải `/me`) | 403 Forbidden |
 | Tạo đơn LATE mà không truyền `lateMinutes` | 400 Bad Request |
 | Tạo đơn LATE với `startDate !== endDate` | 400 Bad Request |
@@ -607,8 +656,10 @@ export function useLeaveRequests() {
 | Đơn ANNUAL với leaveType.daysPerYear=null (không giới hạn) | Không kiểm tra balance, tạo được |
 | Thu hồi đơn đã APPROVED | 400 — chỉ được thu hồi PENDING |
 | Xóa đơn đã CANCELLED | 400 — chỉ được xóa PENDING |
-| Trùng ngày với đơn đã APPROVED | 409 LEAVE_OVERLAP |
-| Trùng ngày với đơn đã CANCELLED | Cho phép (đã huỷ không còn chiếm slot) |
+| Trùng buổi với đơn đã APPROVED | 409 CONFLICT (kiểm tra theo slot AM/PM — xem bảng ma trận ở trên) |
+| Trùng ngày nhưng **khác buổi** (VD LATE + EARLY) | Cho phép — không conflict |
+| Trùng ngày với đơn đã CANCELLED / REJECTED | Cho phép (đã huỷ không còn chiếm slot) |
+| Half-day với ca `breakStartTime === null` (ca linh hoạt, ca đêm) | 400 — ca không hỗ trợ nghỉ nửa ngày |
 | employee không có manager + dept không có manager | Đơn tạo được, `assignedApprover = null`, email gửi cho tất cả HR/ADMIN |
 | manager bị INACTIVE | Server bỏ qua line manager, fallback sang trưởng phòng hoặc HR |
 | trưởng phòng tự xin nghỉ | Server dùng `managerId` của trưởng phòng đó (leo lên cấp trên) |

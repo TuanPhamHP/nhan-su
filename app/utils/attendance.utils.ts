@@ -22,7 +22,11 @@ export function formatShiftDisplay(record: AttendanceRecordDetail): string {
 		const end = parseEffectiveTime(record.effectiveEnd);
 		return `Ca rút gọn (${start}–${end})`;
 	}
-	return `${record.shift.checkInTime}–${record.shift.checkOutTime}`;
+	const { checkInTime, checkOutTime, breakStartTime, breakEndTime } = record.shift;
+	if (breakStartTime && breakEndTime) {
+		return `${checkInTime}–${breakStartTime} · Nghỉ ${breakStartTime}–${breakEndTime} · ${breakEndTime}–${checkOutTime}`;
+	}
+	return `${checkInTime}–${checkOutTime}`;
 }
 
 export function formatVNTime(iso: string | null): string {

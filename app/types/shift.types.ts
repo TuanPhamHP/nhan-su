@@ -7,6 +7,8 @@ export interface WorkShiftResponse {
 	name: string;
 	checkInTime: string;            // "HH:mm" UTC
 	checkOutTime: string;           // "HH:mm" UTC
+	breakStartTime: string | null;  // "HH:mm" — null nếu ca không hỗ trợ half-day
+	breakEndTime: string | null;    // "HH:mm" — null nếu ca không hỗ trợ half-day
 	lateThresholdMin: number;
 	earlyThresholdMin: number;
 	workDays: number[];             // 0=CN, 1=T2, ..., 6=T7
@@ -20,6 +22,8 @@ export interface CreateWorkShiftDto {
 	name: string;
 	checkInTime: string;            // "HH:mm"
 	checkOutTime: string;           // "HH:mm"
+	breakStartTime?: string | null; // "HH:mm" — set cùng breakEndTime; null trên PATCH để clear
+	breakEndTime?: string | null;   // "HH:mm" — set cùng breakStartTime; null trên PATCH để clear
 	lateThresholdMin?: number;
 	earlyThresholdMin?: number;
 	workDays: number[];
@@ -36,6 +40,8 @@ export interface WorkShiftSummary {
 	name: string;
 	checkInTime: string;
 	checkOutTime: string;
+	breakStartTime: string | null;
+	breakEndTime: string | null;
 	workDays: number[];
 }
 
@@ -96,6 +102,8 @@ export interface CalendarShift {
 	name: string;
 	checkInTime: string;
 	checkOutTime: string;
+	breakStartTime: string | null;
+	breakEndTime: string | null;
 }
 
 export interface CalendarDayEmployee {

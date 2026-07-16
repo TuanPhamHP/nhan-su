@@ -66,11 +66,13 @@
 	const selectedWorkDays = ref<number[]>([1, 2, 3, 4, 5]);
 	const workDaysError = ref('');
 
-	const { handleSubmit, defineField, errors, setValues, resetForm } = useForm({
+	const { handleSubmit, defineField, errors, setValues, resetForm, setFieldError } = useForm({
 		validationSchema: {
 			name: (v: string) => (v && v.trim().length >= 2) || 'Tên ca phải có ít nhất 2 ký tự',
 			checkInTime: (v: string) => /^\d{2}:\d{2}$/.test(v) || 'Định dạng HH:mm',
 			checkOutTime: (v: string) => /^\d{2}:\d{2}$/.test(v) || 'Định dạng HH:mm',
+			breakStartTime: (v: string) => !v || /^\d{2}:\d{2}$/.test(v) || 'Định dạng HH:mm',
+			breakEndTime: (v: string) => !v || /^\d{2}:\d{2}$/.test(v) || 'Định dạng HH:mm',
 			lateThresholdMin: (v: number) => (Number.isInteger(v) && v >= 0 && v <= 120) || 'Từ 0 đến 120 phút',
 			earlyThresholdMin: (v: number) => (Number.isInteger(v) && v >= 0 && v <= 120) || 'Từ 0 đến 120 phút',
 		},
@@ -78,6 +80,8 @@
 			name: '',
 			checkInTime: '08:00',
 			checkOutTime: '17:00',
+			breakStartTime: '',
+			breakEndTime: '',
 			lateThresholdMin: 15,
 			earlyThresholdMin: 15,
 			isOnline: false,
@@ -88,6 +92,8 @@
 	const [shiftName, shiftNameAttrs] = defineField('name');
 	const [checkInTime, checkInTimeAttrs] = defineField('checkInTime');
 	const [checkOutTime, checkOutTimeAttrs] = defineField('checkOutTime');
+	const [breakStartTime, breakStartTimeAttrs] = defineField('breakStartTime');
+	const [breakEndTime, breakEndTimeAttrs] = defineField('breakEndTime');
 	const [lateThresholdMin, lateAttrs] = defineField('lateThresholdMin');
 	const [earlyThresholdMin, earlyAttrs] = defineField('earlyThresholdMin');
 	const [isOnline] = defineField('isOnline');
@@ -99,6 +105,22 @@
 		if (online) requiresLocationCheck.value = true;
 	});
 
+	// Ca cross-midnight (checkOut <= checkIn) không hỗ trợ nghỉ trưa — BE reject 400.
+	const isCrossMidnight = computed(() => {
+		const ci = checkInTime.value as string | undefined;
+		const co = checkOutTime.value as string | undefined;
+		if (!ci || !co || !/^\d{2}:\d{2}$/.test(ci) || !/^\d{2}:\d{2}$/.test(co)) return false;
+		return co <= ci;
+	});
+
+	// Khi ca chuyển sang cross-midnight, tự động clear break fields để tránh gửi lên BE bị 400.
+	watch(isCrossMidnight, cross => {
+		if (cross) {
+			breakStartTime.value = '';
+			breakEndTime.value = '';
+		}
+	});
+
 	function openCreateModal() {
 		editingShift.value = null;
 		selectedWorkDays.value = [1, 2, 3, 4, 5];
@@ -108,6 +130,8 @@
 				name: '',
 				checkInTime: '08:00',
 				checkOutTime: '17:00',
+				breakStartTime: '',
+				breakEndTime: '',
 				lateThresholdMin: 15,
 				earlyThresholdMin: 15,
 				isOnline: false,
@@ -125,6 +149,8 @@
 			name: shift.name,
 			checkInTime: shift.checkInTime,
 			checkOutTime: shift.checkOutTime,
+			breakStartTime: shift.breakStartTime ?? '',
+			breakEndTime: shift.breakEndTime ?? '',
 			lateThresholdMin: shift.lateThresholdMin,
 			earlyThresholdMin: shift.earlyThresholdMin,
 			isOnline: shift.isOnline,
@@ -150,9 +176,24 @@
 			workDaysError.value = 'Chọn ít nhất 1 ngày làm việc';
 			return;
 		}
+
+		// XOR client-side: breakStart và breakEnd phải cùng có hoặc cùng trống.
+		const bs = (values.breakStartTime ?? '').trim();
+		const be = (values.breakEndTime ?? '').trim();
+		if ((bs && !be) || (!bs && be)) {
+			setFieldError(bs ? 'breakEndTime' : 'breakStartTime', 'Phải điền cả 2 giờ nghỉ trưa (hoặc để trống cả 2)');
+			return;
+		}
+
 		submittingShift.value = true;
 		try {
-			const dto: CreateWorkShiftDto = { ...values, workDays: selectedWorkDays.value };
+			const { breakStartTime: _bs, breakEndTime: _be, ...rest } = values;
+			const dto: CreateWorkShiftDto = {
+				...rest,
+				workDays: selectedWorkDays.value,
+				breakStartTime: bs || null,
+				breakEndTime: be || null,
+			};
 			if (editingShift.value) {
 				await updateWorkShift(editingShift.value.id, dto);
 				toast.success('Đã cập nhật khuôn ca');
@@ -251,6 +292,17 @@
 		if (s?.shift && s.isDefault)
 			return 'bg-gray-100 border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700';
 		return 'bg-red-50 border-transparent text-red-300 dark:bg-red-900/10 dark:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/20';
+	}
+
+	function cellTitle(employeeId: number, date: string): string {
+		const s = scheduleMap.value.get(`${employeeId}:${date}`);
+		if (!s?.shift) return 'Chưa có ca';
+		const { name, checkInTime, checkOutTime, breakStartTime, breakEndTime } = s.shift;
+		const range = `${checkInTime}–${checkOutTime}`;
+		if (breakStartTime && breakEndTime) {
+			return `${name}: ${checkInTime}–${breakStartTime} · Nghỉ trưa ${breakStartTime}–${breakEndTime} · ${breakEndTime}–${checkOutTime}`;
+		}
+		return `${name}: ${range}`;
 	}
 
 	// ─── Select options ───
@@ -587,6 +639,11 @@
 						{{ shift.checkInTime }} → {{ shift.checkOutTime }}
 					</p>
 
+					<!-- Break time -->
+					<p v-if="shift.breakStartTime && shift.breakEndTime" class="text-xs font-mono text-gray-500 dark:text-gray-400 mb-1">
+						Nghỉ trưa {{ shift.breakStartTime }} – {{ shift.breakEndTime }}
+					</p>
+
 					<!-- Thresholds -->
 					<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">
 						Trễ ≤ {{ shift.lateThresholdMin }}&thinsp;phút · Về sớm ≤ {{ shift.earlyThresholdMin }}&thinsp;phút
@@ -830,6 +887,7 @@
 								<!-- Day cells — 4 trạng thái: online T7 (xanh nhạt) / override (brand) / mặc định (xám) / không có ca (đỏ nhạt) -->
 								<td v-for="date in weekDateStrings" :key="date" class="px-2 py-2 text-center">
 									<button
+										:title="cellTitle(emp.id, date)"
 										:class="[
 											'w-full min-h-[40px] rounded-lg border text-xs font-medium px-2 py-1.5 transition-colors leading-tight',
 											getCellStyle(emp.id, date),
@@ -933,6 +991,45 @@
 								<UiTimeInput v-model="checkOutTime" v-bind="checkOutTimeAttrs" :error="errors.checkOutTime" />
 								<p v-if="errors.checkOutTime" class="mt-1 text-xs text-red-500">{{ errors.checkOutTime }}</p>
 							</div>
+						</div>
+
+						<!-- Giờ nghỉ trưa -->
+						<div>
+							<div class="grid grid-cols-2 gap-3">
+								<div>
+									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+										Bắt đầu nghỉ trưa
+									</label>
+									<UiTimeInput
+										v-model="breakStartTime"
+										v-bind="breakStartTimeAttrs"
+										placeholder="12:00"
+										:disabled="isCrossMidnight"
+										:error="errors.breakStartTime"
+									/>
+									<p v-if="errors.breakStartTime" class="mt-1 text-xs text-red-500">{{ errors.breakStartTime }}</p>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+										Kết thúc nghỉ trưa
+									</label>
+									<UiTimeInput
+										v-model="breakEndTime"
+										v-bind="breakEndTimeAttrs"
+										placeholder="13:30"
+										:disabled="isCrossMidnight"
+										:error="errors.breakEndTime"
+									/>
+									<p v-if="errors.breakEndTime" class="mt-1 text-xs text-red-500">{{ errors.breakEndTime }}</p>
+								</div>
+							</div>
+							<p v-if="isCrossMidnight" class="mt-1.5 text-xs text-amber-600 dark:text-amber-400 leading-snug">
+								Ca cross-midnight (giờ ra ≤ giờ vào) không hỗ trợ nghỉ trưa.
+							</p>
+							<p v-else class="mt-1.5 text-xs text-gray-400 dark:text-gray-500 leading-snug">
+								Để trống nếu ca không có nghỉ trưa (ca liên tục / ca đêm). Khi trống, nhân viên không thể tạo đơn nghỉ nửa
+								ngày cho ca này.
+							</p>
 						</div>
 
 						<!-- Ngưỡng trễ / sớm -->
@@ -1146,7 +1243,8 @@
 							</svg>
 							Đang gán: {{ cellTarget.current!.shift!.name }} ({{ cellTarget.current!.shift!.checkInTime }}–{{
 								cellTarget.current!.shift!.checkOutTime
-							}})
+							}}<template v-if="cellTarget.current!.shift!.breakStartTime && cellTarget.current!.shift!.breakEndTime">
+								· nghỉ {{ cellTarget.current!.shift!.breakStartTime }}–{{ cellTarget.current!.shift!.breakEndTime }}</template>)
 						</div>
 
 						<p class="text-xs font-medium text-gray-500 dark:text-gray-400 px-1 mb-1">Chọn ca:</p>

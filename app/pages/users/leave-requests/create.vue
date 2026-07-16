@@ -8,6 +8,7 @@
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import { useLeaveBalanceService } from '~/services/leave-balance.service';
 	import { useEmployeeService } from '~/services/employee.service';
+	import { useShiftScheduleService } from '~/services/shift-schedule.service';
 	import type {
 		LeaveType,
 		LeaveBalance,
@@ -16,6 +17,7 @@
 		LeavePreviewResponse,
 	} from '~/types/leave.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
+	import type { WorkShiftSummary } from '~/types/shift.types';
 
 	definePageMeta({ title: 'Tạo đơn nghỉ phép' });
 
@@ -30,6 +32,7 @@
 	const leaveRequestService = useLeaveRequestService();
 	const leaveBalanceService = useLeaveBalanceService();
 	const employeeService = useEmployeeService();
+	const shiftScheduleService = useShiftScheduleService();
 
 	// ─── Leave types ───────────────────────────────────────────────────────────────
 	const leaveTypes = ref<LeaveType[]>([]);
@@ -172,6 +175,54 @@
 	const showLimitWarning = ref(false);
 	const suggestHalfDay = ref(false);
 
+	// ─── Shift for chosen date ───────────────────────────────────────────────────
+	// Dùng để biết ca của user (hoặc HR-target) có break time hay không, từ đó cho phép
+	// tạo nghỉ nửa ngày. BE cũng validate — đây chỉ là UX guard tránh submit rồi bị 400.
+	const dayShift = ref<WorkShiftSummary | null>(null);
+	const dayShiftLoading = ref(false);
+	const dayShiftFetched = ref(false); // true sau lần fetch đầu — dùng để phân biệt "chưa biết" và "đã biết là null"
+	let shiftLookupTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const canHalfDay = computed(() => !!dayShift.value?.breakStartTime && !!dayShift.value?.breakEndTime);
+
+	// Message giải thích vì sao HALF_DAY không dùng được cho ngày này.
+	const halfDayBlockedReason = computed<string | null>(() => {
+		if (!dayShiftFetched.value) return null;
+		if (!dayShift.value) return 'Bạn không có ca cho ngày này. Vui lòng liên hệ HR.';
+		if (!canHalfDay.value)
+			return 'Ca làm việc của ngày này không hỗ trợ nghỉ nửa ngày vì chưa cấu hình giờ nghỉ trưa. Vui lòng chọn nghỉ cả ngày hoặc liên hệ HR.';
+		return null;
+	});
+
+	async function fetchDayShift() {
+		const date = startDate.value as string | undefined;
+		if (!date) {
+			dayShift.value = null;
+			dayShiftFetched.value = false;
+			return;
+		}
+		dayShiftLoading.value = true;
+		try {
+			const targetId = selectedEmployee.value?.id;
+			const list = targetId
+				? await shiftScheduleService.findAll({ employeeId: targetId, startDate: date, endDate: date })
+				: await shiftScheduleService.findMine({ startDate: date, endDate: date });
+			dayShift.value = list[0]?.shift ?? null;
+			dayShiftFetched.value = true;
+		} catch {
+			// Non-critical — BE sẽ vẫn reject nếu user cố submit HALF_DAY sai
+			dayShift.value = null;
+			dayShiftFetched.value = false;
+		} finally {
+			dayShiftLoading.value = false;
+		}
+	}
+
+	function triggerShiftLookup() {
+		if (shiftLookupTimer) clearTimeout(shiftLookupTimer);
+		shiftLookupTimer = setTimeout(fetchDayShift, 250);
+	}
+
 	// ─── ANNUAL preview state ─────────────────────────────────────────────────────
 	const preview = ref<LeavePreviewResponse | null>(null);
 	const previewLoading = ref(false);
@@ -234,6 +285,9 @@
 		if (selectedCode.value === 'ANNUAL') triggerPreview();
 	});
 
+	// Fetch shift bất cứ khi nào startDate hoặc target employee thay đổi
+	watch([startDate, selectedEmployee], triggerShiftLookup);
+
 	// ─── Computed duration display ─────────────────────────────────────────────────
 	const durationText = computed(() => {
 		const code = selectedCode.value;
@@ -263,8 +317,14 @@
 		switch (selectedCode.value) {
 			case 'ANNUAL':
 				return 'Số ngày nghỉ sẽ được trừ vào số dư phép năm. Ngày lễ và cuối tuần không tính.';
-			case 'HALF_DAY':
-				return 'Nghỉ nửa ngày tính 0.5 ngày phép. Buổi sáng: nghỉ đến 12:00. Buổi chiều: đi làm từ 12:00.';
+			case 'HALF_DAY': {
+				const bs = dayShift.value?.breakStartTime;
+				const be = dayShift.value?.breakEndTime;
+				if (bs && be) {
+					return `Nghỉ nửa ngày tính 0.5 ngày phép. Buổi sáng: nghỉ đến ${bs}. Buổi chiều: đi làm từ ${be}.`;
+				}
+				return 'Nghỉ nửa ngày tính 0.5 ngày phép. Ranh giới sáng/chiều là giờ nghỉ trưa của ca làm việc theo ngày.';
+			}
 			case 'LATE':
 				return 'Đơn đi muộn không trừ ngày phép. Chỉ ghi nhận để báo cáo.';
 			case 'EARLY':
@@ -543,9 +603,23 @@
 							@change="onLeaveTypeChange"
 						>
 							<option value="" disabled selected>Chọn hình thức nghỉ phép</option>
-							<option v-for="lt in leaveTypes" :key="lt.id" :value="lt.id">{{ lt.name }}</option>
+							<option
+								v-for="lt in leaveTypes"
+								:key="lt.id"
+								:value="lt.id"
+								:disabled="lt.code === 'HALF_DAY' && dayShiftFetched && !canHalfDay"
+							>
+								{{ lt.name }}<template v-if="lt.code === 'HALF_DAY' && dayShiftFetched && !canHalfDay">
+									(ca không hỗ trợ)</template>
+							</option>
 						</select>
 						<p v-if="errors.leaveTypeId" class="mt-1 text-xs text-red-500">{{ errors.leaveTypeId }}</p>
+						<p
+							v-if="selectedCode !== 'HALF_DAY' && halfDayBlockedReason"
+							class="mt-1 text-xs text-gray-400 dark:text-gray-500 leading-snug"
+						>
+							{{ halfDayBlockedReason }}
+						</p>
 					</div>
 
 					<!-- Fields 2+3: Date/time — conditional by type -->
@@ -652,7 +726,8 @@
 									<select
 										:value="halfDayPeriod"
 										v-bind="halfDayPeriodAttrs"
-										class="w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors appearance-none"
+										:disabled="!!halfDayBlockedReason"
+										class="w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
 										:class="
 											errors.halfDayPeriod
 												? 'border-red-400 dark:border-red-500'
@@ -665,6 +740,34 @@
 										<option value="AFTERNOON">Buổi chiều</option>
 									</select>
 									<p v-if="errors.halfDayPeriod" class="mt-1 text-xs text-red-500">{{ errors.halfDayPeriod }}</p>
+								</div>
+							</div>
+
+							<!-- Cảnh báo: ca ngày này không hỗ trợ nửa ngày -->
+							<div
+								v-if="halfDayBlockedReason"
+								class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg"
+							>
+								<div class="flex items-start gap-2">
+									<svg
+										class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+										/>
+									</svg>
+									<div>
+										<p class="text-sm font-medium text-amber-800 dark:text-amber-300">Không thể tạo nghỉ nửa ngày</p>
+										<p class="text-sm text-amber-700 dark:text-amber-400 mt-1 leading-snug">
+											{{ halfDayBlockedReason }}
+										</p>
+									</div>
 								</div>
 							</div>
 						</template>
@@ -898,7 +1001,7 @@
 							type="submit"
 							class="w-full justify-center"
 							:loading="isSubmitting"
-							:disabled="isOverLimit"
+							:disabled="isOverLimit || (selectedCode === 'HALF_DAY' && !!halfDayBlockedReason)"
 						>
 							<svg
 								v-if="!isSubmitting"

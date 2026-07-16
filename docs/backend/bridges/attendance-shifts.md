@@ -44,8 +44,10 @@
 export interface WorkShiftResponse {
 	id: number;
 	name: string;
-	checkInTime: string; // "HH:mm" UTC — ví dụ "08:00"
-	checkOutTime: string; // "HH:mm" UTC — ví dụ "17:00"
+	checkInTime: string; // "HH:mm" UTC — ví dụ "08:30"
+	checkOutTime: string; // "HH:mm" UTC — ví dụ "18:00"
+	breakStartTime: string | null; // "HH:mm" — bắt đầu nghỉ trưa (VD "12:00"). null = ca không hỗ trợ nghỉ nửa ngày
+	breakEndTime: string | null; // "HH:mm" — kết thúc nghỉ trưa (VD "13:30"). null = ca không hỗ trợ nghỉ nửa ngày
 	lateThresholdMin: number; // Số phút trễ được phép, mặc định 15
 	earlyThresholdMin: number; // Số phút về sớm được phép, mặc định 15
 	workDays: number[]; // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
@@ -60,6 +62,8 @@ export interface CreateWorkShiftDto {
 	name: string;
 	checkInTime: string; // "HH:mm"
 	checkOutTime: string; // "HH:mm"
+	breakStartTime?: string; // "HH:mm" — cả 2 break* phải cùng set hoặc cùng null
+	breakEndTime?: string; // "HH:mm"
 	lateThresholdMin?: number; // 0–60, mặc định 15
 	earlyThresholdMin?: number; // 0–60, mặc định 15
 	workDays: number[]; // 0=CN, 1=T2, ..., 6=T7
@@ -78,6 +82,8 @@ export interface WorkShiftSummary {
 	name: string;
 	checkInTime: string; // "HH:mm"
 	checkOutTime: string; // "HH:mm"
+	breakStartTime: string | null; // "HH:mm" | null — dùng để hiển thị nghỉ trưa trên calendar
+	breakEndTime: string | null; // "HH:mm" | null
 	workDays: number[]; // 0=CN, 1=T2, ..., 6=T7
 }
 
@@ -143,6 +149,8 @@ export interface CalendarShift {
 	name: string;
 	checkInTime: string; // "HH:mm"
 	checkOutTime: string; // "HH:mm"
+	breakStartTime: string | null; // "HH:mm" | null
+	breakEndTime: string | null; // "HH:mm" | null
 }
 
 export interface CalendarDayEmployee {
@@ -167,6 +175,14 @@ export interface CalendarDayResponse {
 
 > **`workDays` convention:** `0 = Chủ nhật`, `1 = Thứ 2`, `2 = Thứ 3`, ..., `6 = Thứ 7`.  
 > Ví dụ: `[1, 2, 3, 4, 5]` = Thứ 2 đến Thứ 6. `[0]` = Chủ nhật.
+
+> **Quan trọng về `breakStartTime`/`breakEndTime` (giờ nghỉ trưa):**
+>
+> - Cả 2 phải **cùng set** hoặc **cùng null** (server reject 400 nếu chỉ có 1).
+> - Nếu set → thứ tự bắt buộc: `checkInTime < breakStartTime < breakEndTime < checkOutTime`.
+> - Ca cross-midnight (checkOut ≤ checkIn, VD ca đêm 22:00–06:00) **không được** set break — server reject 400.
+> - `null` cho cả 2 = ca không hỗ trợ nghỉ nửa ngày. Nếu user cố tạo đơn `HALF_DAY` (hoặc bất kỳ leave nào có `halfDayPeriod`) cho ngày dùng ca này → server trả **400** với message: _"Ca làm việc của ngày này không hỗ trợ nghỉ nửa ngày vì chưa cấu hình giờ nghỉ trưa"_.
+> - FE nên disable option "Nghỉ nửa ngày" trong form leave khi ca của employee cho ngày đó có `breakStartTime === null`.
 
 ---
 
@@ -221,23 +237,31 @@ Mọi authenticated user được gọi.
 	"data": [
 		{
 			"id": 1,
-			"name": "Ca hành chính",
-			"checkInTime": "08:00",
-			"checkOutTime": "17:00",
+			"name": "Ca hành chính HN",
+			"checkInTime": "08:30",
+			"checkOutTime": "18:00",
+			"breakStartTime": "12:00",
+			"breakEndTime": "13:30",
 			"lateThresholdMin": 15,
 			"earlyThresholdMin": 15,
 			"workDays": [1, 2, 3, 4, 5],
+			"isOnline": false,
+			"requiresLocationCheck": true,
 			"isActive": true,
 			"createdAt": "2026-01-01T00:00:00.000Z"
 		},
 		{
-			"id": 2,
-			"name": "Ca chiều",
-			"checkInTime": "13:00",
-			"checkOutTime": "22:00",
-			"lateThresholdMin": 10,
-			"earlyThresholdMin": 10,
-			"workDays": [1, 2, 3, 4, 5, 6],
+			"id": 4,
+			"name": "Ca linh hoạt",
+			"checkInTime": "00:00",
+			"checkOutTime": "06:00",
+			"breakStartTime": null,
+			"breakEndTime": null,
+			"lateThresholdMin": 0,
+			"earlyThresholdMin": 0,
+			"workDays": [0, 1, 2, 3, 4, 5, 6],
+			"isOnline": false,
+			"requiresLocationCheck": true,
 			"isActive": true,
 			"createdAt": "2026-01-01T00:00:00.000Z"
 		}
@@ -251,7 +275,22 @@ Mọi authenticated user được gọi.
 
 Chỉ `ADMIN` và `HR` được gọi.
 
-**Request body:**
+**Request body — ca có nghỉ trưa:**
+
+```json
+{
+	"name": "Ca hành chính",
+	"checkInTime": "08:30",
+	"checkOutTime": "18:00",
+	"breakStartTime": "12:00",
+	"breakEndTime": "13:30",
+	"lateThresholdMin": 15,
+	"earlyThresholdMin": 15,
+	"workDays": [1, 2, 3, 4, 5]
+}
+```
+
+**Request body — ca liên tục (không nghỉ trưa):**
 
 ```json
 {
@@ -266,11 +305,14 @@ Chỉ `ADMIN` và `HR` được gọi.
 
 **Response 201:** `ApiSuccess<WorkShiftResponse>`
 
-**400** nếu `checkInTime`/`checkOutTime` sai format (phải là `HH:mm`):
+**400** — các case bị reject:
 
-```json
-{ "success": false, "error": { "code": "BAD_REQUEST", "message": "checkInTime must match /^\\d{2}:\\d{2}$/" } }
-```
+| Case | Message |
+| --- | --- |
+| `checkInTime`/`checkOutTime` sai format | `"checkInTime must match /^\\d{2}:\\d{2}$/"` |
+| Chỉ set 1 trong 2 `break*` | `"breakStartTime và breakEndTime phải được set cùng nhau (hoặc cùng null)"` |
+| Ca cross-midnight có `break*` | `"Ca cross-midnight (checkOutTime ≤ checkInTime) không hỗ trợ nghỉ trưa"` |
+| Thứ tự sai (VD `breakStart > breakEnd`) | `"Thứ tự thời gian không hợp lệ: yêu cầu checkInTime < breakStartTime < breakEndTime < checkOutTime"` |
 
 ---
 
@@ -329,9 +371,11 @@ Mặc định nếu không truyền: từ đầu đến cuối tuần hiện t�
 			},
 			"shift": {
 				"id": 1,
-				"name": "Ca sáng",
-				"checkInTime": "08:00",
-				"checkOutTime": "17:00",
+				"name": "Ca hành chính HN",
+				"checkInTime": "08:30",
+				"checkOutTime": "18:00",
+				"breakStartTime": "12:00",
+				"breakEndTime": "13:30",
 				"workDays": [1, 2, 3, 4, 5]
 			}
 		}
@@ -365,9 +409,11 @@ Chỉ `ADMIN` và `HR` được gọi. `startDate` và `endDate` đều **bắt 
           "department": "Kỹ thuật",
           "shift": {
             "id": 1,
-            "name": "Ca hành chính",
-            "checkInTime": "08:00",
-            "checkOutTime": "17:00"
+            "name": "Ca hành chính HN",
+            "checkInTime": "08:30",
+            "checkOutTime": "18:00",
+            "breakStartTime": "12:00",
+            "breakEndTime": "13:30"
           },
           "isDefault": true
         },
@@ -377,10 +423,12 @@ Chỉ `ADMIN` và `HR` được gọi. `startDate` và `endDate` đều **bắt 
           "fullName": "Trần Thị Bình",
           "department": "Kỹ thuật",
           "shift": {
-            "id": 2,
-            "name": "Ca chiều",
-            "checkInTime": "13:00",
-            "checkOutTime": "22:00"
+            "id": 4,
+            "name": "Ca linh hoạt",
+            "checkInTime": "00:00",
+            "checkOutTime": "06:00",
+            "breakStartTime": null,
+            "breakEndTime": null
           },
           "isDefault": false
         }
@@ -447,9 +495,11 @@ Nếu nhân viên đã có lịch ca cho ngày đó → **upsert** (ghi đè, kh
 		},
 		"shift": {
 			"id": 1,
-			"name": "Ca sáng",
-			"checkInTime": "08:00",
-			"checkOutTime": "17:00",
+			"name": "Ca hành chính HN",
+			"checkInTime": "08:30",
+			"checkOutTime": "18:00",
+			"breakStartTime": "12:00",
+			"breakEndTime": "13:30",
 			"workDays": [1, 2, 3, 4, 5]
 		}
 	}
@@ -600,10 +650,13 @@ Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: 
 	"name": "Ca online T7",
 	"checkInTime": "08:00",
 	"checkOutTime": "13:00",
+	"breakStartTime": null,
+	"breakEndTime": null,
 	"lateThresholdMin": 0,
 	"earlyThresholdMin": 0,
 	"workDays": [6],
 	"isOnline": true,
+	"requiresLocationCheck": true,
 	"isActive": true,
 	"createdAt": "2026-01-01T00:00:00.000Z"
 }
@@ -622,6 +675,8 @@ Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: 
 		"name": "Ca online T7",
 		"checkInTime": "08:00",
 		"checkOutTime": "13:00",
+		"breakStartTime": null,
+		"breakEndTime": null,
 		"workDays": [6]
 	}
 }
@@ -814,6 +869,48 @@ export function useShiftSchedules() {
 
 ---
 
+## Nghỉ nửa ngày & cửa sổ check-in/check-out
+
+Khi employee có đơn nghỉ nửa ngày (`halfDayPeriod = MORNING | AFTERNOON`) **đã được duyệt**, server tự dời cửa sổ check-in/check-out sang phần ca còn phải làm. Mốc dời **dựa trên `breakStartTime`/`breakEndTime` của ca** — không phải hardcode 12:00.
+
+### Công thức
+
+| Half-day period                    | Bắt đầu ca hiệu lực | Kết thúc ca hiệu lực |
+| ---------------------------------- | ------------------- | -------------------- |
+| `MORNING` (nghỉ sáng, làm chiều)   | `breakEndTime`      | `checkOutTime`       |
+| `AFTERNOON` (làm sáng, nghỉ chiều) | `checkInTime`       | `breakStartTime`     |
+
+Ngoài phần ca hiệu lực, buffer chuẩn của check-in/check-out vẫn giữ nguyên:
+
+- Check-in: `[effectiveStart − 60m, effectiveStart + 60m + approvedLate]`
+- Check-out: `[effectiveEnd − 60m − approvedEarly, effectiveEnd + 120m]`
+
+### Ví dụ — Ca 08:30 / break 12:00–13:30 / 18:00
+
+| Loại ngày                     | Check-in window | Check-out window |
+| ----------------------------- | --------------- | ---------------- |
+| Full-day                      | `07:30 – 09:30` | `17:00 – 20:00`  |
+| Half-day MORNING (làm chiều)  | `12:30 – 14:30` | `17:00 – 20:00`  |
+| Half-day AFTERNOON (làm sáng) | `07:30 – 09:30` | `11:00 – 14:00`  |
+
+### FE nên làm gì
+
+**Trong form tạo đơn leave:**
+
+- Trước khi hiển thị option "Nghỉ nửa ngày", check `shift.breakStartTime` cho ngày được chọn. Nếu `null` → disable option + tooltip "Ca này không hỗ trợ nghỉ nửa ngày. Hãy chọn nghỉ cả ngày."
+- Sau khi user chọn `halfDayPeriod`, hiển thị preview khung giờ phải có mặt (tính từ công thức trên) để confirm.
+
+**Trong màn chấm công (mobile app):**
+
+- Đọc `attendance/today-info` như hiện tại — server đã trả `windowFrom`/`windowTo` đúng theo half-day override, FE **không** cần tính lại.
+- Nếu FE muốn hiển thị full breakdown (sáng: nghỉ, chiều: 13:30–18:00) → dùng `breakStartTime`/`breakEndTime` từ shift + `halfDayPeriod` từ đơn leave đã duyệt.
+
+**Trong calendar view (HR):**
+
+- Bổ sung tooltip nghỉ trưa `12:00–13:30` khi hover vào cell ca có `breakStartTime != null`.
+
+---
+
 ## Edge cases
 
 | Tình huống | Kết quả |
@@ -842,3 +939,10 @@ export function useShiftSchedules() {
 | `bulk-online-saturday` gán đè T7 đã có lịch ca khác | Upsert — ghi đè `shiftId` và `isOnline=true` |
 | `autoRecordOnlineSaturday` chạy nhưng không có lịch online hôm nay | Skip toàn bộ, không tạo record |
 | `markAbsentEmployees` (00:10 CN) gặp nhân viên có lịch online T7 | Skip — không đánh ABSENT nhân viên online |
+| POST/PATCH shift chỉ set `breakStartTime` mà thiếu `breakEndTime` | 400 Bad Request — cả 2 phải cùng set hoặc cùng null |
+| POST/PATCH ca cross-midnight (VD `checkIn=22:00, checkOut=06:00`) kèm `break*` | 400 Bad Request — ca cross-midnight không hỗ trợ nghỉ trưa |
+| POST/PATCH shift với `breakStart >= breakEnd` hoặc break ngoài giờ ca | 400 Bad Request — sai thứ tự thời gian |
+| PATCH clear break (gửi cả 2 `break*: null`) | OK — ca chuyển thành không hỗ trợ half-day |
+| Employee tạo đơn `halfDayPeriod` cho ngày có ca `breakStartTime === null` | 400 Bad Request — "Ca không hỗ trợ nghỉ nửa ngày" |
+| Employee tạo đơn `halfDayPeriod` nhưng ngày đó không có ca | 400 Bad Request — "Không tìm thấy ca làm việc cho ngày này" |
+| HR sửa `breakStartTime`/`breakEndTime` sau khi đã có đơn half-day approved | Đơn cũ giữ nguyên window (snapshot), chỉ đơn approve **sau** khi sửa mới dùng giờ mới |

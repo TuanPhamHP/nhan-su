@@ -16,6 +16,8 @@ export interface AttendanceShiftDto {
 	name: string;
 	checkInTime: string; // "HH:mm" UTC
 	checkOutTime: string; // "HH:mm" UTC
+	breakStartTime: string | null; // "HH:mm" UTC — null nếu ca không có nghỉ trưa
+	breakEndTime: string | null; // "HH:mm" UTC — null nếu ca không có nghỉ trưa
 }
 
 export interface AttendanceEmployeeDto {
