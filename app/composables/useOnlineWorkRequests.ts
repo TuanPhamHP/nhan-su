@@ -1,4 +1,5 @@
 import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
+import { useApprovalService } from '~/services/approval.service';
 import type {
 	OnlineWorkRequestResponse,
 	OnlineWorkMonthlyStats,
@@ -9,6 +10,7 @@ import type { PaginatedMeta } from '~/types/api.types';
 
 export function useOnlineWorkRequests() {
 	const service = useOnlineWorkRequestService();
+	const approvalService = useApprovalService();
 
 	const requests = ref<OnlineWorkRequestResponse[]>([]);
 	const requestsMeta = ref<PaginatedMeta | null>(null);
@@ -34,7 +36,8 @@ export function useOnlineWorkRequests() {
 	async function fetchPendingForMe() {
 		pendingLoading.value = true;
 		try {
-			pending.value = await service.findPendingForMe();
+			const res = await approvalService.listOnlineWorkRequests({ limit: 100 });
+			pending.value = res.data.filter(r => r.status.startsWith('PENDING'));
 		} finally {
 			pendingLoading.value = false;
 		}

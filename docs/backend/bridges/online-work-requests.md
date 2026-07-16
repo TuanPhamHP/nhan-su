@@ -9,7 +9,9 @@
 | Method | Path | Ai được gọi | Ghi chú |
 |--------|------|-------------|---------|
 | GET | `/v1/online-work-requests/me` | Mọi user đã đăng nhập | Đơn của bản thân (có phân trang) |
-| GET | `/v1/online-work-requests/pending-for-me` | `MANAGER`, `CHIEF`, `ADMIN`, `HR` | Đơn đang chờ mình duyệt |
+| GET | `/v1/online-work-requests/pending-for-me` | `MANAGER`, `CHIEF`, `ADMIN`, `HR` | Đơn đang chờ mình duyệt (giữ nguyên, không phân trang) |
+| GET | `/v1/approval/online-work-requests` | Approver L1/L2 hoặc `CHIEF`/`DIRECTOR` cho L3 | **Inbox** đơn chờ tôi duyệt (multi-level, có phân trang + filter) — xem [approval.md](./approval.md) |
+| GET | `/v1/approval/online-work-requests/:id` | Approver / HR / ADMIN | Chi tiết (approver view) |
 | GET | `/v1/online-work-requests/report` | `MANAGER`, `CHIEF`, `ADMIN`, `HR` | Báo cáo thống kê theo tháng |
 | GET | `/v1/online-work-requests/report/export` | `MANAGER`, `CHIEF`, `ADMIN`, `HR` | Xuất Excel báo cáo tháng |
 | GET | `/v1/online-work-requests` | `MANAGER`, `CHIEF`, `ADMIN`, `HR` | Danh sách toàn bộ (có phân trang) |

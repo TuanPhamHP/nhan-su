@@ -1,4 +1,5 @@
 import { useBusinessTripService } from '~/services/business-trip.service';
+import { useApprovalService } from '~/services/approval.service';
 import type {
 	BusinessTripResponse,
 	QueryBusinessTripsParams,
@@ -8,6 +9,7 @@ import type { PaginatedMeta } from '~/types/api.types';
 
 export function useBusinessTrips() {
 	const service = useBusinessTripService();
+	const approvalService = useApprovalService();
 
 	const myTrips = ref<BusinessTripResponse[]>([]);
 	const myTripsMeta = ref<PaginatedMeta | null>(null);
@@ -30,7 +32,8 @@ export function useBusinessTrips() {
 	async function fetchPendingForMe() {
 		pendingLoading.value = true;
 		try {
-			pendingTrips.value = await service.findPendingForMe();
+			const res = await approvalService.listBusinessTrips({ limit: 100 });
+			pendingTrips.value = res.data.filter(t => t.status === 'PENDING');
 		} finally {
 			pendingLoading.value = false;
 		}

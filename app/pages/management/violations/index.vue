@@ -118,6 +118,7 @@
 			const idx = allRequests.value.findIndex(r => r.id === updated.id);
 			if (idx !== -1) allRequests.value.splice(idx, 1, updated);
 			toast.success('Đã duyệt phiếu vi phạm');
+			useApprovalStore().fetchCounts();
 			return true;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -163,6 +164,7 @@
 	function onRejected() {
 		rejectTarget.value = null;
 		fetchAllRequests();
+		useApprovalStore().fetchCounts();
 	}
 
 	// ─── Export ───────────────────────────────────────────────────────────────────

@@ -45,6 +45,7 @@ async function handleApprove(trip: BusinessTripResponse) {
 		const updated = await service.approve(trip.id);
 		toast.success('Đã duyệt đơn công tác');
 		replaceInList(updated);
+		useApprovalStore().fetchCounts();
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 	}
@@ -54,6 +55,7 @@ function onRejected(updated: BusinessTripResponse) {
 	rejectTarget.value = null;
 	replaceInList(updated);
 	toast.success('Đã từ chối đơn công tác');
+	useApprovalStore().fetchCounts();
 }
 
 async function handleCancel(trip: BusinessTripResponse) {
@@ -62,6 +64,7 @@ async function handleCancel(trip: BusinessTripResponse) {
 		const updated = await service.cancel(trip.id);
 		toast.success('Đã huỷ đơn công tác');
 		replaceInList(updated);
+		useApprovalStore().fetchCounts();
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 	}

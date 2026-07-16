@@ -133,6 +133,7 @@ async function handleApprove(req: OvertimeRequestResponse) {
 		if (idx !== -1) requests.value.splice(idx, 1, updated);
 		toast.success('Đã duyệt đơn OT');
 		fetchRequests();
+		useApprovalStore().fetchCounts();
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 	} finally {
@@ -146,6 +147,7 @@ const rejectTarget = ref<OvertimeRequestResponse | null>(null);
 function onRejected() {
 	rejectTarget.value = null;
 	fetchRequests();
+	useApprovalStore().fetchCounts();
 }
 
 // ─── Detail ───────────────────────────────────────────────────────────────────

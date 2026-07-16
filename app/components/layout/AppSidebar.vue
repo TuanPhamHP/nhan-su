@@ -12,6 +12,8 @@
 		management?: boolean;
 		dataTour?: string;
 		matchQuery?: Record<string, string>;
+		/** Reactive badge count — nếu > 0 thì hiển thị bên cạnh label. */
+		badge?: () => number;
 	}
 
 	interface NavSection {
@@ -23,7 +25,15 @@
 	const { user } = useAuth();
 	const route = useRoute();
 	const metaDataStore = useMetaDataStore();
+	const approvalStore = useApprovalStore();
+	const { counts: approvalCounts } = storeToRefs(approvalStore);
 	const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
+
+	onMounted(() => {
+		if (user.value && isManagementRole(user.value.role)) {
+			approvalStore.fetchCounts();
+		}
+	});
 
 	watch(
 		() => route.path,
@@ -48,6 +58,13 @@
 					route: '/',
 					icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
 					roles: ['EMPLOYEE'],
+				},
+				{
+					label: 'Duyệt đơn',
+					route: '/management/approval',
+					icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+					management: true,
+					badge: () => approvalCounts.value.total,
 				},
 			],
 		},
@@ -306,7 +323,7 @@
 						:to="item.route"
 						:data-tour="item.dataTour"
 						:class="[
-							'group flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
+							'group relative flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
 							!isOpen && 'justify-center',
 							isActive(item)
 								? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
@@ -337,8 +354,18 @@
 							leave-from-class="opacity-100"
 							leave-to-class="opacity-0"
 						>
-							<span v-if="isOpen" class="whitespace-nowrap">{{ item.label }}</span>
+							<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ item.label }}</span>
 						</Transition>
+						<span
+							v-if="item.badge && item.badge() > 0"
+							:class="[
+								'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold flex-shrink-0',
+								'bg-red-500 text-white',
+								!isOpen && 'absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[10px]',
+							]"
+						>
+							{{ item.badge() > 99 ? '99+' : item.badge() }}
+						</span>
 					</NuxtLink>
 				</div>
 			</div>

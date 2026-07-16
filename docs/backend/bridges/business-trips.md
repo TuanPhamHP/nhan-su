@@ -7,10 +7,12 @@
 ## Endpoints
 
 | Method | Path | Ai được gọi | Ghi chú |
-| --- | --- | --- | --- |
+|--------|------|-------------|---------|
 | GET | `/v1/business-trips/me` | Mọi user đã đăng nhập | Đơn công tác của bản thân (có phân trang) |
-| GET | `/v1/business-trips/pending-for-me` | `MANAGER`, `CHIEF`, `HR`, `ADMIN` | Đơn đang chờ mình duyệt |
+| GET | `/v1/business-trips/pending-for-me` | `MANAGER`, `CHIEF`, `HR`, `ADMIN` | Đơn đang chờ mình duyệt (giữ nguyên, không phân trang) |
 | GET | `/v1/business-trips` | `MANAGER`, `CHIEF`, `HR`, `ADMIN` | Tất cả đơn (có filter, phân trang) |
+| GET | `/v1/approval/business-trips` | Approver được assign | **Inbox** đơn công tác chờ tôi duyệt (có phân trang + filter) — xem [approval.md](./approval.md) |
+| GET | `/v1/approval/business-trips/:id` | Approver / HR / ADMIN | Chi tiết (approver view) |
 | POST | `/v1/business-trips` | Mọi user đã đăng nhập | Tạo đơn mới (trạng thái `DRAFT`) — bắt buộc `routes[]` ≥ 1 |
 | GET | `/v1/business-trips/:id` | Chủ nhân, `MANAGER`, `CHIEF`, `HR`, `ADMIN` | Chi tiết một đơn |
 | PATCH | `/v1/business-trips/:id` | Chủ nhân (chỉ khi `DRAFT`) | Cập nhật thông tin đơn (không sửa routes qua endpoint này) |
@@ -34,19 +36,18 @@
 `GET /v1/meta-data/business-trip-statuses` (mọi user đã đăng nhập) trả về đúng thứ tự dùng cho dropdown filter và mapping `status → statusLabel`. FE **nên gọi endpoint này** thay vì hardcode label để giữ đồng bộ với BE.
 
 **Response 200:**
-
 ```json
 {
-	"success": true,
-	"data": [
-		{ "value": "DRAFT", "label": "Nháp" },
-		{ "value": "PENDING", "label": "Chờ duyệt" },
-		{ "value": "APPROVED", "label": "Đã duyệt" },
-		{ "value": "REJECTED", "label": "Bị từ chối" },
-		{ "value": "IN_PROGRESS", "label": "Đang công tác" },
-		{ "value": "COMPLETED", "label": "Hoàn thành" },
-		{ "value": "CANCELLED", "label": "Đã huỷ" }
-	]
+  "success": true,
+  "data": [
+    { "value": "DRAFT",       "label": "Nháp" },
+    { "value": "PENDING",     "label": "Chờ duyệt" },
+    { "value": "APPROVED",    "label": "Đã duyệt" },
+    { "value": "REJECTED",    "label": "Bị từ chối" },
+    { "value": "IN_PROGRESS", "label": "Đang công tác" },
+    { "value": "COMPLETED",   "label": "Hoàn thành" },
+    { "value": "CANCELLED",   "label": "Đã huỷ" }
+  ]
 }
 ```
 
@@ -60,10 +61,10 @@
 
 Bucket lưu trữ là **private**. Backend đã tự sign toàn bộ URL trước khi trả về, FE **không cần** tự sign lại.
 
-| Field                                  | Kiểu             | Được sign                                               |
-| -------------------------------------- | ---------------- | ------------------------------------------------------- |
+| Field | Kiểu | Được sign |
+|-------|------|-----------|
 | `routes[].transports[].ticketImageUrl` | `string \| null` | ✅ presigned, dùng trực tiếp trong `<img>` / `<a href>` |
-| `report.attachmentUrls[]`              | `string[]`       | ✅ mỗi phần tử đã presigned, dùng trực tiếp             |
+| `report.attachmentUrls[]` | `string[]` | ✅ mỗi phần tử đã presigned, dùng trực tiếp |
 
 - URL presigned có TTL 3600s (1 giờ). Nếu user mở lại tab sau > 1 giờ, gọi lại API để lấy URL mới.
 - Nếu sign lỗi (file bị xoá, key sai), field sẽ về `null` (transport) hoặc bị filter khỏi mảng (report). FE handle như file không tồn tại.
@@ -77,13 +78,13 @@ Bucket lưu trữ là **private**. Backend đã tự sign toàn bộ URL trướ
 // types/business-trip.types.ts
 
 export type BusinessTripStatus =
-	| 'DRAFT'
-	| 'PENDING'
-	| 'APPROVED'
-	| 'IN_PROGRESS'
-	| 'COMPLETED'
-	| 'REJECTED'
-	| 'CANCELLED';
+  | 'DRAFT'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'CANCELLED';
 
 export type TripReportStatus = 'DRAFT' | 'SUBMITTED';
 
@@ -91,177 +92,177 @@ export type TransportType = 'PLANE' | 'TRAIN' | 'CAR' | 'OTHER';
 export type DesiredTimeType = 'ARRIVAL' | 'PICKUP';
 
 export interface TripCompanion {
-	employeeId: number;
+  employeeId: number;
 }
 
 // ── Route + Transport ──
 
 export interface TripTransportResponse {
-	id: number;
-	order: number; // thứ tự phương tiện trong lộ trình
-	transportType: TransportType;
-	pickupLocation: string | null;
-	dropLocation: string | null;
-	pickupTime: string | null; // ISO 8601
-	dropTime: string | null; // ISO 8601
-	licensePlate: string | null;
-	driverPhone: string | null;
-	flightNumber: string | null;
-	checkInTime: string | null; // ISO 8601 — giờ check-in sân bay/bến
-	ticketImageUrl: string | null; // URL ảnh vé — đã presigned, dùng trực tiếp
-	note: string | null;
+  id: number;
+  order: number;                          // thứ tự phương tiện trong lộ trình
+  transportType: TransportType;
+  pickupLocation: string | null;
+  dropLocation: string | null;
+  pickupTime: string | null;              // ISO 8601
+  dropTime: string | null;                // ISO 8601
+  licensePlate: string | null;
+  driverPhone: string | null;
+  flightNumber: string | null;
+  checkInTime: string | null;             // ISO 8601 — giờ check-in sân bay/bến
+  ticketImageUrl: string | null;          // URL ảnh vé — đã presigned, dùng trực tiếp
+  note: string | null;
 }
 
 export interface TripRouteResponse {
-	id: number;
-	order: number; // 1..N — thứ tự lộ trình trong chuyến
-	pickupPoint: string; // điểm xuất phát mong muốn
-	dropPoint: string; // điểm đến mong muốn
-	desiredTimeType: DesiredTimeType; // 'ARRIVAL' = giờ phải có mặt tại dropPoint · 'PICKUP' = giờ xe/máy bay đón
-	desiredTime: string | null; // ISO 8601 — giờ mong muốn tương ứng desiredTimeType
-	isSelfTransport: boolean; // true = nhân viên tự túc di chuyển (transports[] rỗng)
-	transports: TripTransportResponse[]; // do HR cập nhật sau khi trip APPROVED
+  id: number;
+  order: number;                          // 1..N — thứ tự lộ trình trong chuyến
+  pickupPoint: string;                    // điểm xuất phát mong muốn
+  dropPoint: string;                      // điểm đến mong muốn
+  desiredTimeType: DesiredTimeType;       // 'ARRIVAL' = giờ phải có mặt tại dropPoint · 'PICKUP' = giờ xe/máy bay đón
+  desiredTime: string | null;             // ISO 8601 — giờ mong muốn tương ứng desiredTimeType
+  isSelfTransport: boolean;               // true = nhân viên tự túc di chuyển (transports[] rỗng)
+  transports: TripTransportResponse[];    // do HR cập nhật sau khi trip APPROVED
 }
 
 // ── Report ──
 
 export interface TripReportResponse {
-	id: number;
-	summary: string; // min 20 ký tự
-	results: string; // min 20 ký tự
-	actualCost: number | null;
-	issues: string | null;
-	attachmentUrls: string[]; // ảnh/tài liệu đính kèm báo cáo — mỗi URL đã presigned
-	status: TripReportStatus;
-	submittedAt: string | null; // ISO 8601
+  id: number;
+  summary: string;                        // min 20 ký tự
+  results: string;                        // min 20 ký tự
+  actualCost: number | null;
+  issues: string | null;
+  attachmentUrls: string[];               // ảnh/tài liệu đính kèm báo cáo — mỗi URL đã presigned
+  status: TripReportStatus;
+  submittedAt: string | null;             // ISO 8601
 }
 
 // ── Employee summaries ──
 
 export interface BusinessTripEmployee {
-	id: number;
-	fullName: string;
-	employeeCode: string;
-	department: string | null; // tên phòng ban (không phải object)
+  id: number;
+  fullName: string;
+  employeeCode: string;
+  department: string | null;              // tên phòng ban (không phải object)
 }
 
 export interface BusinessTripApprover {
-	id: number;
-	fullName: string;
+  id: number;
+  fullName: string;
 }
 
 export interface BusinessTripCreatedFor {
-	id: number;
-	fullName: string;
-	employeeCode: string;
+  id: number;
+  fullName: string;
+  employeeCode: string;
 }
 
 // ── Response đầy đủ ──
 
 export interface BusinessTripResponse {
-	id: number;
-	title: string;
-	destination: string;
-	purpose: string;
-	startDate: string; // "YYYY-MM-DD"
-	endDate: string; // "YYYY-MM-DD"
-	totalDays: number; // số ngày làm việc (trừ T7/CN/lễ)
-	estimatedCost: number | null;
-	transportType: TransportType | null; // legacy — luôn null cho đơn mới (transport nằm ở TripRoute.transports)
-	companions: TripCompanion[] | null;
-	routes: TripRouteResponse[]; // luôn ≥ 1
-	status: BusinessTripStatus;
-	statusLabel: string; // "Nháp" | "Chờ duyệt" | "Đã duyệt" | "Đang công tác" | "Hoàn thành" | "Bị từ chối" | "Đã huỷ"
-	approver: BusinessTripApprover | null;
-	approvedAt: string | null; // ISO 8601
-	autoApproved: boolean; // true nếu HR nộp không chọn approver → auto-approve
-	rejectedAt: string | null; // ISO 8601
-	rejectNote: string | null;
-	report: TripReportResponse | null;
-	employee: BusinessTripEmployee; // người đi công tác (chủ đơn)
-	createdForEmployee: BusinessTripCreatedFor | null; // != null khi HR tạo đơn hộ người khác
-	// Computed flags — dùng để show/hide buttons
-	canSubmit: boolean; // true nếu là chủ nhân và status === DRAFT
-	canApprove: boolean; // true nếu là người duyệt và status === PENDING
-	canAddReport: boolean; // true nếu là chủ nhân và status === APPROVED hoặc IN_PROGRESS
-	canCancel: boolean; // true nếu là chủ nhân và status === DRAFT hoặc PENDING
-	createdAt: string; // ISO 8601
+  id: number;
+  title: string;
+  destination: string;
+  purpose: string;
+  startDate: string;                      // "YYYY-MM-DD"
+  endDate: string;                        // "YYYY-MM-DD"
+  totalDays: number;                      // số ngày làm việc (trừ T7/CN/lễ)
+  estimatedCost: number | null;
+  transportType: TransportType | null;    // legacy — luôn null cho đơn mới (transport nằm ở TripRoute.transports)
+  companions: TripCompanion[] | null;
+  routes: TripRouteResponse[];            // luôn ≥ 1
+  status: BusinessTripStatus;
+  statusLabel: string;                    // "Nháp" | "Chờ duyệt" | "Đã duyệt" | "Đang công tác" | "Hoàn thành" | "Bị từ chối" | "Đã huỷ"
+  approver: BusinessTripApprover | null;
+  approvedAt: string | null;              // ISO 8601
+  autoApproved: boolean;                  // true nếu HR nộp không chọn approver → auto-approve
+  rejectedAt: string | null;              // ISO 8601
+  rejectNote: string | null;
+  report: TripReportResponse | null;
+  employee: BusinessTripEmployee;         // người đi công tác (chủ đơn)
+  createdForEmployee: BusinessTripCreatedFor | null; // != null khi HR tạo đơn hộ người khác
+  // Computed flags — dùng để show/hide buttons
+  canSubmit: boolean;                     // true nếu là chủ nhân và status === DRAFT
+  canApprove: boolean;                    // true nếu là người duyệt và status === PENDING
+  canAddReport: boolean;                  // true nếu là chủ nhân và status === APPROVED hoặc IN_PROGRESS
+  canCancel: boolean;                     // true nếu là chủ nhân và status === DRAFT hoặc PENDING
+  createdAt: string;                      // ISO 8601
 }
 
 // ── Request DTOs ──
 
 export interface CreateTripRouteDto {
-	pickupPoint: string; // min 2 ký tự — điểm xuất phát
-	dropPoint: string; // min 2 ký tự — điểm đến
-	desiredTimeType: DesiredTimeType;
-	desiredTime?: string; // ISO 8601 — có thể null nếu chưa xác định giờ
+  pickupPoint: string;                    // min 2 ký tự — điểm xuất phát
+  dropPoint: string;                      // min 2 ký tự — điểm đến
+  desiredTimeType: DesiredTimeType;
+  desiredTime?: string;                   // ISO 8601 — có thể null nếu chưa xác định giờ
 }
 
 export interface CreateBusinessTripDto {
-	title: string; // min 3 ký tự
-	destination: string; // min 2 ký tự
-	purpose: string; // min 10 ký tự
-	startDate: string; // "YYYY-MM-DD"
-	endDate: string; // "YYYY-MM-DD" — phải >= startDate
-	estimatedCost?: number; // >= 0
-	companions?: Array<{ employeeId: number }>;
-	routes: CreateTripRouteDto[]; // BẮT BUỘC, tối thiểu 1 lộ trình
-	createdForEmployeeId?: number; // HR/ADMIN only: ID nhân viên đi công tác (khi HR tạo hộ)
+  title: string;                          // min 3 ký tự
+  destination: string;                    // min 2 ký tự
+  purpose: string;                        // min 10 ký tự
+  startDate: string;                      // "YYYY-MM-DD"
+  endDate: string;                        // "YYYY-MM-DD" — phải >= startDate
+  estimatedCost?: number;                 // >= 0
+  companions?: Array<{ employeeId: number }>;
+  routes: CreateTripRouteDto[];           // BẮT BUỘC, tối thiểu 1 lộ trình
+  createdForEmployeeId?: number;          // HR/ADMIN only: ID nhân viên đi công tác (khi HR tạo hộ)
 }
 
 export type UpdateBusinessTripDto = Partial<Omit<CreateBusinessTripDto, 'routes' | 'createdForEmployeeId'>>;
 
 export interface SubmitBusinessTripDto {
-	approverId?: number; // Bắt buộc với EMPLOYEE/MANAGER/CHIEF. HR/ADMIN bỏ trống → auto-approve
+  approverId?: number;                    // Bắt buộc với EMPLOYEE/MANAGER/CHIEF. HR/ADMIN bỏ trống → auto-approve
 }
 
 export interface RejectBusinessTripDto {
-	note: string; // lý do từ chối
+  note: string;                           // lý do từ chối
 }
 
 // ── HR cập nhật phương tiện ──
 
 export interface CreateTripTransportDto {
-	order: number; // 1..N — thứ tự phương tiện
-	transportType: TransportType;
-	pickupLocation?: string;
-	dropLocation?: string;
-	pickupTime?: string; // ISO 8601
-	dropTime?: string; // ISO 8601
-	licensePlate?: string;
-	driverPhone?: string;
-	flightNumber?: string;
-	checkInTime?: string; // ISO 8601
-	ticketImageUrl?: string;
-	note?: string;
+  order: number;                          // 1..N — thứ tự phương tiện
+  transportType: TransportType;
+  pickupLocation?: string;
+  dropLocation?: string;
+  pickupTime?: string;                    // ISO 8601
+  dropTime?: string;                      // ISO 8601
+  licensePlate?: string;
+  driverPhone?: string;
+  flightNumber?: string;
+  checkInTime?: string;                   // ISO 8601
+  ticketImageUrl?: string;
+  note?: string;
 }
 
 // Gửi một trong hai:
 //   { isSelfTransport: true }              → đánh dấu tự túc, xoá hết transports
 //   { transports: [...] }                  → thay thế toàn bộ transports của route
 export interface UpdateRouteTransportDto {
-	isSelfTransport?: boolean;
-	transports?: CreateTripTransportDto[]; // ≥ 1 phần tử khi không dùng isSelfTransport
+  isSelfTransport?: boolean;
+  transports?: CreateTripTransportDto[];   // ≥ 1 phần tử khi không dùng isSelfTransport
 }
 
 // ── Report ──
 
 export interface CreateTripReportDto {
-	summary: string; // min 20 ký tự
-	results: string; // min 20 ký tự
-	actualCost?: number;
-	issues?: string;
-	attachmentUrls?: string[]; // URL ảnh/tài liệu (đã upload trước qua module upload)
+  summary: string;                        // min 20 ký tự
+  results: string;                        // min 20 ký tự
+  actualCost?: number;
+  issues?: string;
+  attachmentUrls?: string[];              // URL ảnh/tài liệu (đã upload trước qua module upload)
 }
 
 export type UpdateTripReportDto = Partial<CreateTripReportDto>;
 
 export interface QueryBusinessTripsParams {
-	page?: number; // default 1
-	limit?: number; // default 20, max 100
-	status?: BusinessTripStatus;
-	departmentId?: number;
-	employeeId?: number;
+  page?: number;                          // default 1
+  limit?: number;                         // default 20, max 100
+  status?: BusinessTripStatus;
+  departmentId?: number;
+  employeeId?: number;
 }
 ```
 
@@ -299,7 +300,6 @@ export interface QueryBusinessTripsParams {
 ```
 
 **Quy tắc:**
-
 - `submit` bởi HR/ADMIN mà bỏ trống `approverId` → thẳng lên `APPROVED`, `autoApproved: true`, không notify approver.
 - `cancel` chỉ khả dụng khi `status ∈ {DRAFT, PENDING}`. Nếu đang `PENDING`, approver cũ sẽ nhận notification huỷ.
 - `updateRouteTransport` chỉ khả dụng khi trip đang `APPROVED`. Payload phải chọn 1 trong 2 nhánh: `isSelfTransport: true` (xoá transports) HOẶC `transports: [...]` (replace toàn bộ).
@@ -346,7 +346,6 @@ Nhân viên khi tạo đơn chỉ khai báo **lộ trình mong muốn** (`pickup
 ```
 
 **Ràng buộc quan trọng:**
-
 - Endpoint yêu cầu `trip.status === APPROVED`. Nếu trip đã `IN_PROGRESS`/`COMPLETED`/`CANCELLED`/`REJECTED` → 400.
 - Không có endpoint riêng để "thêm 1 transport" hay "sửa 1 transport" — luôn là **replace toàn bộ danh sách** của route đó.
 - Trường hợp muốn quay lại "tự túc" sau khi đã thêm transports → gọi lại với `{ isSelfTransport: true }`, BE tự xoá transports cũ.
@@ -358,13 +357,12 @@ Nhân viên khi tạo đơn chỉ khai báo **lộ trình mong muốn** (`pickup
 
 Field `route.desiredTimeType` thể hiện ý nghĩa của `desiredTime` mà nhân viên khai:
 
-| Giá trị     | Ý nghĩa                                              | Label FE gợi ý   | Icon gợi ý |
-| ----------- | ---------------------------------------------------- | ---------------- | ---------- |
-| `'ARRIVAL'` | Cần **có mặt** tại `dropPoint` vào giờ này           | "Cần có mặt lúc" | 🎯 / 📍    |
-| `'PICKUP'`  | Cần **xe/máy bay đón** tại `pickupPoint` vào giờ này | "Cần xe đón lúc" | 🚗 / ⏰    |
+| Giá trị | Ý nghĩa | Label FE gợi ý | Icon gợi ý |
+|---------|---------|----------------|------------|
+| `'ARRIVAL'` | Cần **có mặt** tại `dropPoint` vào giờ này | "Cần có mặt lúc" | 🎯 / 📍 |
+| `'PICKUP'` | Cần **xe/máy bay đón** tại `pickupPoint` vào giờ này | "Cần xe đón lúc" | 🚗 / ⏰ |
 
 **Ví dụ hiển thị:**
-
 ```
 Lộ trình 1: Văn phòng HCM → Sân bay Tân Sơn Nhất
   🎯 Cần có mặt lúc: 06:30 01/07/2026    (desiredTimeType = ARRIVAL)
@@ -381,11 +379,23 @@ Lộ trình 2: Sân bay Nội Bài → Khách sạn Hà Nội
 
 ## Attendance Note — Cron tự động tạo chấm công
 
-Sau khi đơn được **APPROVED**, hệ thống có cron job chạy lúc `00:15 Asia/Ho_Chi_Minh` mỗi ngày:
+Sau khi đơn được **APPROVED**, hệ thống có cron job chạy lúc `00:10 Asia/Ho_Chi_Minh` mỗi ngày:
 
 - Với mỗi chuyến công tác đang `APPROVED` hoặc `IN_PROGRESS` mà ngày hôm qua nằm trong khoảng `[startDate, endDate]`
 - Nếu chưa có AttendanceRecord cho ngày đó → tự động tạo record với `workType = 'BUSINESS_TRIP'`, `status = PRESENT`, `isManual = true`
 - Khi ngày kết thúc đã qua → đánh dấu `attendanceRecordsCreated = true` để không tạo lại
+
+Cron chạy TRƯỚC `AttendanceLockService.markAbsentEmployees` (00:20) để đảm bảo nhân sự đang công tác không bị đánh nhầm ABSENT.
+
+### Backfill khi APPROVE
+
+Nếu đơn được duyệt trễ (dates trong `[startDate, endDate]` đã qua) hoặc backdated:
+
+- Ngay khi APPROVE, service tự chạy `backfillPastAttendance()`:
+  - Ngày quá khứ chưa có record → tạo `PRESENT + workType=BUSINESS_TRIP`
+  - Ngày quá khứ đã có record `ABSENT` với `lockReason='AUTO_MIDNIGHT'` (do markAbsent cron chạy trước khi duyệt) → convert sang `PRESENT + workType=BUSINESS_TRIP`, unlock, xoá `lockReason` và `missingType`
+  - Ngày quá khứ đã có record khác (nhân sự đã check-in thủ công, ON_LEAVE...) → giữ nguyên
+- Ngày tương lai vẫn để cron 00:10 xử lý.
 
 **Frontend không cần trigger gì.** Chỉ cần hiển thị trong màn hình chấm công rằng ngày đó nhân viên đi công tác.
 
@@ -409,96 +419,96 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
 
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"id": 1,
-			"title": "Khảo sát thị trường Hà Nội",
-			"destination": "Hà Nội",
-			"purpose": "Gặp gỡ đối tác và ký hợp đồng",
-			"startDate": "2026-07-01",
-			"endDate": "2026-07-03",
-			"totalDays": 3,
-			"estimatedCost": 5000000,
-			"transportType": null,
-			"companions": [{ "employeeId": 5 }],
-			"routes": [
-				{
-					"id": 10,
-					"order": 1,
-					"pickupPoint": "Văn phòng HCM",
-					"dropPoint": "Sân bay Tân Sơn Nhất",
-					"desiredTimeType": "ARRIVAL",
-					"desiredTime": "2026-07-01T06:30:00.000Z",
-					"isSelfTransport": false,
-					"transports": [
-						{
-							"id": 100,
-							"order": 1,
-							"transportType": "CAR",
-							"pickupLocation": "Văn phòng HCM",
-							"dropLocation": "Sân bay Tân Sơn Nhất",
-							"pickupTime": "2026-07-01T05:30:00.000Z",
-							"dropTime": "2026-07-01T06:30:00.000Z",
-							"licensePlate": "51G-12345",
-							"driverPhone": "0901234567",
-							"flightNumber": null,
-							"checkInTime": null,
-							"ticketImageUrl": null,
-							"note": "Xe công ty"
-						}
-					]
-				},
-				{
-					"id": 11,
-					"order": 2,
-					"pickupPoint": "Sân bay Tân Sơn Nhất",
-					"dropPoint": "Sân bay Nội Bài",
-					"desiredTimeType": "PICKUP",
-					"desiredTime": "2026-07-01T08:00:00.000Z",
-					"isSelfTransport": false,
-					"transports": [
-						{
-							"id": 101,
-							"order": 1,
-							"transportType": "PLANE",
-							"pickupLocation": "Sân bay Tân Sơn Nhất",
-							"dropLocation": "Sân bay Nội Bài",
-							"pickupTime": "2026-07-01T08:00:00.000Z",
-							"dropTime": "2026-07-01T10:15:00.000Z",
-							"licensePlate": null,
-							"driverPhone": null,
-							"flightNumber": "VN123",
-							"checkInTime": "2026-07-01T07:00:00.000Z",
-							"ticketImageUrl": "https://s3-read.example.com/hr-documents/tickets/vn123.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
-							"note": null
-						}
-					]
-				}
-			],
-			"status": "APPROVED",
-			"statusLabel": "Đã duyệt",
-			"approver": { "id": 3, "fullName": "Trần Thị B" },
-			"approvedAt": "2026-06-25T08:30:00.000Z",
-			"autoApproved": false,
-			"rejectedAt": null,
-			"rejectNote": null,
-			"report": null,
-			"employee": {
-				"id": 4,
-				"fullName": "Nguyễn Văn A",
-				"employeeCode": "EMP004",
-				"department": "Kỹ thuật"
-			},
-			"createdForEmployee": null,
-			"canSubmit": false,
-			"canApprove": false,
-			"canAddReport": true,
-			"canCancel": false,
-			"createdAt": "2026-06-20T10:00:00.000Z"
-		}
-	],
-	"meta": { "page": 1, "limit": 20, "total": 3, "totalPages": 1 }
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "title": "Khảo sát thị trường Hà Nội",
+      "destination": "Hà Nội",
+      "purpose": "Gặp gỡ đối tác và ký hợp đồng",
+      "startDate": "2026-07-01",
+      "endDate": "2026-07-03",
+      "totalDays": 3,
+      "estimatedCost": 5000000,
+      "transportType": null,
+      "companions": [{ "employeeId": 5 }],
+      "routes": [
+        {
+          "id": 10,
+          "order": 1,
+          "pickupPoint": "Văn phòng HCM",
+          "dropPoint": "Sân bay Tân Sơn Nhất",
+          "desiredTimeType": "ARRIVAL",
+          "desiredTime": "2026-07-01T06:30:00.000Z",
+          "isSelfTransport": false,
+          "transports": [
+            {
+              "id": 100,
+              "order": 1,
+              "transportType": "CAR",
+              "pickupLocation": "Văn phòng HCM",
+              "dropLocation": "Sân bay Tân Sơn Nhất",
+              "pickupTime": "2026-07-01T05:30:00.000Z",
+              "dropTime": "2026-07-01T06:30:00.000Z",
+              "licensePlate": "51G-12345",
+              "driverPhone": "0901234567",
+              "flightNumber": null,
+              "checkInTime": null,
+              "ticketImageUrl": null,
+              "note": "Xe công ty"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "order": 2,
+          "pickupPoint": "Sân bay Tân Sơn Nhất",
+          "dropPoint": "Sân bay Nội Bài",
+          "desiredTimeType": "PICKUP",
+          "desiredTime": "2026-07-01T08:00:00.000Z",
+          "isSelfTransport": false,
+          "transports": [
+            {
+              "id": 101,
+              "order": 1,
+              "transportType": "PLANE",
+              "pickupLocation": "Sân bay Tân Sơn Nhất",
+              "dropLocation": "Sân bay Nội Bài",
+              "pickupTime": "2026-07-01T08:00:00.000Z",
+              "dropTime": "2026-07-01T10:15:00.000Z",
+              "licensePlate": null,
+              "driverPhone": null,
+              "flightNumber": "VN123",
+              "checkInTime": "2026-07-01T07:00:00.000Z",
+              "ticketImageUrl": "https://s3-read.example.com/hr-documents/tickets/vn123.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
+              "note": null
+            }
+          ]
+        }
+      ],
+      "status": "APPROVED",
+      "statusLabel": "Đã duyệt",
+      "approver": { "id": 3, "fullName": "Trần Thị B" },
+      "approvedAt": "2026-06-25T08:30:00.000Z",
+      "autoApproved": false,
+      "rejectedAt": null,
+      "rejectNote": null,
+      "report": null,
+      "employee": {
+        "id": 4,
+        "fullName": "Nguyễn Văn A",
+        "employeeCode": "EMP004",
+        "department": "Kỹ thuật"
+      },
+      "createdForEmployee": null,
+      "canSubmit": false,
+      "canApprove": false,
+      "canAddReport": true,
+      "canCancel": false,
+      "createdAt": "2026-06-20T10:00:00.000Z"
+    }
+  ],
+  "meta": { "page": 1, "limit": 20, "total": 3, "totalPages": 1 }
 }
 ```
 
@@ -509,51 +519,42 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
 `routes` **bắt buộc** tối thiểu 1 lộ trình. `transportType` trên trip đã bị bỏ — phương tiện nằm trong `routes[].transports[]` do HR cập nhật sau khi duyệt.
 
 **Request body (employee tự tạo):**
-
 ```json
 {
-	"title": "Khảo sát thị trường Hà Nội",
-	"destination": "Hà Nội",
-	"purpose": "Gặp gỡ đối tác và ký hợp đồng để mở rộng thị trường",
-	"startDate": "2026-07-01",
-	"endDate": "2026-07-03",
-	"estimatedCost": 5000000,
-	"companions": [{ "employeeId": 5 }],
-	"routes": [
-		{
-			"pickupPoint": "Văn phòng HCM",
-			"dropPoint": "Sân bay Tân Sơn Nhất",
-			"desiredTimeType": "ARRIVAL",
-			"desiredTime": "2026-07-01T06:30:00.000Z"
-		},
-		{
-			"pickupPoint": "Sân bay Nội Bài",
-			"dropPoint": "Khách sạn Hà Nội",
-			"desiredTimeType": "PICKUP",
-			"desiredTime": "2026-07-01T10:30:00.000Z"
-		}
-	]
+  "title": "Khảo sát thị trường Hà Nội",
+  "destination": "Hà Nội",
+  "purpose": "Gặp gỡ đối tác và ký hợp đồng để mở rộng thị trường",
+  "startDate": "2026-07-01",
+  "endDate": "2026-07-03",
+  "estimatedCost": 5000000,
+  "companions": [{ "employeeId": 5 }],
+  "routes": [
+    {
+      "pickupPoint": "Văn phòng HCM",
+      "dropPoint": "Sân bay Tân Sơn Nhất",
+      "desiredTimeType": "ARRIVAL",
+      "desiredTime": "2026-07-01T06:30:00.000Z"
+    },
+    {
+      "pickupPoint": "Sân bay Nội Bài",
+      "dropPoint": "Khách sạn Hà Nội",
+      "desiredTimeType": "PICKUP",
+      "desiredTime": "2026-07-01T10:30:00.000Z"
+    }
+  ]
 }
 ```
 
 **Request body (HR tạo hộ nhân viên khác):**
-
 ```json
 {
-	"title": "...",
-	"destination": "...",
-	"purpose": "...",
-	"startDate": "2026-07-01",
-	"endDate": "2026-07-03",
-	"routes": [
-		{
-			"pickupPoint": "...",
-			"dropPoint": "...",
-			"desiredTimeType": "ARRIVAL",
-			"desiredTime": "2026-07-01T08:00:00.000Z"
-		}
-	],
-	"createdForEmployeeId": 5
+  "title": "...",
+  "destination": "...",
+  "purpose": "...",
+  "startDate": "2026-07-01",
+  "endDate": "2026-07-03",
+  "routes": [ { "pickupPoint": "...", "dropPoint": "...", "desiredTimeType": "ARRIVAL", "desiredTime": "2026-07-01T08:00:00.000Z" } ],
+  "createdForEmployeeId": 5
 }
 ```
 
@@ -576,18 +577,15 @@ Chỉ khi `status === DRAFT`. Không cập nhật được `routes` qua endpoint
 **Employee/Manager/Chief:** bắt buộc `approverId`, đơn chuyển `PENDING`.
 
 **HR/ADMIN:**
-
 - Có `approverId` → như flow bình thường (`PENDING`).
 - Bỏ trống `approverId` → **auto-approve**: `status = APPROVED`, `autoApproved = true`, `approvedAt = now`, không cần approver, notify chủ đơn.
 
 **Request body:**
-
 ```json
 { "approverId": 3 }
 ```
 
 hoặc HR gửi rỗng:
-
 ```json
 {}
 ```
@@ -609,7 +607,6 @@ Không cần request body. Chỉ approver được chỉ định (hoặc HR/ADMI
 ## PATCH /v1/business-trips/:id/reject — Từ chối đơn
 
 **Request body:**
-
 ```json
 { "note": "Chưa đủ ngân sách quý này" }
 ```
@@ -623,11 +620,9 @@ Không cần request body. Chỉ approver được chỉ định (hoặc HR/ADMI
 Không cần request body. Chủ nhân hoặc HR/ADMIN.
 
 **Điều kiện:**
-
 - `status ∈ {DRAFT, PENDING}` — không huỷ được sau khi đã duyệt.
 
 **Side effect:**
-
 - Nếu đang `PENDING`, approver cũ nhận notification `businessTripCancelledByOwner`.
 - Chủ đơn nhận notification `businessTripCancelledOwner`.
 
@@ -644,42 +639,38 @@ Chỉ **HR/ADMIN**. Chỉ khi trip cha đang `APPROVED`.
 **Route:** `PATCH /v1/business-trips/routes/{routeId}/transport` (chú ý path — `routeId` là ID của `TripRoute`, không phải trip).
 
 **Nhánh 1 — HR đánh dấu nhân viên tự túc:**
-
 ```json
 { "isSelfTransport": true }
 ```
-
 Server sẽ xoá toàn bộ `transports[]` của route và set `isSelfTransport = true`.
 
 **Nhánh 2 — HR cập nhật danh sách phương tiện:**
-
 ```json
 {
-	"transports": [
-		{
-			"order": 1,
-			"transportType": "CAR",
-			"pickupLocation": "Văn phòng HCM",
-			"dropLocation": "Sân bay Tân Sơn Nhất",
-			"pickupTime": "2026-07-01T05:30:00.000Z",
-			"dropTime": "2026-07-01T06:30:00.000Z",
-			"licensePlate": "51G-12345",
-			"driverPhone": "0901234567",
-			"note": "Xe công ty"
-		},
-		{
-			"order": 2,
-			"transportType": "PLANE",
-			"flightNumber": "VN123",
-			"pickupTime": "2026-07-01T08:00:00.000Z",
-			"dropTime": "2026-07-01T10:15:00.000Z",
-			"checkInTime": "2026-07-01T07:00:00.000Z",
-			"ticketImageUrl": "https://s3/bucket/tickets/vn123.jpg"
-		}
-	]
+  "transports": [
+    {
+      "order": 1,
+      "transportType": "CAR",
+      "pickupLocation": "Văn phòng HCM",
+      "dropLocation": "Sân bay Tân Sơn Nhất",
+      "pickupTime": "2026-07-01T05:30:00.000Z",
+      "dropTime": "2026-07-01T06:30:00.000Z",
+      "licensePlate": "51G-12345",
+      "driverPhone": "0901234567",
+      "note": "Xe công ty"
+    },
+    {
+      "order": 2,
+      "transportType": "PLANE",
+      "flightNumber": "VN123",
+      "pickupTime": "2026-07-01T08:00:00.000Z",
+      "dropTime": "2026-07-01T10:15:00.000Z",
+      "checkInTime": "2026-07-01T07:00:00.000Z",
+      "ticketImageUrl": "https://s3/bucket/tickets/vn123.jpg"
+    }
+  ]
 }
 ```
-
 Server sẽ **replace toàn bộ** transports cũ bằng danh sách mới, `isSelfTransport = false`.
 
 `ticketImageUrl` trong body phải là URL **gốc** nhận từ module upload (chưa sign). BE lưu nguyên và sẽ tự sign khi trả về response.
@@ -689,7 +680,6 @@ Server sẽ **replace toàn bộ** transports cũ bằng danh sách mới, `isSe
 **Response 200:** `BusinessTripResponse` (toàn bộ trip đã include routes+transports mới).
 
 **400** nếu:
-
 - Trip cha không phải `APPROVED`
 - Không truyền `isSelfTransport: true` mà cũng không truyền `transports` (hoặc `transports` rỗng)
 
@@ -702,14 +692,16 @@ Server sẽ **replace toàn bộ** transports cũ bằng danh sách mới, `isSe
 Chỉ tạo được khi `status === APPROVED` hoặc `IN_PROGRESS`. Mỗi chuyến chỉ có 1 báo cáo.
 
 **Request body:**
-
 ```json
 {
-	"summary": "Đã hoàn thành chuyến công tác, gặp gỡ 3 đối tác quan trọng tại Hà Nội",
-	"results": "Ký kết thành công hợp đồng hợp tác trị giá 500 triệu đồng với đối tác ABC",
-	"actualCost": 4800000,
-	"issues": "Thời tiết xấu làm chậm một số lịch họp",
-	"attachmentUrls": ["https://s3/bucket/reports/photo1.jpg", "https://s3/bucket/reports/contract-signed.pdf"]
+  "summary": "Đã hoàn thành chuyến công tác, gặp gỡ 3 đối tác quan trọng tại Hà Nội",
+  "results": "Ký kết thành công hợp đồng hợp tác trị giá 500 triệu đồng với đối tác ABC",
+  "actualCost": 4800000,
+  "issues": "Thời tiết xấu làm chậm một số lịch họp",
+  "attachmentUrls": [
+    "https://s3/bucket/reports/photo1.jpg",
+    "https://s3/bucket/reports/contract-signed.pdf"
+  ]
 }
 ```
 
@@ -730,7 +722,6 @@ Chỉ khi `report.status === DRAFT`. Body dùng `UpdateTripReportDto` (partial).
 ## PATCH /v1/business-trips/:id/report/submit — Nộp báo cáo
 
 Không cần request body. Sau khi nộp:
-
 - `report.status` → `"SUBMITTED"`
 - `business_trip.status` → `"COMPLETED"`
 
@@ -754,7 +745,6 @@ Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id
 - **Path R2:** `trip-transport/{tripId}/tickets/{uuid}.{ext}` (tripId lấy từ route)
 
 **Response 201:**
-
 ```json
 { "success": true, "data": { "url": "https://hr-documents.s3.example.com/trip-transport/42/tickets/abc.jpg" } }
 ```
@@ -762,7 +752,6 @@ Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id
 `url` là **URL gốc chưa sign** — FE gán vào field `ticketImageUrl` của một phần tử trong `UpdateRouteTransportDto.transports[]` khi gọi `PATCH /routes/:routeId/transport`.
 
 **Errors:**
-
 - 400: File thiếu hoặc sai mime/size
 - 403: Không phải HR/ADMIN
 - 404: Lộ trình không tồn tại
@@ -779,23 +768,16 @@ Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id
 - **Path R2:** `trip-report/{tripId}/attachments/{uuid}.{ext}`
 
 **Response 201:**
-
 ```json
-{
-	"success": true,
-	"data": {
-		"urls": [
-			"https://hr-documents.s3.example.com/trip-report/42/attachments/photo1.jpg",
-			"https://hr-documents.s3.example.com/trip-report/42/attachments/contract.pdf"
-		]
-	}
-}
+{ "success": true, "data": { "urls": [
+  "https://hr-documents.s3.example.com/trip-report/42/attachments/photo1.jpg",
+  "https://hr-documents.s3.example.com/trip-report/42/attachments/contract.pdf"
+] } }
 ```
 
 `urls[]` là mảng **URL gốc chưa sign** — FE gán trực tiếp vào `CreateTripReportDto.attachmentUrls` hoặc `UpdateTripReportDto.attachmentUrls`.
 
 **Errors:**
-
 - 400: Không có file, sai mime/size, hoặc > 10 file
 - 403: Không phải chủ đơn / HR / ADMIN
 - 404: Đơn không tồn tại
@@ -807,86 +789,98 @@ Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id
 ```typescript
 // composables/useBusinessTrips.ts
 import type {
-	BusinessTripResponse,
-	CreateBusinessTripDto,
-	UpdateBusinessTripDto,
-	SubmitBusinessTripDto,
-	RejectBusinessTripDto,
-	CreateTripReportDto,
-	UpdateTripReportDto,
-	UpdateRouteTransportDto,
-	QueryBusinessTripsParams,
+  BusinessTripResponse,
+  CreateBusinessTripDto,
+  UpdateBusinessTripDto,
+  SubmitBusinessTripDto,
+  RejectBusinessTripDto,
+  CreateTripReportDto,
+  UpdateTripReportDto,
+  UpdateRouteTransportDto,
+  QueryBusinessTripsParams,
 } from '~/types/business-trip.types';
 
 export function useBusinessTrips() {
-	const { get, list, post, patch } = useFetch();
+  const { get, list, post, patch } = useFetch();
 
-	const fetchMyTrips = (params?: QueryBusinessTripsParams) =>
-		list<BusinessTripResponse>('/v1/business-trips/me', { params });
+  const fetchMyTrips = (params?: QueryBusinessTripsParams) =>
+    list<BusinessTripResponse>('/v1/business-trips/me', { params });
 
-	const fetchPendingForMe = () => list<BusinessTripResponse>('/v1/business-trips/pending-for-me');
+  const fetchPendingForMe = () =>
+    list<BusinessTripResponse>('/v1/business-trips/pending-for-me');
 
-	const fetchAllTrips = (params?: QueryBusinessTripsParams) =>
-		list<BusinessTripResponse>('/v1/business-trips', { params });
+  const fetchAllTrips = (params?: QueryBusinessTripsParams) =>
+    list<BusinessTripResponse>('/v1/business-trips', { params });
 
-	const fetchTrip = (id: number) => get<BusinessTripResponse>(`/v1/business-trips/${id}`);
+  const fetchTrip = (id: number) =>
+    get<BusinessTripResponse>(`/v1/business-trips/${id}`);
 
-	const createTrip = (dto: CreateBusinessTripDto) => post<BusinessTripResponse>('/v1/business-trips', dto);
+  const createTrip = (dto: CreateBusinessTripDto) =>
+    post<BusinessTripResponse>('/v1/business-trips', dto);
 
-	const updateTrip = (id: number, dto: UpdateBusinessTripDto) =>
-		patch<BusinessTripResponse>(`/v1/business-trips/${id}`, dto);
+  const updateTrip = (id: number, dto: UpdateBusinessTripDto) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}`, dto);
 
-	const submitTrip = (id: number, dto: SubmitBusinessTripDto) =>
-		patch<BusinessTripResponse>(`/v1/business-trips/${id}/submit`, dto);
+  const submitTrip = (id: number, dto: SubmitBusinessTripDto) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}/submit`, dto);
 
-	const approveTrip = (id: number) => patch<BusinessTripResponse>(`/v1/business-trips/${id}/approve`, {});
+  const approveTrip = (id: number) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}/approve`, {});
 
-	const rejectTrip = (id: number, dto: RejectBusinessTripDto) =>
-		patch<BusinessTripResponse>(`/v1/business-trips/${id}/reject`, dto);
+  const rejectTrip = (id: number, dto: RejectBusinessTripDto) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}/reject`, dto);
 
-	const cancelTrip = (id: number) => patch<BusinessTripResponse>(`/v1/business-trips/${id}/cancel`, {});
+  const cancelTrip = (id: number) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}/cancel`, {});
 
-	const updateRouteTransport = (routeId: number, dto: UpdateRouteTransportDto) =>
-		patch<BusinessTripResponse>(`/v1/business-trips/routes/${routeId}/transport`, dto);
+  const updateRouteTransport = (routeId: number, dto: UpdateRouteTransportDto) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/routes/${routeId}/transport`, dto);
 
-	const uploadTripTicket = (routeId: number, file: File) => {
-		const form = new FormData();
-		form.append('file', file);
-		return post<{ url: string }>(`/v1/business-trips/routes/${routeId}/upload-ticket`, form);
-	};
+  const uploadTripTicket = (routeId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return post<{ url: string }>(
+      `/v1/business-trips/routes/${routeId}/upload-ticket`,
+      form,
+    );
+  };
 
-	const uploadTripAttachments = (tripId: number, files: File[]) => {
-		const form = new FormData();
-		files.forEach(f => form.append('files', f));
-		return post<{ urls: string[] }>(`/v1/business-trips/${tripId}/upload-attachment`, form);
-	};
+  const uploadTripAttachments = (tripId: number, files: File[]) => {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    return post<{ urls: string[] }>(
+      `/v1/business-trips/${tripId}/upload-attachment`,
+      form,
+    );
+  };
 
-	const createReport = (id: number, dto: CreateTripReportDto) =>
-		post<BusinessTripResponse>(`/v1/business-trips/${id}/report`, dto);
+  const createReport = (id: number, dto: CreateTripReportDto) =>
+    post<BusinessTripResponse>(`/v1/business-trips/${id}/report`, dto);
 
-	const updateReport = (id: number, dto: UpdateTripReportDto) =>
-		patch<BusinessTripResponse>(`/v1/business-trips/${id}/report`, dto);
+  const updateReport = (id: number, dto: UpdateTripReportDto) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}/report`, dto);
 
-	const submitReport = (id: number) => patch<BusinessTripResponse>(`/v1/business-trips/${id}/report/submit`, {});
+  const submitReport = (id: number) =>
+    patch<BusinessTripResponse>(`/v1/business-trips/${id}/report/submit`, {});
 
-	return {
-		fetchMyTrips,
-		fetchPendingForMe,
-		fetchAllTrips,
-		fetchTrip,
-		createTrip,
-		updateTrip,
-		submitTrip,
-		approveTrip,
-		rejectTrip,
-		cancelTrip,
-		updateRouteTransport,
-		uploadTripTicket,
-		uploadTripAttachments,
-		createReport,
-		updateReport,
-		submitReport,
-	};
+  return {
+    fetchMyTrips,
+    fetchPendingForMe,
+    fetchAllTrips,
+    fetchTrip,
+    createTrip,
+    updateTrip,
+    submitTrip,
+    approveTrip,
+    rejectTrip,
+    cancelTrip,
+    updateRouteTransport,
+    uploadTripTicket,
+    uploadTripAttachments,
+    createReport,
+    updateReport,
+    submitReport,
+  };
 }
 ```
 
@@ -895,7 +889,7 @@ export function useBusinessTrips() {
 ## Edge Cases
 
 | Tình huống | Kết quả |
-| --- | --- |
+|-----------|---------|
 | `EMPLOYEE` gọi `GET /business-trips` | 403 Forbidden |
 | `EMPLOYEE` gọi `GET /business-trips/pending-for-me` | 403 Forbidden |
 | Tạo đơn với `routes: []` hoặc thiếu `routes` | 400 Bad Request |

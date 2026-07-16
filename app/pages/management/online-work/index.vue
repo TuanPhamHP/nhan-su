@@ -83,6 +83,7 @@ async function handleApprove(req: OnlineWorkRequestResponse): Promise<boolean> {
 		await approve(req.id);
 		toast.success('Đã duyệt đơn thành công');
 		await fetchPendingForMe();
+		useApprovalStore().fetchCounts();
 		return true;
 	} catch (e) {
 		toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -107,6 +108,7 @@ function handleRejectFromDetail() {
 function onRejected() {
 	rejectTarget.value = null;
 	fetchPendingForMe();
+	useApprovalStore().fetchCounts();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

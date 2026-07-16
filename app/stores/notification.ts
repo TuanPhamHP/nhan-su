@@ -71,6 +71,7 @@ export const useNotificationStore = defineStore('notification', () => {
 		const { approveRequest } = useNotificationService();
 		await approveRequest(notification.actionPayload.approveEndpoint);
 		await markRead(notification.id);
+		useApprovalStore().fetchCounts();
 	}
 
 	async function quickReject(notification: NotificationResponse, rejectNote: string) {
@@ -78,6 +79,7 @@ export const useNotificationStore = defineStore('notification', () => {
 		const { rejectRequest } = useNotificationService();
 		await rejectRequest(notification.actionPayload.rejectEndpoint, rejectNote);
 		await markRead(notification.id);
+		useApprovalStore().fetchCounts();
 	}
 
 	async function deleteAll(category?: NotificationCategory) {

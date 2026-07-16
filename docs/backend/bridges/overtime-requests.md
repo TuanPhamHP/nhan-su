@@ -14,6 +14,8 @@
 | GET | `/v1/overtime-requests/report` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Thống kê OT theo tháng |
 | GET | `/v1/overtime-requests/report/export` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Xuất báo cáo OT ra Excel |
 | GET | `/v1/overtime-requests` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Danh sách tất cả đơn OT |
+| GET | `/v1/approval/overtime-requests` | Approver được assign | **Inbox** đơn OT chờ tôi duyệt — xem [approval.md](./approval.md) |
+| GET | `/v1/approval/overtime-requests/:id` | Approver / HR / ADMIN | Chi tiết (approver view) |
 | GET | `/v1/overtime-requests/:id` | Chủ đơn, `ADMIN`, `HR`, hoặc approver được phân công | Chi tiết một đơn OT |
 | PATCH | `/v1/overtime-requests/:id/approve` | `ADMIN`, `MANAGER`, `CHIEF` | Duyệt đơn OT |
 | PATCH | `/v1/overtime-requests/:id/reject` | `ADMIN`, `MANAGER`, `CHIEF` | Từ chối đơn OT |

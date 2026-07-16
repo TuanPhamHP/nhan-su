@@ -131,6 +131,7 @@
 			if (idx !== -1) requests.value.splice(idx, 1, updated);
 			toast.success('Đã duyệt đơn nghỉ phép');
 			fetchSummary();
+			useApprovalStore().fetchCounts();
 			return true;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -159,6 +160,7 @@
 		rejectTarget.value = null;
 		fetchRequests();
 		fetchSummary();
+		useApprovalStore().fetchCounts();
 	}
 
 	// ─── Detail ───────────────────────────────────────────────────────────────────

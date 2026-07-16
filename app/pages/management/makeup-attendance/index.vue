@@ -119,6 +119,7 @@
 			replaceInList(updated);
 			if (detailTarget.value?.id === updated.id) detailTarget.value = updated;
 			toast.success('Đã duyệt đơn bù công');
+			useApprovalStore().fetchCounts();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 		} finally {
@@ -130,6 +131,7 @@
 		replaceInList(updated);
 		if (detailTarget.value?.id === updated.id) detailTarget.value = updated;
 		rejectTarget.value = null;
+		useApprovalStore().fetchCounts();
 	}
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────
