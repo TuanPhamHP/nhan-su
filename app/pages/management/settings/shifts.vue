@@ -94,9 +94,10 @@
 	}
 
 	// Validate 1 pair (start hoặc end) của cửa sổ. Trả về error message nếu vi phạm.
-	// side='start' → window phải nằm TRƯỚC hoặc bằng shiftTime, cách tối đa 240p.
-	// side='end'   → window phải nằm SAU hoặc bằng shiftTime, cách tối đa 240p.
+	// side='start' → window phải nằm TRƯỚC hoặc bằng shiftTime.
+	// side='end'   → window phải nằm SAU hoặc bằng shiftTime.
 	// Dùng circular offset (mod 1440) để cross-midnight vẫn đúng. offset > 720 ≡ user đặt sai phía.
+	// Không giới hạn khoảng cách 4 giờ — BE là authoritative nếu cần enforce.
 	function validateWindowSide(window: string, shift: string, side: 'start' | 'end'): string | undefined {
 		if (!window) return undefined;
 		if (!/^\d{2}:\d{2}$/.test(window)) return 'Định dạng HH:mm';
@@ -108,7 +109,6 @@
 		if (offset > 720) {
 			return side === 'start' ? `Phải trước hoặc bằng ${shift}` : `Phải sau hoặc bằng ${shift}`;
 		}
-		if (offset > 240) return 'Cách giờ ca không quá 4 tiếng';
 		return undefined;
 	}
 
