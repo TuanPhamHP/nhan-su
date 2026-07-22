@@ -840,14 +840,18 @@
 					</p>
 
 					<!-- Khung giờ chấm công hợp lệ (null → default ±60p) -->
-					<div class="text-[11px] font-mono text-gray-500 dark:text-gray-400 mb-1 leading-tight">
+					<div class="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-tight space-y-0.5">
 						<p>
-							<span class="text-gray-400 dark:text-gray-500">CI</span>
-							{{ effectiveWindows(shift).ciStart }} – {{ effectiveWindows(shift).ciEnd }}
+							<span class="text-gray-400 dark:text-gray-500">Thời gian vào hợp lệ:</span>
+							<span class="font-mono">
+								{{ effectiveWindows(shift).ciStart }} – {{ effectiveWindows(shift).ciEnd }}
+							</span>
 						</p>
 						<p>
-							<span class="text-gray-400 dark:text-gray-500">CO</span>
-							{{ effectiveWindows(shift).coStart }} – {{ effectiveWindows(shift).coEnd }}
+							<span class="text-gray-400 dark:text-gray-500">Thời gian ra hợp lệ:</span>
+							<span class="font-mono">
+								{{ effectiveWindows(shift).coStart }} – {{ effectiveWindows(shift).coEnd }}
+							</span>
 						</p>
 					</div>
 
