@@ -39,13 +39,11 @@ Content-Type: application/json
 ```
 
 **Response 201:**
-
 ```json
 { "success": true, "data": { "message": "Device token registered" } }
 ```
 
 ### Khi nào gọi?
-
 - Sau `signIn` thành công
 - Sau khi Firebase SDK refresh token (listener `onTokenRefresh`)
 - App foreground lại sau thời gian dài
@@ -62,7 +60,6 @@ Authorization: Bearer <access_token>
 ```
 
 **Response 200:**
-
 ```json
 { "success": true, "data": { "message": "Device token unregistered" } }
 ```
@@ -83,30 +80,30 @@ Server gửi **cả `notification` field VÀ `data` field**:
 
 ```json
 {
-	"notification": {
-		"title": "Chấm công vào thành công",
-		"body": "Bạn đã check-in lúc 08:32"
-	},
-	"data": {
-		"category": "ATTENDANCE",
-		"type": "CHECK_IN",
-		"refType": "attendance_record",
-		"id": "123",
-		"notificationId": "42",
-		"title": "Chấm công vào thành công",
-		"body": "Bạn đã check-in lúc 08:32"
-	}
+  "notification": {
+    "title": "Chấm công vào thành công",
+    "body": "Bạn đã check-in lúc 08:32"
+  },
+  "data": {
+    "category": "ATTENDANCE",
+    "type": "CHECK_IN",
+    "refType": "attendance_record",
+    "refId": "123",
+    "notificationId": "42",
+    "title": "Chấm công vào thành công",
+    "body": "Bạn đã check-in lúc 08:32"
+  }
 }
 ```
 
 ### Field semantics trong `data`:
 
 | Field | Kiểu | Ý nghĩa |
-| --- | --- | --- |
+|---|---|---|
 | `category` | `NotificationCategory` enum | `EVENT` / `ATTENDANCE` / `LEAVE` / `REQUEST` — mobile route đến tab tương ứng |
 | `type` | `NotificationType` enum | event chi tiết, vd. `LEAVE_APPROVED`, `CHECK_IN`, `TEST` |
 | `refType` | string | tên entity, vd. `leave_request`, `attendance_record`. `''` nếu không có |
-| `id` | string | **ID entity gốc** để mobile navigate (vd. mở màn hình LeaveDetail/123). `''` nếu không có |
+| `refId` | string | **ID entity gốc** để mobile navigate (vd. mở màn hình LeaveDetail/123). `''` nếu không có |
 | `notificationId` | string | **ID record Notification** trong DB để mark read. `'0'` nếu là test (không có DB record) |
 | `title`, `body` | string | bản sao của `notification.title/body` — foreground in-app banner dùng |
 
@@ -122,52 +119,46 @@ Foreground (app đang mở) → OS KHÔNG hiện noti → SDK fire onMessage()
 ```
 
 ### Các giá trị `type` thường gặp:
-
-| type                       | category     | refType             | Trigger                                       |
-| -------------------------- | ------------ | ------------------- | --------------------------------------------- |
-| `CHECK_IN`                 | `ATTENDANCE` | `attendance_record` | Employee check-in thành công                  |
-| `CHECK_OUT`                | `ATTENDANCE` | `attendance_record` | Employee check-out thành công                 |
-| `LATE`                     | `ATTENDANCE` | `attendance_record` | Đi muộn                                       |
-| `LEAVE_APPROVED`           | `LEAVE`      | `leave_request`     | Đơn phép được duyệt                           |
-| `LEAVE_REJECTED`           | `LEAVE`      | `leave_request`     | Đơn phép bị từ chối                           |
-| `GENERAL_REQUEST_PENDING`  | `REQUEST`    | `general_request`   | Đơn văn bản được nộp                          |
-| `GENERAL_REQUEST_APPROVED` | `REQUEST`    | `general_request`   | Đơn văn bản duyệt xong                        |
-| `GENERAL_REQUEST_REJECTED` | `REQUEST`    | `general_request`   | Đơn văn bản bị từ chối                        |
-| `TEST`                     | `EVENT`      | `''`                | Gọi từ admin qua `/v1/notifications/test-fcm` |
+| type | category | refType | Trigger |
+|------|----------|---------|---------|
+| `CHECK_IN` | `ATTENDANCE` | `attendance_record` | Employee check-in thành công |
+| `CHECK_OUT` | `ATTENDANCE` | `attendance_record` | Employee check-out thành công |
+| `LATE` | `ATTENDANCE` | `attendance_record` | Đi muộn |
+| `LEAVE_APPROVED` | `LEAVE` | `leave_request` | Đơn phép được duyệt |
+| `LEAVE_REJECTED` | `LEAVE` | `leave_request` | Đơn phép bị từ chối |
+| `GENERAL_REQUEST_PENDING`  | `REQUEST` | `general_request` | Đơn văn bản được nộp |
+| `GENERAL_REQUEST_APPROVED` | `REQUEST` | `general_request` | Đơn văn bản duyệt xong |
+| `GENERAL_REQUEST_REJECTED` | `REQUEST` | `general_request` | Đơn văn bản bị từ chối |
+| `TEST` | `EVENT` | `''` | Gọi từ admin qua `/v1/notifications/test-fcm` |
 
 Xem full enum: `prisma/schema.prisma → enum NotificationType`.
 
 ### Web (Nuxt / Vue) — Firebase JS SDK:
-
 ```javascript
-import { getMessaging, onMessage } from 'firebase/messaging';
+import { getMessaging, onMessage } from 'firebase/messaging'
 
-const messaging = getMessaging();
+const messaging = getMessaging()
 
 // Foreground: app đang mở → OS không hiện noti, mình tự render từ data
-onMessage(messaging, payload => {
-	const { category, type, refType, id, notificationId, title, body } = payload.data;
+onMessage(messaging, (payload) => {
+  const { category, type, refType, id, notificationId, title, body } = payload.data
 
-	notificationStore.fetchUnreadCount();
-	showToast({ title, body, onClick: () => navigate({ category, refType, id }) });
-});
+  notificationStore.fetchUnreadCount()
+  showToast({ title, body, onClick: () => navigate({ category, refType, id }) })
+})
 ```
 
 **firebase-messaging-sw.js** (background — không cần tự render notification vì server đã gửi field `notification`, OS xử lý sẵn):
-
 ```javascript
-importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-app-compat.js')
+importScripts('https://www.gstatic.com/firebasejs/10.x.x/firebase-messaging-compat.js')
 
-firebase.initializeApp({
-	/* config */
-});
-firebase.messaging();
+firebase.initializeApp({ /* config */ })
+firebase.messaging()
 // Không cần onBackgroundMessage handler vì server gửi sẵn notification field
 ```
 
 ### Mobile (Flutter):
-
 ```dart
 // Foreground: OS không hiện noti → app tự render
 FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -189,13 +180,13 @@ FirebaseMessaging.instance.getInitialMessage().then((message) {
 void _navigateFromPayload(Map<String, dynamic> data) {
   final category = data['category'];   // "ATTENDANCE" / "LEAVE" / "REQUEST" / "EVENT"
   final refType  = data['refType'];    // "leave_request" / "attendance_record" / ...
-  final id       = data['id'];         // "123" — entity ID để navigate
+  final refId    = data['refId'];      // "123" — entity ID để navigate
   final notificationId = data['notificationId'];  // mark as read sau khi navigate
 
   switch (refType) {
-    case 'leave_request':       Navigator.pushNamed(context, '/leave/$id'); break;
-    case 'attendance_record':   Navigator.pushNamed(context, '/attendance/$id'); break;
-    case 'general_request':     Navigator.pushNamed(context, '/general-requests/$id'); break;
+    case 'leave_request':       Navigator.pushNamed(context, '/leave/$refId'); break;
+    case 'attendance_record':   Navigator.pushNamed(context, '/attendance/$refId'); break;
+    case 'general_request':     Navigator.pushNamed(context, '/general-requests/$refId'); break;
     default:                    Navigator.pushNamed(context, '/notifications'); break;
   }
 
@@ -219,22 +210,21 @@ Authorization: Bearer <access_token>
 ```
 
 **Response:**
-
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"id": 42,
-			"type": "attendance.checkin",
-			"title": "Chấm công vào thành công",
-			"body": "Bạn đã check-in lúc 08:32",
-			"payload": { "attendanceId": 123, "lateMinutes": 0 },
-			"readAt": null,
-			"createdAt": "2025-05-15T01:32:00.000Z"
-		}
-	],
-	"meta": { "page": 1, "limit": 20, "total": 5, "totalPages": 1 }
+  "success": true,
+  "data": [
+    {
+      "id": 42,
+      "type": "attendance.checkin",
+      "title": "Chấm công vào thành công",
+      "body": "Bạn đã check-in lúc 08:32",
+      "payload": { "attendanceId": 123, "lateMinutes": 0 },
+      "readAt": null,
+      "createdAt": "2025-05-15T01:32:00.000Z"
+    }
+  ],
+  "meta": { "page": 1, "limit": 20, "total": 5, "totalPages": 1 }
 }
 ```
 
@@ -246,7 +236,6 @@ Authorization: Bearer <access_token>
 ```
 
 **Response:**
-
 ```json
 { "success": true, "data": { "unreadCount": 3 } }
 ```
@@ -314,20 +303,18 @@ src/
 Để thêm push cho leave.approved, leave.rejected, v.v.:
 
 1. **Thêm event class** vào `notification.events.ts`:
-
 ```typescript
 export class LeaveApprovedEvent {
-	static readonly EVENT = 'leave.approved';
-	employeeId: number;
-	leaveId: number;
-	startDate: Date;
-	endDate: Date;
-	totalDays: number;
+  static readonly EVENT = 'leave.approved';
+  employeeId: number;
+  leaveId: number;
+  startDate: Date;
+  endDate: Date;
+  totalDays: number;
 }
 ```
 
 2. **Emit từ LeaveService** sau khi approve:
-
 ```typescript
 const event = new LeaveApprovedEvent();
 event.employeeId = leave.employeeId;
@@ -336,7 +323,6 @@ this.eventEmitter.emit(LeaveApprovedEvent.EVENT, event);
 ```
 
 3. **Thêm handler** trong `NotificationListener`:
-
 ```typescript
 @OnEvent(LeaveApprovedEvent.EVENT, { async: true })
 async handleLeaveApproved(event: LeaveApprovedEvent) {

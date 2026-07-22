@@ -55,7 +55,10 @@ Server tự phát hiện trường hợp dựa vào bản ghi chấm công ngày
 | Trường hợp | Điều kiện | `slotCost` | Side effect khi APPROVE |
 |-----------|-----------|-----------|------------------------|
 | **Thiếu check-in hoặc check-out** | Có bản ghi chấm công (chưa hoặc đã bị khóa) | 1 | Điền check-in/check-out còn thiếu theo giờ ca |
-| **Quên cả ngày** | Không có bản ghi chấm công | **2** | Tạo bản ghi chấm công mới với giờ theo ca |
+| **Quên cả ngày** — ngày quá khứ | Không có bản ghi chấm công, `violationDate < hôm nay` | **2** | Tạo bản ghi chấm công mới với giờ theo ca |
+| **Quên cả ngày** — hôm nay, ca có `requireCheckOut=true`, còn kịp check-out | Không có bản ghi, `violationDate = hôm nay`, cửa sổ check-out **chưa đóng** | 1 | Chỉ điền check-in (nhân viên tự check-out sau) |
+| **Quên cả ngày** — hôm nay, ca có `requireCheckOut=true`, hết giờ check-out | Không có bản ghi, `violationDate = hôm nay`, cửa sổ check-out **đã đóng** | **2** | Tạo bản ghi mới với cả check-in + check-out theo giờ ca |
+| **Quên cả ngày** — hôm nay, ca có `requireCheckOut=false` | Không có bản ghi, `violationDate = hôm nay`, ca chỉ check-in | **0** | Điền check-in theo giờ ca — không có check-out cần bù |
 
 **Client không cần gửi `requestedCheckIn`/`requestedCheckOut`.** Hệ thống tự tính giờ hợp lệ từ ca làm việc (ưu tiên `EmployeeShiftSchedule` của ngày đó, fallback về `defaultShift` của nhân viên).
 
@@ -81,7 +84,10 @@ Mỗi nhân viên có tổng cộng **5 lượt (slots) giải trình mỗi thá
 | `LATE` | 1 |
 | `EARLY` | 1 |
 | `FORGOT_CHECKIN` — thiếu check-in/out (có bản ghi) | 1 |
-| `FORGOT_CHECKIN` — quên cả ngày (không có bản ghi) | **2** |
+| `FORGOT_CHECKIN` — quên cả ngày, tạo hôm nay, ca **có** `requireCheckOut=true` và cửa sổ check-out **còn mở** | 1 |
+| `FORGOT_CHECKIN` — quên cả ngày, tạo hôm nay, ca **có** `requireCheckOut=true` và cửa sổ check-out **đã đóng** | **2** |
+| `FORGOT_CHECKIN` — quên cả ngày, tạo hôm nay, ca có `requireCheckOut=false` | **0** — không tính quota (ca không yêu cầu check-out nên chỉ đúng 1 phần chấm công bị thiếu, và đã cover bởi phiếu) |
+| `FORGOT_CHECKIN` — quên cả ngày, ngày quá khứ | **2** |
 | `FORGOT_CHECKOUT` | 1 |
 
 ```
@@ -635,6 +641,8 @@ export function useViolationRequests() {
 | FORGOT_CHECKIN, có bản ghi + đã có phiếu PENDING/APPROVED | 409 |
 | FORGOT_CHECKIN, không có bản ghi (quên cả ngày) + đã có phiếu PENDING/APPROVED cùng ngày | 409 |
 | FORGOT_CHECKIN, không có bản ghi + `remaining < 2` | 400 — không đủ 2 lượt |
+| FORGOT_CHECKIN, không có bản ghi, hôm nay, ca có `requireCheckOut=false` | 201 với `slotCost: 0` — không tính quota |
+| FORGOT_CHECKIN, không có bản ghi, hôm nay, check-out window chưa đóng | 201 với `slotCost: 1` |
 | FORGOT_CHECKIN, phiếu trước REJECTED → tạo lại cho cùng ngày | 201 — hợp lệ |
 | FORGOT_CHECKOUT, không có bản ghi chấm công ngày đó | 400 — cần check-in trước |
 | FORGOT_CHECKOUT, bản ghi đã có `checkOutAt` | 400 — đã chấm công ra rồi |

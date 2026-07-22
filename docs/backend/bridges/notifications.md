@@ -10,7 +10,7 @@ Khác với email notifications — đây là **in-app + push**, không phải e
 ## Endpoints
 
 | Method | Path | Ai được gọi | Ghi chú |
-| --- | --- | --- | --- |
+|--------|------|-------------|---------|
 | GET | `/v1/notifications` | Mọi user đã đăng nhập | Danh sách của tôi, hỗ trợ lọc theo `category` |
 | GET | `/v1/notifications/unread-count` | Mọi user đã đăng nhập | Số chưa đọc theo từng category (dùng cho badge) |
 | PATCH | `/v1/notifications/read-all` | Mọi user đã đăng nhập | Đánh dấu tất cả đã đọc; truyền `?category=` để giới hạn |
@@ -35,69 +35,69 @@ Mỗi user chỉ đọc/ghi được thông báo của chính mình. Các endpoi
 export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE';
 
 export type NotificationType =
-	// Chấm công
-	| 'CHECK_IN'
-	| 'CHECK_OUT'
-	| 'LATE'
-	| 'ABSENT'
-	| 'MISSING_CHECKOUT'
-	// Nghỉ phép
-	| 'LEAVE_CREATED'
-	| 'LEAVE_APPROVED'
-	| 'LEAVE_REJECTED'
-	| 'LEAVE_CANCELLED'
-	| 'LEAVE_AUTO_CANCELLED'
-	// OT
-	| 'OT_CREATED'
-	| 'OT_APPROVED'
-	| 'OT_REJECTED'
-	| 'OT_CANCELLED'
-	| 'OT_AUTO_CANCELLED'
-	// Vi phạm
-	| 'VIOLATION_CREATED'
-	| 'VIOLATION_APPROVED'
-	| 'VIOLATION_REJECTED'
-	// Đăng ký WFH
-	| 'ONLINE_WORK_CREATED'
-	| 'ONLINE_WORK_APPROVED'
-	| 'ONLINE_WORK_REJECTED'
-	| 'ONLINE_WORK_CANCELLED'
-	| 'ONLINE_WORK_COMPLETED'
-	// Bù công
-	| 'MAKEUP_CREATED'
-	| 'MAKEUP_APPROVED'
-	| 'MAKEUP_REJECTED'
-	// Admin test
-	| 'TEST';
+  // Chấm công
+  | 'CHECK_IN'
+  | 'CHECK_OUT'
+  | 'LATE'
+  | 'ABSENT'
+  | 'MISSING_CHECKOUT'
+  // Nghỉ phép
+  | 'LEAVE_CREATED'
+  | 'LEAVE_APPROVED'
+  | 'LEAVE_REJECTED'
+  | 'LEAVE_CANCELLED'
+  | 'LEAVE_AUTO_CANCELLED'
+  // OT
+  | 'OT_CREATED'
+  | 'OT_APPROVED'
+  | 'OT_REJECTED'
+  | 'OT_CANCELLED'
+  | 'OT_AUTO_CANCELLED'
+  // Vi phạm
+  | 'VIOLATION_CREATED'
+  | 'VIOLATION_APPROVED'
+  | 'VIOLATION_REJECTED'
+  // Đăng ký WFH
+  | 'ONLINE_WORK_CREATED'
+  | 'ONLINE_WORK_APPROVED'
+  | 'ONLINE_WORK_REJECTED'
+  | 'ONLINE_WORK_CANCELLED'
+  | 'ONLINE_WORK_COMPLETED'
+  // Bù công
+  | 'MAKEUP_CREATED'
+  | 'MAKEUP_APPROVED'
+  | 'MAKEUP_REJECTED'
+  // Admin test
+  | 'TEST';
 
 export type NotificationActionType = 'NAVIGATE_ONLY' | 'APPROVE_REJECT';
 
 export interface NotificationResponse {
-	id: number;
-	title: string;
-	body: string;
-	category: NotificationCategory;
-	type: NotificationType;
-	refId: number | null; // ID của entity liên quan — null nếu không có navigation
-	refType: string | null; // 'leave_request' | 'overtime_request' | 'violation_request' | 'online_work_request' | 'makeup_request' | null
-	actionType: NotificationActionType | null; // 'APPROVE_REJECT' = người duyệt; 'NAVIGATE_ONLY' = đọc thôi
-	targetUrl: string | null; // URL deep link tương đối, ví dụ "/leave/55"
-	actionPayload: Record<string, unknown> | null; // data phụ cho action (nếu cần)
-	isRead: boolean;
-	createdAt: string; // ISO 8601
+  id: number;
+  title: string;
+  body: string;
+  category: NotificationCategory;
+  type: NotificationType;
+  refId: number | null;           // ID của entity liên quan — null nếu không có navigation
+  refType: string | null;         // 'leave_request' | 'overtime_request' | 'violation_request' | 'online_work_request' | 'makeup_request' | null
+  actionType: NotificationActionType | null; // 'APPROVE_REJECT' = người duyệt; 'NAVIGATE_ONLY' = đọc thôi
+  targetUrl: string | null;       // URL deep link tương đối, ví dụ "/leave/55"
+  actionPayload: Record<string, unknown> | null; // data phụ cho action (nếu cần)
+  isRead: boolean;
+  createdAt: string;              // ISO 8601
 }
 
 export interface UnreadCountResponse {
-	total: number; // tổng tất cả category
-	event: number; // category EVENT
-	attendance: number; // category ATTENDANCE
-	leave: number; // category LEAVE
+  total: number;              // tổng tất cả category
+  event: number;              // category EVENT
+  attendance: number;         // category ATTENDANCE
+  leave: number;              // category LEAVE
 }
 
 export interface QueryNotificationsParams {
-	page?: number; // default 1
-	limit?: number; // default 20, max 100
-	category?: NotificationCategory;
+  page?: number;              // default 1
+  limit?: number;             // default 20, max 100
+  category?: NotificationCategory;
 }
 ```
 
@@ -106,7 +106,7 @@ export interface QueryNotificationsParams {
 ## Category Mapping
 
 | Category | Các type thuộc về |
-| --- | --- |
+|----------|-------------------|
 | `EVENT` | `OT_CREATED`, `OT_APPROVED`, `OT_REJECTED`, `OT_CANCELLED`, `OT_AUTO_CANCELLED`, `VIOLATION_CREATED`, `VIOLATION_APPROVED`, `VIOLATION_REJECTED`, `ONLINE_WORK_CREATED`, `ONLINE_WORK_APPROVED`, `ONLINE_WORK_REJECTED`, `ONLINE_WORK_CANCELLED`, `ONLINE_WORK_COMPLETED`, `MAKEUP_CREATED`, `MAKEUP_APPROVED`, `MAKEUP_REJECTED` |
 | `ATTENDANCE` | `CHECK_IN`, `CHECK_OUT`, `LATE`, `ABSENT`, `MISSING_CHECKOUT` |
 | `LEAVE` | `LEAVE_CREATED`, `LEAVE_APPROVED`, `LEAVE_REJECTED`, `LEAVE_CANCELLED`, `LEAVE_AUTO_CANCELLED` |
@@ -117,42 +117,42 @@ export interface QueryNotificationsParams {
 
 Ưu tiên dùng `targetUrl` nếu có (backend đã build sẵn path). Fallback về `refType + refId` nếu cần.
 
-| `actionType`       | Ý nghĩa                                     | Hiển thị trên UI        |
-| ------------------ | ------------------------------------------- | ----------------------- |
+| `actionType` | Ý nghĩa | Hiển thị trên UI |
+|-------------|---------|-----------------|
 | `'APPROVE_REJECT'` | Người nhận cần duyệt/từ chối — tiền tố `📋` | Hiện nút "Xem và duyệt" |
-| `'NAVIGATE_ONLY'`  | Chỉ đọc/theo dõi — tiền tố `✅❌🔄⚠️⏰📌`   | Chỉ điều hướng          |
-| `null`             | Không điều hướng (ATTENDANCE informational) | Không có nút/link       |
+| `'NAVIGATE_ONLY'` | Chỉ đọc/theo dõi — tiền tố `✅❌🔄⚠️⏰📌` | Chỉ điều hướng |
+| `null` | Không điều hướng (ATTENDANCE informational) | Không có nút/link |
 
-| `refType`             | Route fallback        | Các type sử dụng           |
-| --------------------- | --------------------- | -------------------------- |
-| `leave_request`       | `/leave/:refId`       | `LEAVE_*`                  |
-| `overtime_request`    | `/overtime/:refId`    | `OT_*`                     |
-| `violation_request`   | `/violation/:refId`   | `VIOLATION_*`              |
-| `online_work_request` | `/online-work/:refId` | `ONLINE_WORK_*`            |
-| `makeup_request`      | `/makeup/:refId`      | `MAKEUP_*`                 |
-| `null`                | _(không navigate)_    | `ATTENDANCE` types, `TEST` |
+| `refType` | Route fallback | Các type sử dụng |
+|-----------|---------------|------------------|
+| `leave_request` | `/leave/:refId` | `LEAVE_*` |
+| `overtime_request` | `/overtime/:refId` | `OT_*` |
+| `violation_request` | `/violation/:refId` | `VIOLATION_*` |
+| `online_work_request` | `/online-work/:refId` | `ONLINE_WORK_*` |
+| `makeup_request` | `/makeup/:refId` | `MAKEUP_*` |
+| `null` | _(không navigate)_ | `ATTENDANCE` types, `TEST` |
 
 ```typescript
 function navigateFromNotification(notification: NotificationResponse, router: Router) {
-	// Ưu tiên targetUrl nếu backend đã build sẵn
-	if (notification.targetUrl) {
-		router.push(notification.targetUrl);
-		return;
-	}
+  // Ưu tiên targetUrl nếu backend đã build sẵn
+  if (notification.targetUrl) {
+    router.push(notification.targetUrl);
+    return;
+  }
 
-	const { refType, refId } = notification;
-	if (!refType || refId === null) return;
+  const { refType, refId } = notification;
+  if (!refType || refId === null) return;
 
-	const routes: Record<string, string> = {
-		leave_request: `/leave/${refId}`,
-		overtime_request: `/overtime/${refId}`,
-		violation_request: `/violation/${refId}`,
-		online_work_request: `/online-work/${refId}`,
-		makeup_request: `/makeup/${refId}`,
-	};
+  const routes: Record<string, string> = {
+    leave_request: `/leave/${refId}`,
+    overtime_request: `/overtime/${refId}`,
+    violation_request: `/violation/${refId}`,
+    online_work_request: `/online-work/${refId}`,
+    makeup_request: `/makeup/${refId}`,
+  };
 
-	const route = routes[refType];
-	if (route) router.push(route);
+  const route = routes[refType];
+  if (route) router.push(route);
 }
 ```
 
@@ -166,38 +166,38 @@ function navigateFromNotification(notification: NotificationResponse, router: Ro
 
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"id": 101,
-			"title": "Đơn nghỉ phép được duyệt ✅",
-			"body": "Đơn Nghỉ phép năm ngày 03/06/2026 đã được duyệt",
-			"category": "LEAVE",
-			"type": "LEAVE_APPROVED",
-			"refId": 55,
-			"refType": "leave_request",
-			"isRead": false,
-			"createdAt": "2026-06-03T04:12:00.000Z"
-		},
-		{
-			"id": 98,
-			"title": "Check-in thành công!",
-			"body": "Bạn đã check-in lúc 08:27 tại Văn phòng",
-			"category": "ATTENDANCE",
-			"type": "CHECK_IN",
-			"refId": null,
-			"refType": null,
-			"isRead": true,
-			"createdAt": "2026-06-03T01:27:00.000Z"
-		}
-	],
-	"meta": {
-		"page": 1,
-		"limit": 20,
-		"total": 42,
-		"totalPages": 3,
-		"unreadCount": 7
-	}
+  "success": true,
+  "data": [
+    {
+      "id": 101,
+      "title": "Đơn nghỉ phép được duyệt ✅",
+      "body": "Đơn Nghỉ phép năm ngày 03/06/2026 đã được duyệt",
+      "category": "LEAVE",
+      "type": "LEAVE_APPROVED",
+      "refId": 55,
+      "refType": "leave_request",
+      "isRead": false,
+      "createdAt": "2026-06-03T04:12:00.000Z"
+    },
+    {
+      "id": 98,
+      "title": "Check-in thành công!",
+      "body": "Bạn đã check-in lúc 08:27 tại Văn phòng",
+      "category": "ATTENDANCE",
+      "type": "CHECK_IN",
+      "refId": null,
+      "refType": null,
+      "isRead": true,
+      "createdAt": "2026-06-03T01:27:00.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 42,
+    "totalPages": 3,
+    "unreadCount": 7
+  }
 }
 ```
 
@@ -209,18 +209,17 @@ function navigateFromNotification(notification: NotificationResponse, router: Ro
 
 ```json
 {
-	"success": true,
-	"data": {
-		"total": 7,
-		"event": 2,
-		"attendance": 3,
-		"leave": 2
-	}
+  "success": true,
+  "data": {
+    "total": 7,
+    "event": 2,
+    "attendance": 3,
+    "leave": 2
+  }
 }
 ```
 
 **Gọi khi nào:**
-
 - Mở app (sau khi đăng nhập thành công)
 - Mở notification center
 - Sau khi `PATCH /:id/read` hoặc `PATCH /read-all`
@@ -253,38 +252,40 @@ function navigateFromNotification(notification: NotificationResponse, router: Ro
 ```typescript
 // composables/useNotifications.ts
 import type {
-	NotificationResponse,
-	UnreadCountResponse,
-	QueryNotificationsParams,
-	NotificationCategory,
+  NotificationResponse,
+  UnreadCountResponse,
+  QueryNotificationsParams,
+  NotificationCategory,
 } from '~/types/notification.types';
 
 export function useNotifications() {
-	const { get, patch, del } = useFetch();
+  const { get, patch, del } = useFetch();
 
-	const fetchNotifications = (params?: QueryNotificationsParams) =>
-		get<{
-			data: NotificationResponse[];
-			meta: { page: number; limit: number; total: number; totalPages: number; unreadCount: number };
-		}>('/v1/notifications', { params });
+  const fetchNotifications = (params?: QueryNotificationsParams) =>
+    get<{ data: NotificationResponse[]; meta: { page: number; limit: number; total: number; totalPages: number; unreadCount: number } }>(
+      '/v1/notifications',
+      { params },
+    );
 
-	const fetchUnreadCount = () => get<UnreadCountResponse>('/v1/notifications/unread-count');
+  const fetchUnreadCount = () =>
+    get<UnreadCountResponse>('/v1/notifications/unread-count');
 
-	const markAsRead = (id: number) => patch<void>(`/v1/notifications/${id}/read`);
+  const markAsRead = (id: number) =>
+    patch<void>(`/v1/notifications/${id}/read`);
 
-	const markAllAsRead = (category?: NotificationCategory) =>
-		patch<void>('/v1/notifications/read-all', undefined, { params: category ? { category } : {} });
+  const markAllAsRead = (category?: NotificationCategory) =>
+    patch<void>('/v1/notifications/read-all', undefined, { params: category ? { category } : {} });
 
-	const deleteAll = (category?: NotificationCategory) =>
-		del<void>('/v1/notifications', { params: category ? { category } : {} });
+  const deleteAll = (category?: NotificationCategory) =>
+    del<void>('/v1/notifications', { params: category ? { category } : {} });
 
-	return {
-		fetchNotifications,
-		fetchUnreadCount,
-		markAsRead,
-		markAllAsRead,
-		deleteAll,
-	};
+  return {
+    fetchNotifications,
+    fetchUnreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteAll,
+  };
 }
 ```
 
@@ -296,17 +297,16 @@ Khi tạo notification, server đồng thời gửi FCM data message đến tấ
 
 ```typescript
 interface FcmNotificationPayload {
-	type: string; // NotificationType, ví dụ "LEAVE_APPROVED"
-	notificationId: string; // ID trong DB, dùng để mark read
-	title: string;
-	body: string;
-	refId: string; // "" nếu không có
-	refType: string; // "" nếu không có
+  type: string;           // NotificationType, ví dụ "LEAVE_APPROVED"
+  notificationId: string; // ID trong DB, dùng để mark read
+  title: string;
+  body: string;
+  refId: string;          // "" nếu không có
+  refType: string;        // "" nếu không có
 }
 ```
 
 Khi nhận FCM:
-
 1. Hiển thị local notification từ `title` + `body`.
 2. Gọi `GET /notifications/unread-count` để cập nhật badge.
 3. Khi user tap → parse `refType` + `refId` để navigate (xem bảng Navigation ở trên).
@@ -324,37 +324,35 @@ Ba endpoint dùng để kiểm tra pipeline notification. **Không gọi từ UI
 Gửi cùng một notification tới nhiều platform trong một lần gọi. Kết quả trả về cho từng platform.
 
 **Request body:**
-
 ```json
 {
-	"employeeId": 1,
-	"title": "Test Notification",
-	"body": "Đây là nội dung thông báo test từ admin.",
-	"platforms": ["in-app", "email", "fcm"],
-	"emailTo": "admin@company.com"
+  "employeeId": 1,
+  "title": "Test Notification",
+  "body": "Đây là nội dung thông báo test từ admin.",
+  "platforms": ["in-app", "email", "fcm"],
+  "emailTo": "admin@company.com"
 }
 ```
 
-| Field        | Bắt buộc                       | Ghi chú                                                   |
-| ------------ | ------------------------------ | --------------------------------------------------------- |
-| `employeeId` | ✓                              | Nhân viên nhận in-app và FCM                              |
-| `title`      | ✓                              | Tiêu đề                                                   |
-| `body`       | ✓                              | Nội dung                                                  |
-| `platforms`  | ✓                              | Mảng, tối thiểu 1 phần tử: `'email'`, `'in-app'`, `'fcm'` |
-| `emailTo`    | Khi `platforms` chứa `'email'` | Địa chỉ email nhận                                        |
+| Field | Bắt buộc | Ghi chú |
+|-------|----------|---------|
+| `employeeId` | ✓ | Nhân viên nhận in-app và FCM |
+| `title` | ✓ | Tiêu đề |
+| `body` | ✓ | Nội dung |
+| `platforms` | ✓ | Mảng, tối thiểu 1 phần tử: `'email'`, `'in-app'`, `'fcm'` |
+| `emailTo` | Khi `platforms` chứa `'email'` | Địa chỉ email nhận |
 
 **Response 200:**
-
 ```json
 {
-	"success": true,
-	"data": {
-		"platforms": {
-			"in-app": { "sent": true },
-			"email": { "sent": true },
-			"fcm": { "sent": true, "detail": { "sent": 2, "invalidRemoved": 0, "tokens": ["abc…"] } }
-		}
-	}
+  "success": true,
+  "data": {
+    "platforms": {
+      "in-app": { "sent": true },
+      "email": { "sent": true },
+      "fcm": { "sent": true, "detail": { "sent": 2, "invalidRemoved": 0, "tokens": ["abc…"] } }
+    }
+  }
 }
 ```
 
@@ -364,10 +362,10 @@ Gửi cùng một notification tới nhiều platform trong một lần gọi. K
 
 ```json
 {
-	"employeeId": 1,
-	"title": "Test FCM",
-	"body": "Kiểm tra FCM pipeline",
-	"type": "test.manual"
+  "employeeId": 1,
+  "title": "Test FCM",
+  "body": "Kiểm tra FCM pipeline",
+  "type": "test.manual"
 }
 ```
 
@@ -384,7 +382,7 @@ Gửi cùng một notification tới nhiều platform trong một lần gọi. K
 ## Edge Cases
 
 | Tình huống | Kết quả |
-| --- | --- |
+|-----------|---------|
 | `DELETE /notifications` không có `?category=` | Xóa **toàn bộ** thông báo của mình |
 | `DELETE /notifications?category=ATTENDANCE` | Chỉ xóa ATTENDANCE, EVENT + LEAVE giữ nguyên |
 | `PATCH /read-all?category=LEAVE` | Chỉ mark LEAVE đã đọc |

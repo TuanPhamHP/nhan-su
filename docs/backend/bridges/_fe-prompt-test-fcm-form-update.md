@@ -2,7 +2,7 @@
 
 ## Context
 
-BE đã mở rộng endpoint `POST /v1/notifications/test-fcm` để admin có thể test FCM với đầy đủ payload navigation (category, refType, id) — giống payload thực tế khi BE gửi notification production. Hiện tại form trên FE chỉ có 4 field (Employee ID, Type, Title, Body), thiếu 3 field navigation → mobile test luôn nhận `refType=''` và `id=''` → không verify được flow tap-notification-to-navigate.
+BE đã mở rộng endpoint `POST /v1/notifications/test-fcm` để admin có thể test FCM với đầy đủ payload navigation (category, refType, refId) — giống payload thực tế khi BE gửi notification production. Hiện tại form trên FE chỉ có 4 field (Employee ID, Type, Title, Body), thiếu 3 field navigation → mobile test luôn nhận `refType=''` và `refId=''` → không verify được flow tap-notification-to-navigate.
 
 Cần update form để admin test đầy đủ payload trước khi production go-live.
 
@@ -25,7 +25,7 @@ export interface TestFcmDto {
   // ─── NEW — cần thêm 3 field ───
   category?: NotificationCategory;  // optional, default 'EVENT', enum
   refType?: string;                 // optional, default '', free text
-  id?: string;                      // optional, default '', free text (entity ID dạng string)
+  refId?: string;                   // optional, default '', free text (entity ID dạng string)
 }
 ```
 
@@ -101,7 +101,7 @@ Bố cục dạng grid 2 cột (tận dụng không gian), tham khảo form hi�
 │  │  Category          [dropdown enum]                     │  │
 │  │  [ EVENT              ▼ ]                              │  │
 │  │                                                        │  │
-│  │  refType                       │  id (entity ID)       │  │
+│  │  refType                       │  refId (entity ID)    │  │
 │  │  [ violation_request        ]  │  [ 42              ]  │  │
 │  │                                                        │  │
 │  │  💡 Mobile dùng để navigate khi user tap notification │  │
@@ -130,7 +130,7 @@ Hiện tại Type là text input → đổi thành **dropdown** load enum `Notif
 - Placeholder: `violation_request, leave_request, attendance_record, ...`
 - Helper text: "Tên entity. Để rỗng nếu test attendance reminder/late."
 
-### 4. id field — text input, mới thêm
+### 4. refId field — text input, mới thêm
 
 - Text input, optional, default empty
 - Placeholder: `42` (string số)
@@ -138,15 +138,15 @@ Hiện tại Type là text input → đổi thành **dropdown** load enum `Notif
 
 ### 5. Validation
 
-Không bắt buộc validate cứng (BE đã default empty). Nhưng có thể warn UX nếu **chỉ điền 1 trong 2** (refType có id rỗng hoặc ngược lại) — vì navigate cần cả 2 mới có ý nghĩa:
+Không bắt buộc validate cứng (BE đã default empty). Nhưng có thể warn UX nếu **chỉ điền 1 trong 2** (refType có refId rỗng hoặc ngược lại) — vì navigate cần cả 2 mới có ý nghĩa:
 
-> ⚠️ Nên điền cả `refType` và `id` cùng lúc, hoặc bỏ trống cả 2.
+> ⚠️ Nên điền cả `refType` và `refId` cùng lúc, hoặc bỏ trống cả 2.
 
 ### 6. Preset templates (nice-to-have)
 
 Thêm dropdown nhỏ "Preset" để admin chọn template có sẵn, auto-fill 5 field navigation:
 
-| Preset | type | category | refType | id (placeholder) |
+| Preset | type | category | refType | refId (placeholder) |
 |---|---|---|---|---|
 | Test Leave Approved | LEAVE_APPROVED | LEAVE | leave_request | 1 |
 | Test OT Approved | OT_APPROVED | EVENT | overtime_request | 1 |
@@ -154,7 +154,7 @@ Thêm dropdown nhỏ "Preset" để admin chọn template có sẵn, auto-fill 5
 | Test Check-in Reminder | CHECKIN_REMINDER | ATTENDANCE | (empty) | (empty) |
 | Custom (manual) | — | — | — | — |
 
-Khi chọn preset → auto-fill các field, admin chỉ cần điền Employee ID + sửa id nếu cần.
+Khi chọn preset → auto-fill các field, admin chỉ cần điền Employee ID + sửa refId nếu cần.
 
 ## Sample request body sau update
 
@@ -167,7 +167,7 @@ POST /v1/notifications/test-fcm
   "type": "VIOLATION_APPROVED",
   "category": "EVENT",
   "refType": "violation_request",
-  "id": "42"
+  "refId": "42"
 }
 ```
 
@@ -196,7 +196,7 @@ POST /v1/notifications/test-fcm
     "category": "EVENT",
     "type": "VIOLATION_APPROVED",
     "refType": "violation_request",
-    "id": "42",
+    "refId": "42",
     "notificationId": "0",
     "title": "✅ Phiếu giải trình được chấp thuận",
     "body": "Phiếu Đi muộn ngày 22/06/2026 đã được duyệt"
@@ -204,14 +204,14 @@ POST /v1/notifications/test-fcm
 }
 ```
 
-Mobile dev verify nhận được đúng `category/type/refType/id` để confirm navigation logic.
+Mobile dev verify nhận được đúng `category/type/refType/refId` để confirm navigation logic.
 
 ## Checklist trước khi merge FE PR
 
 - [ ] Field `Type` đổi từ text input sang dropdown load `NotificationType` enum (38 options)
 - [ ] Thêm field `Category` dropdown load `NotificationCategory` enum (4 options), default `EVENT`
 - [ ] Thêm field `refType` text input optional
-- [ ] Thêm field `id` text input optional
+- [ ] Thêm field `refId` text input optional
 - [ ] Helper text giải thích từng field
 - [ ] (Nice-to-have) Preset dropdown auto-fill template
 - [ ] Form submit gửi đủ 7 field trong JSON body

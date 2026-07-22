@@ -96,14 +96,12 @@
 	const checkOutWindowEndInput = makeWindowModel(checkOutWindowEnd);
 
 	const requireError = computed(() =>
-		!requireCheckIn.value && !requireCheckOut.value
-			? 'Ca làm việc phải yêu cầu ít nhất check-in hoặc check-out'
-			: '',
+		!requireCheckIn.value && !requireCheckOut.value ? 'Ca làm việc phải yêu cầu ít nhất check-in hoặc check-out' : '',
 	);
 
 	// Collapse state cho 2 khối trong modal (default expanded)
 	const showTimeSection = ref(true);
-	const showWindowSection = ref(true);
+	const showWindowSection = ref(false);
 
 	const { handleSubmit, defineField, errors, setValues, resetForm, setFieldError } = useForm({
 		validationSchema: {
@@ -759,7 +757,10 @@
 					</p>
 
 					<!-- Break time -->
-					<p v-if="shift.breakStartTime && shift.breakEndTime" class="text-xs font-mono text-gray-500 dark:text-gray-400 mb-1">
+					<p
+						v-if="shift.breakStartTime && shift.breakEndTime"
+						class="text-xs font-mono text-gray-500 dark:text-gray-400 mb-1"
+					>
 						Nghỉ trưa {{ shift.breakStartTime }} – {{ shift.breakEndTime }}
 					</p>
 
@@ -1157,99 +1158,103 @@
 								</div>
 
 								<!-- Giờ nghỉ trưa -->
-						<div>
-							<div class="grid grid-cols-2 gap-3">
 								<div>
-									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-										Bắt đầu nghỉ trưa
-									</label>
-									<UiTimeInput
-										v-model="breakStartTime"
-										v-bind="breakStartTimeAttrs"
-										placeholder="12:00"
-										:disabled="isCrossMidnight"
-										:error="errors.breakStartTime"
-									/>
-									<p v-if="errors.breakStartTime" class="mt-1 text-xs text-red-500">{{ errors.breakStartTime }}</p>
+									<div class="grid grid-cols-2 gap-3">
+										<div>
+											<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+												Bắt đầu nghỉ trưa
+											</label>
+											<UiTimeInput
+												v-model="breakStartTime"
+												v-bind="breakStartTimeAttrs"
+												placeholder="12:00"
+												:disabled="isCrossMidnight"
+												:error="errors.breakStartTime"
+											/>
+											<p v-if="errors.breakStartTime" class="mt-1 text-xs text-red-500">{{ errors.breakStartTime }}</p>
+										</div>
+										<div>
+											<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+												Kết thúc nghỉ trưa
+											</label>
+											<UiTimeInput
+												v-model="breakEndTime"
+												v-bind="breakEndTimeAttrs"
+												placeholder="13:30"
+												:disabled="isCrossMidnight"
+												:error="errors.breakEndTime"
+											/>
+											<p v-if="errors.breakEndTime" class="mt-1 text-xs text-red-500">{{ errors.breakEndTime }}</p>
+										</div>
+									</div>
+									<p v-if="isCrossMidnight" class="mt-1.5 text-xs text-amber-600 dark:text-amber-400 leading-snug">
+										Ca cross-midnight (giờ ra ≤ giờ vào) không hỗ trợ nghỉ trưa.
+									</p>
+									<p v-else class="mt-1.5 text-xs text-gray-400 dark:text-gray-500 leading-snug">
+										Để trống nếu ca không có nghỉ trưa (ca liên tục / ca đêm). Khi trống, nhân viên không thể tạo đơn
+										nghỉ nửa ngày cho ca này.
+									</p>
 								</div>
+
+								<!-- Ngưỡng trễ / sớm -->
+								<div class="grid grid-cols-2 gap-3">
+									<div>
+										<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+											Ngưỡng đến trễ (phút)
+										</label>
+										<input
+											v-model.number="lateThresholdMin"
+											v-bind="lateAttrs"
+											type="number"
+											min="0"
+											max="120"
+											class="w-full h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+										/>
+										<p v-if="errors.lateThresholdMin" class="mt-1 text-xs text-red-500">
+											{{ errors.lateThresholdMin }}
+										</p>
+									</div>
+									<div>
+										<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+											Ngưỡng về sớm (phút)
+										</label>
+										<input
+											v-model.number="earlyThresholdMin"
+											v-bind="earlyAttrs"
+											type="number"
+											min="0"
+											max="120"
+											class="w-full h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+										/>
+										<p v-if="errors.earlyThresholdMin" class="mt-1 text-xs text-red-500">
+											{{ errors.earlyThresholdMin }}
+										</p>
+									</div>
+								</div>
+
+								<!-- Ngày làm việc -->
 								<div>
-									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-										Kết thúc nghỉ trưa
+									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+										Ngày làm việc <span class="text-red-500">*</span>
 									</label>
-									<UiTimeInput
-										v-model="breakEndTime"
-										v-bind="breakEndTimeAttrs"
-										placeholder="13:30"
-										:disabled="isCrossMidnight"
-										:error="errors.breakEndTime"
-									/>
-									<p v-if="errors.breakEndTime" class="mt-1 text-xs text-red-500">{{ errors.breakEndTime }}</p>
+									<div class="flex flex-wrap gap-2">
+										<button
+											v-for="day in ALL_WORK_DAYS"
+											:key="day"
+											type="button"
+											:class="[
+												'w-9 h-9 rounded-full text-xs font-medium transition-colors',
+												selectedWorkDays.includes(day)
+													? 'bg-brand-600 text-white'
+													: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700',
+											]"
+											@click="toggleWorkDay(day)"
+										>
+											{{ WORK_DAY_LABELS[day] }}
+										</button>
+									</div>
+									<p v-if="workDaysError" class="mt-1.5 text-xs text-red-500">{{ workDaysError }}</p>
 								</div>
-							</div>
-							<p v-if="isCrossMidnight" class="mt-1.5 text-xs text-amber-600 dark:text-amber-400 leading-snug">
-								Ca cross-midnight (giờ ra ≤ giờ vào) không hỗ trợ nghỉ trưa.
-							</p>
-							<p v-else class="mt-1.5 text-xs text-gray-400 dark:text-gray-500 leading-snug">
-								Để trống nếu ca không có nghỉ trưa (ca liên tục / ca đêm). Khi trống, nhân viên không thể tạo đơn nghỉ nửa
-								ngày cho ca này.
-							</p>
-						</div>
-
-						<!-- Ngưỡng trễ / sớm -->
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-									Ngưỡng đến trễ (phút)
-								</label>
-								<input
-									v-model.number="lateThresholdMin"
-									v-bind="lateAttrs"
-									type="number"
-									min="0"
-									max="120"
-									class="w-full h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-								/>
-								<p v-if="errors.lateThresholdMin" class="mt-1 text-xs text-red-500">{{ errors.lateThresholdMin }}</p>
-							</div>
-							<div>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-									Ngưỡng về sớm (phút)
-								</label>
-								<input
-									v-model.number="earlyThresholdMin"
-									v-bind="earlyAttrs"
-									type="number"
-									min="0"
-									max="120"
-									class="w-full h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-								/>
-								<p v-if="errors.earlyThresholdMin" class="mt-1 text-xs text-red-500">{{ errors.earlyThresholdMin }}</p>
-							</div>
-						</div>
-
-						<!-- Ngày làm việc -->
-						<div>
-							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-								Ngày làm việc <span class="text-red-500">*</span>
-							</label>
-							<div class="flex flex-wrap gap-2">
-								<button
-									v-for="day in ALL_WORK_DAYS"
-									:key="day"
-									type="button"
-									:class="[
-										'w-9 h-9 rounded-full text-xs font-medium transition-colors',
-										selectedWorkDays.includes(day)
-											? 'bg-brand-600 text-white'
-											: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700',
-									]"
-									@click="toggleWorkDay(day)"
-								>
-									{{ WORK_DAY_LABELS[day] }}
-								</button>
-							</div>
-							<p v-if="workDaysError" class="mt-1.5 text-xs text-red-500">{{ workDaysError }}</p>
-						</div>
 
 								<!-- Chế độ ca làm việc -->
 								<div class="space-y-3 pt-1">
@@ -1260,7 +1265,9 @@
 											class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
 										/>
 										<div class="flex-1 min-w-0">
-											<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Ca online (hệ thống tự ghi công)</p>
+											<p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+												Ca online (hệ thống tự ghi công)
+											</p>
 											<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
 												Cron tự ghi PRESENT cuối ngày, nhân viên KHÔNG cần check-in thủ công (vd: ca T7 WFH).
 											</p>
@@ -1322,84 +1329,84 @@
 
 							<div v-show="showWindowSection" class="p-4 space-y-4">
 								<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-								<!-- Check-in -->
-								<div class="space-y-3">
-									<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-										Check-in
-									</p>
-									<div>
-										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-											Phút sớm nhất trước giờ vào
-										</label>
-										<input
-											v-model="checkInWindowStartInput"
-											type="number"
-											min="0"
-											max="240"
-											placeholder="Mặc định 60p"
-											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-										/>
-										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-											VD: 60 → được check-in từ [giờ vào − 60p]
+									<!-- Check-in -->
+									<div class="space-y-3">
+										<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+											Check-in
 										</p>
+										<div>
+											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+												Phút sớm nhất trước giờ vào
+											</label>
+											<input
+												v-model="checkInWindowStartInput"
+												type="number"
+												min="0"
+												max="240"
+												placeholder="Mặc định 60p"
+												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											/>
+											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+												VD: 60 → được check-in từ [giờ vào − 60p]
+											</p>
+										</div>
+										<div>
+											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+												Phút muộn nhất sau giờ vào
+											</label>
+											<input
+												v-model="checkInWindowEndInput"
+												type="number"
+												min="0"
+												max="240"
+												placeholder="Mặc định 60p"
+												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											/>
+											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+												VD: 60 → deadline check-in [giờ vào + phép trễ + 60p]
+											</p>
+										</div>
 									</div>
-									<div>
-										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-											Phút muộn nhất sau giờ vào
-										</label>
-										<input
-											v-model="checkInWindowEndInput"
-											type="number"
-											min="0"
-											max="240"
-											placeholder="Mặc định 60p"
-											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-										/>
-										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-											VD: 60 → deadline check-in [giờ vào + phép trễ + 60p]
-										</p>
-									</div>
-								</div>
 
-								<!-- Check-out -->
-								<div class="space-y-3">
-									<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-										Check-out
-									</p>
-									<div>
-										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-											Phút sớm nhất trước giờ ra
-										</label>
-										<input
-											v-model="checkOutWindowStartInput"
-											type="number"
-											min="0"
-											max="240"
-											placeholder="Mặc định 60p"
-											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-										/>
-										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-											VD: 60 → được check-out từ [giờ ra − phép về sớm − 60p]
+									<!-- Check-out -->
+									<div class="space-y-3">
+										<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+											Check-out
 										</p>
-									</div>
-									<div>
-										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-											Phút muộn nhất sau giờ ra
-										</label>
-										<input
-											v-model="checkOutWindowEndInput"
-											type="number"
-											min="0"
-											max="240"
-											placeholder="Mặc định 60p"
-											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-										/>
-										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-											VD: 60 → deadline check-out [giờ ra + 60p]
-										</p>
+										<div>
+											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+												Phút sớm nhất trước giờ ra
+											</label>
+											<input
+												v-model="checkOutWindowStartInput"
+												type="number"
+												min="0"
+												max="240"
+												placeholder="Mặc định 60p"
+												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											/>
+											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+												VD: 60 → được check-out từ [giờ ra − phép về sớm − 60p]
+											</p>
+										</div>
+										<div>
+											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+												Phút muộn nhất sau giờ ra
+											</label>
+											<input
+												v-model="checkOutWindowEndInput"
+												type="number"
+												min="0"
+												max="240"
+												placeholder="Mặc định 60p"
+												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											/>
+											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+												VD: 60 → deadline check-out [giờ ra + 60p]
+											</p>
+										</div>
 									</div>
 								</div>
-							</div>
 
 								<!-- Preview realtime -->
 								<div
@@ -1408,11 +1415,15 @@
 								>
 									<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
 										Check-in: {{ previewWindows.checkIn.earliest }} → {{ previewWindows.checkIn.shiftTime }}
-										<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkIn.deadline }})</span>
+										<span class="text-gray-400 dark:text-gray-500"
+											>(deadline: {{ previewWindows.checkIn.deadline }})</span
+										>
 									</p>
 									<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
 										Check-out: {{ previewWindows.checkOut.earliest }} → {{ previewWindows.checkOut.shiftTime }}
-										<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkOut.deadline }})</span>
+										<span class="text-gray-400 dark:text-gray-500"
+											>(deadline: {{ previewWindows.checkOut.deadline }})</span
+										>
 									</p>
 								</div>
 
@@ -1456,10 +1467,7 @@
 										</label>
 									</div>
 
-									<p
-										v-if="requireError"
-										class="mt-2 text-xs text-red-500 leading-snug"
-									>
+									<p v-if="requireError" class="mt-2 text-xs text-red-500 leading-snug">
 										{{ requireError }}
 									</p>
 								</div>
@@ -1584,7 +1592,10 @@
 							Đang gán: {{ cellTarget.current!.shift!.name }} ({{ cellTarget.current!.shift!.checkInTime }}–{{
 								cellTarget.current!.shift!.checkOutTime
 							}}<template v-if="cellTarget.current!.shift!.breakStartTime && cellTarget.current!.shift!.breakEndTime">
-								· nghỉ {{ cellTarget.current!.shift!.breakStartTime }}–{{ cellTarget.current!.shift!.breakEndTime }}</template>)
+								· nghỉ {{ cellTarget.current!.shift!.breakStartTime }}–{{
+									cellTarget.current!.shift!.breakEndTime
+								}}</template
+							>)
 						</div>
 
 						<p class="text-xs font-medium text-gray-500 dark:text-gray-400 px-1 mb-1">Chọn ca:</p>

@@ -298,4 +298,4 @@ Khi tạo / cập nhật employee, truyền `positionId` vào body:
 | `HR` gọi DELETE | **403** — chỉ `ADMIN` được xóa |
 | Không truyền `isActive` trong query | Trả về **cả** active lẫn inactive |
 | `isActive=true` trong query string | Phải là string `"true"` — backend tự convert sang `boolean` |
-| Chức vụ có `employeeCount > 0` bị deactivate | Vẫn cho phép — backend không chặn; FE nên hiển thị cảnh báo trước khi xác nhận |
+| Chức vụ có `employeeCount > 0` bị deactivate | **204** — backend không chặn. Nhân viên đang giữ chức vụ đó **vẫn giữ nguyên `positionId`** trỏ vào chức vụ đã inactive. FE phải đọc `employeeCount` từ response GET trước khi gọi DELETE và hiển thị dialog xác nhận kiểu: *"Chức vụ này đang có N nhân viên. Vô hiệu hóa sẽ không tự động gỡ chức vụ khỏi các nhân viên đó."* |

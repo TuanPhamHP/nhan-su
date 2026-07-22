@@ -79,23 +79,26 @@ Lấy danh sách địa điểm được phép
 Hiển thị bản đồ với vòng tròn bán kính từng địa điểm
     │
     ▼
-GPS lấy tọa độ hiện tại
+GPS lấy tọa độ + chụp ảnh selfie
     │
     ▼
-Gửi check-in
-    POST /v1/attendance/check-in  { latitude, longitude }
+Gửi check-in (multipart/form-data)
+    POST /v1/attendance/check-in
+    Fields: photo (File), latitude (number), longitude (number)
     │
+    ├─ 400 ảnh thiếu / sai format → "Vui lòng chụp ảnh selfie rõ mặt."
     ├─ 400 isLocked → "Bản ghi đã bị khóa. Hãy tạo đơn bù công."
     ├─ Thất bại khác → hiển thị lỗi cụ thể (vị trí / ca / giờ)
     └─ Thành công → lưu AttendanceRecordDetail vào state
                     isHalfDay? → hiển thị "Ca rút gọn"
     │
-    ▼ (cuối ngày)
-Gửi check-out
+    ▼ (cuối ngày — chụp ảnh selfie)
+Gửi check-out (multipart/form-data)
     POST /v1/attendance/check-out
+    Fields: photo (File)
     │
     ├─ 400 isLocked → "Bản ghi đã bị khóa. Hãy tạo đơn bù công."
-    └─ Thành công → cập nhật checkOutAt trong state
+    └─ Thành công → cập nhật checkOutAt + checkOutPhotoUrl trong state
 ```
 
 ---
@@ -169,8 +172,8 @@ Server tạo EffectiveShiftOverride
     AFTERNOON → effectiveStart: giờ bắt đầu ca gốc, effectiveEnd: 12:00
     │
     ▼
-Employee check-in bình thường
-    POST /v1/attendance/check-in  { latitude, longitude }
+Employee check-in bình thường (multipart + ảnh selfie)
+    POST /v1/attendance/check-in  photo + latitude + longitude
     │
     └─ Response: AttendanceRecordDetail với
            isHalfDay: true
@@ -183,23 +186,35 @@ Employee check-in bình thường
 
 ---
 
-## Các trường hợp check-in thất bại
+## Các trường hợp check-in / check-out thất bại
 
-| Lỗi | Nguyên nhân | Cách xử lý trên UI |
-| --- | --- | --- |
+Server trả 400 với `failReason` tương ứng (message có thể khác nhau tùy scenario):
+
+| `failReason` | Nguyên nhân | Cách xử lý trên UI |
+|-----|-------------|-------------------|
 | `NO_VALID_LOCATION` | GPS ngoài bán kính mọi địa điểm được gán, hoặc chưa được gán địa điểm | "Vị trí không hợp lệ. Hãy đến gần văn phòng hơn." |
 | `NO_SHIFT_TODAY` | Không có ca (không có schedule cụ thể lẫn default shift) | "Bạn không có ca làm việc hôm nay." |
-| `OUTSIDE_WINDOW` | Ngoài cửa sổ ±30 phút xung quanh giờ bắt đầu ca thực tế | "Ngoài khung giờ chấm công. Vui lòng thử lại đúng giờ." |
-| `ATTENDANCE_ALREADY_CHECKED_IN` | Đã check-in hôm nay (409) | "Bạn đã check-in hôm nay rồi." |
+| `ONLINE_SHIFT_NO_CHECKIN` | Ca online — hệ thống tự ghi công cuối ngày | Ẩn nút check-in |
+| `TOO_EARLY` | Chưa đến cửa sổ check-in (mặc định 60p trước `shift.checkInTime`) | Hiển thị "Check-in mở lúc HH:MM" |
+| `CHECK_IN_WINDOW_CLOSED` | Đã quá cửa sổ check-in (mặc định 60p sau `shift.checkInTime` + `approvedLate`) | "Đã hết giờ check-in. Vui lòng tạo phiếu giải trình" |
+| `CHECK_IN_NOT_REQUIRED` | Ca có `requireCheckIn=false` — ca chỉ check-out | Ẩn nút check-in |
+| `TOO_EARLY_CHECKOUT` | Chưa đến cửa sổ check-out (mặc định 60p trước `shift.checkOutTime`, trừ `approvedEarly`) | "Sớm nhất có thể check-out lúc HH:MM" |
+| `CHECK_OUT_WINDOW_CLOSED` | Đã quá cửa sổ check-out (mặc định 60p sau `shift.checkOutTime`) | "Đã quá giờ check-out. Vui lòng tạo phiếu giải trình" |
+| `CHECK_OUT_NOT_REQUIRED` | Ca có `requireCheckOut=false` — ca chỉ check-in | Ẩn nút check-out |
 | `isLocked` | Bản ghi ngày đó đã bị khóa (400) | "Bản ghi đã bị khóa. Hãy tạo đơn bù công." |
+
+> Cửa sổ check-in/out có 2 chế độ:
+> - **TH1 default** (khi các field window trong `WorkShift` = `null`): trước 60p, sau 60p (đối xứng cho cả check-in và check-out).
+> - **TH2 custom**: HR cài `checkInWindowStart/End`, `checkOutWindowStart/End` cho từng ca (0–240 phút).
+> Xem chi tiết ở [attendance-shifts.md](./attendance-shifts.md) mục "Cấu hình window check-in/out — TH1 vs TH2".
 
 ---
 
 ## Bridge docs chi tiết
 
-| File                                                 | Nội dung                                       |
-| ---------------------------------------------------- | ---------------------------------------------- |
+| File | Nội dung |
+|------|---------|
 | [attendance-locations.md](./attendance-locations.md) | CRUD địa điểm, gán nhân viên, tích hợp Leaflet |
-| [attendance-shifts.md](./attendance-shifts.md)       | Khuôn ca, gán lịch ca, ca mặc định             |
-| [attendance.md](./attendance.md)                     | Check-in/out, lịch sử, chỉnh sửa thủ công      |
-| [makeup-attendance.md](./makeup-attendance.md)       | Đơn bù công — tạo, duyệt, từ chối              |
+| [attendance-shifts.md](./attendance-shifts.md) | Khuôn ca, gán lịch ca, ca mặc định |
+| [attendance.md](./attendance.md) | Check-in/out, lịch sử, chỉnh sửa thủ công |
+| [makeup-attendance.md](./makeup-attendance.md) | Đơn bù công — tạo, duyệt, từ chối |

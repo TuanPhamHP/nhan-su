@@ -33,7 +33,7 @@ export interface ProfileResponse {
   dateOfBirth: string | null; // "YYYY-MM-DD" — chỉ ngày, không có giờ
   gender: Gender | null;
   address: string | null;
-  avatarUrl: string | null;   // URL S3 public sau khi upload
+  avatarUrl: string | null;   // Presigned S3 URL, hiệu lực 1 giờ — dùng trực tiếp trong <img>
 }
 
 // Body của PATCH /profile — tất cả fields đều optional
@@ -152,8 +152,9 @@ console.log(data.avatarUrl); // URL S3 public, dùng trực tiếp để hiển 
 }
 ```
 
-> `avatarUrl` là S3 URL **public** — dùng trực tiếp trong `<img :src="avatarUrl">`, không cần presigned URL.  
-> Mỗi lần upload sẽ tạo một file mới trên S3 — file cũ không tự xóa. Frontend nên dùng `avatarUrl` mới nhất từ response.
+> `avatarUrl` trong response là **presigned URL** (hiệu lực 1 giờ) — dùng trực tiếp trong `<img :src="avatarUrl">`.  
+> Không cache URL này lâu hơn 1 giờ. Gọi lại `GET /auth/me` hoặc `PATCH /auth/profile` để lấy URL mới.  
+> Mỗi lần upload sẽ tạo một file mới trên S3 — file cũ không tự xóa.
 
 ---
 

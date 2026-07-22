@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "version": "1.0.0",
+  "lastUpdated": "2026-06-29",
+  "description": "Mapping NotificationType → mobile navigation route. App mobile dùng JSON này khi user tap vào notification để biết cần mở screen nào với param gì.",
+
+  "fcmPayloadShape": {
+    "category": {
+      "type": "enum",
+      "values": ["ATTENDANCE", "LEAVE", "EVENT", "REQUEST"],
+      "note": "Mobile có thể dùng để route đến tab tương ứng trong notification center"
+    },
+    "type": {
+      "type": "enum",
+      "note": "Key của mục `notifications` bên dưới. Mobile lookup để biết screen + params"
+    },
+    "refType": {
+      "type": "string",
+      "note": "Tên entity. Empty string ('') nếu là attendance reminder/late/missing"
+    },
+    "refId": {
+      "type": "string",
+      "note": "Entity ID dùng để navigate. Empty string ('') nếu attendance reminder/late/missing"
+    },
+    "notificationId": {
+      "type": "string",
+      "note": "ID record Notification trong DB. Mobile dùng để mark read sau khi mở. '0' nếu là test"
+    },
+    "title": "string — bản sao của notification.title",
+    "body": "string — bản sao của notification.body"
+  },
+
+  "fallbackBehavior": {
+    "unknownType": "Mở Notification Center và highlight notification có notificationId tương ứng",
+    "missingRefId": "Mở list screen của module (vd. /leave thay vì /leave/123)",
+    "afterNavigate": "Gọi PATCH /v1/notifications/{notificationId}/read để mark read (skip nếu notificationId === '0')"
+  },
+
+  "notifications": {
+    "LATE": {
+      "category": "ATTENDANCE",
+      "refType": "",
+      "hasEntityId": false,
+      "screen": "AttendanceList",
+      "params": { "date": "today" },
+      "webUrl": "/attendance?date={today}",
+      "trigger": "Check-in trễ — lateMinutes > 0",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "MISSING_CHECKOUT": {
+      "category": "ATTENDANCE",
+      "refType": "",
+      "hasEntityId": false,
+      "screen": "AttendanceList",
+      "params": { "date": "yesterday" },
+      "webUrl": "/attendance?date={yesterday}",
+      "trigger": "Cron 23:50 — phát hiện không check-out hôm đó",
+      "recipients": ["owner"],
+      "frequency": "daily cron"
+    },
+
+    "CHECKIN_REMINDER": {
+      "category": "ATTENDANCE",
+      "refType": "",
+      "hasEntityId": false,
+      "screen": "AttendanceCheckIn",
+      "params": {},
+      "webUrl": "/attendance?date={today}",
+      "trigger": "Cron mỗi 5 phút — 10 phút trước giờ ca bắt đầu",
+      "recipients": ["owner"],
+      "frequency": "every 5 minutes"
+    },
+
+    "CHECKOUT_REMINDER": {
+      "category": "ATTENDANCE",
+      "refType": "",
+      "hasEntityId": false,
+      "screen": "AttendanceCheckOut",
+      "params": {},
+      "webUrl": "/attendance?date={today}",
+      "trigger": "Cron mỗi 5 phút — 10 phút trước giờ ca kết thúc (đã check-in)",
+      "recipients": ["owner"],
+      "frequency": "every 5 minutes"
+    },
+
+    "LEAVE_CREATED": {
+      "category": "LEAVE",
+      "refType": "leave_request",
+      "hasEntityId": true,
+      "screen": "LeaveDetail",
+      "params": { "leaveId": "{refId}" },
+      "webUrl": "/leave?id={id}",
+      "trigger": "User tạo đơn nghỉ phép",
+      "recipients": ["approver", "hr", "owner"],
+      "frequency": "real-time"
+    },
+
+    "LEAVE_APPROVED": {
+      "category": "LEAVE",
+      "refType": "leave_request",
+      "hasEntityId": true,
+      "screen": "LeaveDetail",
+      "params": { "leaveId": "{refId}" },
+      "webUrl": "/leave?id={id}",
+      "trigger": "Approver duyệt đơn",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "LEAVE_REJECTED": {
+      "category": "LEAVE",
+      "refType": "leave_request",
+      "hasEntityId": true,
+      "screen": "LeaveDetail",
+      "params": { "leaveId": "{refId}" },
+      "webUrl": "/leave?id={id}",
+      "trigger": "Approver từ chối đơn",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "LEAVE_CANCELLED": {
+      "category": "LEAVE",
+      "refType": "leave_request",
+      "hasEntityId": true,
+      "screen": "LeaveDetail",
+      "params": { "leaveId": "{refId}" },
+      "webUrl": "/leave?id={id}",
+      "trigger": "Owner thu hồi đơn",
+      "recipients": ["owner", "approver", "hr"],
+      "frequency": "real-time"
+    },
+
+    "OT_CREATED": {
+      "category": "EVENT",
+      "refType": "overtime_request",
+      "hasEntityId": true,
+      "screen": "OvertimeDetail",
+      "params": { "overtimeId": "{refId}" },
+      "webUrl": "/overtime?id={id}",
+      "trigger": "User tạo đơn tăng ca",
+      "recipients": ["approver", "hr", "owner"],
+      "frequency": "real-time"
+    },
+
+    "OT_APPROVED": {
+      "category": "EVENT",
+      "refType": "overtime_request",
+      "hasEntityId": true,
+      "screen": "OvertimeDetail",
+      "params": { "overtimeId": "{refId}" },
+      "webUrl": "/overtime?id={id}",
+      "trigger": "Approver duyệt OT",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "OT_REJECTED": {
+      "category": "EVENT",
+      "refType": "overtime_request",
+      "hasEntityId": true,
+      "screen": "OvertimeDetail",
+      "params": { "overtimeId": "{refId}" },
+      "webUrl": "/overtime?id={id}",
+      "trigger": "Approver từ chối OT",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "OT_CANCELLED": {
+      "category": "EVENT",
+      "refType": "overtime_request",
+      "hasEntityId": true,
+      "screen": "OvertimeDetail",
+      "params": { "overtimeId": "{refId}" },
+      "webUrl": "/overtime?id={id}",
+      "trigger": "Owner thu hồi OT",
+      "recipients": ["approver", "hr"],
+      "frequency": "real-time"
+    },
+
+    "OT_AUTO_CANCELLED": {
+      "category": "EVENT",
+      "refType": "overtime_request",
+      "hasEntityId": true,
+      "screen": "OvertimeDetail",
+      "params": { "overtimeId": "{refId}" },
+      "webUrl": "/overtime?id={id}",
+      "trigger": "Cron auto-cancel OT quá 7 ngày chưa duyệt",
+      "recipients": ["owner", "hr"],
+      "frequency": "daily cron"
+    },
+
+    "VIOLATION_CREATED": {
+      "category": "EVENT",
+      "refType": "violation_request",
+      "hasEntityId": true,
+      "screen": "ViolationDetail",
+      "params": { "violationId": "{refId}" },
+      "webUrl": "/violations?id={id}",
+      "trigger": "User tạo phiếu giải trình vi phạm",
+      "recipients": ["approver", "hr", "owner"],
+      "frequency": "real-time"
+    },
+
+    "VIOLATION_APPROVED": {
+      "category": "EVENT",
+      "refType": "violation_request",
+      "hasEntityId": true,
+      "screen": "ViolationDetail",
+      "params": { "violationId": "{refId}" },
+      "webUrl": "/violations?id={id}",
+      "trigger": "Approver duyệt phiếu",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "VIOLATION_REJECTED": {
+      "category": "EVENT",
+      "refType": "violation_request",
+      "hasEntityId": true,
+      "screen": "ViolationDetail",
+      "params": { "violationId": "{refId}" },
+      "webUrl": "/violations?id={id}",
+      "trigger": "Approver từ chối phiếu",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "MAKEUP_CREATED": {
+      "category": "ATTENDANCE",
+      "refType": "makeup_attendance_request",
+      "hasEntityId": true,
+      "screen": "MakeupAttendanceDetail",
+      "params": { "makeupId": "{refId}" },
+      "webUrl": "/attendance/makeup?id={id}",
+      "trigger": "User tạo đơn bù công",
+      "recipients": ["approver", "hr", "owner"],
+      "frequency": "real-time"
+    },
+
+    "MAKEUP_APPROVED": {
+      "category": "ATTENDANCE",
+      "refType": "makeup_attendance_request",
+      "hasEntityId": true,
+      "screen": "MakeupAttendanceDetail",
+      "params": { "makeupId": "{refId}" },
+      "webUrl": "/attendance/makeup?id={id}",
+      "trigger": "Approver duyệt đơn bù",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "MAKEUP_REJECTED": {
+      "category": "ATTENDANCE",
+      "refType": "makeup_attendance_request",
+      "hasEntityId": true,
+      "screen": "MakeupAttendanceDetail",
+      "params": { "makeupId": "{refId}" },
+      "webUrl": "/attendance/makeup?id={id}",
+      "trigger": "Approver từ chối đơn bù",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "ONLINE_WORK_CREATED": {
+      "category": "LEAVE",
+      "refType": "online_work_request",
+      "hasEntityId": true,
+      "screen": "OnlineWorkDetail",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/online-work?id={id}",
+      "trigger": "User tạo đơn làm online (gửi cho approver L1)",
+      "recipients": ["approverL1", "hr", "owner"],
+      "frequency": "real-time"
+    },
+
+    "ONLINE_WORK_APPROVED": {
+      "category": "LEAVE",
+      "refType": "online_work_request",
+      "hasEntityId": true,
+      "screen": "OnlineWorkDetail",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/online-work?id={id}",
+      "trigger": "Approver L1 hoặc L2 duyệt (chuyển sang cấp tiếp theo)",
+      "recipients": ["approverNextLevel", "owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "ONLINE_WORK_COMPLETED": {
+      "category": "LEAVE",
+      "refType": "online_work_request",
+      "hasEntityId": true,
+      "screen": "OnlineWorkDetail",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/online-work?id={id}",
+      "trigger": "Chief (cấp cuối) duyệt — đơn online được chấp thuận",
+      "recipients": ["owner", "approvers", "hr"],
+      "frequency": "real-time"
+    },
+
+    "ONLINE_WORK_REJECTED": {
+      "category": "LEAVE",
+      "refType": "online_work_request",
+      "hasEntityId": true,
+      "screen": "OnlineWorkDetail",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/online-work?id={id}",
+      "trigger": "Approver bất kỳ cấp từ chối",
+      "recipients": ["owner", "hr"],
+      "frequency": "real-time"
+    },
+
+    "ONLINE_WORK_CANCELLED": {
+      "category": "LEAVE",
+      "refType": "online_work_request",
+      "hasEntityId": true,
+      "screen": "OnlineWorkDetail",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/online-work?id={id}",
+      "trigger": "Owner thu hồi đơn",
+      "recipients": ["approver"],
+      "frequency": "real-time"
+    },
+
+    "BUSINESS_TRIP_PENDING": {
+      "category": "REQUEST",
+      "refType": "business_trip",
+      "hasEntityId": true,
+      "screen": "BusinessTripDetail",
+      "params": { "tripId": "{refId}" },
+      "webUrl": "/business-trips?id={id}",
+      "trigger": "User submit đơn đi công tác",
+      "recipients": ["approver", "owner"],
+      "frequency": "real-time"
+    },
+
+    "BUSINESS_TRIP_APPROVED": {
+      "category": "REQUEST",
+      "refType": "business_trip",
+      "hasEntityId": true,
+      "screen": "BusinessTripDetail",
+      "params": { "tripId": "{refId}" },
+      "webUrl": "/business-trips?id={id}",
+      "trigger": "Approver duyệt",
+      "recipients": ["owner"],
+      "frequency": "real-time"
+    },
+
+    "BUSINESS_TRIP_REJECTED": {
+      "category": "REQUEST",
+      "refType": "business_trip",
+      "hasEntityId": true,
+      "screen": "BusinessTripDetail",
+      "params": { "tripId": "{refId}" },
+      "webUrl": "/business-trips?id={id}",
+      "trigger": "Approver từ chối",
+      "recipients": ["owner"],
+      "frequency": "real-time"
+    },
+
+    "CONTRACT_EXPIRY_WARNING": {
+      "category": "EVENT",
+      "refType": "contract",
+      "hasEntityId": true,
+      "screen": "EmployeeContracts",
+      "params": { "employeeId": "{refId}" },
+      "webUrl": "/employees/{id}?tab=contracts",
+      "trigger": "Cron hàng ngày — HĐ sắp hết hạn (30/15/7 ngày)",
+      "recipients": ["owner", "hr"],
+      "frequency": "daily cron",
+      "note": "id ở đây là employeeId, không phải contractId"
+    },
+
+    "TEST": {
+      "category": "EVENT",
+      "refType": "{tùy}",
+      "hasEntityId": "{tùy}",
+      "screen": "{tùy theo refType test}",
+      "params": {},
+      "trigger": "ADMIN gọi /v1/notifications/test-fcm hoặc /v1/notifications/test",
+      "recipients": ["employee theo employeeId"],
+      "frequency": "manual",
+      "note": "Mobile có thể skip handle hoặc hiện toast generic"
+    }
+  },
+
+  "exclusions": {
+    "general_request": "Các type GENERAL_REQUEST_* đã được bỏ qua theo yêu cầu — sẽ thêm sau"
+  },
+
+  "implementationGuide": {
+    "flutter": "Switch trên `data['type']`, gọi `Navigator.pushNamed(context, screen, arguments: {...params with id substituted})`. Sau push thì gọi API mark-read nếu notificationId !== '0'.",
+    "ios_native": "Trong `didReceive response: UNNotificationResponse`, parse userInfo, switch trên type, push view controller tương ứng.",
+    "android_native": "Trong `MessagingService.onMessageReceived`, build PendingIntent với extras từ data, set vào NotificationCompat.Builder."
+  }
+}
