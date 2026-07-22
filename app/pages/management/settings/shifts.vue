@@ -66,6 +66,41 @@
 	const selectedWorkDays = ref<number[]>([1, 2, 3, 4, 5]);
 	const workDaysError = ref('');
 
+	// ─── Cửa sổ chấm công + require flags (6 fields mới) ───
+	const checkInWindowStart = ref<number | null>(null);
+	const checkInWindowEnd = ref<number | null>(null);
+	const checkOutWindowStart = ref<number | null>(null);
+	const checkOutWindowEnd = ref<number | null>(null);
+	const requireCheckIn = ref(true);
+	const requireCheckOut = ref(true);
+
+	// Getter/setter chuyển null <-> '' cho <input type="number">.
+	// parseInt('') = NaN → null. Giữ null khi user để trống (không gửi 0).
+	function makeWindowModel(ref: Ref<number | null>) {
+		return computed({
+			get: () => (ref.value === null ? '' : String(ref.value)),
+			set: (v: string) => {
+				if (v === '') {
+					ref.value = null;
+					return;
+				}
+				const n = parseInt(v, 10);
+				ref.value = Number.isNaN(n) ? null : n;
+			},
+		});
+	}
+
+	const checkInWindowStartInput = makeWindowModel(checkInWindowStart);
+	const checkInWindowEndInput = makeWindowModel(checkInWindowEnd);
+	const checkOutWindowStartInput = makeWindowModel(checkOutWindowStart);
+	const checkOutWindowEndInput = makeWindowModel(checkOutWindowEnd);
+
+	const requireError = computed(() =>
+		!requireCheckIn.value && !requireCheckOut.value
+			? 'Ca làm việc phải yêu cầu ít nhất check-in hoặc check-out'
+			: '',
+	);
+
 	const { handleSubmit, defineField, errors, setValues, resetForm, setFieldError } = useForm({
 		validationSchema: {
 			name: (v: string) => (v && v.trim().length >= 2) || 'Tên ca phải có ít nhất 2 ký tự',
@@ -121,10 +156,73 @@
 		}
 	});
 
+	// Preview realtime cửa sổ chấm công. null → fallback 60p.
+	const previewWindows = computed(() => {
+		const ci = checkInTime.value as string | undefined;
+		const co = checkOutTime.value as string | undefined;
+		if (!ci || !co || !/^\d{2}:\d{2}$/.test(ci) || !/^\d{2}:\d{2}$/.test(co)) return null;
+
+		const parseTime = (t: string) => {
+			const [h, m] = t.split(':').map(Number);
+			return (h ?? 0) * 60 + (m ?? 0);
+		};
+		const formatMin = (totalMin: number) => {
+			const normalized = ((totalMin % 1440) + 1440) % 1440;
+			const h = Math.floor(normalized / 60);
+			const m = normalized % 60;
+			return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+		};
+
+		const shiftStart = parseTime(ci);
+		const shiftEnd = parseTime(co);
+		const ciStart = checkInWindowStart.value ?? 60;
+		const ciEnd = checkInWindowEnd.value ?? 60;
+		const coStart = checkOutWindowStart.value ?? 60;
+		const coEnd = checkOutWindowEnd.value ?? 60;
+
+		return {
+			checkIn: {
+				earliest: formatMin(shiftStart - ciStart),
+				shiftTime: formatMin(shiftStart),
+				deadline: formatMin(shiftStart + ciEnd),
+			},
+			checkOut: {
+				earliest: formatMin(shiftEnd - coStart),
+				shiftTime: formatMin(shiftEnd),
+				deadline: formatMin(shiftEnd + coEnd),
+			},
+		};
+	});
+
+	// Helpers cho list view: badge + tooltip khi ca có custom window
+	function hasCustomWindow(s: WorkShiftResponse) {
+		return (
+			s.checkInWindowStart !== null ||
+			s.checkInWindowEnd !== null ||
+			s.checkOutWindowStart !== null ||
+			s.checkOutWindowEnd !== null
+		);
+	}
+
+	function customWindowTooltip(s: WorkShiftResponse) {
+		const fmt = (v: number | null) => (v === null ? 'mặc định 60' : String(v));
+		return (
+			'Khung giờ tùy chỉnh:\n' +
+			`Check-in: ${fmt(s.checkInWindowStart)}p trước – ${fmt(s.checkInWindowEnd)}p sau\n` +
+			`Check-out: ${fmt(s.checkOutWindowStart)}p trước – ${fmt(s.checkOutWindowEnd)}p sau`
+		);
+	}
+
 	function openCreateModal() {
 		editingShift.value = null;
 		selectedWorkDays.value = [1, 2, 3, 4, 5];
 		workDaysError.value = '';
+		checkInWindowStart.value = null;
+		checkInWindowEnd.value = null;
+		checkOutWindowStart.value = null;
+		checkOutWindowEnd.value = null;
+		requireCheckIn.value = true;
+		requireCheckOut.value = true;
 		resetForm({
 			values: {
 				name: '',
@@ -145,6 +243,13 @@
 		editingShift.value = shift;
 		selectedWorkDays.value = [...shift.workDays];
 		workDaysError.value = '';
+		// null giữ nguyên null — placeholder hiện đúng "Mặc định 60p"
+		checkInWindowStart.value = shift.checkInWindowStart;
+		checkInWindowEnd.value = shift.checkInWindowEnd;
+		checkOutWindowStart.value = shift.checkOutWindowStart;
+		checkOutWindowEnd.value = shift.checkOutWindowEnd;
+		requireCheckIn.value = shift.requireCheckIn;
+		requireCheckOut.value = shift.requireCheckOut;
 		setValues({
 			name: shift.name,
 			checkInTime: shift.checkInTime,
@@ -177,6 +282,9 @@
 			return;
 		}
 
+		// Cả 2 require flags OFF → BE reject; chặn client-side.
+		if (requireError.value) return;
+
 		// XOR client-side: breakStart và breakEnd phải cùng có hoặc cùng trống.
 		const bs = (values.breakStartTime ?? '').trim();
 		const be = (values.breakEndTime ?? '').trim();
@@ -193,6 +301,13 @@
 				workDays: selectedWorkDays.value,
 				breakStartTime: bs || null,
 				breakEndTime: be || null,
+				// null → TH1 default; gửi thẳng null để BE clear khi PATCH
+				checkInWindowStart: checkInWindowStart.value,
+				checkInWindowEnd: checkInWindowEnd.value,
+				checkOutWindowStart: checkOutWindowStart.value,
+				checkOutWindowEnd: checkOutWindowEnd.value,
+				requireCheckIn: requireCheckIn.value,
+				requireCheckOut: requireCheckOut.value,
 			};
 			if (editingShift.value) {
 				await updateWorkShift(editingShift.value.id, dto);
@@ -672,6 +787,27 @@
 						>
 							📍 GPS
 						</span>
+						<span
+							v-if="!shift.requireCheckIn"
+							class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+							title="Ca này không yêu cầu check-in"
+						>
+							Chỉ check-out
+						</span>
+						<span
+							v-if="!shift.requireCheckOut"
+							class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+							title="Ca này không yêu cầu check-out"
+						>
+							Chỉ check-in
+						</span>
+						<span
+							v-if="hasCustomWindow(shift)"
+							class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+							:title="customWindowTooltip(shift)"
+						>
+							⚙️ Cửa sổ tùy chỉnh
+						</span>
 					</div>
 
 					<!-- Work days pills -->
@@ -1126,10 +1262,163 @@
 							</label>
 						</div>
 
+						<!-- ─── Section: Khung giờ được phép chấm công ─── -->
+						<div class="pt-4 border-t border-gray-100 dark:border-gray-800">
+							<div class="mb-3">
+								<p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Khung giờ được phép chấm công</p>
+								<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+									Để trống → hệ thống tự động cộng ±60 phút
+								</p>
+							</div>
+
+							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+								<!-- Check-in -->
+								<div class="space-y-3">
+									<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+										Check-in
+									</p>
+									<div>
+										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+											Phút sớm nhất trước giờ vào
+										</label>
+										<input
+											v-model="checkInWindowStartInput"
+											type="number"
+											min="0"
+											max="240"
+											placeholder="Mặc định 60p"
+											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+										/>
+										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+											VD: 60 → được check-in từ [giờ vào − 60p]
+										</p>
+									</div>
+									<div>
+										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+											Phút muộn nhất sau giờ vào
+										</label>
+										<input
+											v-model="checkInWindowEndInput"
+											type="number"
+											min="0"
+											max="240"
+											placeholder="Mặc định 60p"
+											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+										/>
+										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+											VD: 60 → deadline check-in [giờ vào + phép trễ + 60p]
+										</p>
+									</div>
+								</div>
+
+								<!-- Check-out -->
+								<div class="space-y-3">
+									<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+										Check-out
+									</p>
+									<div>
+										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+											Phút sớm nhất trước giờ ra
+										</label>
+										<input
+											v-model="checkOutWindowStartInput"
+											type="number"
+											min="0"
+											max="240"
+											placeholder="Mặc định 60p"
+											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+										/>
+										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+											VD: 60 → được check-out từ [giờ ra − phép về sớm − 60p]
+										</p>
+									</div>
+									<div>
+										<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+											Phút muộn nhất sau giờ ra
+										</label>
+										<input
+											v-model="checkOutWindowEndInput"
+											type="number"
+											min="0"
+											max="240"
+											placeholder="Mặc định 60p"
+											class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+										/>
+										<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+											VD: 60 → deadline check-out [giờ ra + 60p]
+										</p>
+									</div>
+								</div>
+							</div>
+
+							<!-- Preview realtime -->
+							<div
+								v-if="previewWindows"
+								class="mt-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2 space-y-1"
+							>
+								<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
+									Check-in: {{ previewWindows.checkIn.earliest }} → {{ previewWindows.checkIn.shiftTime }}
+									<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkIn.deadline }})</span>
+								</p>
+								<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
+									Check-out: {{ previewWindows.checkOut.earliest }} → {{ previewWindows.checkOut.shiftTime }}
+									<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkOut.deadline }})</span>
+								</p>
+							</div>
+						</div>
+
+						<!-- ─── Section: Yêu cầu chấm công ─── -->
+						<div class="pt-4 border-t border-gray-100 dark:border-gray-800">
+							<p class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Yêu cầu chấm công</p>
+
+							<div class="space-y-3">
+								<label class="flex items-start gap-3 cursor-pointer">
+									<input
+										v-model="requireCheckIn"
+										type="checkbox"
+										class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+									/>
+									<div class="flex-1 min-w-0">
+										<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-in</p>
+										<p
+											v-if="!requireCheckIn"
+											class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
+										>
+											⚠️ Nhân viên không cần check-in cho ca này
+										</p>
+									</div>
+								</label>
+
+								<label class="flex items-start gap-3 cursor-pointer">
+									<input
+										v-model="requireCheckOut"
+										type="checkbox"
+										class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+									/>
+									<div class="flex-1 min-w-0">
+										<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-out</p>
+										<p
+											v-if="!requireCheckOut"
+											class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
+										>
+											⚠️ Nhân viên không cần check-out cho ca này
+										</p>
+									</div>
+								</label>
+							</div>
+
+							<p
+								v-if="requireError"
+								class="mt-2 text-xs text-red-500 leading-snug"
+							>
+								{{ requireError }}
+							</p>
+						</div>
+
 						<!-- Actions -->
 						<div class="flex justify-end gap-3 pt-2">
 							<CommonAppButton variant="outline" type="button" @click="closeShiftModal">Hủy</CommonAppButton>
-							<CommonAppButton type="submit" :loading="submittingShift">
+							<CommonAppButton type="submit" :loading="submittingShift" :disabled="!!requireError">
 								{{ editingShift ? 'Cập nhật' : 'Tạo khuôn ca' }}
 							</CommonAppButton>
 						</div>

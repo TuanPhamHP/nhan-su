@@ -14,6 +14,14 @@ export interface WorkShiftResponse {
 	workDays: number[];             // 0=CN, 1=T2, ..., 6=T7
 	isOnline: boolean;              // true = cron tự ghi PRESENT, ẩn nút check-in
 	requiresLocationCheck: boolean; // false = remote toàn thời gian — check-in thủ công, không validate GPS
+	// Cửa sổ chấm công (TH2 custom, null = TH1 default 60p)
+	checkInWindowStart: number | null;   // phút TRƯỚC giờ vào ca
+	checkInWindowEnd: number | null;     // phút SAU giờ vào ca (chưa cộng approvedLate)
+	checkOutWindowStart: number | null;  // phút TRƯỚC giờ tan ca (chưa trừ approvedEarly)
+	checkOutWindowEnd: number | null;    // phút SAU giờ tan ca
+	// Require flags
+	requireCheckIn: boolean;             // false = ca chỉ check-out
+	requireCheckOut: boolean;            // false = ca chỉ check-in
 	isActive: boolean;
 	createdAt: string;              // ISO 8601
 }
@@ -29,6 +37,13 @@ export interface CreateWorkShiftDto {
 	workDays: number[];
 	isOnline?: boolean;             // mặc định false
 	requiresLocationCheck?: boolean; // mặc định true
+	// 0-240 phút — omit / null = TH1 default 60p. Gửi null trên PATCH để clear từ TH2 → TH1.
+	checkInWindowStart?: number | null;
+	checkInWindowEnd?: number | null;
+	checkOutWindowStart?: number | null;
+	checkOutWindowEnd?: number | null;
+	requireCheckIn?: boolean;       // default true
+	requireCheckOut?: boolean;      // default true
 }
 
 export type UpdateWorkShiftDto = Partial<CreateWorkShiftDto>;
