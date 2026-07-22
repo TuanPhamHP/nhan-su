@@ -88,25 +88,16 @@
 		return h * 60 + m;
 	}
 
-	// Offset (start → shift, hoặc shift → end) tính theo modulo 1440 để cross-midnight vẫn đúng.
-	function circularOffset(from: number, to: number): number {
-		return (((to - from) % 1440) + 1440) % 1440;
-	}
-
-	// Enforce windowStart ≤ shiftTime ≤ windowEnd (mod 1440).
-	// side='start' → offset = shift - window (window trước shift). offset > 720 ≡ window đặt SAU shift.
-	// side='end'   → offset = window - shift (window sau shift).   offset > 720 ≡ window đặt TRƯỚC shift.
-	// Không giới hạn 4h — BE handle range.
+	// Enforce windowStart ≤ shiftTime ≤ windowEnd. So sánh thẳng theo phút trong ngày —
+	// không hỗ trợ ca cross-midnight (BE tự handle nếu cần).
 	function validateWindowSide(window: string, shift: string, side: 'start' | 'end'): string | undefined {
 		if (!window) return undefined;
 		if (!/^\d{2}:\d{2}$/.test(window)) return 'Định dạng HH:mm';
 		const wMin = hhmmToMinutes(window);
 		const sMin = hhmmToMinutes(shift);
 		if (wMin === undefined || sMin === undefined) return undefined; // shift chưa hợp lệ — bỏ qua
-		const offset = side === 'start' ? circularOffset(wMin, sMin) : circularOffset(sMin, wMin);
-		if (offset > 720) {
-			return side === 'start' ? `Phải trước hoặc bằng ${shift}` : `Phải sau hoặc bằng ${shift}`;
-		}
+		if (side === 'start' && wMin > sMin) return `Phải trước hoặc bằng ${shift}`;
+		if (side === 'end' && wMin < sMin) return `Phải sau hoặc bằng ${shift}`;
 		return undefined;
 	}
 
