@@ -14,11 +14,11 @@ export interface WorkShiftResponse {
 	workDays: number[];             // 0=CN, 1=T2, ..., 6=T7
 	isOnline: boolean;              // true = cron tự ghi PRESENT, ẩn nút check-in
 	requiresLocationCheck: boolean; // false = remote toàn thời gian — check-in thủ công, không validate GPS
-	// Cửa sổ chấm công (TH2 custom, null = TH1 default 60p)
-	checkInWindowStart: number | null;   // phút TRƯỚC giờ vào ca
-	checkInWindowEnd: number | null;     // phút SAU giờ vào ca (chưa cộng approvedLate)
-	checkOutWindowStart: number | null;  // phút TRƯỚC giờ tan ca (chưa trừ approvedEarly)
-	checkOutWindowEnd: number | null;    // phút SAU giờ tan ca
+	// Cửa sổ chấm công (HH:mm tuyệt đối; null = default ±60p quanh giờ vào/ra)
+	checkInWindowStart: string | null;   // "HH:mm" — mở cửa sổ check-in
+	checkInWindowEnd: string | null;     // "HH:mm" — đóng cửa sổ check-in (BE tự cộng approvedLate khi eval)
+	checkOutWindowStart: string | null;  // "HH:mm" — mở cửa sổ check-out (BE tự trừ approvedEarly)
+	checkOutWindowEnd: string | null;    // "HH:mm" — đóng cửa sổ check-out
 	// Require flags
 	requireCheckIn: boolean;             // false = ca chỉ check-out
 	requireCheckOut: boolean;            // false = ca chỉ check-in
@@ -37,11 +37,12 @@ export interface CreateWorkShiftDto {
 	workDays: number[];
 	isOnline?: boolean;             // mặc định false
 	requiresLocationCheck?: boolean; // mặc định true
-	// 0-240 phút — omit / null = TH1 default 60p. Gửi null trên PATCH để clear từ TH2 → TH1.
-	checkInWindowStart?: number | null;
-	checkInWindowEnd?: number | null;
-	checkOutWindowStart?: number | null;
-	checkOutWindowEnd?: number | null;
+	// "HH:mm" tuyệt đối — omit / null = default ±60p. Gửi null trên PATCH để clear về default.
+	// BE validate cửa sổ nằm trong 240p quanh giờ vào/ra và windowStart ≤ shiftTime ≤ windowEnd (mod 1440 cho ca cross-midnight).
+	checkInWindowStart?: string | null;
+	checkInWindowEnd?: string | null;
+	checkOutWindowStart?: string | null;
+	checkOutWindowEnd?: string | null;
 	requireCheckIn?: boolean;       // default true
 	requireCheckOut?: boolean;      // default true
 }

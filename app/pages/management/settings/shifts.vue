@@ -827,32 +827,31 @@
 					</p>
 
 					<!-- Time info grid — labels căn cùng cột nhờ grid-cols-[auto_1fr] -->
-					<div class="grid grid-cols-[auto_1fr] gap-x-2 items-baseline mb-1">
+					<div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 items-baseline mb-1">
 						<span class="text-sm text-gray-700 dark:text-gray-300">Thời gian:</span>
 						<span class="text-sm font-mono font-semibold text-brand-600 dark:text-brand-400">
 							{{ shift.checkInTime }} → {{ shift.checkOutTime }}
 						</span>
 
 						<template v-if="shift.breakStartTime && shift.breakEndTime">
-							<span class="text-xs text-gray-500 dark:text-gray-400">Nghỉ trưa:</span>
-							<span class="text-xs font-mono text-gray-500 dark:text-gray-400">
-								{{ shift.breakStartTime }} – {{ shift.breakEndTime }}
+							<span class="text-sm text-gray-700 dark:text-gray-400">Nghỉ trưa:</span>
+							<span class="text-sm font-mono text-brand-500 dark:text-brand-400">
+								{{ shift.breakStartTime }} → {{ shift.breakEndTime }}
 							</span>
 						</template>
-
-						<span class="text-xs text-gray-500 dark:text-gray-400">Thời gian vào hợp lệ:</span>
-						<span class="text-xs font-mono text-gray-500 dark:text-gray-400">
-							{{ effectiveWindows(shift).ciStart }} – {{ effectiveWindows(shift).ciEnd }}
+						<span class="text-sm text-gray-700 dark:text-gray-400">Vào hợp lệ:</span>
+						<span class="text-sm font-mono text-brand-500 dark:text-brand-400">
+							{{ effectiveWindows(shift).ciStart }} → {{ effectiveWindows(shift).ciEnd }}
 						</span>
 
-						<span class="text-xs text-gray-500 dark:text-gray-400">Thời gian ra hợp lệ:</span>
-						<span class="text-xs font-mono text-gray-500 dark:text-gray-400">
-							{{ effectiveWindows(shift).coStart }} – {{ effectiveWindows(shift).coEnd }}
+						<span class="text-sm text-gray-700 dark:text-gray-400">Ra hợp lệ:</span>
+						<span class="text-sm font-mono text-brand-500 dark:text-brand-400">
+							{{ effectiveWindows(shift).coStart }} → {{ effectiveWindows(shift).coEnd }}
 						</span>
 					</div>
 
 					<!-- Thresholds -->
-					<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">
+					<p class="text-xs text-gray-700 dark:text-gray-500 mb-2">
 						Trễ ≤ {{ shift.lateThresholdMin }}&thinsp;phút · Về sớm ≤ {{ shift.earlyThresholdMin }}&thinsp;phút
 					</p>
 
