@@ -101,6 +101,10 @@
 			: '',
 	);
 
+	// Collapse state cho 2 khối trong modal (default expanded)
+	const showTimeSection = ref(true);
+	const showWindowSection = ref(true);
+
 	const { handleSubmit, defineField, errors, setValues, resetForm, setFieldError } = useForm({
 		validationSchema: {
 			name: (v: string) => (v && v.trim().length >= 2) || 'Tên ca phải có ít nhất 2 ký tự',
@@ -1111,25 +1115,48 @@
 							<p v-if="errors.name" class="mt-1 text-xs text-red-500">{{ errors.name }}</p>
 						</div>
 
-						<!-- Giờ vào / Giờ ra -->
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-									Giờ vào <span class="text-red-500">*</span>
-								</label>
-								<UiTimeInput v-model="checkInTime" v-bind="checkInTimeAttrs" :error="errors.checkInTime" />
-								<p v-if="errors.checkInTime" class="mt-1 text-xs text-red-500">{{ errors.checkInTime }}</p>
-							</div>
-							<div>
-								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-									Giờ ra <span class="text-red-500">*</span>
-								</label>
-								<UiTimeInput v-model="checkOutTime" v-bind="checkOutTimeAttrs" :error="errors.checkOutTime" />
-								<p v-if="errors.checkOutTime" class="mt-1 text-xs text-red-500">{{ errors.checkOutTime }}</p>
-							</div>
-						</div>
+						<!-- ═══════════════════════════════════════════════════ -->
+						<!-- KHỐI 1: Thông tin thời gian (collapse)             -->
+						<!-- ═══════════════════════════════════════════════════ -->
+						<div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+							<button
+								type="button"
+								class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+								@click="showTimeSection = !showTimeSection"
+							>
+								<span class="text-sm font-semibold text-gray-800 dark:text-gray-200">Thông tin thời gian</span>
+								<svg
+									class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform"
+									:class="{ 'rotate-180': showTimeSection }"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+								</svg>
+							</button>
 
-						<!-- Giờ nghỉ trưa -->
+							<div v-show="showTimeSection" class="p-4 space-y-4">
+								<!-- Giờ vào / Giờ ra -->
+								<div class="grid grid-cols-2 gap-3">
+									<div>
+										<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+											Giờ vào <span class="text-red-500">*</span>
+										</label>
+										<UiTimeInput v-model="checkInTime" v-bind="checkInTimeAttrs" :error="errors.checkInTime" />
+										<p v-if="errors.checkInTime" class="mt-1 text-xs text-red-500">{{ errors.checkInTime }}</p>
+									</div>
+									<div>
+										<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+											Giờ ra <span class="text-red-500">*</span>
+										</label>
+										<UiTimeInput v-model="checkOutTime" v-bind="checkOutTimeAttrs" :error="errors.checkOutTime" />
+										<p v-if="errors.checkOutTime" class="mt-1 text-xs text-red-500">{{ errors.checkOutTime }}</p>
+									</div>
+								</div>
+
+								<!-- Giờ nghỉ trưa -->
 						<div>
 							<div class="grid grid-cols-2 gap-3">
 								<div>
@@ -1224,54 +1251,77 @@
 							<p v-if="workDaysError" class="mt-1.5 text-xs text-red-500">{{ workDaysError }}</p>
 						</div>
 
-						<!-- Chế độ ca làm việc -->
-						<div class="space-y-3 pt-1">
-							<label class="flex items-start gap-3 cursor-pointer">
-								<input
-									v-model="isOnline"
-									type="checkbox"
-									class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
-								/>
-								<div class="flex-1 min-w-0">
-									<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Ca online (hệ thống tự ghi công)</p>
-									<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
-										Cron tự ghi PRESENT cuối ngày, nhân viên KHÔNG cần check-in thủ công (vd: ca T7 WFH).
-									</p>
-								</div>
-							</label>
+								<!-- Chế độ ca làm việc -->
+								<div class="space-y-3 pt-1">
+									<label class="flex items-start gap-3 cursor-pointer">
+										<input
+											v-model="isOnline"
+											type="checkbox"
+											class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+										/>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Ca online (hệ thống tự ghi công)</p>
+											<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+												Cron tự ghi PRESENT cuối ngày, nhân viên KHÔNG cần check-in thủ công (vd: ca T7 WFH).
+											</p>
+										</div>
+									</label>
 
-							<label
-								class="flex items-start gap-3"
-								:class="isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
-							>
-								<input
-									v-model="requiresLocationCheck"
-									type="checkbox"
-									:disabled="!!isOnline"
-									class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 disabled:cursor-not-allowed"
-								/>
-								<div class="flex-1 min-w-0">
-									<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check vị trí GPS</p>
-									<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
-										Tắt nếu nhân sự làm remote toàn thời gian — vẫn check-in/out thủ công nhưng không kiểm tra GPS.
-									</p>
-									<p v-if="isOnline" class="text-xs text-amber-600 dark:text-amber-400 mt-1 leading-snug">
-										Ca online luôn override — không cho check-in thủ công, GPS không có tác dụng.
-									</p>
+									<label
+										class="flex items-start gap-3"
+										:class="isOnline ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+									>
+										<input
+											v-model="requiresLocationCheck"
+											type="checkbox"
+											:disabled="!!isOnline"
+											class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 disabled:cursor-not-allowed"
+										/>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check vị trí GPS</p>
+											<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+												Tắt nếu nhân sự làm remote toàn thời gian — vẫn check-in/out thủ công nhưng không kiểm tra GPS.
+											</p>
+											<p v-if="isOnline" class="text-xs text-amber-600 dark:text-amber-400 mt-1 leading-snug">
+												Ca online luôn override — không cho check-in thủ công, GPS không có tác dụng.
+											</p>
+										</div>
+									</label>
 								</div>
-							</label>
+							</div>
 						</div>
 
-						<!-- ─── Section: Khung giờ được phép chấm công ─── -->
-						<div class="pt-4 border-t border-gray-100 dark:border-gray-800">
-							<div class="mb-3">
-								<p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Khung giờ được phép chấm công</p>
-								<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
-									Để trống → hệ thống tự động cộng ±60 phút
-								</p>
-							</div>
+						<!-- ═══════════════════════════════════════════════════ -->
+						<!-- KHỐI 2: Khung giờ được phép chấm công (collapse)   -->
+						<!-- ═══════════════════════════════════════════════════ -->
+						<div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+							<button
+								type="button"
+								class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+								@click="showWindowSection = !showWindowSection"
+							>
+								<div class="text-left">
+									<span class="block text-sm font-semibold text-gray-800 dark:text-gray-200">
+										Khung giờ được phép chấm công
+									</span>
+									<span class="block text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+										Để trống → hệ thống tự động cộng ±60 phút
+									</span>
+								</div>
+								<svg
+									class="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400 transition-transform"
+									:class="{ 'rotate-180': showWindowSection }"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+								</svg>
+							</button>
 
-							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+							<div v-show="showWindowSection" class="p-4 space-y-4">
+								<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<!-- Check-in -->
 								<div class="space-y-3">
 									<p class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
@@ -1351,68 +1401,69 @@
 								</div>
 							</div>
 
-							<!-- Preview realtime -->
-							<div
-								v-if="previewWindows"
-								class="mt-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2 space-y-1"
-							>
-								<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
-									Check-in: {{ previewWindows.checkIn.earliest }} → {{ previewWindows.checkIn.shiftTime }}
-									<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkIn.deadline }})</span>
-								</p>
-								<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
-									Check-out: {{ previewWindows.checkOut.earliest }} → {{ previewWindows.checkOut.shiftTime }}
-									<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkOut.deadline }})</span>
-								</p>
-							</div>
-						</div>
+								<!-- Preview realtime -->
+								<div
+									v-if="previewWindows"
+									class="mt-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2 space-y-1"
+								>
+									<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
+										Check-in: {{ previewWindows.checkIn.earliest }} → {{ previewWindows.checkIn.shiftTime }}
+										<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkIn.deadline }})</span>
+									</p>
+									<p class="text-[11px] font-mono text-gray-600 dark:text-gray-300">
+										Check-out: {{ previewWindows.checkOut.earliest }} → {{ previewWindows.checkOut.shiftTime }}
+										<span class="text-gray-400 dark:text-gray-500">(deadline: {{ previewWindows.checkOut.deadline }})</span>
+									</p>
+								</div>
 
-						<!-- ─── Section: Yêu cầu chấm công ─── -->
-						<div class="pt-4 border-t border-gray-100 dark:border-gray-800">
-							<p class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Yêu cầu chấm công</p>
+								<!-- ─── Sub-section: Yêu cầu chấm công ─── -->
+								<div class="pt-4 border-t border-gray-100 dark:border-gray-800">
+									<p class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Yêu cầu chấm công</p>
 
-							<div class="space-y-3">
-								<label class="flex items-start gap-3 cursor-pointer">
-									<input
-										v-model="requireCheckIn"
-										type="checkbox"
-										class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
-									/>
-									<div class="flex-1 min-w-0">
-										<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-in</p>
-										<p
-											v-if="!requireCheckIn"
-											class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
-										>
-											⚠️ Nhân viên không cần check-in cho ca này
-										</p>
+									<div class="space-y-3">
+										<label class="flex items-start gap-3 cursor-pointer">
+											<input
+												v-model="requireCheckIn"
+												type="checkbox"
+												class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+											/>
+											<div class="flex-1 min-w-0">
+												<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-in</p>
+												<p
+													v-if="!requireCheckIn"
+													class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
+												>
+													⚠️ Nhân viên không cần check-in cho ca này
+												</p>
+											</div>
+										</label>
+
+										<label class="flex items-start gap-3 cursor-pointer">
+											<input
+												v-model="requireCheckOut"
+												type="checkbox"
+												class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+											/>
+											<div class="flex-1 min-w-0">
+												<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-out</p>
+												<p
+													v-if="!requireCheckOut"
+													class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
+												>
+													⚠️ Nhân viên không cần check-out cho ca này
+												</p>
+											</div>
+										</label>
 									</div>
-								</label>
 
-								<label class="flex items-start gap-3 cursor-pointer">
-									<input
-										v-model="requireCheckOut"
-										type="checkbox"
-										class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
-									/>
-									<div class="flex-1 min-w-0">
-										<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-out</p>
-										<p
-											v-if="!requireCheckOut"
-											class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
-										>
-											⚠️ Nhân viên không cần check-out cho ca này
-										</p>
-									</div>
-								</label>
+									<p
+										v-if="requireError"
+										class="mt-2 text-xs text-red-500 leading-snug"
+									>
+										{{ requireError }}
+									</p>
+								</div>
 							</div>
-
-							<p
-								v-if="requireError"
-								class="mt-2 text-xs text-red-500 leading-snug"
-							>
-								{{ requireError }}
-							</p>
 						</div>
 
 						<!-- Actions -->
