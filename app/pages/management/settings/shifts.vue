@@ -234,6 +234,28 @@
 		};
 	});
 
+	// Compute khung giờ hợp lệ hiển thị trên card. null → fallback shift ± 60p.
+	function effectiveWindows(s: WorkShiftResponse) {
+		const parseTime = (t: string) => {
+			const [h, m] = t.split(':').map(Number);
+			return (h ?? 0) * 60 + (m ?? 0);
+		};
+		const formatMin = (totalMin: number) => {
+			const normalized = ((totalMin % 1440) + 1440) % 1440;
+			const h = Math.floor(normalized / 60);
+			const m = normalized % 60;
+			return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+		};
+		const ci = parseTime(s.checkInTime);
+		const co = parseTime(s.checkOutTime);
+		return {
+			ciStart: s.checkInWindowStart ?? formatMin(ci - 60),
+			ciEnd: s.checkInWindowEnd ?? formatMin(ci + 60),
+			coStart: s.checkOutWindowStart ?? formatMin(co - 60),
+			coEnd: s.checkOutWindowEnd ?? formatMin(co + 60),
+		};
+	}
+
 	// Helpers cho list view: badge + tooltip khi ca có custom window
 	function hasCustomWindow(s: WorkShiftResponse) {
 		return (
@@ -816,6 +838,18 @@
 					>
 						Nghỉ trưa {{ shift.breakStartTime }} – {{ shift.breakEndTime }}
 					</p>
+
+					<!-- Khung giờ chấm công hợp lệ (null → default ±60p) -->
+					<div class="text-[11px] font-mono text-gray-500 dark:text-gray-400 mb-1 leading-tight">
+						<p>
+							<span class="text-gray-400 dark:text-gray-500">CI</span>
+							{{ effectiveWindows(shift).ciStart }} – {{ effectiveWindows(shift).ciEnd }}
+						</p>
+						<p>
+							<span class="text-gray-400 dark:text-gray-500">CO</span>
+							{{ effectiveWindows(shift).coStart }} – {{ effectiveWindows(shift).coEnd }}
+						</p>
+					</div>
 
 					<!-- Thresholds -->
 					<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">
