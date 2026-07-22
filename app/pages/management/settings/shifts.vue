@@ -80,10 +80,33 @@
 		!requireCheckIn.value && !requireCheckOut.value ? 'Ca làm việc phải yêu cầu ít nhất check-in hoặc check-out' : '',
 	);
 
-	// FE chỉ check format sanity — BE là authoritative cho direction và range constraints.
-	function validateWindowSide(window: string): string | undefined {
+	// Convert HH:mm → phút trong ngày; trả undefined nếu format sai.
+	function hhmmToMinutes(t: string): number | undefined {
+		if (!/^\d{2}:\d{2}$/.test(t)) return undefined;
+		const [h, m] = t.split(':').map(Number);
+		if (h === undefined || m === undefined || h > 23 || m > 59) return undefined;
+		return h * 60 + m;
+	}
+
+	// Offset (start → shift, hoặc shift → end) tính theo modulo 1440 để cross-midnight vẫn đúng.
+	function circularOffset(from: number, to: number): number {
+		return (((to - from) % 1440) + 1440) % 1440;
+	}
+
+	// Enforce windowStart ≤ shiftTime ≤ windowEnd (mod 1440).
+	// side='start' → offset = shift - window (window trước shift). offset > 720 ≡ window đặt SAU shift.
+	// side='end'   → offset = window - shift (window sau shift).   offset > 720 ≡ window đặt TRƯỚC shift.
+	// Không giới hạn 4h — BE handle range.
+	function validateWindowSide(window: string, shift: string, side: 'start' | 'end'): string | undefined {
 		if (!window) return undefined;
 		if (!/^\d{2}:\d{2}$/.test(window)) return 'Định dạng HH:mm';
+		const wMin = hhmmToMinutes(window);
+		const sMin = hhmmToMinutes(shift);
+		if (wMin === undefined || sMin === undefined) return undefined; // shift chưa hợp lệ — bỏ qua
+		const offset = side === 'start' ? circularOffset(wMin, sMin) : circularOffset(sMin, wMin);
+		if (offset > 720) {
+			return side === 'start' ? `Phải trước hoặc bằng ${shift}` : `Phải sau hoặc bằng ${shift}`;
+		}
 		return undefined;
 	}
 
@@ -338,10 +361,10 @@
 		const coWinStart = checkOutWindowStart.value.trim();
 		const coWinEnd = checkOutWindowEnd.value.trim();
 		windowErrors.value = {
-			ciStart: validateWindowSide(ciWinStart),
-			ciEnd: validateWindowSide(ciWinEnd),
-			coStart: validateWindowSide(coWinStart),
-			coEnd: validateWindowSide(coWinEnd),
+			ciStart: validateWindowSide(ciWinStart, values.checkInTime, 'start'),
+			ciEnd: validateWindowSide(ciWinEnd, values.checkInTime, 'end'),
+			coStart: validateWindowSide(coWinStart, values.checkOutTime, 'start'),
+			coEnd: validateWindowSide(coWinEnd, values.checkOutTime, 'end'),
 		};
 		if (Object.values(windowErrors.value).some(Boolean)) return;
 
