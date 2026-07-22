@@ -826,33 +826,29 @@
 						{{ shift.name }}
 					</p>
 
-					<!-- Time range -->
-					<p class="text-sm font-mono text-brand-600 dark:text-brand-400 mb-1">
-						{{ shift.checkInTime }} → {{ shift.checkOutTime }}
-					</p>
+					<!-- Time info grid — labels căn cùng cột nhờ grid-cols-[auto_1fr] -->
+					<div class="grid grid-cols-[auto_1fr] gap-x-2 items-baseline mb-1">
+						<span class="text-sm text-gray-700 dark:text-gray-300">Thời gian:</span>
+						<span class="text-sm font-mono font-semibold text-brand-600 dark:text-brand-400">
+							{{ shift.checkInTime }} → {{ shift.checkOutTime }}
+						</span>
 
-					<!-- Break time -->
-					<p
-						v-if="shift.breakStartTime && shift.breakEndTime"
-						class="text-xs font-mono text-gray-500 dark:text-gray-400 mb-1"
-					>
-						Nghỉ trưa {{ shift.breakStartTime }} – {{ shift.breakEndTime }}
-					</p>
+						<template v-if="shift.breakStartTime && shift.breakEndTime">
+							<span class="text-xs text-gray-500 dark:text-gray-400">Nghỉ trưa:</span>
+							<span class="text-xs font-mono text-gray-500 dark:text-gray-400">
+								{{ shift.breakStartTime }} – {{ shift.breakEndTime }}
+							</span>
+						</template>
 
-					<!-- Khung giờ chấm công hợp lệ (null → default ±60p) -->
-					<div class="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-tight space-y-0.5">
-						<p>
-							<span class="text-gray-400 dark:text-gray-500">Thời gian vào hợp lệ:</span>
-							<span class="font-mono">
-								{{ effectiveWindows(shift).ciStart }} – {{ effectiveWindows(shift).ciEnd }}
-							</span>
-						</p>
-						<p>
-							<span class="text-gray-400 dark:text-gray-500">Thời gian ra hợp lệ:</span>
-							<span class="font-mono">
-								{{ effectiveWindows(shift).coStart }} – {{ effectiveWindows(shift).coEnd }}
-							</span>
-						</p>
+						<span class="text-xs text-gray-500 dark:text-gray-400">Thời gian vào hợp lệ:</span>
+						<span class="text-xs font-mono text-gray-500 dark:text-gray-400">
+							{{ effectiveWindows(shift).ciStart }} – {{ effectiveWindows(shift).ciEnd }}
+						</span>
+
+						<span class="text-xs text-gray-500 dark:text-gray-400">Thời gian ra hợp lệ:</span>
+						<span class="text-xs font-mono text-gray-500 dark:text-gray-400">
+							{{ effectiveWindows(shift).coStart }} – {{ effectiveWindows(shift).coEnd }}
+						</span>
 					</div>
 
 					<!-- Thresholds -->
