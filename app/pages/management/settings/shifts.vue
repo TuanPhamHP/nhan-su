@@ -66,38 +66,51 @@
 	const selectedWorkDays = ref<number[]>([1, 2, 3, 4, 5]);
 	const workDaysError = ref('');
 
-	// ─── Cửa sổ chấm công + require flags (6 fields mới) ───
-	const checkInWindowStart = ref<number | null>(null);
-	const checkInWindowEnd = ref<number | null>(null);
-	const checkOutWindowStart = ref<number | null>(null);
-	const checkOutWindowEnd = ref<number | null>(null);
+	// ─── Cửa sổ chấm công + require flags ───
+	// Empty string = null (BE dùng default ±60p). UiTimeInput bind trực tiếp.
+	const checkInWindowStart = ref('');
+	const checkInWindowEnd = ref('');
+	const checkOutWindowStart = ref('');
+	const checkOutWindowEnd = ref('');
 	const requireCheckIn = ref(true);
 	const requireCheckOut = ref(true);
-
-	// Getter/setter chuyển null <-> '' cho <input type="number">.
-	// parseInt('') = NaN → null. Giữ null khi user để trống (không gửi 0).
-	function makeWindowModel(ref: Ref<number | null>) {
-		return computed({
-			get: () => (ref.value === null ? '' : String(ref.value)),
-			set: (v: string) => {
-				if (v === '') {
-					ref.value = null;
-					return;
-				}
-				const n = parseInt(v, 10);
-				ref.value = Number.isNaN(n) ? null : n;
-			},
-		});
-	}
-
-	const checkInWindowStartInput = makeWindowModel(checkInWindowStart);
-	const checkInWindowEndInput = makeWindowModel(checkInWindowEnd);
-	const checkOutWindowStartInput = makeWindowModel(checkOutWindowStart);
-	const checkOutWindowEndInput = makeWindowModel(checkOutWindowEnd);
+	const windowErrors = ref<{ ciStart?: string; ciEnd?: string; coStart?: string; coEnd?: string }>({});
 
 	const requireError = computed(() =>
 		!requireCheckIn.value && !requireCheckOut.value ? 'Ca làm việc phải yêu cầu ít nhất check-in hoặc check-out' : '',
 	);
+
+	// Convert HH:mm → phút trong ngày; trả undefined nếu format sai.
+	function hhmmToMinutes(t: string): number | undefined {
+		if (!/^\d{2}:\d{2}$/.test(t)) return undefined;
+		const [h, m] = t.split(':').map(Number);
+		if (h === undefined || m === undefined || h > 23 || m > 59) return undefined;
+		return h * 60 + m;
+	}
+
+	// Offset (start → shift, hoặc shift → end) tính theo modulo 1440 để cross-midnight vẫn đúng.
+	function circularOffset(from: number, to: number): number {
+		return (((to - from) % 1440) + 1440) % 1440;
+	}
+
+	// Validate 1 pair (start hoặc end) của cửa sổ. Trả về error message nếu vi phạm.
+	// side='start' → window phải nằm TRƯỚC hoặc bằng shiftTime, cách tối đa 240p.
+	// side='end'   → window phải nằm SAU hoặc bằng shiftTime, cách tối đa 240p.
+	// Dùng circular offset (mod 1440) để cross-midnight vẫn đúng. offset > 720 ≡ user đặt sai phía.
+	function validateWindowSide(window: string, shift: string, side: 'start' | 'end'): string | undefined {
+		if (!window) return undefined;
+		if (!/^\d{2}:\d{2}$/.test(window)) return 'Định dạng HH:mm';
+		const wMin = hhmmToMinutes(window);
+		const sMin = hhmmToMinutes(shift);
+		if (wMin === undefined || sMin === undefined) return undefined; // shift chưa hợp lệ — bỏ qua
+		const offset = side === 'start' ? circularOffset(wMin, sMin) : circularOffset(sMin, wMin);
+		if (offset === 0) return undefined;
+		if (offset > 720) {
+			return side === 'start' ? `Phải trước hoặc bằng ${shift}` : `Phải sau hoặc bằng ${shift}`;
+		}
+		if (offset > 240) return 'Cách giờ ca không quá 4 tiếng';
+		return undefined;
+	}
 
 	// Collapse state cho 2 khối trong modal (default expanded)
 	const showTimeSection = ref(true);
@@ -177,22 +190,47 @@
 
 		const shiftStart = parseTime(ci);
 		const shiftEnd = parseTime(co);
-		const ciStart = checkInWindowStart.value ?? 60;
-		const ciEnd = checkInWindowEnd.value ?? 60;
-		const coStart = checkOutWindowStart.value ?? 60;
-		const coEnd = checkOutWindowEnd.value ?? 60;
+		// Windows là HH:mm tuyệt đối; null/empty → fallback ±60p quanh giờ ca.
+		const resolveStart = (window: string, shift: number) =>
+			window && /^\d{2}:\d{2}$/.test(window) ? parseTime(window) : shift - 60;
+		const resolveEnd = (window: string, shift: number) =>
+			window && /^\d{2}:\d{2}$/.test(window) ? parseTime(window) : shift + 60;
 
 		return {
 			checkIn: {
-				earliest: formatMin(shiftStart - ciStart),
+				earliest: formatMin(resolveStart(checkInWindowStart.value, shiftStart)),
 				shiftTime: formatMin(shiftStart),
-				deadline: formatMin(shiftStart + ciEnd),
+				deadline: formatMin(resolveEnd(checkInWindowEnd.value, shiftStart)),
 			},
 			checkOut: {
-				earliest: formatMin(shiftEnd - coStart),
+				earliest: formatMin(resolveStart(checkOutWindowStart.value, shiftEnd)),
 				shiftTime: formatMin(shiftEnd),
-				deadline: formatMin(shiftEnd + coEnd),
+				deadline: formatMin(resolveEnd(checkOutWindowEnd.value, shiftEnd)),
 			},
+		};
+	});
+
+	// Placeholder human-friendly cho 4 input Khung giờ — hiển thị mốc default (±60p quanh giờ ca).
+	const windowPlaceholders = computed(() => {
+		const ci = checkInTime.value as string | undefined;
+		const co = checkOutTime.value as string | undefined;
+		const parseTime = (t: string) => {
+			const [h, m] = t.split(':').map(Number);
+			return (h ?? 0) * 60 + (m ?? 0);
+		};
+		const formatMin = (totalMin: number) => {
+			const normalized = ((totalMin % 1440) + 1440) % 1440;
+			const h = Math.floor(normalized / 60);
+			const m = normalized % 60;
+			return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+		};
+		const withOffset = (t: string | undefined, off: number) =>
+			t && /^\d{2}:\d{2}$/.test(t) ? formatMin(parseTime(t) + off) : '--:--';
+		return {
+			ciStart: withOffset(ci, -60),
+			ciEnd: withOffset(ci, 60),
+			coStart: withOffset(co, -60),
+			coEnd: withOffset(co, 60),
 		};
 	});
 
@@ -207,11 +245,11 @@
 	}
 
 	function customWindowTooltip(s: WorkShiftResponse) {
-		const fmt = (v: number | null) => (v === null ? 'mặc định 60' : String(v));
+		const fmt = (v: string | null) => v ?? 'mặc định ±60p';
 		return (
 			'Khung giờ tùy chỉnh:\n' +
-			`Check-in: ${fmt(s.checkInWindowStart)}p trước – ${fmt(s.checkInWindowEnd)}p sau\n` +
-			`Check-out: ${fmt(s.checkOutWindowStart)}p trước – ${fmt(s.checkOutWindowEnd)}p sau`
+			`Check-in: ${fmt(s.checkInWindowStart)} – ${fmt(s.checkInWindowEnd)}\n` +
+			`Check-out: ${fmt(s.checkOutWindowStart)} – ${fmt(s.checkOutWindowEnd)}`
 		);
 	}
 
@@ -219,10 +257,11 @@
 		editingShift.value = null;
 		selectedWorkDays.value = [1, 2, 3, 4, 5];
 		workDaysError.value = '';
-		checkInWindowStart.value = null;
-		checkInWindowEnd.value = null;
-		checkOutWindowStart.value = null;
-		checkOutWindowEnd.value = null;
+		checkInWindowStart.value = '';
+		checkInWindowEnd.value = '';
+		checkOutWindowStart.value = '';
+		checkOutWindowEnd.value = '';
+		windowErrors.value = {};
 		requireCheckIn.value = true;
 		requireCheckOut.value = true;
 		resetForm({
@@ -245,11 +284,12 @@
 		editingShift.value = shift;
 		selectedWorkDays.value = [...shift.workDays];
 		workDaysError.value = '';
-		// null giữ nguyên null — placeholder hiện đúng "Mặc định 60p"
-		checkInWindowStart.value = shift.checkInWindowStart;
-		checkInWindowEnd.value = shift.checkInWindowEnd;
-		checkOutWindowStart.value = shift.checkOutWindowStart;
-		checkOutWindowEnd.value = shift.checkOutWindowEnd;
+		// null → '' để UiTimeInput hiển thị placeholder mặc định
+		checkInWindowStart.value = shift.checkInWindowStart ?? '';
+		checkInWindowEnd.value = shift.checkInWindowEnd ?? '';
+		checkOutWindowStart.value = shift.checkOutWindowStart ?? '';
+		checkOutWindowEnd.value = shift.checkOutWindowEnd ?? '';
+		windowErrors.value = {};
 		requireCheckIn.value = shift.requireCheckIn;
 		requireCheckOut.value = shift.requireCheckOut;
 		setValues({
@@ -295,6 +335,19 @@
 			return;
 		}
 
+		// Validate 4 window fields dựa trên checkInTime/checkOutTime hiện tại
+		const ciWinStart = checkInWindowStart.value.trim();
+		const ciWinEnd = checkInWindowEnd.value.trim();
+		const coWinStart = checkOutWindowStart.value.trim();
+		const coWinEnd = checkOutWindowEnd.value.trim();
+		windowErrors.value = {
+			ciStart: validateWindowSide(ciWinStart, values.checkInTime, 'start'),
+			ciEnd: validateWindowSide(ciWinEnd, values.checkInTime, 'end'),
+			coStart: validateWindowSide(coWinStart, values.checkOutTime, 'start'),
+			coEnd: validateWindowSide(coWinEnd, values.checkOutTime, 'end'),
+		};
+		if (Object.values(windowErrors.value).some(Boolean)) return;
+
 		submittingShift.value = true;
 		try {
 			const { breakStartTime: _bs, breakEndTime: _be, ...rest } = values;
@@ -303,11 +356,11 @@
 				workDays: selectedWorkDays.value,
 				breakStartTime: bs || null,
 				breakEndTime: be || null,
-				// null → TH1 default; gửi thẳng null để BE clear khi PATCH
-				checkInWindowStart: checkInWindowStart.value,
-				checkInWindowEnd: checkInWindowEnd.value,
-				checkOutWindowStart: checkOutWindowStart.value,
-				checkOutWindowEnd: checkOutWindowEnd.value,
+				// empty → null: BE dùng default ±60p, hoặc clear override khi PATCH
+				checkInWindowStart: ciWinStart || null,
+				checkInWindowEnd: ciWinEnd || null,
+				checkOutWindowStart: coWinStart || null,
+				checkOutWindowEnd: coWinEnd || null,
 				requireCheckIn: requireCheckIn.value,
 				requireCheckOut: requireCheckOut.value,
 			};
@@ -811,7 +864,7 @@
 							class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
 							:title="customWindowTooltip(shift)"
 						>
-							⚙️ Cửa sổ tùy chỉnh
+							⚙️ Khung giờ tùy chỉnh
 						</span>
 					</div>
 
@@ -1073,7 +1126,7 @@
 				@click.self="closeShiftModal"
 			>
 				<div
-					class="bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md max-h-[90vh] overflow-y-auto"
+					class="bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md lg:max-w-lg xl:max-w-2xl max-h-[90vh] overflow-y-auto"
 				>
 					<!-- Header -->
 					<div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-800">
@@ -1336,35 +1389,29 @@
 										</p>
 										<div>
 											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-												Phút sớm nhất trước giờ vào
+												Cửa sổ mở lúc
 											</label>
-											<input
-												v-model="checkInWindowStartInput"
-												type="number"
-												min="0"
-												max="240"
-												placeholder="Mặc định 60p"
-												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											<UiTimeInput
+												:model-value="checkInWindowStart || undefined"
+												:placeholder="windowPlaceholders.ciStart"
+												:error="windowErrors.ciStart"
+												@update:model-value="v => (checkInWindowStart = v)"
 											/>
-											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-												VD: 60 → được check-in từ [giờ vào − 60p]
+											<p v-if="windowErrors.ciStart" class="mt-1 text-[11px] text-red-500">
+												{{ windowErrors.ciStart }}
 											</p>
 										</div>
 										<div>
 											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-												Phút muộn nhất sau giờ vào
+												Cửa sổ đóng lúc
 											</label>
-											<input
-												v-model="checkInWindowEndInput"
-												type="number"
-												min="0"
-												max="240"
-												placeholder="Mặc định 60p"
-												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											<UiTimeInput
+												:model-value="checkInWindowEnd || undefined"
+												:placeholder="windowPlaceholders.ciEnd"
+												:error="windowErrors.ciEnd"
+												@update:model-value="v => (checkInWindowEnd = v)"
 											/>
-											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-												VD: 60 → deadline check-in [giờ vào + phép trễ + 60p]
-											</p>
+											<p v-if="windowErrors.ciEnd" class="mt-1 text-[11px] text-red-500">{{ windowErrors.ciEnd }}</p>
 										</div>
 									</div>
 
@@ -1375,35 +1422,29 @@
 										</p>
 										<div>
 											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-												Phút sớm nhất trước giờ ra
+												Cửa sổ mở lúc
 											</label>
-											<input
-												v-model="checkOutWindowStartInput"
-												type="number"
-												min="0"
-												max="240"
-												placeholder="Mặc định 60p"
-												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											<UiTimeInput
+												:model-value="checkOutWindowStart || undefined"
+												:placeholder="windowPlaceholders.coStart"
+												:error="windowErrors.coStart"
+												@update:model-value="v => (checkOutWindowStart = v)"
 											/>
-											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-												VD: 60 → được check-out từ [giờ ra − phép về sớm − 60p]
+											<p v-if="windowErrors.coStart" class="mt-1 text-[11px] text-red-500">
+												{{ windowErrors.coStart }}
 											</p>
 										</div>
 										<div>
 											<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-												Phút muộn nhất sau giờ ra
+												Cửa sổ đóng lúc
 											</label>
-											<input
-												v-model="checkOutWindowEndInput"
-												type="number"
-												min="0"
-												max="240"
-												placeholder="Mặc định 60p"
-												class="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+											<UiTimeInput
+												:model-value="checkOutWindowEnd || undefined"
+												:placeholder="windowPlaceholders.coEnd"
+												:error="windowErrors.coEnd"
+												@update:model-value="v => (checkOutWindowEnd = v)"
 											/>
-											<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
-												VD: 60 → deadline check-out [giờ ra + 60p]
-											</p>
+											<p v-if="windowErrors.coEnd" class="mt-1 text-[11px] text-red-500">{{ windowErrors.coEnd }}</p>
 										</div>
 									</div>
 								</div>
