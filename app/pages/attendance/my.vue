@@ -7,7 +7,7 @@
 	import ViolationRequestModal from '~/components/modules/violation/ViolationRequestModal.vue';
 	import ViolationDetailModal from '~/components/modules/violation/ViolationDetailModal.vue';
 	import MakeupRequestModal from '~/components/modules/attendance/MakeupRequestModal.vue';
-	import type { ViolationCounter, ViolationRequestType, ViolationRequestStatus, ViolationDetailView } from '~/types/violation.types';
+	import type { MyViolationStatus, ViolationRequestType, ViolationRequestStatus, ViolationDetailView } from '~/types/violation.types';
 
 	definePageMeta({ title: 'Chấm công của tôi' });
 
@@ -226,7 +226,7 @@
 	const violationModal = reactive({
 		open: false,
 		loading: false,
-		counter: null as ViolationCounter | null,
+		monthlyStatus: null as MyViolationStatus | null,
 		type: undefined as ViolationRequestType | undefined,
 		date: undefined as string | undefined,
 	});
@@ -235,13 +235,13 @@
 		if (!selectedRecord.value) return;
 		violationModal.loading = true;
 		try {
-			const counter = await violationService.getMyStatus(viewMonth.value + 1, viewYear.value);
-			violationModal.counter = counter;
+			const status = await violationService.getMyStatus(viewMonth.value + 1, viewYear.value);
+			violationModal.monthlyStatus = status;
 			violationModal.type = type;
 			violationModal.date = selectedRecord.value.date;
 			violationModal.open = true;
 		} catch {
-			toast.error('Không tải được thông tin quota vi phạm');
+			toast.error('Không tải được thông tin trạng thái vi phạm chuyên cần');
 		} finally {
 			violationModal.loading = false;
 		}
@@ -748,8 +748,8 @@
 
 	<Teleport to="body">
 		<ViolationRequestModal
-			v-if="violationModal.open && violationModal.counter"
-			:counter="violationModal.counter"
+			v-if="violationModal.open && violationModal.monthlyStatus"
+			:monthly-status="violationModal.monthlyStatus"
 			:initial-type="violationModal.type"
 			:initial-date="violationModal.date"
 			@submitted="violationModal.open = false"

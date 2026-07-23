@@ -1,15 +1,22 @@
 export type ViolationRequestType = 'FORGOT_CHECKIN' | 'FORGOT_CHECKOUT' | 'LATE' | 'EARLY';
-export type ViolationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export type ViolationRequestStatus =
+	| 'PENDING'
+	| 'PENDING_L2'
+	| 'APPROVED'
+	| 'REJECTED'
+	| 'CANCELLED';
 
 export interface ViolationEmployeeRef {
 	id: number;
 	fullName: string;
 	employeeCode: string;
+	avatarUrl?: string | null;
 }
 
-export interface ViolationReviewedByRef {
+export interface ViolationReviewerRef {
 	id: number;
 	fullName: string;
+	avatarUrl: string | null;
 }
 
 export interface ViolationRequest {
@@ -25,9 +32,13 @@ export interface ViolationRequest {
 	reason: string;
 	evidencePhotoUrl: string | null;
 	status: ViolationRequestStatus;
-	assignedReviewer: ViolationReviewedByRef | null;
+	assignedReviewer: ViolationReviewerRef | null;
+	approverL2: ViolationReviewerRef | null;
+	approvedL1At: string | null;
+	isMultiLevel: boolean;
+	currentApprovalLevel: 1 | 2;
 	reviewNote: string | null;
-	reviewedBy: ViolationReviewedByRef | null;
+	reviewedBy: ViolationReviewerRef | null;
 	reviewedAt: string | null;
 	isViolationFlagged: boolean;
 	employee: ViolationEmployeeRef;
@@ -43,8 +54,12 @@ export interface ViolationDetailView {
 	slotCost: number;
 	reason: string;
 	evidencePhotoUrl: string | null;
-	assignedReviewer: ViolationReviewedByRef | null;
-	reviewedBy: ViolationReviewedByRef | null;
+	assignedReviewer: ViolationReviewerRef | null;
+	approverL2: ViolationReviewerRef | null;
+	approvedL1At: string | null;
+	isMultiLevel: boolean;
+	currentApprovalLevel: 1 | 2;
+	reviewedBy: ViolationReviewerRef | null;
 	reviewedAt: string | null;
 	reviewNote: string | null;
 	deadline: string;
@@ -52,11 +67,9 @@ export interface ViolationDetailView {
 	createdAt: string;
 }
 
-export interface ViolationCounter {
-	usedCount: number;
-	remaining: number;
-	isBlocked: boolean;
-	blockedMessage: string | null;
+export interface MyViolationStatus {
+	approvedThisMonth: number;
+	isNextMultiLevel: boolean;
 }
 
 export interface CreateViolationRequestDto {

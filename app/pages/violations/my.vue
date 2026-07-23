@@ -6,7 +6,7 @@
 	import ViolationDetailModal from '~/components/modules/violation/ViolationDetailModal.vue';
 	import type {
 		ViolationRequest,
-		ViolationCounter,
+		MyViolationStatus,
 		ViolationRequestType,
 		ViolationRequestStatus,
 		QueryViolationRequestParams,
@@ -20,7 +20,7 @@
 		violationTypeClass,
 	} from '~/utils/violation.utils';
 
-	definePageMeta({ title: 'Đơn xin chỉnh công' });
+	definePageMeta({ title: 'Vi phạm chuyên cần' });
 
 	const toast = useToast();
 	const violationService = useViolationRequestService();
@@ -46,7 +46,7 @@
 	const myRequests = ref<ViolationRequest[]>([]);
 	const myLoading = ref(false);
 	const myMeta = ref<PaginatedMeta | null>(null);
-	const counter = ref<ViolationCounter | null>(null);
+	const myStatus = ref<MyViolationStatus | null>(null);
 
 	const myFilter = reactive({
 		month: undefined as number | undefined,
@@ -56,9 +56,9 @@
 		page: 1,
 	});
 
-	async function fetchCounter() {
+	async function fetchMyStatus() {
 		try {
-			counter.value = await violationService.getMyStatus(currentMonth, currentYear);
+			myStatus.value = await violationService.getMyStatus(currentMonth, currentYear);
 		} catch {
 			// non-critical
 		}
@@ -94,14 +94,13 @@
 	const showCreateModal = ref(false);
 
 	function openCreateModal() {
-		if (counter.value?.isBlocked) return;
 		showCreateModal.value = true;
 	}
 
 	function onSubmitted(req: ViolationRequest) {
 		showCreateModal.value = false;
 		myRequests.value.unshift(req);
-		fetchCounter();
+		fetchMyStatus();
 	}
 
 	// ─── Cancel ───────────────────────────────────────────────────────────────────
@@ -115,7 +114,7 @@
 			const idx = myRequests.value.findIndex(r => r.id === updated.id);
 			if (idx !== -1) myRequests.value.splice(idx, 1, updated);
 			toast.success('Đã thu hồi phiếu');
-			fetchCounter();
+			fetchMyStatus();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 		} finally {
@@ -134,7 +133,7 @@
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────────
 	onMounted(() => {
-		fetchCounter();
+		fetchMyStatus();
 		fetchMyRequests();
 	});
 </script>
@@ -143,43 +142,23 @@
 	<div class="space-y-5">
 		<!-- Page header -->
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn xin chỉnh công</h1>
+			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Vi phạm chuyên cần</h1>
 			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Giải trình vi phạm chấm công: quên chấm, đi muộn, về sớm</p>
 		</div>
 
-		<!-- Quota bar -->
+		<!-- Monthly status summary -->
 		<div
-			v-if="counter"
-			class="p-4 rounded-xl border"
-			:class="
-				counter.isBlocked
-					? 'bg-red-50 border-red-300 dark:bg-red-900/10 dark:border-red-700'
-					: 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-700'
-			"
+			v-if="myStatus"
+			class="p-4 rounded-xl border bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-700"
 		>
-			<p v-if="counter.isBlocked" class="text-red-700 dark:text-red-400 font-semibold text-sm">
-				❌ Bạn đã hết số lần giải trình vi phạm chuyên cần trong tháng (Tối đa 5 lần). Hệ thống không cho phép tạo thêm đơn.
-			</p>
-			<div v-else>
-				<div class="flex justify-between items-center mb-2">
-					<span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-						Số lần đã dùng tháng {{ currentMonth }}/{{ currentYear }}
-					</span>
-					<span
-						class="text-sm font-bold"
-						:class="counter.remaining <= 1 ? 'text-red-600 dark:text-red-400' : 'text-blue-700 dark:text-blue-300'"
-					>
-						{{ counter.usedCount }}/5
-					</span>
-				</div>
-				<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-					<div
-						class="h-2 rounded-full transition-all"
-						:class="counter.usedCount >= 4 ? 'bg-red-500' : counter.usedCount >= 3 ? 'bg-orange-500' : 'bg-blue-500'"
-						:style="`width: ${(counter.usedCount / 5) * 100}%`"
-					/>
-				</div>
-				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Còn lại {{ counter.remaining }} lần trong tháng này</p>
+			<div class="flex items-center justify-between flex-wrap gap-2">
+				<span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+					Đã duyệt tháng {{ currentMonth }}/{{ currentYear }}:
+					<strong class="text-blue-700 dark:text-blue-300">{{ myStatus.approvedThisMonth }} lượt</strong>
+				</span>
+				<span v-if="myStatus.isNextMultiLevel" class="text-sm text-orange-600 dark:text-orange-400 font-medium">
+					⚠️ Đơn tiếp theo cần 2 cấp duyệt
+				</span>
 			</div>
 		</div>
 
@@ -187,7 +166,7 @@
 		<div class="flex items-center justify-between">
 			<h2 class="text-base font-semibold text-gray-900 dark:text-white">Danh sách phiếu của tôi</h2>
 			<div class="hidden sm:block">
-				<CommonAppButton :disabled="counter?.isBlocked" @click="openCreateModal">
+				<CommonAppButton @click="openCreateModal">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
 					</svg>
@@ -332,7 +311,7 @@
 										</svg>
 									</button>
 									<CommonAppButton
-										v-if="req.status === 'PENDING'"
+										v-if="req.status === 'PENDING' || req.status === 'PENDING_L2'"
 										size="sm"
 										variant="outline"
 										:loading="cancellingId === req.id"
@@ -369,8 +348,8 @@
 	<!-- Modals -->
 	<Teleport to="body">
 		<ViolationRequestModal
-			v-if="showCreateModal && counter"
-			:counter="counter"
+			v-if="showCreateModal && myStatus"
+			:monthly-status="myStatus"
 			@submitted="onSubmitted"
 			@close="showCreateModal = false"
 		/>
@@ -380,11 +359,10 @@
 			@close="detailRequest = null"
 		/>
 
-		<!-- FAB mobile — ẩn khi bị blocked -->
+		<!-- FAB mobile -->
 		<button
-			v-if="!counter?.isBlocked"
 			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
-			aria-label="Tạo phiếu chỉnh công"
+			aria-label="Tạo phiếu vi phạm chuyên cần"
 			@click="openCreateModal"
 		>
 			<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">

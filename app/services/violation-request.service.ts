@@ -2,7 +2,7 @@ import { useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse, PaginatedResponse, PaginatedMeta } from '~/types/api.types';
 import type {
 	ViolationRequest,
-	ViolationCounter,
+	MyViolationStatus,
 	ViolationMonthlyStats,
 	CreateViolationRequestDto,
 	RejectViolationRequestDto,
@@ -19,8 +19,8 @@ export const useViolationRequestService = () => {
 			return { data: res.data, meta: res.meta };
 		},
 
-		async getMyStatus(month: number, year: number): Promise<ViolationCounter> {
-			const res = await authFetch<ApiResponse<ViolationCounter>>('/v1/violation-requests/me/status', {
+		async getMyStatus(month: number, year: number): Promise<MyViolationStatus> {
+			const res = await authFetch<ApiResponse<MyViolationStatus>>('/v1/violation-requests/me/status', {
 				params: { month, year },
 			});
 			return res.data;

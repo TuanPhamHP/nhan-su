@@ -4,11 +4,11 @@
 	import * as z from 'zod';
 	import { format, parseISO } from 'date-fns';
 	import { useViolationRequestService } from '~/services/violation-request.service';
-	import type { ViolationCounter, ViolationRequest, ViolationRequestType } from '~/types/violation.types';
+	import type { MyViolationStatus, ViolationRequest, ViolationRequestType } from '~/types/violation.types';
 	import { VIOLATION_TYPE_LABEL } from '~/utils/violation.utils';
 
 	const props = defineProps<{
-		counter: ViolationCounter;
+		monthlyStatus: MyViolationStatus;
 		initialType?: ViolationRequestType;
 		initialDate?: string;
 	}>();
@@ -102,17 +102,8 @@
 	const onSubmit = handleSubmit(async vals => {
 		if (deadlinePassed.value) return;
 
-		const isForgotCheckin = vals.type === 'FORGOT_CHECKIN';
-		const needsConfirm =
-			props.counter.remaining === 1 ||
-			(isForgotCheckin && props.counter.remaining === 2);
-
-		if (needsConfirm) {
-			const msg =
-				isForgotCheckin && props.counter.remaining === 2
-					? 'Nếu đây là phiếu quên chấm công cả ngày (tốn 2 lượt), bạn sẽ không còn lượt nào trong tháng. Tiếp tục?'
-					: 'Đây là lần giải trình cuối cùng trong tháng này. Bạn có chắc muốn tiếp tục?';
-			if (!confirm(msg)) return;
+		if (props.monthlyStatus.isNextMultiLevel) {
+			if (!confirm('Tháng này đã có 5+ lượt được duyệt. Phiếu này sẽ cần cả trưởng phòng ban phê duyệt (2 cấp). Tiếp tục?')) return;
 		}
 
 		try {
@@ -122,8 +113,7 @@
 				reason: vals.reason,
 				evidencePhoto: evidenceFile.value ?? undefined,
 			});
-			const remaining = Math.max(0, props.counter.remaining - result.slotCost);
-			toast.success(`Đã gửi phiếu, chờ duyệt. Còn ${remaining} lần trong tháng.`);
+			toast.success('Đã gửi phiếu, chờ duyệt');
 			emit('submitted', result);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -151,16 +141,16 @@
 
 			<!-- Scrollable body -->
 			<div class="overflow-y-auto flex-1 px-6 py-4">
-				<!-- Quota warning -->
+				<!-- Multi-level warning -->
 				<div
-					v-if="counter.remaining <= 2"
-					class="mb-4 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 space-y-1"
+					v-if="monthlyStatus.isNextMultiLevel"
+					class="mb-4 px-3 py-2.5 rounded-lg bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-700 space-y-1"
 				>
-					<p class="text-sm text-amber-700 dark:text-amber-300 font-medium">
-						⚠️ Bạn còn {{ counter.remaining }} lần giải trình trong tháng này
+					<p class="text-sm text-orange-700 dark:text-orange-300 font-medium">
+						⚠️ Tháng này đã có {{ monthlyStatus.approvedThisMonth }} lượt được duyệt
 					</p>
-					<p v-if="type === 'FORGOT_CHECKIN' && counter.remaining <= 2" class="text-xs text-amber-600 dark:text-amber-400">
-						Lưu ý: phiếu quên chấm công cả ngày tốn 2 lượt.
+					<p class="text-xs text-orange-600 dark:text-orange-400">
+						Phiếu này sẽ cần cả trưởng phòng ban phê duyệt (2 cấp).
 					</p>
 				</div>
 
@@ -217,7 +207,6 @@
 						</svg>
 						<div class="text-xs text-blue-700 dark:text-blue-300 space-y-0.5">
 							<p>Hệ thống tự động xác định giờ check-in/check-out theo ca làm việc khi phiếu được duyệt.</p>
-							<p class="font-medium">Quên chấm công cả ngày (không có bản ghi) tốn <span class="underline">2 lượt</span> giải trình.</p>
 						</div>
 					</div>
 

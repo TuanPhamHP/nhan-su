@@ -3,7 +3,7 @@
 	import { useViolationRequestService } from '~/services/violation-request.service';
 	import ViolationRequestModal from '~/components/modules/violation/ViolationRequestModal.vue';
 	import type { AttendanceRecordDetail, CheckAttendanceResponseDto } from '~/types/attendance.types';
-	import type { ViolationCounter, ViolationRequestType } from '~/types/violation.types';
+	import type { MyViolationStatus, ViolationRequestType } from '~/types/violation.types';
 	import { formatVNTime } from '~/utils/attendance.utils';
 
 	definePageMeta({ title: 'Check-in / Check-out' });
@@ -306,20 +306,20 @@
 	const violationService = useViolationRequestService();
 	const showViolationModal = ref(false);
 	const violationInitialType = ref<ViolationRequestType | undefined>(undefined);
-	const violationCounter = ref<ViolationCounter | null>(null);
-	const loadingViolationCounter = ref(false);
+	const violationMonthlyStatus = ref<MyViolationStatus | null>(null);
+	const loadingViolationStatus = ref(false);
 
 	async function openViolationModal(type?: ViolationRequestType) {
 		violationInitialType.value = type;
-		loadingViolationCounter.value = true;
+		loadingViolationStatus.value = true;
 		try {
 			const today = new Date();
-			violationCounter.value = await violationService.getMyStatus(today.getMonth() + 1, today.getFullYear());
+			violationMonthlyStatus.value = await violationService.getMyStatus(today.getMonth() + 1, today.getFullYear());
 			showViolationModal.value = true;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Không thể tải thông tin vi phạm');
 		} finally {
-			loadingViolationCounter.value = false;
+			loadingViolationStatus.value = false;
 		}
 	}
 
@@ -545,16 +545,16 @@
 							Khung giờ: {{ checkInWindow.from }} – {{ checkInWindow.to }}
 						</p>
 						<button
-							:disabled="loadingViolationCounter"
+							:disabled="loadingViolationStatus"
 							class="w-full py-3 rounded-xl text-sm font-semibold transition-colors"
 							:class="
-								loadingViolationCounter
+								loadingViolationStatus
 									? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
 									: 'bg-red-500 hover:bg-red-600 text-white'
 							"
 							@click="openViolationModal('FORGOT_CHECKIN')"
 						>
-							{{ loadingViolationCounter ? 'Đang tải...' : 'Tạo đơn cập nhật công' }}
+							{{ loadingViolationStatus ? 'Đang tải...' : 'Tạo đơn cập nhật công' }}
 						</button>
 					</div>
 
@@ -714,16 +714,16 @@
 							Khung giờ: {{ checkOutWindow.from }} – {{ checkOutWindow.to }}
 						</p>
 						<button
-							:disabled="loadingViolationCounter"
+							:disabled="loadingViolationStatus"
 							class="w-full py-3 rounded-xl text-sm font-semibold transition-colors"
 							:class="
-								loadingViolationCounter
+								loadingViolationStatus
 									? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
 									: 'bg-red-500 hover:bg-red-600 text-white'
 							"
 							@click="openViolationModal()"
 						>
-							{{ loadingViolationCounter ? 'Đang tải...' : 'Tạo đơn cập nhật công' }}
+							{{ loadingViolationStatus ? 'Đang tải...' : 'Tạo đơn cập nhật công' }}
 						</button>
 					</div>
 
@@ -942,8 +942,8 @@
 
 	<!-- Violation request modal -->
 	<ViolationRequestModal
-		v-if="showViolationModal && violationCounter"
-		:counter="violationCounter"
+		v-if="showViolationModal && violationMonthlyStatus"
+		:monthly-status="violationMonthlyStatus"
 		:initial-type="violationInitialType"
 		:initial-date="new Date().toISOString().slice(0, 10)"
 		@submitted="onViolationSubmitted"

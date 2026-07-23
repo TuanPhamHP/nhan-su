@@ -1,7 +1,7 @@
 import { useViolationRequestService } from '~/services/violation-request.service';
 import type {
 	ViolationRequest,
-	ViolationCounter,
+	MyViolationStatus,
 	CreateViolationRequestDto,
 	RejectViolationRequestDto,
 	QueryViolationRequestParams,
@@ -13,7 +13,7 @@ export function useViolationRequests() {
 
 	const myRequests = ref<ViolationRequest[]>([]);
 	const allRequests = ref<ViolationRequest[]>([]);
-	const counter = ref<ViolationCounter | null>(null);
+	const monthlyStatus = ref<MyViolationStatus | null>(null);
 	const loading = ref(false);
 	const myMeta = ref<PaginatedMeta | null>(null);
 	const allMeta = ref<PaginatedMeta | null>(null);
@@ -31,7 +31,7 @@ export function useViolationRequests() {
 
 	async function fetchMyStatus(month: number, year: number) {
 		try {
-			counter.value = await service.getMyStatus(month, year);
+			monthlyStatus.value = await service.getMyStatus(month, year);
 		} catch {
 			// non-critical
 		}
@@ -83,7 +83,7 @@ export function useViolationRequests() {
 	return {
 		myRequests,
 		allRequests,
-		counter,
+		monthlyStatus,
 		loading,
 		myMeta,
 		allMeta,

@@ -111,13 +111,18 @@
 	const approvingId = ref<number | null>(null);
 
 	async function handleApprove(req: ViolationRequest): Promise<boolean> {
-		if (!confirm(`Duyệt phiếu vi phạm của ${req.employee.fullName}?`)) return false;
+		const levelSuffix = req.status === 'PENDING_L2' ? ' (Cấp 2)' : req.isMultiLevel ? ' (Cấp 1)' : '';
+		if (!confirm(`Duyệt phiếu vi phạm của ${req.employee.fullName}${levelSuffix}?`)) return false;
 		approvingId.value = req.id;
 		try {
 			const updated = await violationService.approve(req.id);
 			const idx = allRequests.value.findIndex(r => r.id === updated.id);
 			if (idx !== -1) allRequests.value.splice(idx, 1, updated);
-			toast.success('Đã duyệt phiếu vi phạm');
+			toast.success(
+				updated.status === 'PENDING_L2'
+					? 'Đã duyệt cấp 1 — phiếu chuyển lên cấp 2'
+					: 'Đã duyệt phiếu vi phạm',
+			);
 			useApprovalStore().fetchCounts();
 			return true;
 		} catch (e) {
@@ -205,11 +210,19 @@
 
 	function canReview(req: ViolationRequest): boolean {
 		if (!user.value) return false;
+		if (req.status !== 'PENDING' && req.status !== 'PENDING_L2') return false;
 		if (user.value.role === 'ADMIN') return true;
-		if (req.assignedReviewer !== null) {
-			return req.assignedReviewer.id === user.value.id;
+		if (req.status === 'PENDING') {
+			if (req.assignedReviewer !== null) return req.assignedReviewer.id === user.value.id;
+			return user.value.role === 'HR';
 		}
+		if (req.approverL2 !== null) return req.approverL2.id === user.value.id;
 		return user.value.role === 'HR';
+	}
+
+	function approveButtonLabel(req: ViolationRequest): string {
+		if (req.status === 'PENDING') return req.isMultiLevel ? 'Duyệt (Cấp 1)' : 'Duyệt';
+		return 'Duyệt (Cấp 2)';
 	}
 
 
@@ -400,14 +413,14 @@
 											<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 										</svg>
 									</button>
-									<template v-if="req.status === 'PENDING' && canReview(req)">
+									<template v-if="canReview(req)">
 										<CommonAppButton
 											size="sm"
 											variant="primary"
 											:loading="approvingId === req.id"
 											@click="handleApprove(req)"
 										>
-											Duyệt
+											{{ approveButtonLabel(req) }}
 										</CommonAppButton>
 										<CommonAppButton size="sm" variant="danger" @click="rejectTarget = req">Từ chối</CommonAppButton>
 									</template>

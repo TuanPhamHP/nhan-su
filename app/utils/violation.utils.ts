@@ -20,14 +20,16 @@ export const VIOLATION_TYPE_CLASS: Record<ViolationRequestType, string> = {
 // ─── Status labels & classes ──────────────────────────────────────────────────
 
 export const VIOLATION_STATUS_LABEL: Record<ViolationRequestStatus, string> = {
-	PENDING: 'Chờ duyệt',
+	PENDING: 'Chờ duyệt cấp 1',
+	PENDING_L2: 'Chờ duyệt cấp 2',
 	APPROVED: 'Đã duyệt',
 	REJECTED: 'Từ chối',
-	CANCELLED: 'Đã thu hồi',
+	CANCELLED: 'Đã huỷ',
 };
 
 export const VIOLATION_STATUS_CLASS: Record<ViolationRequestStatus, string> = {
-	PENDING: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+	PENDING: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+	PENDING_L2: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
 	APPROVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
 	REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 	CANCELLED: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
@@ -46,6 +48,7 @@ export const VIOLATION_TYPE_OPTIONS: SelectOption[] = [
 export const VIOLATION_STATUS_OPTIONS: SelectOption[] = [
 	{ value: undefined, label: 'Tất cả trạng thái' },
 	{ value: 'PENDING', label: VIOLATION_STATUS_LABEL.PENDING },
+	{ value: 'PENDING_L2', label: VIOLATION_STATUS_LABEL.PENDING_L2 },
 	{ value: 'APPROVED', label: VIOLATION_STATUS_LABEL.APPROVED },
 	{ value: 'REJECTED', label: VIOLATION_STATUS_LABEL.REJECTED },
 	{ value: 'CANCELLED', label: VIOLATION_STATUS_LABEL.CANCELLED },

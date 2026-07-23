@@ -98,7 +98,7 @@ export default defineNuxtConfig({
 		client: { installPrompt: true },
 		devOptions: { enabled: false },
 	},
-	css: ['~/assets/styles/globals.scss', 'leaflet/dist/leaflet.css'],
+	css: ['~/assets/styles/globals.scss', '~/assets/styles/announcement.css', 'leaflet/dist/leaflet.css'],
 	vite: {
 		plugins: [svgLoader({ defaultImport: 'component' })],
 		server: {

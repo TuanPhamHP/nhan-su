@@ -281,19 +281,31 @@
 	}
 
 	async function approveViolation(req: ViolationRequest) {
-		if (!confirm(`Duyệt phiếu giải trình của ${req.employee.fullName}?`)) return;
+		const levelSuffix = req.status === 'PENDING_L2' ? ' (Cấp 2)' : req.isMultiLevel ? ' (Cấp 1)' : '';
+		if (!confirm(`Duyệt phiếu giải trình của ${req.employee.fullName}${levelSuffix}?`)) return;
 		violationApprovingId.value = req.id;
 		try {
-			await violationService.approve(req.id);
-			removeFromList(violationList, req.id);
+			const updated = await violationService.approve(req.id);
+			// If still awaiting L2, keep it in the list only if current user is also the L2 approver
+			if (updated.status === 'PENDING_L2') {
+				removeFromList(violationList, req.id);
+				toast.success('Đã duyệt cấp 1 — phiếu chuyển lên cấp 2');
+			} else {
+				removeFromList(violationList, req.id);
+				toast.success('Đã duyệt phiếu giải trình');
+			}
 			violationDetail.value = null;
-			toast.success('Đã duyệt phiếu giải trình');
 			refreshBadge();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 		} finally {
 			violationApprovingId.value = null;
 		}
+	}
+
+	function violationApproveLabel(req: ViolationRequest): string {
+		if (req.status === 'PENDING') return req.isMultiLevel ? 'Duyệt (Cấp 1)' : 'Duyệt';
+		return 'Duyệt (Cấp 2)';
 	}
 
 	function onViolationRejected() {
@@ -675,11 +687,25 @@
 								<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ req.typeLabel }}</td>
 								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">{{ fmtDate(req.violationDate) }}</td>
 								<td class="px-4 py-3 max-w-[240px] text-gray-600 dark:text-gray-400">{{ truncate(req.reason) }}</td>
-								<td class="px-4 py-3"><ViolationStatusBadge :status="req.status" /></td>
+								<td class="px-4 py-3">
+									<div class="flex items-center gap-1.5 flex-wrap">
+										<ViolationStatusBadge :status="req.status" />
+										<span
+											v-if="req.status === 'PENDING'"
+											class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
+										>Cấp 1</span>
+										<span
+											v-else-if="req.status === 'PENDING_L2'"
+											class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+										>Cấp 2</span>
+									</div>
+								</td>
 								<td class="px-4 py-3">
 									<div class="flex items-center justify-end gap-1.5">
-										<template v-if="req.status === 'PENDING'">
-											<CommonAppButton size="sm" variant="primary" :loading="violationApprovingId === req.id" @click="approveViolation(req)">Duyệt</CommonAppButton>
+										<template v-if="req.status === 'PENDING' || req.status === 'PENDING_L2'">
+											<CommonAppButton size="sm" variant="primary" :loading="violationApprovingId === req.id" @click="approveViolation(req)">
+												{{ violationApproveLabel(req) }}
+											</CommonAppButton>
 											<CommonAppButton size="sm" variant="danger" @click="violationReject = req">Từ chối</CommonAppButton>
 										</template>
 										<button

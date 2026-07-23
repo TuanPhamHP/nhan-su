@@ -21,13 +21,24 @@
 	const { user } = useAuth();
 
 	const canReview = computed(() => {
-		if (props.violationRequest.status !== 'PENDING') return false;
+		const v = props.violationRequest;
+		if (v.status !== 'PENDING' && v.status !== 'PENDING_L2') return false;
 		if (!user.value) return false;
 		if (user.value.role === 'ADMIN') return true;
-		if (props.violationRequest.assignedReviewer !== null) {
-			return props.violationRequest.assignedReviewer.id === user.value.id;
+		if (v.status === 'PENDING') {
+			if (v.assignedReviewer !== null) return v.assignedReviewer.id === user.value.id;
+			return user.value.role === 'HR';
 		}
+		if (v.approverL2 !== null) return v.approverL2.id === user.value.id;
 		return user.value.role === 'HR';
+	});
+
+	const approveButtonLabel = computed(() => {
+		const v = props.violationRequest;
+		if (v.status === 'PENDING') {
+			return v.isMultiLevel ? 'Duyệt (Cấp 1)' : 'Duyệt';
+		}
+		return 'Duyệt (Cấp 2)';
 	});
 
 	function formatDate(d: string | null | undefined) {
@@ -47,7 +58,6 @@
 			return iso;
 		}
 	}
-
 </script>
 
 <template>
@@ -122,89 +132,152 @@
 					</a>
 				</div>
 
-				<!-- Timeline -->
-				<div class="space-y-1.5">
-					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Timeline</p>
-					<div class="relative space-y-3">
-						<!-- Vertical line — left-3 = 12px, dot center = ml-1.5(6px) + w-3/2(6px) = 12px ✓ -->
-						<div class="absolute left-3 top-2 bottom-2 w-0.5 bg-gray-200 dark:bg-gray-700" />
+				<!-- Approval flow -->
+				<div class="space-y-2">
+					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quy trình duyệt</p>
 
-						<!-- Submitted -->
-						<div class="flex items-start gap-2.5">
-							<div class="ml-1.5 mt-0.5 w-3 h-3 rounded-full bg-brand-500 flex-shrink-0 ring-2 ring-white dark:ring-gray-900 z-10" />
-							<div>
-								<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Đã nộp phiếu</p>
-								<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-									{{ formatDateTime(violationRequest.createdAt) }}
-								</p>
-							</div>
-						</div>
-
-						<!-- Result: APPROVED / REJECTED / CANCELLED -->
-						<div v-if="violationRequest.status !== 'PENDING'" class="flex items-start gap-2.5">
+					<!-- Multi-level: 2-step timeline -->
+					<div v-if="violationRequest.isMultiLevel" class="space-y-3">
+						<!-- Step 1 -->
+						<div class="flex items-start gap-3">
 							<div
-								class="ml-1.5 mt-0.5 w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-white dark:ring-gray-900 z-10"
-								:class="{
-									'bg-green-500': violationRequest.status === 'APPROVED',
-									'bg-red-500': violationRequest.status === 'REJECTED',
-									'bg-gray-400': violationRequest.status === 'CANCELLED',
-								}"
-							/>
-							<div class="space-y-0.5">
-								<p class="text-xs font-medium text-gray-700 dark:text-gray-300">
-									<span v-if="violationRequest.status === 'APPROVED'">Đã duyệt</span>
-									<span v-else-if="violationRequest.status === 'REJECTED'">Từ chối</span>
-									<span v-else>Đã thu hồi</span>
-									<span
-										v-if="violationRequest.reviewedBy"
-										class="font-normal text-gray-500 dark:text-gray-400"
-									>
-										bởi {{ violationRequest.reviewedBy.fullName }}
-									</span>
+								class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold ring-2 ring-white dark:ring-gray-900"
+								:class="
+									violationRequest.approvedL1At
+										? 'bg-green-500 text-white'
+										: violationRequest.status === 'PENDING'
+											? 'bg-yellow-400 text-white animate-pulse'
+											: 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+								"
+							>
+								<svg v-if="violationRequest.approvedL1At" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+								</svg>
+								<span v-else>1</span>
+							</div>
+							<div class="flex-1 min-w-0">
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Cấp 1 — Quản lý trực tiếp</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">
+									{{ violationRequest.assignedReviewer?.fullName ?? 'HR' }}
 								</p>
-								<p v-if="violationRequest.reviewedAt" class="text-xs text-gray-400 dark:text-gray-500">
-									{{ formatDateTime(violationRequest.reviewedAt) }}
+								<p v-if="violationRequest.approvedL1At" class="text-xs text-green-600 dark:text-green-400 mt-0.5">
+									✓ Đã duyệt {{ formatDateTime(violationRequest.approvedL1At) }}
 								</p>
 								<p
-									v-if="violationRequest.reviewNote"
-									class="text-xs text-red-600 dark:text-red-400 italic mt-1 leading-relaxed"
+									v-else-if="violationRequest.status === 'PENDING'"
+									class="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5"
 								>
-									"{{ violationRequest.reviewNote }}"
+									⏳ Đang chờ duyệt
 								</p>
 							</div>
 						</div>
 
-						<!-- Pending — waiting -->
-						<div v-else class="flex items-start gap-2.5">
-							<div class="ml-1.5 mt-0.5 w-3 h-3 rounded-full bg-amber-400 flex-shrink-0 ring-2 ring-white dark:ring-gray-900 z-10 animate-pulse" />
-							<div>
-								<p class="text-xs font-medium text-amber-600 dark:text-amber-400 mt-0.5">Đang chờ duyệt...</p>
-								<p v-if="violationRequest.assignedReviewer" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-									Người duyệt: {{ violationRequest.assignedReviewer.fullName }}
+						<!-- Connector -->
+						<div class="ml-3.5 h-4 w-0.5" :class="violationRequest.approvedL1At ? 'bg-green-400' : 'bg-gray-200 dark:bg-gray-700'" />
+
+						<!-- Step 2 -->
+						<div class="flex items-start gap-3">
+							<div
+								class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold ring-2 ring-white dark:ring-gray-900"
+								:class="
+									violationRequest.status === 'APPROVED'
+										? 'bg-green-500 text-white'
+										: violationRequest.status === 'PENDING_L2'
+											? 'bg-orange-500 text-white animate-pulse'
+											: 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+								"
+							>
+								<svg v-if="violationRequest.status === 'APPROVED'" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+								</svg>
+								<span v-else>2</span>
+							</div>
+							<div class="flex-1 min-w-0">
+								<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Cấp 2 — Quản lý phòng ban</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">
+									{{ violationRequest.approverL2?.fullName ?? 'Giám đốc' }}
+								</p>
+								<p v-if="violationRequest.status === 'APPROVED'" class="text-xs text-green-600 dark:text-green-400 mt-0.5">
+									✓ Đã duyệt {{ formatDateTime(violationRequest.reviewedAt) }}
+								</p>
+								<p
+									v-else-if="violationRequest.status === 'PENDING_L2'"
+									class="text-xs text-orange-600 dark:text-orange-400 mt-0.5"
+								>
+									⏳ Đang chờ duyệt
+								</p>
+								<p v-else class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+									Chờ cấp 1 duyệt trước
 								</p>
 							</div>
 						</div>
 					</div>
+
+					<!-- Single-level -->
+					<div v-else class="text-sm text-gray-600 dark:text-gray-400">
+						Người duyệt: <span class="font-medium text-gray-800 dark:text-gray-200">{{ violationRequest.assignedReviewer?.fullName ?? 'HR' }}</span>
+					</div>
 				</div>
 
-				<!-- Deadline -->
+				<!-- Terminal result (REJECTED / CANCELLED) -->
 				<div
-					class="flex items-center justify-between text-xs pt-1 border-t border-gray-100 dark:border-gray-800"
+					v-if="violationRequest.status === 'REJECTED' || violationRequest.status === 'CANCELLED'"
+					class="space-y-1.5 pt-3 border-t border-gray-100 dark:border-gray-800"
 				>
-					<span class="text-gray-400 dark:text-gray-500">Hạn nộp</span>
-					<span :class="violationRequest.deadlinePassed ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'">
-						{{ formatDate(violationRequest.deadline) }}
-						<span v-if="violationRequest.deadlinePassed"> (Quá hạn)</span>
-					</span>
+					<p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+						<span v-if="violationRequest.status === 'REJECTED'">Bị từ chối</span>
+						<span v-else>Đã thu hồi</span>
+						<span
+							v-if="violationRequest.reviewedBy"
+							class="font-normal text-gray-500 dark:text-gray-400"
+						>
+							bởi {{ violationRequest.reviewedBy.fullName }}
+						</span>
+					</p>
+					<p v-if="violationRequest.reviewedAt" class="text-xs text-gray-400 dark:text-gray-500">
+						{{ formatDateTime(violationRequest.reviewedAt) }}
+					</p>
+					<p
+						v-if="violationRequest.reviewNote"
+						class="text-xs text-red-600 dark:text-red-400 italic mt-1 leading-relaxed"
+					>
+						"{{ violationRequest.reviewNote }}"
+					</p>
+				</div>
+
+				<!-- Created + Deadline -->
+				<div class="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-1.5">
+					<div class="flex items-center justify-between text-xs">
+						<span class="text-gray-400 dark:text-gray-500">Đã nộp</span>
+						<span class="text-gray-500 dark:text-gray-400">{{ formatDateTime(violationRequest.createdAt) }}</span>
+					</div>
+					<div class="flex items-center justify-between text-xs">
+						<span class="text-gray-400 dark:text-gray-500">Hạn nộp</span>
+						<span :class="violationRequest.deadlinePassed ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'">
+							{{ formatDate(violationRequest.deadline) }}
+							<span v-if="violationRequest.deadlinePassed"> (Quá hạn)</span>
+						</span>
+					</div>
 				</div>
 			</div>
 
 			<!-- Footer -->
 			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-				<div v-if="canReview" class="flex items-center gap-2">
-					<CommonAppButton variant="outline" class="flex-1 justify-center" @click="emit('close')">Đóng</CommonAppButton>
-					<CommonAppButton variant="danger" @click="emit('reject')">Từ chối</CommonAppButton>
-					<CommonAppButton variant="primary" :loading="approving" @click="emit('approve')">Duyệt</CommonAppButton>
+				<div v-if="canReview" class="space-y-2">
+					<div class="flex items-center gap-2">
+						<CommonAppButton variant="outline" class="flex-1 justify-center" @click="emit('close')">Đóng</CommonAppButton>
+						<CommonAppButton variant="danger" @click="emit('reject')">Từ chối</CommonAppButton>
+						<CommonAppButton variant="primary" :loading="approving" @click="emit('approve')">
+							{{ approveButtonLabel }}
+						</CommonAppButton>
+					</div>
+					<p
+						v-if="violationRequest.isMultiLevel && violationRequest.status === 'PENDING'"
+						class="text-xs text-gray-400 dark:text-gray-500 text-right"
+					>
+						Sau khi duyệt, phiếu sẽ chuyển lên
+						{{ violationRequest.approverL2?.fullName ?? 'Giám đốc' }} xem xét cấp 2
+					</p>
 				</div>
 				<CommonAppButton v-else variant="outline" class="w-full justify-center" @click="emit('close')">Đóng</CommonAppButton>
 			</div>

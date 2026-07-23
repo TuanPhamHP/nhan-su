@@ -19,6 +19,7 @@ import { isManagementRole } from '~/utils/role';
  * | online_work_request  | /management/online-work?open_id=:id      | /online-work/my?open_id=:id       |
  * | attendance           | /management/attendance                   | /attendance/my                    |
  * | makeup_attendance_request | /management/makeup-attendance?open_id=:id | /makeup-attendance/my?open_id=:id |
+ * | company_announcement | /management/announcements/:id (HR/ADMIN) | /announcements/:id (các role còn lại) |
  */
 export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
 	if (!refType) return null;
@@ -53,6 +54,14 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 
 		case 'general_request':
 			return id ? `/general-requests/${id}` : '/general-requests';
+
+		case 'company_announcement': {
+			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,
+			// DIRECTOR, EMPLOYEE) đều là "reader" nên navigate về trang employee.
+			const isHrAdmin = role === 'ADMIN' || role === 'HR';
+			if (!id) return isHrAdmin ? '/management/announcements' : '/announcements';
+			return isHrAdmin ? `/management/announcements/${id}` : `/announcements/${id}`;
+		}
 
 		default:
 			return null;
