@@ -7,6 +7,7 @@ import type {
 	CompanyAnnouncementSummary,
 	CreateCommentDto,
 	EmojiKey,
+	MyAnnouncementDetail,
 	MyAnnouncementItem,
 	QueryAnnouncementParams,
 	ReactActionResponse,
@@ -77,6 +78,13 @@ export const useCompanyAnnouncementService = () => {
 				{ params },
 			);
 			return { data: res.data, meta: res.meta };
+		},
+
+		async fetchMyAnnouncementDetail(id: number): Promise<MyAnnouncementDetail> {
+			const res = await authFetch<ApiResponse<MyAnnouncementDetail>>(
+				`/v1/company-announcements/my/${id}`,
+			);
+			return res.data;
 		},
 
 		async markAsRead(id: number): Promise<void> {

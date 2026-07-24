@@ -19,28 +19,17 @@ export interface AnnouncementCreator {
 	fullName: string;
 }
 
-export type RecipientScope = 'ALL' | 'DEPARTMENT' | 'CUSTOM';
-
-export interface RecipientScopeInfo {
-	type: RecipientScope;
-	// Chỉ có khi type === 'DEPARTMENT'
-	departmentName?: string | null;
-}
+export type AnnouncementStatus = 'ACTIVE' | 'RECALLED';
 
 export interface CompanyAnnouncementSummary {
 	id: number;
 	title: string;
-	body?: string;
 	announcementType: AnnouncementType;
+	status: AnnouncementStatus;
 	sentAt: string;
-	updatedAt?: string;
+	createdAt: string;
 	createdBy: AnnouncementCreator;
-	recipientCount: number;
-	recipientScope?: RecipientScopeInfo;
-	attachments: AnnouncementAttachment[];
-	links: AnnouncementLink[];
 	recalledAt: string | null;
-	recalledBy: AnnouncementCreator | null;
 }
 
 export interface AnnouncementRecipientStatus {
@@ -75,11 +64,23 @@ export interface ReadStatusResponse {
 export interface MyAnnouncementItem {
 	id: number;
 	title: string;
+	announcementType: AnnouncementType;
+	sentAt: string;
+	createdAt: string;
+	createdBy: AnnouncementCreator;
+	isRead: boolean;
+	readAt: string | null;
+}
+
+export interface MyAnnouncementDetail {
+	id: number;
+	title: string;
 	body: string;
 	announcementType: AnnouncementType;
 	attachments: AnnouncementAttachment[];
 	links: AnnouncementLink[];
 	sentAt: string;
+	createdAt: string;
 	createdBy: AnnouncementCreator;
 	isRead: boolean;
 	readAt: string | null;

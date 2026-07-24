@@ -8,6 +8,8 @@ import type {
 	RejectOvertimeDto,
 	QueryOvertimeParams,
 	QueryOvertimeReportParams,
+	CheckOtLocationDto,
+	CheckOtLocationResponse,
 } from '~/types/overtime.types';
 
 export const useOvertimeRequestService = () => {
@@ -73,6 +75,14 @@ export const useOvertimeRequestService = () => {
 
 		async exportReport(params: QueryOvertimeReportParams): Promise<Blob> {
 			return authFetch<Blob>('/v1/overtime-requests/report/export', { params, responseType: 'blob' });
+		},
+
+		async checkLocation(id: number, dto: CheckOtLocationDto): Promise<CheckOtLocationResponse> {
+			const res = await authFetch<ApiResponse<CheckOtLocationResponse>>(`/v1/overtime-requests/${id}/check-location`, {
+				method: 'POST',
+				body: dto,
+			});
+			return res.data;
 		},
 	};
 };

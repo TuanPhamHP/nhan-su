@@ -2,10 +2,24 @@
 import { format, differenceInDays } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import OvertimeStatusBadge from '~/components/modules/overtime/OvertimeStatusBadge.vue';
-import type { OvertimeRequestResponse } from '~/types/overtime.types';
+import { useOvertimeRequestService } from '~/services/overtime-request.service';
+import type { OvertimeRequestResponse, OtLocationCheckType } from '~/types/overtime.types';
 
 const props = defineProps<{ request: OvertimeRequestResponse }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; refresh: [] }>();
+
+const toast = useToast();
+const service = useOvertimeRequestService();
+
+// Reactive "now" — cập nhật mỗi phút để check window
+const now = ref(new Date());
+let tickId: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+	tickId = setInterval(() => (now.value = new Date()), 60_000);
+});
+onBeforeUnmount(() => {
+	if (tickId) clearInterval(tickId);
+});
 
 function formatDate(d: string) {
 	return format(new Date(d), 'dd/MM/yyyy');
@@ -25,6 +39,70 @@ const daysUntilExpire = computed(() => {
 	return days;
 });
 
+// ─── Location check window helpers ───────────────────────────────────────────
+const isInStartWindow = computed(() => {
+	const start = new Date(props.request.startTime).getTime();
+	const t = now.value.getTime();
+	return t >= start - 30 * 60 * 1000 && t <= start + 30 * 60 * 1000;
+});
+
+const isInEndWindow = computed(() => {
+	const end = new Date(props.request.endTime).getTime();
+	const t = now.value.getTime();
+	return t >= end - 30 * 60 * 1000 && t <= end + 30 * 60 * 1000;
+});
+
+const showLocationSection = computed(
+	() => props.request.workMode === 'OFFLINE' && props.request.status === 'APPROVED',
+);
+
+// ─── Check location handler (Geolocation API) ────────────────────────────────
+const isCheckingLocation = ref(false);
+const checkingType = ref<OtLocationCheckType | null>(null);
+
+function handleCheckLocation(checkType: OtLocationCheckType) {
+	if (!navigator.geolocation) {
+		toast.error('Trình duyệt không hỗ trợ GPS');
+		return;
+	}
+	isCheckingLocation.value = true;
+	checkingType.value = checkType;
+
+	navigator.geolocation.getCurrentPosition(
+		async position => {
+			try {
+				const result = await service.checkLocation(props.request.id, {
+					latitude: position.coords.latitude,
+					longitude: position.coords.longitude,
+					checkType,
+				});
+				if (result.isValid) {
+					toast.success(`Vị trí hợp lệ — ${result.locationName ?? 'Trong phạm vi'}`);
+				} else {
+					toast.warning('Vị trí ngoài phạm vi. Hệ thống đã ghi nhận.');
+				}
+				emit('refresh');
+			} catch (err) {
+				toast.error(err instanceof Error ? err.message : 'Không thể xác nhận vị trí. Thử lại sau.');
+			} finally {
+				isCheckingLocation.value = false;
+				checkingType.value = null;
+			}
+		},
+		error => {
+			isCheckingLocation.value = false;
+			checkingType.value = null;
+			if (error.code === error.PERMISSION_DENIED) {
+				toast.error('Vui lòng cho phép truy cập vị trí trong cài đặt trình duyệt');
+			} else {
+				toast.error('Không lấy được vị trí GPS. Kiểm tra kết nối.');
+			}
+		},
+		{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+	);
+}
+
+// ─── Timeline ─────────────────────────────────────────────────────────────────
 const timelineSteps = computed(() => {
 	const req = props.request;
 	const steps: Array<{
@@ -72,6 +150,40 @@ const timelineSteps = computed(() => {
 
 			<!-- Body -->
 			<div class="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+				<!-- OT Rate + WorkMode badges -->
+				<div class="flex items-center gap-2 flex-wrap">
+					<span
+						:class="[
+							'inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold',
+							request.otRate === 300
+								? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+								: request.otRate === 200
+									? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+									: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+						]"
+					>
+						⏱ {{ request.otRateLabel }}
+					</span>
+
+					<span
+						:class="[
+							'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm',
+							request.workMode === 'OFFLINE'
+								? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+								: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+						]"
+					>
+						{{ request.workMode === 'OFFLINE' ? '🏢 Tại văn phòng' : '🏠 Online' }}
+					</span>
+
+					<span
+						v-if="request.finalWorkMode && request.finalWorkMode !== request.workMode"
+						class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
+					>
+						⚠️ Đã chuyển sang {{ request.finalWorkMode === 'ONLINE' ? 'Online' : 'Văn phòng' }}
+					</span>
+				</div>
+
 				<!-- Basic info -->
 				<div class="space-y-3 text-sm">
 					<div class="flex justify-between">
@@ -130,6 +242,125 @@ const timelineSteps = computed(() => {
 					<div v-if="request.reviewNote" class="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2.5">
 						<p class="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Lý do từ chối</p>
 						<p class="text-sm text-red-700 dark:text-red-300">{{ request.reviewNote }}</p>
+					</div>
+				</div>
+
+				<!-- Location check section — chỉ hiện khi OFFLINE + APPROVED -->
+				<div
+					v-if="showLocationSection"
+					:class="[
+						'border rounded-xl p-4',
+						request.locationStatus.isResolved
+							? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+							: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+					]"
+				>
+					<h4 class="font-medium text-sm mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
+						📍 Xác nhận vị trí làm việc
+						<span v-if="request.locationStatus.isResolved" class="text-xs font-normal text-gray-400 dark:text-gray-500">
+							(Đã hoàn tất)
+						</span>
+					</h4>
+
+					<div class="grid grid-cols-2 gap-3">
+						<!-- START check -->
+						<div
+							:class="[
+								'rounded-lg p-3 border text-center',
+								request.locationStatus.start.isValid === true
+									? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+									: request.locationStatus.start.isValid === false
+										? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+										: 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700',
+							]"
+						>
+							<p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trước khi bắt đầu</p>
+							<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">{{ formatTime(request.startTime) }}</p>
+
+							<template v-if="request.locationStatus.start.isValid === true">
+								<p class="text-green-600 dark:text-green-400 text-sm font-medium">✓ Hợp lệ</p>
+								<p v-if="request.locationStatus.start.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
+									{{ formatDateTime(request.locationStatus.start.checkedAt) }}
+								</p>
+							</template>
+							<template v-else-if="request.locationStatus.start.isValid === false">
+								<p class="text-red-600 dark:text-red-400 text-sm font-medium">✗ Ngoài phạm vi</p>
+								<p v-if="request.locationStatus.start.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
+									{{ formatDateTime(request.locationStatus.start.checkedAt) }}
+								</p>
+							</template>
+							<template v-else>
+								<button
+									v-if="isInStartWindow && !request.locationStatus.isResolved"
+									:disabled="isCheckingLocation"
+									class="mt-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg disabled:opacity-50 transition-colors"
+									@click="handleCheckLocation('START')"
+								>
+									{{ isCheckingLocation && checkingType === 'START' ? 'Đang kiểm tra…' : 'Xác nhận ngay' }}
+								</button>
+								<p v-else class="text-xs text-gray-400 dark:text-gray-500">Chưa xác nhận</p>
+							</template>
+						</div>
+
+						<!-- END check -->
+						<div
+							:class="[
+								'rounded-lg p-3 border text-center',
+								request.locationStatus.end.isValid === true
+									? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+									: request.locationStatus.end.isValid === false
+										? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+										: 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700',
+							]"
+						>
+							<p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trước khi kết thúc</p>
+							<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">{{ formatTime(request.endTime) }}</p>
+
+							<template v-if="request.locationStatus.end.isValid === true">
+								<p class="text-green-600 dark:text-green-400 text-sm font-medium">✓ Hợp lệ</p>
+								<p v-if="request.locationStatus.end.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
+									{{ formatDateTime(request.locationStatus.end.checkedAt) }}
+								</p>
+							</template>
+							<template v-else-if="request.locationStatus.end.isValid === false">
+								<p class="text-red-600 dark:text-red-400 text-sm font-medium">✗ Ngoài phạm vi</p>
+								<p v-if="request.locationStatus.end.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
+									{{ formatDateTime(request.locationStatus.end.checkedAt) }}
+								</p>
+							</template>
+							<template v-else>
+								<button
+									v-if="isInEndWindow && !request.locationStatus.isResolved"
+									:disabled="isCheckingLocation"
+									class="mt-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg disabled:opacity-50 transition-colors"
+									@click="handleCheckLocation('END')"
+								>
+									{{ isCheckingLocation && checkingType === 'END' ? 'Đang kiểm tra…' : 'Xác nhận ngay' }}
+								</button>
+								<p v-else class="text-xs text-gray-400 dark:text-gray-500">Chưa xác nhận</p>
+							</template>
+						</div>
+					</div>
+
+					<!-- Kết quả cuối cùng -->
+					<div
+						v-if="request.locationStatus.isResolved"
+						class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-center"
+					>
+						<p
+							:class="[
+								'text-sm font-medium',
+								request.finalWorkMode === 'OFFLINE'
+									? 'text-green-600 dark:text-green-400'
+									: 'text-orange-600 dark:text-orange-400',
+							]"
+						>
+							{{
+								request.finalWorkMode === 'OFFLINE'
+									? '✓ Xác nhận làm việc tại văn phòng'
+									: '→ Đã chuyển sang hình thức Online'
+							}}
+						</p>
 					</div>
 				</div>
 

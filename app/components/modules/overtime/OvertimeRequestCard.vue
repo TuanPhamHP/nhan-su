@@ -40,7 +40,15 @@ const approverName = computed(() => {
 				<p class="text-sm font-semibold text-gray-900 dark:text-white">{{ formatDate(request.overtimeDate) }}</p>
 			</div>
 			<div class="flex flex-col items-end gap-1 flex-shrink-0">
-				<OvertimeStatusBadge :status="request.status" />
+				<div class="flex items-center gap-1.5">
+					<OvertimeStatusBadge :status="request.status" />
+					<span class="text-xs text-gray-400 dark:text-gray-500">
+						{{ request.workMode === 'OFFLINE' ? '🏢' : '🏠' }}
+						<template v-if="request.finalWorkMode && request.finalWorkMode !== request.workMode">
+							→ {{ request.finalWorkMode === 'ONLINE' ? 'Online' : 'VP' }}
+						</template>
+					</span>
+				</div>
 				<span
 					v-if="request.status === 'PENDING' && request.autoExpireAt"
 					class="text-xs text-orange-500 dark:text-orange-400"
@@ -50,8 +58,8 @@ const approverName = computed(() => {
 			</div>
 		</div>
 
-		<!-- Thời gian + số giờ -->
-		<div class="flex items-center gap-3">
+		<!-- Thời gian + số giờ + hệ số -->
+		<div class="flex items-center gap-2 flex-wrap">
 			<div class="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
 				<svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -60,6 +68,18 @@ const approverName = computed(() => {
 			</div>
 			<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
 				{{ request.hoursDisplay }}
+			</span>
+			<span
+				:class="[
+					'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold',
+					request.otRate === 300
+						? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+						: request.otRate === 200
+							? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+							: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+				]"
+			>
+				{{ request.otRateLabel }}
 			</span>
 		</div>
 

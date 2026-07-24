@@ -6,40 +6,18 @@
 	import { formatRelativeTime } from '~/utils/date';
 	import {
 		ANNOUNCEMENT_TYPE_CONFIG,
-		type MyAnnouncementItem,
+		type MyAnnouncementDetail,
 	} from '~/types/announcement.types';
 
 	definePageMeta({ title: 'Chi tiết thông báo' });
 
 	const route = useRoute();
-	const { fetchMyAnnouncements, markAsRead } = useCompanyAnnouncements();
+	const { fetchMyAnnouncementDetail, markAsRead } = useCompanyAnnouncements();
 
 	const id = computed(() => Number(route.params.id));
-	const announcement = ref<MyAnnouncementItem | null>(null);
+	const announcement = ref<MyAnnouncementDetail | null>(null);
 	const loading = ref(true);
 	const notFound = ref(false);
-	const recalled = ref(false);
-
-	// BE không có endpoint GET /my/:id, phải quét list /my để tìm.
-	// Server đã tự filter bài đã recall khỏi /my, nên nếu không tìm thấy
-	// có khả năng bài đã bị thu hồi (hoặc chưa bao giờ dành cho user này).
-	async function findByIdViaMy(targetId: number): Promise<MyAnnouncementItem | null> {
-		const limit = 50;
-		let page = 1;
-		while (page <= 20) {
-			const res = await fetchMyAnnouncements({ page, limit });
-			const found = res.data.find(i => i.id === targetId);
-			if (found) return found;
-			if (page >= res.meta.totalPages) return null;
-			page++;
-		}
-		return null;
-	}
-
-	function isNotFoundError(e: unknown): boolean {
-		if (!(e instanceof Error)) return false;
-		return /404|not[_ ]?found|thu hồi|đã bị thu hồi/i.test(e.message);
-	}
 
 	async function load() {
 		if (!id.value || Number.isNaN(id.value)) {
@@ -48,27 +26,14 @@
 			return;
 		}
 		try {
-			const item = await findByIdViaMy(id.value);
-			if (!item) {
-				// Có thể bài đã bị thu hồi hoặc không tồn tại — không hiển thị toast, chỉ show fallback screen.
-				recalled.value = true;
-				return;
-			}
-			announcement.value = item;
-			// markAsRead có thể trả 404 nếu bài đã bị recall sau khi ta lấy list
-			// → nuốt lỗi, không toast.
-			markAsRead(id.value).catch(err => {
-				if (isNotFoundError(err)) {
-					recalled.value = true;
-					announcement.value = null;
-				}
-			});
-		} catch (e) {
-			if (isNotFoundError(e)) {
-				recalled.value = true;
-			} else {
-				notFound.value = true;
-			}
+			announcement.value = await fetchMyAnnouncementDetail(id.value);
+			// BE guarantees mark-as-read is idempotent — swallow errors silently
+			// (bài có thể vừa bị recall giữa hai request).
+			markAsRead(id.value).catch(() => {});
+		} catch {
+			// BE trả 404 chung cho: không tồn tại / không phải recipient / đã bị thu hồi.
+			// Không cần phân biệt case, hiển thị 1 màn thông báo chung.
+			notFound.value = true;
 		} finally {
 			loading.value = false;
 		}
@@ -119,20 +84,15 @@
 			</svg>
 		</div>
 
-		<!-- Recalled (silent) -->
+		<!-- Not found / recalled / not-a-recipient — server trả 404 chung cho cả 3 -->
 		<div
-			v-else-if="recalled"
+			v-else-if="notFound || !announcement || !config"
 			class="p-12 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3"
 		>
 			<p class="text-4xl">🚫</p>
-			<div>
-				<p class="text-base font-semibold text-gray-800 dark:text-gray-200">
-					Thông báo đã bị thu hồi hoặc không còn khả dụng
-				</p>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-					Bộ phận HR đã thu hồi thông báo này. Vui lòng quay lại danh sách để xem các thông báo khác.
-				</p>
-			</div>
+			<p class="text-base font-semibold text-gray-800 dark:text-gray-200">
+				Thông báo không tồn tại hoặc đã bị thu hồi.
+			</p>
 			<NuxtLink
 				to="/announcements"
 				class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
@@ -142,15 +102,6 @@
 				</svg>
 				Quay lại danh sách
 			</NuxtLink>
-		</div>
-
-		<!-- Not found -->
-		<div
-			v-else-if="notFound || !announcement || !config"
-			class="p-16 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
-		>
-			<p class="text-4xl mb-2">🔍</p>
-			<p class="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy thông báo</p>
 		</div>
 
 		<!-- Content -->

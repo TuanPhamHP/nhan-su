@@ -17,8 +17,10 @@ Module cho phép **HR/ADMIN** broadcast thông báo tới nhiều nhân viên c�
 | Method | Path | Ai được gọi | Ghi chú |
 | --- | --- | --- | --- |
 | POST | `/v1/company-announcements` | `HR`, `ADMIN` | Tạo + broadcast — `multipart/form-data` với `attachments[]` |
-| GET | `/v1/company-announcements` | `HR`, `ADMIN` | Danh sách đã gửi (phân trang) |
-| GET | `/v1/company-announcements/my` | Mọi user đã đăng nhập | Danh sách thông báo dành cho tôi (phân trang, filter `isRead`) |
+| GET | `/v1/company-announcements` | `HR`, `ADMIN` | Danh sách đã gửi (phân trang) — **tinh gọn: chỉ id/title/type/status/thời gian/người tạo** |
+| GET | `/v1/company-announcements/types` | Mọi user đã đăng nhập | Metadata: danh sách loại thông báo (`value` + `label`) cho dropdown |
+| GET | `/v1/company-announcements/my` | Mọi user đã đăng nhập | Danh sách thông báo dành cho tôi (phân trang, filter `isRead`) — **tinh gọn, không kèm body/attachments** |
+| GET | `/v1/company-announcements/my/:id` | Recipient | **MỚI:** Chi tiết một thông báo dành cho employee (kèm body + attachments đã presigned) |
 | GET | `/v1/company-announcements/:id/mentionable-employees` | Mọi user đã đăng nhập | Danh sách nhân viên có thể @mention khi comment: recipients ACTIVE ∪ creator ∪ HR ACTIVE |
 | GET | `/v1/company-announcements/:id` | `HR`, `ADMIN` | Chi tiết + full recipients (kèm avatar & trạng thái đọc) |
 | GET | `/v1/company-announcements/:id/read-status` | `HR`, `ADMIN` | Thống kê đọc/chưa đọc (dashboard) |
@@ -31,7 +33,9 @@ Module cho phép **HR/ADMIN** broadcast thông báo tới nhiều nhân viên c�
 | POST | `/v1/company-announcements/:id/comments` | Mọi user đã đăng nhập | Thêm comment hoặc reply — hỗ trợ @mention |
 | DELETE | `/v1/company-announcements/comments/:commentId` | Owner hoặc `HR`/`ADMIN` | Soft-delete comment |
 
-> **Thứ tự route:** `/my` và `/:id/mentionable-employees` được khai báo **trước** `/:id` để tránh bị parse thành id. FE không cần lo, chỉ dùng path đúng.
+> **Thứ tự route:** `/my`, `/my/:id`, `/types` và `/:id/mentionable-employees` được khai báo **trước** `/:id` để tránh bị parse thành id. FE không cần lo, chỉ dùng path đúng.
+
+> ⚠️ **BREAKING (2026-07):** payload của `GET /` (HR list) và `GET /my` (employee list) đã **bỏ** các field `body`, `attachments`, `links`, `recipientCount`, `recalledBy`. Thêm field mới `status: 'ACTIVE' | 'RECALLED'` + `createdAt`. Nếu cần các field trên → gọi `GET /:id` (HR/ADMIN) hoặc endpoint mới `GET /my/:id` (recipient).
 
 ---
 
@@ -39,17 +43,19 @@ Module cho phép **HR/ADMIN** broadcast thông báo tới nhiều nhân viên c�
 
 Bucket lưu trữ là **private**. Toàn bộ URL trong response được BE sign trước khi trả về, FE **không cần** sign lại.
 
-| Field | Kiểu | Được sign |
-| --- | --- | --- |
-| `attachments[].url` | `string` | ✅ presigned, dùng trực tiếp trong `<a href download>` |
-| `recipients[].avatarUrl` | `string \| null` | ✅ presigned nếu có, `null` nếu nhân viên chưa upload avatar |
-| `comments[].author.avatarUrl` | `string \| null` | ✅ presigned nếu có |
-| `comments[].replies[].author.avatarUrl` | `string \| null` | ✅ presigned nếu có |
+| Field | Kiểu | Được sign | Xuất hiện ở |
+| --- | --- | --- | --- |
+| `attachments[].url` | `string` | ✅ presigned, dùng trực tiếp trong `<a href download>` | `GET /:id`, `GET /my/:id` |
+| `recipients[].avatarUrl` | `string \| null` | ✅ presigned nếu có, `null` nếu nhân viên chưa upload avatar | `GET /:id`, `GET /:id/read-status` |
+| `comments[].author.avatarUrl` | `string \| null` | ✅ presigned nếu có | `GET /:id/comments` |
+| `comments[].replies[].author.avatarUrl` | `string \| null` | ✅ presigned nếu có | `GET /:id/comments` |
 
 - TTL 3600s (1 giờ). Sau đó gọi lại API để lấy URL mới.
 - Nếu sign lỗi (file bị xoá, key sai), field về `null` hoặc bị filter khỏi mảng attachments.
 
 `links[].url` (link ngoài) **không sign** — dùng nguyên URL do HR nhập.
+
+> **Danh sách (list) không còn attachments/links.** Presign chỉ xảy ra ở các endpoint detail (`GET /:id`, `GET /my/:id`) và response của `POST /` sẽ **không** kèm attachments — HR cần preview thì gọi GET detail ngay sau khi tạo.
 
 ---
 
@@ -59,6 +65,13 @@ Bucket lưu trữ là **private**. Toàn bộ URL trong response được BE sig
 // types/company-announcement.types.ts
 
 export type AnnouncementType = 'ATTENDANCE_REPORT' | 'PROFILE_UPDATE' | 'DOCUMENT_SUBMIT' | 'GENERAL';
+
+// ── Metadata (dropdown / picker) ──
+
+export interface AnnouncementTypeOption {
+	value: AnnouncementType;
+	label: string; // nhãn tiếng Việt do BE cung cấp
+}
 
 export interface AnnouncementAttachment {
 	name: string; // originalname từ browser
@@ -75,19 +88,19 @@ export interface AnnouncementCreator {
 	fullName: string;
 }
 
-// ── Response cho list (HR/ADMIN) ──
+// ── Response cho list (HR/ADMIN) — tinh gọn ──
+
+export type AnnouncementStatus = 'ACTIVE' | 'RECALLED';
 
 export interface CompanyAnnouncementSummary {
 	id: number;
 	title: string;
 	announcementType: AnnouncementType;
-	sentAt: string; // ISO 8601
+	status: AnnouncementStatus; // 'ACTIVE' | 'RECALLED' — derived từ recalledAt
+	sentAt: string; // ISO 8601 — thời điểm broadcast
+	createdAt: string; // ISO 8601 — record createdAt (thường trùng sentAt)
 	createdBy: AnnouncementCreator;
-	recipientCount: number; // tổng số người nhận
-	attachments: AnnouncementAttachment[];
-	links: AnnouncementLink[];
-	recalledAt: string | null; // ISO 8601 nếu đã bị thu hồi. HR/ADMIN thấy; employee KHÔNG bao giờ thấy record đã recalled.
-	recalledBy: AnnouncementCreator | null;
+	recalledAt: string | null; // ISO 8601 nếu đã bị thu hồi. Chi tiết ai thu hồi → gọi GET /:id
 }
 
 // ── Response chi tiết (HR/ADMIN) ──
@@ -123,19 +136,34 @@ export interface ReadStatusResponse {
 	recipients: AnnouncementRecipientStatus[];
 }
 
-// ── Response cho employee ──
+// ── Response cho employee — list (tinh gọn) ──
 
 export interface MyAnnouncementItem {
 	id: number; // = announcement.id (KHÔNG phải recipient.id)
 	title: string;
-	body: string; // HTML
 	announcementType: AnnouncementType;
-	attachments: AnnouncementAttachment[];
-	links: AnnouncementLink[];
 	sentAt: string; // ISO 8601
+	createdAt: string; // ISO 8601 — record createdAt
 	createdBy: AnnouncementCreator;
 	isRead: boolean; // trạng thái đọc của TÔI với thông báo này
 	readAt: string | null; // ISO 8601 khi tôi đọc
+	// KHÔNG còn body/attachments/links — gọi GET /my/:id để lấy chi tiết
+}
+
+// ── Response cho employee — detail (đầy đủ) ──
+
+export interface MyAnnouncementDetail {
+	id: number;
+	title: string;
+	body: string; // HTML — render qua v-html hoặc dangerouslySetInnerHTML
+	announcementType: AnnouncementType;
+	attachments: AnnouncementAttachment[]; // presigned URL
+	links: AnnouncementLink[];
+	sentAt: string; // ISO 8601
+	createdAt: string; // ISO 8601
+	createdBy: AnnouncementCreator;
+	isRead: boolean;
+	readAt: string | null;
 }
 
 // ── Mention picker (comment) ──
@@ -224,6 +252,30 @@ FE dùng icon + action label để render banner/card trong list. `body` là HTM
 
 ---
 
+## GET /v1/company-announcements/types — Metadata loại thông báo
+
+Trả về đầy đủ enum `announcementType` kèm `label` tiếng Việt do BE nắm giữ. Dùng để FE render dropdown khi HR tạo thông báo mới, tránh phải hard-code list trên FE.
+
+- **Ai được gọi:** bất kỳ authenticated user (không giới hạn role).
+- **Query params:** không có.
+- **Response:** `ApiSuccess<AnnouncementTypeOption[]>` — thứ tự cố định `ATTENDANCE_REPORT → PROFILE_UPDATE → DOCUMENT_SUBMIT → GENERAL`.
+
+```json
+{
+	"success": true,
+	"data": [
+		{ "value": "ATTENDANCE_REPORT", "label": "Báo cáo chấm công" },
+		{ "value": "PROFILE_UPDATE", "label": "Cập nhật thông tin" },
+		{ "value": "DOCUMENT_SUBMIT", "label": "Nộp hồ sơ" },
+		{ "value": "GENERAL", "label": "Thông báo chung" }
+	]
+}
+```
+
+FE gợi ý cache 1 lần cho cả session (list này gần như không đổi). Icon vẫn thuộc FE — map từ `value` theo bảng "Render guide" ở trên.
+
+---
+
 ## POST /v1/company-announcements — Tạo & broadcast
 
 **Content-Type:** `multipart/form-data`.
@@ -258,7 +310,7 @@ files.forEach(f => form.append('attachments', f));
 await $fetch('/v1/company-announcements', { method: 'POST', body: form });
 ```
 
-**Response 201:** `ApiSuccess<CompanyAnnouncementSummary>` (attachments đã presigned).
+**Response 201:** `ApiSuccess<CompanyAnnouncementSummary>` — payload tinh gọn (không kèm attachments/links). Nếu HR cần preview file/link vừa upload, gọi `GET /:id` ngay sau đó.
 
 ```json
 {
@@ -267,16 +319,11 @@ await $fetch('/v1/company-announcements', { method: 'POST', body: form });
 		"id": 12,
 		"title": "Báo cáo chấm công tháng 07/2026",
 		"announcementType": "ATTENDANCE_REPORT",
+		"status": "ACTIVE",
 		"sentAt": "2026-07-23T05:30:00.000Z",
+		"createdAt": "2026-07-23T05:30:00.000Z",
 		"createdBy": { "id": 3, "fullName": "Nguyễn Thị HR" },
-		"recipientCount": 45,
-		"attachments": [
-			{
-				"name": "bao-cao-cham-cong-thang-07.xlsx",
-				"url": "https://hr-documents.s3.example.com/announcements/12/attachments/abc.xlsx?X-Amz-Signature=..."
-			}
-		],
-		"links": [{ "label": "Xem trên intranet", "url": "https://intranet.company.com/reports/2026-07" }]
+		"recalledAt": null
 	}
 }
 ```
@@ -307,7 +354,7 @@ Filter behaviour:
 - `created_at_from` / `created_at_to`: khoảng ngày `createdAt`. Nếu gửi `YYYY-MM-DD`, `to` được coi là **hết ngày** (server convert `lt(nextDay)` để inclusive). Có thể gửi độc lập 1 trong 2.
 - Bỏ trống = không filter, trả full list phân trang.
 
-**Response:** `ApiPaginated<CompanyAnnouncementSummary>`
+**Response:** `ApiPaginated<CompanyAnnouncementSummary>` — payload tinh gọn.
 
 ```json
 {
@@ -317,22 +364,32 @@ Filter behaviour:
 			"id": 12,
 			"title": "Báo cáo chấm công tháng 07/2026",
 			"announcementType": "ATTENDANCE_REPORT",
+			"status": "ACTIVE",
 			"sentAt": "2026-07-23T05:30:00.000Z",
+			"createdAt": "2026-07-23T05:30:00.000Z",
 			"createdBy": { "id": 3, "fullName": "Nguyễn Thị HR" },
-			"recipientCount": 45,
-			"attachments": [
-				/* ... presigned ... */
-			],
-			"links": [
-				/* ... */
-			]
+			"recalledAt": null
+		},
+		{
+			"id": 11,
+			"title": "Thông báo cập nhật hồ sơ",
+			"announcementType": "PROFILE_UPDATE",
+			"status": "RECALLED",
+			"sentAt": "2026-07-20T05:30:00.000Z",
+			"createdAt": "2026-07-20T05:30:00.000Z",
+			"createdBy": { "id": 3, "fullName": "Nguyễn Thị HR" },
+			"recalledAt": "2026-07-21T04:00:00.000Z"
 		}
 	],
 	"meta": { "page": 1, "limit": 20, "total": 30, "totalPages": 2 }
 }
 ```
 
-`body` **không** trả trong list — muốn xem toàn bộ HTML, gọi `GET /:id`.
+`body`, `attachments`, `links`, `recipientCount`, `recalledBy` **không** trả trong list — gọi `GET /:id` để lấy chi tiết đầy đủ + danh sách người nhận.
+
+**Sort:** mặc định `sentAt DESC` (mới nhất trước). Không hỗ trợ tuỳ chọn sort.
+
+**Filter:** giữ nguyên như trước (`search`, `created_at_from`, `created_at_to`, `page`, `limit`).
 
 ---
 
@@ -432,7 +489,7 @@ Không cần body. Cascade xoá `AnnouncementRecipient` (constraint FK `onDelete
 
 Không cần body.
 
-**Response 200:** `ApiSuccess<CompanyAnnouncementSummary>` với `recalledAt` + `recalledBy` non-null.
+**Response 200:** `ApiSuccess<CompanyAnnouncementSummary>` với `recalledAt` non-null và `status: "RECALLED"`. Muốn biết ai thu hồi → gọi `GET /:id` (payload chi tiết vẫn giữ `recalledBy`).
 
 ```json
 {
@@ -440,13 +497,12 @@ Không cần body.
 	"data": {
 		"id": 12,
 		"title": "...",
-		"recalledAt": "2026-07-23T07:15:00.000Z",
-		"recalledBy": { "id": 3, "fullName": "Nguyễn Thị HR" },
-		"sentAt": "...",
+		"announcementType": "ATTENDANCE_REPORT",
+		"status": "RECALLED",
+		"sentAt": "2026-07-23T05:30:00.000Z",
+		"createdAt": "2026-07-23T05:30:00.000Z",
 		"createdBy": { "id": 3, "fullName": "..." },
-		"recipientCount": 45,
-		"attachments": [],
-		"links": []
+		"recalledAt": "2026-07-23T07:15:00.000Z"
 	}
 }
 ```
@@ -459,8 +515,8 @@ Không cần body.
 
 **FE việc cần làm:**
 
-- Trên list HR: nếu `recalledAt != null`, hiển thị badge/label "Đã thu hồi" (VD gray + strikethrough hoặc badge màu vàng). Nút "Thu hồi" nên disable/ẩn.
-- Trên detail HR: hiển thị banner "Thu hồi bởi {recalledBy.fullName} lúc {recalledAt}".
+- Trên list HR: dùng `status === 'RECALLED'` (hoặc `recalledAt != null`) để hiển thị badge/label "Đã thu hồi" (VD gray + strikethrough hoặc badge màu vàng). Nút "Thu hồi" nên disable/ẩn.
+- Trên detail HR (`GET /:id`): hiển thị banner "Thu hồi bởi {recalledBy.fullName} lúc {recalledAt}" — `recalledBy` chỉ tồn tại trong response chi tiết, KHÔNG có trong list nữa.
 - Trên list employee (`GET /my`): không cần xử lý — server đã filter.
 - Nếu FE có deep link đến announcement đã bị recall, xử lý 404 gracefully với message riêng "Thông báo này đã bị thu hồi".
 
@@ -504,7 +560,7 @@ Dedupe theo `id`, sort theo `fullName`. Không phân trang.
 
 ---
 
-## GET /v1/company-announcements/my — Thông báo của tôi
+## GET /v1/company-announcements/my — Thông báo của tôi (list tinh gọn)
 
 **Query params:**
 
@@ -513,7 +569,7 @@ Dedupe theo `id`, sort theo `fullName`. Không phân trang.
 - `isRead=false` — chỉ hiện chưa đọc
 - Bỏ `isRead` — hiện tất cả
 
-**Response:** `ApiPaginated<MyAnnouncementItem>`
+**Response:** `ApiPaginated<MyAnnouncementItem>` — không kèm `body`, `attachments`, `links`.
 
 ```json
 {
@@ -522,15 +578,9 @@ Dedupe theo `id`, sort theo `fullName`. Không phân trang.
 		{
 			"id": 12,
 			"title": "Báo cáo chấm công tháng 07/2026",
-			"body": "<p>Kính gửi toàn thể nhân viên,</p>...",
 			"announcementType": "ATTENDANCE_REPORT",
-			"attachments": [
-				/* presigned */
-			],
-			"links": [
-				/* ... */
-			],
 			"sentAt": "2026-07-23T05:30:00.000Z",
+			"createdAt": "2026-07-23T05:30:00.000Z",
 			"createdBy": { "id": 3, "fullName": "Nguyễn Thị HR" },
 			"isRead": false,
 			"readAt": null
@@ -541,6 +591,54 @@ Dedupe theo `id`, sort theo `fullName`. Không phân trang.
 ```
 
 Sort mặc định: `createdAt` của `AnnouncementRecipient` (thời điểm HR gửi cho tôi) — mới nhất trước.
+
+FE cần render danh sách nhanh (card, thông báo trong bell icon…) → dùng endpoint này. Khi user click vào 1 item → điều hướng sang trang chi tiết gọi `GET /my/:id`.
+
+---
+
+## GET /v1/company-announcements/my/:id — Chi tiết thông báo của tôi
+
+Full content dành cho recipient. Trả về HTML `body`, `attachments` đã presigned, `links` và trạng thái đọc của tôi.
+
+**Response 200:** `ApiSuccess<MyAnnouncementDetail>`
+
+```json
+{
+	"success": true,
+	"data": {
+		"id": 12,
+		"title": "Báo cáo chấm công tháng 07/2026",
+		"body": "<p>Kính gửi toàn thể nhân viên,</p><p>Đính kèm báo cáo tháng 07...</p>",
+		"announcementType": "ATTENDANCE_REPORT",
+		"attachments": [
+			{
+				"name": "bao-cao-cham-cong-thang-07.xlsx",
+				"url": "https://hr-documents.s3.example.com/announcements/12/attachments/abc.xlsx?X-Amz-Signature=..."
+			}
+		],
+		"links": [{ "label": "Xem trên intranet", "url": "https://intranet.company.com/reports/2026-07" }],
+		"sentAt": "2026-07-23T05:30:00.000Z",
+		"createdAt": "2026-07-23T05:30:00.000Z",
+		"createdBy": { "id": 3, "fullName": "Nguyễn Thị HR" },
+		"isRead": false,
+		"readAt": null
+	}
+}
+```
+
+**Ai được gọi:** bất kỳ authenticated user. Server tự check user là recipient — nếu không phải hoặc thông báo đã bị thu hồi → **404** (không leak sự tồn tại).
+
+**FE flow gợi ý:**
+
+1. Vào trang list `/my` → chọn 1 item → điều hướng `/announcements/{id}`.
+2. Trang chi tiết gọi `GET /my/:id` → render body + attachments + links.
+3. Sau khi render xong, gọi song song `PATCH /:id/read` (idempotent, no-op nếu đã đọc) để bell icon cập nhật.
+4. Nếu deep-link cũ dẫn về announcement đã bị recall → hiển thị message "Thông báo đã bị thu hồi".
+
+**Errors:**
+
+- `401` — chưa đăng nhập.
+- `404` — thông báo không tồn tại / bạn không phải người nhận / đã bị thu hồi.
 
 ---
 
@@ -673,8 +771,10 @@ import type {
 	CompanyAnnouncementSummary,
 	CompanyAnnouncementResponse,
 	MyAnnouncementItem,
+	MyAnnouncementDetail,
 	ReadStatusResponse,
 	AvailableRecipient,
+	AnnouncementTypeOption,
 	CreateAnnouncementDto,
 	QueryAnnouncementParams,
 	ReactionEmoji,
@@ -714,10 +814,16 @@ export function useCompanyAnnouncements() {
 	const getMentionableEmployees = (announcementId: number) =>
 		get<AvailableRecipient[]>(`/v1/company-announcements/${announcementId}/mentionable-employees`);
 
+	// ── Metadata ──
+
+	const fetchTypes = () => get<AnnouncementTypeOption[]>('/v1/company-announcements/types');
+
 	// ── Employee ──
 
 	const fetchMyAnnouncements = (params?: QueryAnnouncementParams) =>
 		list<MyAnnouncementItem>('/v1/company-announcements/my', { params });
+
+	const fetchMyAnnouncementDetail = (id: number) => get<MyAnnouncementDetail>(`/v1/company-announcements/my/${id}`);
 
 	const markAsRead = (id: number) => patch<void>(`/v1/company-announcements/${id}/read`, {});
 
@@ -735,7 +841,9 @@ export function useCompanyAnnouncements() {
 		create,
 		deleteAnnouncement,
 		getMentionableEmployees,
+		fetchTypes,
 		fetchMyAnnouncements,
+		fetchMyAnnouncementDetail,
 		markAsRead,
 		react,
 		fetchReactions,
@@ -816,6 +924,9 @@ Mobile app dùng `type === "COMPANY_ANNOUNCEMENT"` để navigate tới màn hì
 | React với emoji khác reaction cũ | Update tại chỗ (giữ nguyên `createdAt` của record) → `{ action: 'changed' }` |
 | Xoá announcement | Cascade xoá `AnnouncementReaction` (constraint FK `onDelete: Cascade`) |
 | Recall announcement | Không xoá reactions; endpoint `POST /:id/react` vẫn hoạt động nhưng FE thường ẩn UI sau khi recall |
+| Gọi `GET /my/:id` với announcement đã bị recall | `404` — server ẩn hoàn toàn với recipient |
+| Gọi `GET /my/:id` với id thuộc user khác | `404` (không phải 403) — tránh leak sự tồn tại |
+| Cần biết `recipientCount` sau đổi API | Gọi `GET /:id/read-status` (đã có `total` field) |
 
 ---
 

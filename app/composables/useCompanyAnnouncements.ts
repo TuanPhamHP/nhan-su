@@ -5,6 +5,7 @@ import type {
 	CompanyAnnouncementResponse,
 	CompanyAnnouncementSummary,
 	EmojiKey,
+	MyAnnouncementDetail,
 	MyAnnouncementItem,
 	QueryAnnouncementParams,
 	ReactActionResponse,
@@ -54,6 +55,10 @@ export function useCompanyAnnouncements() {
 		return service.fetchMyAnnouncements(params);
 	}
 
+	async function fetchMyAnnouncementDetail(id: number): Promise<MyAnnouncementDetail> {
+		return service.fetchMyAnnouncementDetail(id);
+	}
+
 	async function markAsRead(id: number): Promise<void> {
 		return service.markAsRead(id);
 	}
@@ -91,6 +96,7 @@ export function useCompanyAnnouncements() {
 		recall,
 		getMentionableEmployees,
 		fetchMyAnnouncements,
+		fetchMyAnnouncementDetail,
 		markAsRead,
 		react,
 		getReactions,

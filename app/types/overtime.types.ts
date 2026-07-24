@@ -1,5 +1,9 @@
 export type OvertimeStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'AUTO_CANCELLED';
 
+export type OvertimeWorkMode = 'ONLINE' | 'OFFLINE';
+
+export type OtLocationCheckType = 'START' | 'END';
+
 export interface OvertimeApproverDto {
 	id: number;
 	fullName: string;
@@ -12,6 +16,17 @@ export interface OvertimeEmployeeDto {
 	department: string | null;
 }
 
+export interface OtLocationCheckStatus {
+	checkedAt: string | null;
+	isValid: boolean | null;
+}
+
+export interface OtLocationStatus {
+	start: OtLocationCheckStatus;
+	end: OtLocationCheckStatus;
+	isResolved: boolean;
+}
+
 export interface OvertimeRequestResponse {
 	id: number;
 	overtimeDate: string;
@@ -20,6 +35,12 @@ export interface OvertimeRequestResponse {
 	totalHours: number;
 	reason: string;
 	status: OvertimeStatus;
+	workMode: OvertimeWorkMode;
+	otRate: 150 | 200 | 300;
+	otRateLabel: string;
+	finalWorkMode: OvertimeWorkMode | null;
+	resolvedAt: string | null;
+	locationStatus: OtLocationStatus;
 	reviewNote: string | null;
 	assignedApprover: OvertimeApproverDto | null;
 	reviewedBy: OvertimeApproverDto | null;
@@ -57,10 +78,24 @@ export interface CreateOvertimeRequestDto {
 	startTime: string;
 	endTime: string;
 	reason: string;
+	workMode: OvertimeWorkMode;
 }
 
 export interface RejectOvertimeDto {
 	reviewNote: string;
+}
+
+export interface CheckOtLocationDto {
+	latitude: number;
+	longitude: number;
+	checkType: OtLocationCheckType;
+}
+
+export interface CheckOtLocationResponse {
+	isValid: boolean;
+	locationName: string | null;
+	distanceMeters: number | null;
+	checkType: OtLocationCheckType;
 }
 
 export interface QueryOvertimeParams {

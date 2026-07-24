@@ -41,12 +41,6 @@
 		loadMy();
 	}
 
-	function stripHtml(html: string, max = 100): string {
-		const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-		if (text.length <= max) return text;
-		return text.slice(0, max) + '…';
-	}
-
 	onMounted(() => {
 		loadMy();
 	});
@@ -136,8 +130,8 @@
 							Mới
 						</span>
 					</div>
-					<p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-						{{ stripHtml(item.body) }}
+					<p class="text-xs text-gray-500 dark:text-gray-400">
+						{{ ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].label }}
 					</p>
 					<p class="text-xs text-gray-400 dark:text-gray-500">
 						{{ item.createdBy.fullName }} · {{ formatTimeAgo(item.sentAt) }}
@@ -164,12 +158,3 @@
 		</div>
 	</div>
 </template>
-
-<style scoped>
-	.line-clamp-2 {
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-</style>

@@ -81,13 +81,10 @@
 			return;
 		recalling.value = true;
 		try {
-			const updated = await recall(announcement.value.id);
-			// Merge cập nhật recalledAt/recalledBy vào state hiện tại (giữ recipients + body)
-			announcement.value = {
-				...announcement.value,
-				recalledAt: updated.recalledAt,
-				recalledBy: updated.recalledBy,
-			};
+			await recall(announcement.value.id);
+			// Response của recall giờ tinh gọn (không có recalledBy). Refetch để lấy full detail
+			// bao gồm recalledBy để hiển thị banner đầy đủ.
+			announcement.value = await fetchById(announcement.value.id);
 			toast.success('Đã thu hồi thông báo');
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : 'Đã có lỗi xảy ra';

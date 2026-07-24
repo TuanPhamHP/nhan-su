@@ -4,6 +4,7 @@ import { toTypedSchema } from '@vee-validate/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { useOvertimeRequestService } from '~/services/overtime-request.service';
+import type { OvertimeWorkMode } from '~/types/overtime.types';
 
 definePageMeta({ title: 'Tạo đơn làm thêm giờ' });
 
@@ -18,15 +19,29 @@ const schema = toTypedSchema(
 		startTime: z.string().min(1, 'Vui lòng nhập giờ bắt đầu'),
 		endTime: z.string().min(1, 'Vui lòng nhập giờ kết thúc'),
 		reason: z.string().min(10, 'Lý do phải có ít nhất 10 ký tự'),
+		workMode: z.enum(['ONLINE', 'OFFLINE'], { message: 'Vui lòng chọn hình thức OT' }),
 	}),
 );
 
-const { handleSubmit, defineField, errors, isSubmitting } = useForm({ validationSchema: schema });
+const { handleSubmit, defineField, errors, isSubmitting } = useForm({
+	validationSchema: schema,
+	initialValues: { workMode: 'ONLINE' as OvertimeWorkMode },
+});
 
 const [overtimeDate, overtimeDateAttrs] = defineField('overtimeDate');
 const [startTime, startTimeAttrs] = defineField('startTime');
 const [endTime, endTimeAttrs] = defineField('endTime');
 const [reason, reasonAttrs] = defineField('reason');
+const [workMode] = defineField('workMode');
+
+// ─── OT Rate preview — detect Chủ nhật để hint; ngày lễ do BE detect ─────────
+const otRatePreview = computed(() => {
+	const d = overtimeDate.value as string | undefined;
+	if (!d) return null;
+	const day = new Date(d).getDay(); // 0 = Sunday
+	if (day === 0) return { rate: 200, label: '200%', note: 'Chủ nhật' };
+	return { rate: 150, label: '150%', note: 'Ngày thường' };
+});
 
 // ─── Preview: tổng giờ OT ────────────────────────────────────────────────────
 const previewHours = computed(() => {
@@ -84,6 +99,7 @@ const onSubmit = handleSubmit(async values => {
 				values.endTime,
 			),
 			reason: values.reason,
+			workMode: values.workMode,
 		});
 
 		const approverName = created.assignedApprover?.fullName;
@@ -142,7 +158,13 @@ const today = format(new Date(), 'yyyy-MM-dd');
 							:class="errors.overtimeDate ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'"
 						/>
 						<p v-if="errors.overtimeDate" class="mt-1 text-xs text-red-500">{{ errors.overtimeDate }}</p>
-						<p class="mt-1 text-xs text-gray-400">Chỉ được tạo đơn trong vòng 30 ngày kể từ ngày OT</p>
+						<p v-if="otRatePreview" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+							Hệ số OT dự kiến:
+							<span class="font-semibold text-green-600 dark:text-green-400">{{ otRatePreview.label }}</span>
+							({{ otRatePreview.note }})
+							<span class="text-gray-400 dark:text-gray-500">— Ngày lễ sẽ được tính 300% tự động</span>
+						</p>
+						<p v-else class="mt-1 text-xs text-gray-400">Chỉ được tạo đơn trong vòng 30 ngày kể từ ngày OT</p>
 					</div>
 
 					<!-- Giờ bắt đầu + Giờ kết thúc -->
@@ -236,6 +258,48 @@ const today = format(new Date(), 'yyyy-MM-dd');
 							<p v-if="errors.reason" class="text-xs text-red-500">{{ errors.reason }}</p>
 							<p v-else class="text-xs text-gray-400">{{ (reason as string | undefined)?.length ?? 0 }} ký tự</p>
 						</div>
+					</div>
+
+					<!-- Hình thức OT -->
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+							Hình thức làm thêm giờ <span class="text-red-500">*</span>
+						</label>
+						<div class="grid grid-cols-2 gap-3">
+							<button
+								type="button"
+								:class="[
+									'flex items-center gap-3 p-3 rounded-xl border-2 transition-all',
+									workMode === 'OFFLINE'
+										? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+										: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400',
+								]"
+								@click="workMode = 'OFFLINE'"
+							>
+								<span class="text-2xl">🏢</span>
+								<div class="text-left">
+									<p class="font-medium text-sm">Tại văn phòng</p>
+									<p class="text-xs opacity-70">Cần xác nhận GPS</p>
+								</div>
+							</button>
+							<button
+								type="button"
+								:class="[
+									'flex items-center gap-3 p-3 rounded-xl border-2 transition-all',
+									workMode === 'ONLINE'
+										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+										: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400',
+								]"
+								@click="workMode = 'ONLINE'"
+							>
+								<span class="text-2xl">🏠</span>
+								<div class="text-left">
+									<p class="font-medium text-sm">Online / Từ xa</p>
+									<p class="text-xs opacity-70">Không cần GPS</p>
+								</div>
+							</button>
+						</div>
+						<p v-if="errors.workMode" class="mt-1 text-xs text-red-500">{{ errors.workMode }}</p>
 					</div>
 
 					<!-- Submit -->

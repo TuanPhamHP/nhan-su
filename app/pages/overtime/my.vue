@@ -107,6 +107,41 @@ function formatTime(d: string) {
 	return format(new Date(d), 'HH:mm');
 }
 
+function isInWindow(time: string, windowMinutes: number) {
+	const t = new Date(time).getTime();
+	const diff = Math.abs(t - Date.now());
+	return diff <= windowMinutes * 60 * 1000;
+}
+
+// ─── Pending location check (OFFLINE + APPROVED, chưa resolve, trong window ±30p) ──
+const pendingLocationCheck = computed(() =>
+	requests.value.filter(
+		r =>
+			r.workMode === 'OFFLINE' &&
+			r.status === 'APPROVED' &&
+			!r.locationStatus.isResolved &&
+			((isInWindow(r.startTime, 30) && !r.locationStatus.start.checkedAt) ||
+				(isInWindow(r.endTime, 30) && !r.locationStatus.end.checkedAt)),
+	),
+);
+
+// ─── Detail open + refresh ────────────────────────────────────────────────────
+function openDetail(req: OvertimeRequestResponse) {
+	detailTarget.value = req;
+}
+
+async function handleRefreshDetail() {
+	if (!detailTarget.value) return;
+	try {
+		const fresh = await service.findOne(detailTarget.value.id);
+		const idx = requests.value.findIndex(r => r.id === fresh.id);
+		if (idx !== -1) requests.value.splice(idx, 1, fresh);
+		detailTarget.value = fresh;
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Không thể tải lại chi tiết đơn');
+	}
+}
+
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(fetchRequests);
 </script>
@@ -168,6 +203,26 @@ onMounted(fetchRequests);
 					<p class="text-lg font-bold text-gray-900 dark:text-white leading-tight">{{ stats.totalHours.toFixed(1) }}h</p>
 				</div>
 			</div>
+		</div>
+
+		<!-- Pending location check banner -->
+		<div
+			v-if="pendingLocationCheck.length"
+			class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-3"
+		>
+			<span class="text-xl">📍</span>
+			<div class="flex-1 min-w-0">
+				<p class="text-sm font-medium text-blue-800 dark:text-blue-300">Cần xác nhận vị trí OT</p>
+				<p class="text-xs text-blue-600 dark:text-blue-400">
+					Bạn có {{ pendingLocationCheck.length }} đơn OT offline đang trong thời gian xác nhận vị trí.
+				</p>
+			</div>
+			<button
+				class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 whitespace-nowrap"
+				@click="openDetail(pendingLocationCheck[0]!)"
+			>
+				Xác nhận ngay →
+			</button>
 		</div>
 
 		<!-- Filter -->
@@ -244,7 +299,7 @@ onMounted(fetchRequests);
 				:request="req"
 				:cancelling="cancellingId === req.id"
 				@cancel="handleCancel(req)"
-				@view="detailTarget = req"
+				@view="openDetail(req)"
 			/>
 		</div>
 
@@ -257,6 +312,7 @@ onMounted(fetchRequests);
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ngày OT</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thời gian</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Số giờ</th>
+							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Hệ số</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Lý do</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Người duyệt</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
@@ -265,7 +321,7 @@ onMounted(fetchRequests);
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 						<tr v-if="loading">
-							<td colspan="7" class="px-4 py-8 text-center">
+							<td colspan="8" class="px-4 py-8 text-center">
 								<svg class="animate-spin w-5 h-5 mx-auto text-brand-500" fill="none" viewBox="0 0 24 24">
 									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
 									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -273,7 +329,7 @@ onMounted(fetchRequests);
 							</td>
 						</tr>
 						<tr v-else-if="requests.length === 0">
-							<td colspan="7" class="px-4 py-12 text-center">
+							<td colspan="8" class="px-4 py-12 text-center">
 								<div class="flex flex-col items-center gap-3">
 									<svg class="w-10 h-10 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -303,6 +359,22 @@ onMounted(fetchRequests);
 							<!-- Số giờ -->
 							<td class="px-4 py-3">
 								<span class="font-medium text-gray-900 dark:text-white">{{ req.hoursDisplay }}</span>
+							</td>
+
+							<!-- Hệ số -->
+							<td class="px-4 py-3">
+								<span
+									:class="[
+										'text-xs font-semibold px-1.5 py-0.5 rounded',
+										req.otRate === 300
+											? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+											: req.otRate === 200
+												? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300'
+												: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300',
+									]"
+								>
+									{{ req.otRateLabel }}
+								</span>
 							</td>
 
 							<!-- Lý do -->
@@ -348,7 +420,7 @@ onMounted(fetchRequests);
 									<button
 										class="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
 										title="Xem chi tiết"
-										@click="detailTarget = req"
+										@click="openDetail(req)"
 									>
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 											<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -378,7 +450,12 @@ onMounted(fetchRequests);
 
 	<!-- Modal -->
 	<Teleport to="body">
-		<OvertimeDetailModal v-if="detailTarget" :request="detailTarget" @close="detailTarget = null" />
+		<OvertimeDetailModal
+			v-if="detailTarget"
+			:request="detailTarget"
+			@close="detailTarget = null"
+			@refresh="handleRefreshDetail"
+		/>
 
 		<!-- FAB mobile -->
 		<NuxtLink

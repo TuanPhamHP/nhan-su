@@ -126,7 +126,7 @@
 
 	// ─── Recall ──────────────────────────────────────────────────────────────────
 	async function handleRecall(item: CompanyAnnouncementSummary) {
-		if (item.recalledAt) return;
+		if (item.status === 'RECALLED' || item.recalledAt) return;
 		if (
 			!confirm(
 				`Thu hồi thông báo "${item.title}"? Sau khi thu hồi, nhân viên sẽ không còn thấy thông báo này. Không thể hoàn tác.`,
@@ -164,7 +164,7 @@
 				label: 'Thu hồi',
 				icon: 'M9 12h6m2.25 6.75L4.5 5.25M12 21a9 9 0 100-18 9 9 0 000 18z',
 				variant: 'danger',
-				hidden: item.recalledAt !== null,
+				hidden: item.status === 'RECALLED',
 				action: () => handleRecall(item),
 			},
 		];
@@ -176,14 +176,6 @@
 		return (page - 1) * PAGE_LIMIT + index + 1;
 	}
 
-	function truncateBody(html: string | undefined, max = 30): string {
-		if (!html) return '—';
-		const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-		if (!text) return '—';
-		if (text.length <= max) return text;
-		return text.slice(0, max) + '…';
-	}
-
 	function formatDateTime(iso: string | undefined | null): string {
 		if (!iso) return '—';
 		try {
@@ -191,27 +183,6 @@
 		} catch {
 			return '—';
 		}
-	}
-
-	function scopeLabel(item: CompanyAnnouncementSummary): string {
-		const scope = item.recipientScope;
-		if (scope) {
-			if (scope.type === 'ALL') return 'Toàn công ty';
-			if (scope.type === 'DEPARTMENT') {
-				return scope.departmentName ? `Phòng ban: ${scope.departmentName}` : 'Phòng ban';
-			}
-			return `Gửi riêng nhóm (${item.recipientCount})`;
-		}
-		return `Gửi cho ${item.recipientCount} người`;
-	}
-
-	function scopeClass(item: CompanyAnnouncementSummary): string {
-		const t = item.recipientScope?.type;
-		if (t === 'ALL')
-			return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
-		if (t === 'DEPARTMENT')
-			return 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-		return 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
 	}
 
 	// ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -300,17 +271,14 @@
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
 								Tiêu đề
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-								Nội dung
+							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
+								Người gửi
 							</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
-								Ngày tạo
+								Thời điểm gửi
 							</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
-								Ngày sửa cuối
-							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-								Đối tượng
+								Trạng thái
 							</th>
 							<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-20">
 								Tác vụ
@@ -319,7 +287,7 @@
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 						<tr v-if="loading">
-							<td colspan="7" class="px-4 py-10 text-center">
+							<td colspan="6" class="px-4 py-10 text-center">
 								<svg class="animate-spin w-5 h-5 mx-auto text-brand-500" fill="none" viewBox="0 0 24 24">
 									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
 									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -327,7 +295,7 @@
 							</td>
 						</tr>
 						<tr v-else-if="items.length === 0">
-							<td colspan="7" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
+							<td colspan="6" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
 								<p class="text-2xl mb-1">📤</p>
 								Chưa có thông báo nào
 							</td>
@@ -337,11 +305,11 @@
 							:key="item.id"
 							:class="[
 								'hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors',
-								item.recalledAt ? 'opacity-60' : '',
+								item.status === 'RECALLED' ? 'opacity-60' : '',
 							]"
 						>
 							<td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ stt(idx) }}</td>
-							<td class="px-4 py-3 min-w-[220px] max-w-xs">
+							<td class="px-4 py-3 min-w-[240px] max-w-md">
 								<div class="flex items-center gap-2">
 									<span class="flex-shrink-0 text-base">
 										{{ ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].icon }}
@@ -350,41 +318,34 @@
 										:to="`/management/announcements/${item.id}`"
 										:class="[
 											'text-sm font-medium truncate hover:text-brand-600 dark:hover:text-brand-400 transition-colors',
-											item.recalledAt
+											item.status === 'RECALLED'
 												? 'text-gray-500 dark:text-gray-500 line-through'
 												: 'text-gray-900 dark:text-white',
 										]"
 									>
 										{{ item.title }}
 									</NuxtLink>
-									<span
-										v-if="item.recalledAt"
-										:title="`Thu hồi bởi ${item.recalledBy?.fullName ?? 'HR'} · ${formatDateTime(item.recalledAt)}`"
-										class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 flex-shrink-0 whitespace-nowrap"
-									>
-										🚫 Đã thu hồi
-									</span>
 								</div>
 							</td>
-							<td class="px-4 py-3 max-w-xs">
-								<p class="text-gray-600 dark:text-gray-400 truncate">
-									{{ truncateBody(item.body) }}
-								</p>
+							<td class="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+								{{ item.createdBy.fullName }}
 							</td>
 							<td class="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
 								{{ formatDateTime(item.sentAt) }}
 							</td>
-							<td class="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-								{{ formatDateTime(item.updatedAt ?? item.sentAt) }}
-							</td>
-							<td class="px-4 py-3">
+							<td class="px-4 py-3 whitespace-nowrap">
 								<span
-									:class="[
-										'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap',
-										scopeClass(item),
-									]"
+									v-if="item.status === 'RECALLED'"
+									:title="item.recalledAt ? `Thu hồi lúc ${formatDateTime(item.recalledAt)}` : 'Đã thu hồi'"
+									class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
 								>
-									{{ scopeLabel(item) }}
+									🚫 Đã thu hồi
+								</span>
+								<span
+									v-else
+									class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+								>
+									● Đang hiển thị
 								</span>
 							</td>
 							<td class="px-4 py-3">
