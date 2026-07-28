@@ -15,13 +15,13 @@ const toast = useToast();
 const service = useOvertimeRequestService();
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
-// startTime/endTime: giá trị từ <input type="datetime-local"> — dạng "YYYY-MM-DDTHH:mm" (không có timezone)
+// startTime/endTime: giá trị từ DateTimePickerV2 — dạng "YYYY-MM-DDTHH:mm" (không có timezone)
 const schema = toTypedSchema(
 	z
 		.object({
-			startTime: z.string().min(1, 'Vui lòng chọn thời gian bắt đầu'),
-			endTime: z.string().min(1, 'Vui lòng chọn thời gian kết thúc'),
-			reason: z.string().min(10, 'Lý do phải có ít nhất 10 ký tự'),
+			startTime: z.string({ required_error: 'Vui lòng chọn thời gian bắt đầu' }).min(1, 'Vui lòng chọn thời gian bắt đầu'),
+			endTime: z.string({ required_error: 'Vui lòng chọn thời gian kết thúc' }).min(1, 'Vui lòng chọn thời gian kết thúc'),
+			reason: z.string({ required_error: 'Vui lòng nhập lý do làm thêm giờ' }).min(10, 'Lý do phải có ít nhất 10 ký tự'),
 			workMode: z.enum(['ONLINE', 'OFFLINE'], { message: 'Vui lòng chọn hình thức OT' }),
 			locationId: z.number().nullable().optional(),
 		})
@@ -32,6 +32,35 @@ const schema = toTypedSchema(
 					message: 'Vui lòng chọn địa điểm thực hiện OT',
 					path: ['locationId'],
 				});
+			}
+
+			if (data.startTime && data.endTime) {
+				const startMs = new Date(data.startTime).getTime();
+				const endMs = new Date(data.endTime).getTime();
+
+				if (!isNaN(startMs) && !isNaN(endMs)) {
+					const diffMinutes = (endMs - startMs) / (1000 * 60);
+
+					if (diffMinutes <= 0) {
+						ctx.addIssue({
+							code: z.ZodIssueCode.custom,
+							message: 'Thời gian kết thúc phải lớn hơn thời gian bắt đầu',
+							path: ['endTime'],
+						});
+					} else if (diffMinutes < 60) {
+						ctx.addIssue({
+							code: z.ZodIssueCode.custom,
+							message: 'Thời gian làm thêm giờ tối thiểu là 1 giờ',
+							path: ['endTime'],
+						});
+					} else if (diffMinutes % 30 !== 0) {
+						ctx.addIssue({
+							code: z.ZodIssueCode.custom,
+							message: 'Thời gian làm thêm giờ phải là bội số của 30 phút (0.5 giờ). Được phép chọn các mốc: 00:30, 01:00, 01:30, ..., 23:00, 23:30',
+							path: ['endTime'],
+						});
+					}
+				}
 			}
 		}),
 );
@@ -101,6 +130,15 @@ async function runPreviewNow() {
 	if (!s || !e || !mode) return;
 	if (mode === 'OFFLINE' && !loc) return;
 	if (Date.now() < rateLimitedUntil.value) return;
+
+	const startMs = new Date(s).getTime();
+	const endMs = new Date(e).getTime();
+	if (isNaN(startMs) || isNaN(endMs)) return;
+	const diffMinutes = (endMs - startMs) / (1000 * 60);
+	if (diffMinutes < 60 || diffMinutes % 30 !== 0) {
+		previewData.value = null;
+		return;
+	}
 
 	previewLoading.value = true;
 	try {
@@ -201,19 +239,16 @@ function fmtSegmentDate(dateYmd: string): string {
 					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 space-y-5"
 					@submit.prevent="onSubmit"
 				>
-					<!-- Bắt đầu + Kết thúc (datetime-local, gồm cả ngày + giờ) -->
+					<!-- Bắt đầu + Kết thúc (DateTimePickerV2, gồm cả ngày + giờ) -->
 					<div class="grid sm:grid-cols-2 gap-4">
 						<div>
 							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 								Bắt đầu <span class="text-red-500">*</span>
 							</label>
-							<input
+							<UiDateTimePickerV2
 								v-model="startTime"
 								v-bind="startTimeAttrs"
-								type="datetime-local"
-								step="1800"
-								class="w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-								:class="errors.startTime ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'"
+								:error="Boolean(errors.startTime)"
 							/>
 							<p v-if="errors.startTime" class="mt-1 text-xs text-red-500">{{ errors.startTime }}</p>
 						</div>
@@ -221,13 +256,10 @@ function fmtSegmentDate(dateYmd: string): string {
 							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
 								Kết thúc <span class="text-red-500">*</span>
 							</label>
-							<input
+							<UiDateTimePickerV2
 								v-model="endTime"
 								v-bind="endTimeAttrs"
-								type="datetime-local"
-								step="1800"
-								class="w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
-								:class="errors.endTime ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'"
+								:error="Boolean(errors.endTime)"
 							/>
 							<p v-if="errors.endTime" class="mt-1 text-xs text-red-500">{{ errors.endTime }}</p>
 						</div>
@@ -523,7 +555,7 @@ function fmtSegmentDate(dateYmd: string): string {
 						</li>
 						<li class="flex items-start gap-2">
 							<span class="text-gray-400 mt-0.5 flex-shrink-0">•</span>
-							<span>Tối thiểu <strong class="text-gray-700 dark:text-gray-300">0.5 giờ</strong>, tối đa <strong class="text-gray-700 dark:text-gray-300">12 giờ</strong>/đơn</span>
+							<span>Tối thiểu <strong class="text-gray-700 dark:text-gray-300">1 giờ</strong>, tối đa <strong class="text-gray-700 dark:text-gray-300">12 giờ</strong>/đơn</span>
 						</li>
 						<li class="flex items-start gap-2">
 							<span class="text-gray-400 mt-0.5 flex-shrink-0">•</span>
