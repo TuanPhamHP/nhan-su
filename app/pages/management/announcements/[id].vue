@@ -1,13 +1,12 @@
 <script setup lang="ts">
 	import DOMPurify from 'dompurify';
-	import { format, parseISO } from 'date-fns';
 	import AnnouncementComments from '~/components/modules/announcement/AnnouncementComments.vue';
 	import AnnouncementReactions from '~/components/modules/announcement/AnnouncementReactions.vue';
+	import AnnouncementReadersModal from '~/components/modules/announcement/AnnouncementReadersModal.vue';
 	import { useCompanyAnnouncements } from '~/composables/useCompanyAnnouncements';
 	import { formatDateTime, formatRelativeTime } from '~/utils/date';
 	import {
 		ANNOUNCEMENT_TYPE_CONFIG,
-		type AnnouncementRecipientStatus,
 		type CompanyAnnouncementResponse,
 	} from '~/types/announcement.types';
 
@@ -22,8 +21,7 @@
 	const loading = ref(true);
 	const notFound = ref(false);
 	const recalling = ref(false);
-	const activeTab = ref<'content' | 'readers'>('content');
-	const readerFilter = ref<'read' | 'unread'>('read');
+	const showReadersModal = ref(false);
 
 	const isRecalled = computed(() => !!announcement.value?.recalledAt);
 
@@ -47,12 +45,6 @@
 		return Math.round((readCount.value / totalCount.value) * 100);
 	});
 
-	const readerList = computed<AnnouncementRecipientStatus[]>(() => {
-		if (!announcement.value) return [];
-		return readerFilter.value === 'read'
-			? announcement.value.recipients.filter(r => r.isRead)
-			: announcement.value.recipients.filter(r => !r.isRead);
-	});
 
 	async function load() {
 		if (!id.value || Number.isNaN(id.value)) {
@@ -108,23 +100,6 @@
 		return '📎';
 	}
 
-	function initials(name: string): string {
-		return name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(-2)
-			.map(w => w.charAt(0).toUpperCase())
-			.join('');
-	}
-
-	function formatReadAt(iso: string | null): string {
-		if (!iso) return '';
-		try {
-			return format(parseISO(iso), 'dd/MM HH:mm');
-		} catch {
-			return iso;
-		}
-	}
 
 	onMounted(load);
 </script>
@@ -182,9 +157,10 @@
 				</div>
 			</div>
 
-			<!-- Header card -->
+			<!-- Merged Main Card -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-				<div class="px-8 py-6 flex items-start justify-between gap-4 flex-wrap">
+				<!-- Header -->
+				<div class="px-8 py-6 flex items-start justify-between gap-4 flex-wrap border-b border-gray-100 dark:border-gray-800">
 					<div class="space-y-2 min-w-0 flex-1">
 						<div
 							class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold"
@@ -212,70 +188,35 @@
 						</p>
 					</div>
 
-					<button
-						v-if="!isRecalled"
-						type="button"
-						:disabled="recalling"
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-sm font-medium transition-colors disabled:opacity-50 flex-shrink-0"
-						@click="handleRecall"
-					>
-						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m2.25 6.75L4.5 5.25M12 21a9 9 0 100-18 9 9 0 000 18z" />
-						</svg>
-						{{ recalling ? 'Đang thu hồi…' : 'Thu hồi' }}
-					</button>
-				</div>
+					<div class="flex items-center gap-2.5 flex-shrink-0">
+						<!-- Reader Badge Button -->
+						<button
+							type="button"
+							class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-sm font-medium transition-colors shadow-2xs cursor-pointer"
+							title="Click để xem danh sách người đọc"
+							@click="showReadersModal = true"
+						>
+							<span>{{ readCount }}/{{ totalCount }} người đã đọc</span>
+							<span class="text-xs font-semibold opacity-75">({{ progressPercent }}%)</span>
+						</button>
 
-				<!-- Stats summary -->
-				<div class="px-8 pb-6 space-y-2">
-					<div class="flex items-center justify-between text-sm">
-						<span class="text-gray-700 dark:text-gray-300 font-medium">
-							{{ readCount }}/{{ totalCount }} người đã đọc
-						</span>
-						<span class="text-xs text-gray-500 dark:text-gray-400">{{ progressPercent }}%</span>
-					</div>
-					<div class="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-						<div
-							class="h-full bg-brand-500 transition-all duration-300"
-							:style="{ width: `${progressPercent}%` }"
-						/>
+						<!-- Recall Button -->
+						<button
+							v-if="!isRecalled"
+							type="button"
+							:disabled="recalling"
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-sm font-medium transition-colors disabled:opacity-50"
+							@click="handleRecall"
+						>
+							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m2.25 6.75L4.5 5.25M12 21a9 9 0 100-18 9 9 0 000 18z" />
+							</svg>
+							{{ recalling ? 'Đang thu hồi…' : 'Thu hồi' }}
+						</button>
 					</div>
 				</div>
 
-				<!-- Tabs -->
-				<div class="border-t border-gray-100 dark:border-gray-800 px-4 flex items-center gap-1">
-					<button
-						type="button"
-						:class="[
-							'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-							activeTab === 'content'
-								? 'border-brand-500 text-brand-600 dark:text-brand-400'
-								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300',
-						]"
-						@click="activeTab = 'content'"
-					>
-						Nội dung
-					</button>
-					<button
-						type="button"
-						:class="[
-							'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-							activeTab === 'readers'
-								? 'border-brand-500 text-brand-600 dark:text-brand-400'
-								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300',
-						]"
-						@click="activeTab = 'readers'"
-					>
-						Người nhận ({{ totalCount }})
-					</button>
-				</div>
-			</div>
-
-			<!-- Content tab -->
-			<div
-				v-if="activeTab === 'content'"
-				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-			>
+				<!-- Body & Content -->
 				<div class="px-8 py-6 space-y-5">
 					<div
 						class="announcement-body text-gray-800 dark:text-gray-200"
@@ -349,83 +290,13 @@
 				</div>
 			</div>
 
-			<!-- Readers tab -->
-			<div
-				v-else
-				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-			>
-				<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-					<button
-						type="button"
-						:class="[
-							'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-							readerFilter === 'read'
-								? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-								: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700',
-						]"
-						@click="readerFilter = 'read'"
-					>
-						Đã đọc ({{ readCount }})
-					</button>
-					<button
-						type="button"
-						:class="[
-							'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-							readerFilter === 'unread'
-								? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-								: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700',
-						]"
-						@click="readerFilter = 'unread'"
-					>
-						Chưa đọc ({{ unreadCount }})
-					</button>
-				</div>
-
-				<div class="px-6 py-4">
-					<div v-if="readerList.length === 0" class="py-8 text-center text-sm text-gray-400">
-						<template v-if="readerFilter === 'read'">Chưa có ai đọc thông báo này</template>
-						<template v-else>Tất cả nhân viên đã đọc thông báo</template>
-					</div>
-
-					<div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-						<div
-							v-for="r in readerList"
-							:key="r.employeeId"
-							class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-						>
-							<div
-								:class="[
-									'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden',
-									readerFilter === 'read'
-										? 'bg-brand-100 dark:bg-brand-900'
-										: 'bg-gray-200 dark:bg-gray-700',
-								]"
-							>
-								<img v-if="r.avatarUrl" :src="r.avatarUrl" :alt="r.fullName" class="w-full h-full object-cover" />
-								<span
-									v-else
-									:class="[
-										'text-xs font-semibold',
-										readerFilter === 'read'
-											? 'text-brand-700 dark:text-brand-300'
-											: 'text-gray-600 dark:text-gray-300',
-									]"
-								>
-									{{ initials(r.fullName) }}
-								</span>
-							</div>
-							<div class="flex-1 min-w-0">
-								<p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-									{{ r.fullName }}
-								</p>
-								<p v-if="r.isRead && r.readAt" class="text-xs text-gray-500 dark:text-gray-400">
-									Đã đọc lúc {{ formatReadAt(r.readAt) }}
-								</p>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
+			<!-- Readers Modal -->
+			<AnnouncementReadersModal
+				v-model="showReadersModal"
+				:recipients="announcement.recipients"
+				:read-count="readCount"
+				:total-count="totalCount"
+			/>
 		</template>
 	</div>
 </template>
