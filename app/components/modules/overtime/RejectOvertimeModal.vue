@@ -67,7 +67,15 @@ function formatTime(d: string) {
 				</div>
 				<div class="flex justify-between">
 					<span class="text-gray-500 dark:text-gray-400">Ngày OT</span>
-					<span class="font-medium text-gray-900 dark:text-white">{{ formatDate(request.overtimeDate) }}</span>
+					<span class="font-medium text-gray-900 dark:text-white">
+						{{ formatDate(request.startTime) }}
+						<span
+							v-if="formatDate(request.startTime) !== formatDate(request.endTime)"
+							class="text-xs font-normal text-gray-400"
+						>
+							→ {{ formatDate(request.endTime) }}
+						</span>
+					</span>
 				</div>
 				<div class="flex justify-between">
 					<span class="text-gray-500 dark:text-gray-400">Thời gian</span>

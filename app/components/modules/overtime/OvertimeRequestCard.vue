@@ -2,6 +2,7 @@
 import { format } from 'date-fns';
 import type { OvertimeRequestResponse } from '~/types/overtime.types';
 import OvertimeStatusBadge from '~/components/modules/overtime/OvertimeStatusBadge.vue';
+import { getRateBadge, rateBadgeClass } from '~/utils/overtime.utils';
 
 const props = defineProps<{
 	request: OvertimeRequestResponse;
@@ -26,6 +27,9 @@ const approverName = computed(() => {
 	if (props.request.assignedApprover) return props.request.assignedApprover.fullName;
 	return null;
 });
+
+const rateBadge = computed(() => getRateBadge(props.request));
+const isOvernight = computed(() => formatDate(props.request.startTime) !== formatDate(props.request.endTime));
 </script>
 
 <template>
@@ -37,7 +41,12 @@ const approverName = computed(() => {
 		<div class="flex items-start justify-between gap-2">
 			<div>
 				<p class="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Ngày OT</p>
-				<p class="text-sm font-semibold text-gray-900 dark:text-white">{{ formatDate(request.overtimeDate) }}</p>
+				<p class="text-sm font-semibold text-gray-900 dark:text-white">
+					{{ formatDate(request.startTime) }}
+					<span v-if="isOvernight" class="text-xs font-normal text-gray-400">
+						→ {{ formatDate(request.endTime) }}
+					</span>
+				</p>
 			</div>
 			<div class="flex flex-col items-end gap-1 flex-shrink-0">
 				<div class="flex items-center gap-1.5">
@@ -70,16 +79,10 @@ const approverName = computed(() => {
 				{{ request.hoursDisplay }}
 			</span>
 			<span
-				:class="[
-					'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold',
-					request.otRate === 300
-						? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-						: request.otRate === 200
-							? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
-							: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-				]"
+				:class="['inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap', rateBadgeClass(rateBadge.maxRate)]"
+				:title="rateBadge.isMulti ? rateBadge.segments.map(s => `${s.segmentDate}: ${s.hours}h × ${s.otRateLabel}`).join('\n') : undefined"
 			>
-				{{ request.otRateLabel }}
+				{{ rateBadge.label }}
 			</span>
 		</div>
 

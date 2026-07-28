@@ -1,9 +1,10 @@
 <script setup lang="ts">
 	import MentionInput from '~/components/common/MentionInput.vue';
 	import CommentItem from '~/components/modules/announcement/CommentItem.vue';
+	import { useAnnouncementRealtime } from '~/composables/useAnnouncementRealtime';
 	import { useAuth } from '~/composables/useAuth';
 	import { useCompanyAnnouncements } from '~/composables/useCompanyAnnouncements';
-	import type { AnnouncementComment } from '~/types/announcement.types';
+	import type { AnnouncementComment, AnnouncementReply } from '~/types/announcement.types';
 
 	interface EmployeeOption {
 		id: number;
@@ -17,6 +18,7 @@
 
 	const { user } = useAuth();
 	const { getComments, addComment, deleteComment, getMentionableEmployees } = useCompanyAnnouncements();
+	const { subscribe: subscribeRealtime } = useAnnouncementRealtime();
 	const toast = useToast();
 
 	const PAGE_SIZE = 10;
@@ -136,16 +138,69 @@
 	async function handleDeleted(commentId: number) {
 		try {
 			await deleteComment(commentId);
-			await loadComments();
+			removeCommentLocally(commentId);
 			toast.success('Đã xóa bình luận');
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Không xóa được bình luận');
 		}
 	}
 
+	function removeCommentLocally(commentId: number) {
+		comments.value = comments.value
+			.filter(c => c.id !== commentId)
+			.map(c => {
+				const filtered = (c.replies ?? []).filter(r => r.id !== commentId);
+				if (filtered.length === (c.replies?.length ?? 0)) return c;
+				return { ...c, replies: filtered, replyCount: filtered.length };
+			});
+	}
+
+	// ── Realtime ──────────────────────────────────────────────────────────────
+	// Server broadcast:
+	//   - `comment.added`: comment mới (root hoặc reply — phân biệt qua parentId)
+	//   - `comment.deleted`: comment/reply bị xoá
+	// Dedupe theo `id` để tránh double-append khi optimistic UI đã push local record.
+	let unsubscribeRealtime: (() => void) | null = null;
+
+	function handleRemoteCommentAdded(c: AnnouncementComment) {
+		if (c.parentId === null) {
+			if (comments.value.some(x => x.id === c.id)) return;
+			comments.value = [...comments.value, c];
+			return;
+		}
+		const parent = comments.value.find(x => x.id === c.parentId);
+		if (!parent) return;
+		const replies = parent.replies ?? [];
+		if (replies.some(r => r.id === c.id)) return;
+		// `c` có shape AnnouncementComment nhưng khi parentId !== null thì logic hiển thị
+		// giống hệt AnnouncementReply (không có replies lồng bên trong).
+		const reply: AnnouncementReply = {
+			id: c.id,
+			announcementId: c.announcementId,
+			parentId: c.parentId,
+			author: c.author,
+			content: c.content,
+			mentionIds: c.mentionIds,
+			isDeleted: c.isDeleted,
+			createdAt: c.createdAt,
+			updatedAt: c.updatedAt,
+		};
+		parent.replies = [...replies, reply];
+		parent.replyCount = parent.replies.length;
+	}
+
 	onMounted(() => {
 		loadComments();
 		loadMentionablePool();
+		unsubscribeRealtime = subscribeRealtime(props.announcementId, {
+			onCommentAdded: handleRemoteCommentAdded,
+			onCommentDeleted: ({ commentId }) => removeCommentLocally(commentId),
+		});
+	});
+
+	onBeforeUnmount(() => {
+		unsubscribeRealtime?.();
+		unsubscribeRealtime = null;
 	});
 </script>
 

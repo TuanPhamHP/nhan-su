@@ -10,7 +10,9 @@
 | --- | --- | --- | --- |
 | GET | `/v1/overtime-requests/me` | Mọi user đã đăng nhập | Danh sách đơn OT của bản thân |
 | GET | `/v1/overtime-requests/me/stats` | Mọi user đã đăng nhập | Thống kê OT theo tháng của bản thân |
+| GET | `/v1/overtime-requests/available-locations` | Mọi user đã đăng nhập | Toàn bộ địa điểm chấm công ACTIVE của hệ thống (để chọn khi tạo OT offline) |
 | POST | `/v1/overtime-requests` | Mọi user đã đăng nhập | Tạo đơn OT mới |
+| POST | `/v1/overtime-requests/preview` | Mọi user đã đăng nhập | **Kiểm tra nhanh** — trả segments + rate + approver mà không lưu DB (rate-limit 20 req/60s) |
 | GET | `/v1/overtime-requests/report` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Thống kê OT theo tháng |
 | GET | `/v1/overtime-requests/report/export` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Xuất báo cáo OT ra Excel |
 | GET | `/v1/overtime-requests` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Danh sách tất cả đơn OT |
@@ -55,6 +57,16 @@ export interface OvertimeApproverDto {
 	fullName: string;
 }
 
+export interface OvertimeLocationDto {
+	id: number;
+	name: string;
+}
+
+export interface AvailableLocationDto {
+	id: number;
+	name: string;
+}
+
 export interface OvertimeEmployeeDto {
 	id: number;
 	fullName: string;
@@ -62,18 +74,25 @@ export interface OvertimeEmployeeDto {
 	department: string | null; // tên phòng ban (string), không phải object
 }
 
+export interface OvertimeSegment {
+	segmentDate: string; // "YYYY-MM-DD" — ngày local VN của segment
+	hours: number; // số giờ OT thuộc segment này
+	otRate: 150 | 200 | 300; // rate detect theo ngày: lễ (300) > CN (200) > T2–T7 (150)
+	otRateLabel: string; // "150%" | "200%" | "300%"
+}
+
 // Dùng trong GET /overtime-requests, GET /overtime-requests/:id, POST /overtime-requests
 export interface OvertimeRequestResponse {
 	id: number;
-	overtimeDate: string; // "YYYY-MM-DD"
 	startTime: string; // ISO 8601 full datetime
-	endTime: string; // ISO 8601 full datetime
-	totalHours: number; // số thực, tối thiểu 0.5, tối đa 12
+	endTime: string; // ISO 8601 full datetime — có thể sang ngày sau
+	totalHours: number; // raw hours (endTime - startTime); tối thiểu 0.5, tối đa 12
+	segments: OvertimeSegment[]; // 1–N segments; nếu OT span 2 ngày VN → 2 segments với rate riêng
+	totalPaidHours: number; // sum(hours × otRate/100) — tổng "giờ trả lương" đã nhân hệ số
 	reason: string;
 	status: OvertimeStatus;
 	workMode: OvertimeWorkMode; // do user chọn khi tạo đơn
-	otRate: 150 | 200 | 300; // auto detect theo ngày
-	otRateLabel: string; // "150%" | "200%" | "300%"
+	location: OvertimeLocationDto | null; // chỉ có khi workMode = OFFLINE, null với ONLINE
 	finalWorkMode: OvertimeWorkMode | null; // null = chưa resolve; cron set sau khi endTime + 30p
 	resolvedAt: string | null; // ISO 8601 datetime khi cron resolve
 	locationStatus: OvertimeLocationStatus; // trạng thái xác nhận vị trí
@@ -82,12 +101,12 @@ export interface OvertimeRequestResponse {
 	reviewedBy: OvertimeApproverDto | null;
 	reviewedAt: string | null; // ISO 8601 full datetime
 	autoExpireAt: string; // ISO 8601 — deadline để manager duyệt (tạo + 7 ngày)
-	deadlineAt: string; // ISO 8601 — deadline tạo đơn (overtimeDate + 30 ngày)
+	deadlineAt: string; // ISO 8601 — deadline tạo đơn (startTime + 30 ngày)
 	isExpired: boolean;
 	employee: OvertimeEmployeeDto;
 	createdAt: string; // ISO 8601 full datetime
 	canBeCancelled: boolean; // true khi status === 'PENDING'
-	hoursDisplay: string; // VD: "3.0 giờ" — dùng để hiển thị
+	hoursDisplay: string; // VD: "3.0 giờ" — dùng để hiển thị (raw hours)
 }
 
 // Dùng trong GET /overtime-requests/report và GET /reports/overtime
@@ -96,20 +115,47 @@ export interface OvertimeMonthlyStatsResponse {
 	employeeCode: string;
 	fullName: string;
 	departmentName: string | null;
-	totalRequests: number;
+	totalRequests: number; // số đơn có segment rơi vào tháng này
 	approvedRequests: number;
-	totalApprovedHours: number; // tổng giờ OT đã duyệt trong tháng
+	totalApprovedHours: number; // tổng giờ OT (raw) của các segment ACCEPTED thuộc tháng này
 	pendingRequests: number;
 	rejectedRequests: number;
 }
 
 // Request DTOs
 export interface CreateOvertimeRequestDto {
-	overtimeDate: string; // "YYYY-MM-DD" — ngày OT
-	startTime: string; // ISO 8601 datetime — giờ bắt đầu OT
-	endTime: string; // ISO 8601 datetime — giờ kết thúc OT
+	startTime: string; // ISO 8601 full datetime — giờ bắt đầu OT (BẮT BUỘC gồm ngày)
+	endTime: string; // ISO 8601 full datetime — giờ kết thúc OT; có thể sang ngày sau
 	workMode: OvertimeWorkMode; // BẮT BUỘC: 'ONLINE' | 'OFFLINE'
+	locationId?: number; // BẮT BUỘC khi workMode = OFFLINE; bỏ qua khi ONLINE
+	//   → id phải là 1 CheckInLocation ACTIVE bất kỳ (xem /available-locations)
 	reason: string; // tối thiểu 10 ký tự
+}
+
+export interface PreviewOvertimeRequestDto {
+	startTime: string; // ISO 8601 full datetime
+	endTime: string; // ISO 8601 full datetime
+	workMode: OvertimeWorkMode;
+	locationId?: number; // optional khi OFFLINE — nếu thiếu/invalid, response trả location=null + isValid=false
+}
+
+export interface OvertimePreviewApprover {
+	id: number;
+	fullName: string;
+}
+
+export interface OvertimePreviewResponse {
+	isValid: boolean; // true nếu hợp lệ theo mọi rule; false → xem `reason`
+	reason: string | null; // lý do invalid nếu isValid=false
+	startTime: string; // echo lại ISO datetime từ request
+	endTime: string;
+	totalHours: number; // raw hours
+	segments: OvertimeSegment[]; // rỗng nếu totalHours ngoài [0.5, 12] hoặc endTime<=startTime
+	totalPaidHours: number; // sum(hours × otRate/100)
+	workMode: OvertimeWorkMode;
+	location: OvertimeLocationDto | null; // null khi ONLINE hoặc lookup fail
+	approver: OvertimePreviewApprover | null; // null → fallback HR
+	approverFallbackToHR: boolean;
 }
 
 export interface RejectOvertimeDto {
@@ -123,9 +169,9 @@ export interface CheckOtLocationDto {
 }
 
 export interface CheckOtLocationResponse {
-	isValid: boolean;
-	locationName: string | null; // tên location được match (hoặc nearest nếu không match)
-	distanceMeters: number; // khoảng cách tới điểm gần nhất; -1 khi employee chưa được assign location
+	isValid: boolean; // true khi GPS nằm trong radius của ot.locationId
+	locationName: string | null; // tên location đã khai (ot.locationId); null nếu location không tồn tại / đã deactivate
+	distanceMeters: number; // khoảng cách GPS tới ot.locationId; -1 khi location không tồn tại / deactivate
 	checkType: OtLocationCheckType;
 }
 
@@ -154,7 +200,7 @@ export interface QueryOvertimeReportParams {
 
 ### Deadline tạo đơn
 
-- Chỉ được tạo đơn nếu `now <= overtimeDate + 30 ngày`
+- Chỉ được tạo đơn nếu `now <= (startTime local VN date) + 30 ngày`
 - Quá 30 ngày → **400** `"Đã quá 30 ngày kể từ ngày OT. Không thể tạo đơn."`
 
 ### Auto-cancel sau 7 ngày
@@ -164,28 +210,37 @@ export interface QueryOvertimeReportParams {
 - Đơn `PENDING` quá `autoExpireAt` → chuyển sang `AUTO_CANCELLED`, `isExpired = true`
 - Nhân viên nhận email + push notification
 
+### Multi-day segments — BẮT BUỘC hiểu trước khi tích hợp
+
+Đơn OT được phép span nhiều ngày local VN. BE tự **tách đơn thành 1–N segments** theo boundary `00:00 VN`:
+
+- Mỗi segment có `segmentDate`, `hours`, `otRate` riêng.
+- Rate detect **per-segment** theo ngày của segment đó: lễ (300) > CN (200) > T2–T7 (150).
+- **Window shift check per-segment**: nếu segment ngày lễ / CN → skip. Ngày T2–T7 → giờ segment phải ngoài giờ ca của ngày đó.
+- Tổng `endTime - startTime` phải ≤ 12h (ràng buộc trên tổng, không phải per-segment).
+
+**Ví dụ:** `startTime = 2026-07-26T16:00:00Z` (23:00 26/07 T7), `endTime = 2026-07-27T02:00:00Z` (09:00 27/07 CN) → tổng 10h, split thành:
+
+- Segment 1: `2026-07-26`, 1h × 150% (T7)
+- Segment 2: `2026-07-27`, 9h × 200% (CN)
+
+`totalPaidHours = 1 × 1.5 + 9 × 2.0 = 19.5`. Response trả cả `totalHours` (raw 10) và `totalPaidHours` (đã nhân hệ số 19.5).
+
 ### OT Window (giờ hợp lệ)
 
-| Ngày          | Quy tắc                                                                |
-| ------------- | ---------------------------------------------------------------------- |
-| Chủ nhật (CN) | OT cả ngày, không kiểm tra ca                                          |
-| Thứ 2 – Thứ 7 | Phải nằm **ngoài** giờ ca: trước `checkInTime` hoặc sau `checkOutTime` |
-| Không có ca   | Cho phép OT bất kỳ giờ nào                                             |
+| Ngày segment | Quy tắc |
+| --- | --- |
+| Ngày lễ | OT cả ngày, không kiểm tra ca. `otRate = 300` |
+| Chủ nhật | OT cả ngày, không kiểm tra ca. `otRate = 200` |
+| Thứ 2 – Thứ 7 | Giờ segment phải nằm **ngoài** ca của ngày đó (trước `checkInTime` hoặc sau `checkOutTime`). `otRate = 150` |
+| Không có ca | Cho phép OT bất kỳ giờ nào |
 
-- `totalHours` tính từ `endTime - startTime`; nếu `endTime < startTime` thì tự động cộng thêm 24h (OT qua đêm)
-- Tối thiểu 0.5 giờ, tối đa 12 giờ/đơn
+Ưu tiên rate: **ngày lễ > chủ nhật > ngày thường**. Chủ nhật trùng ngày lễ → 300%.
 
-### OT Rate & Work Mode
+### Ràng buộc thời gian
 
-**OT Rate (hệ số tăng ca)** — auto-detect khi tạo đơn, không thể thay đổi sau:
-
-| Ngày                                  | otRate |  Label   |
-| ------------------------------------- | :----: | :------: |
-| Ngày lễ (nằm trong `public_holidays`) |  300   | `"300%"` |
-| Chủ nhật (`getUTCDay() === 0`)        |  200   | `"200%"` |
-| Thứ 2 – Thứ 7 (ngày thường)           |  150   | `"150%"` |
-
-Ưu tiên: **ngày lễ > chủ nhật > ngày thường**. Nếu Chủ nhật trùng ngày lễ → 300%.
+- `endTime > startTime` bắt buộc (không còn logic `+24h` — vì đã có full date).
+- Tổng `totalHours = (endTime - startTime) / 3600` ∈ `[0.5, 12]`.
 
 **Work Mode:**
 
@@ -280,18 +335,24 @@ Lấy danh sách in-app notifications qua `/v1/notifications` (xem bridge doc ri
 	"data": [
 		{
 			"id": 15,
-			"overtimeDate": "2026-05-20",
-			"startTime": "2026-05-20T11:00:00.000Z",
-			"endTime": "2026-05-20T14:00:00.000Z",
-			"totalHours": 3,
+			"startTime": "2026-07-26T16:00:00.000Z",
+			"endTime": "2026-07-27T02:00:00.000Z",
+			"totalHours": 10,
+			"segments": [
+				{ "segmentDate": "2026-07-26", "hours": 1, "otRate": 150, "otRateLabel": "150%" },
+				{ "segmentDate": "2026-07-27", "hours": 9, "otRate": 200, "otRateLabel": "200%" }
+			],
+			"totalPaidHours": 19.5,
 			"reason": "Hoàn thành dự án X trước deadline",
 			"status": "PENDING",
+			"workMode": "OFFLINE",
+			"location": { "id": 1, "name": "Trụ sở Q1" },
 			"reviewNote": null,
 			"assignedApprover": { "id": 3, "fullName": "Trần Thị B" },
 			"reviewedBy": null,
 			"reviewedAt": null,
-			"autoExpireAt": "2026-05-27T07:30:00.000Z",
-			"deadlineAt": "2026-06-19T00:00:00.000Z",
+			"autoExpireAt": "2026-08-02T07:30:00.000Z",
+			"deadlineAt": "2026-08-25T00:00:00.000Z",
 			"isExpired": false,
 			"employee": {
 				"id": 4,
@@ -299,9 +360,9 @@ Lấy danh sách in-app notifications qua `/v1/notifications` (xem bridge doc ri
 				"employeeCode": "EMP004",
 				"department": "Kỹ thuật"
 			},
-			"createdAt": "2026-05-20T07:30:00.000Z",
+			"createdAt": "2026-07-26T07:30:00.000Z",
 			"canBeCancelled": true,
-			"hoursDisplay": "3.0 giờ"
+			"hoursDisplay": "10.0 giờ"
 		}
 	],
 	"meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
@@ -334,30 +395,152 @@ Lấy danh sách in-app notifications qua `/v1/notifications` (xem bridge doc ri
 
 ---
 
-## POST /v1/overtime-requests — Tạo đơn OT
+## GET /v1/overtime-requests/available-locations — Địa điểm OT có thể chọn
+
+Trả về **toàn bộ** `CheckInLocation` có `isActive = true` trong hệ thống. FE dùng để populate dropdown khi user chọn `workMode = OFFLINE`. Không lọc theo assignment (`LocationEmployee`) — user tự khai địa điểm mình sẽ OT.
+
+**Response:** `ApiSuccess<AvailableLocationDto[]>`
+
+```json
+{
+	"success": true,
+	"data": [
+		{ "id": 1, "name": "Trụ sở Q1" },
+		{ "id": 2, "name": "Chi nhánh Q7" }
+	]
+}
+```
+
+- Sort theo `name` ASC.
+- Trả `[]` nếu hệ thống chưa có location nào ACTIVE — FE nên hint HR tạo trước, hoặc chặn workMode OFFLINE.
+- **GPS check-in sau đó verify strict theo `ot.locationId` đã lưu trong đơn** (không dùng nearest logic). Xem `POST /:id/check-location` bên dưới.
+
+---
+
+## POST /v1/overtime-requests/preview — Kiểm tra nhanh (không lưu DB)
+
+Endpoint lightweight dành cho form OT của FE. Từ payload người dùng đang gõ, BE tính ngay:
+
+- **Segments theo ngày VN local** (rate 150/200/300 per-segment)
+- **Tổng `totalPaidHours`** đã nhân hệ số
+- **Location** — lookup theo `locationId` (best-effort)
+- **Approver** — người sẽ được assign khi submit (theo `managerId` của current user)
+- **`isValid` + `reason`** — cờ chung để FE enable/disable nút submit
+
+**Đặc điểm:**
+
+- **KHÔNG lưu DB.** Chỉ chạy 3–5 read query (holiday, shift schedule, location, manager).
+- **Rate-limit: 20 req / 60s / user** (vượt → 429). FE nên debounce 300–500ms trước khi gọi.
+- Không throw exception khi payload hợp lệ về format nhưng invalid về nghiệp vụ (VD tổng > 12h) — trả `isValid=false, reason: "..."` để FE hiển thị inline.
+- Best-effort: nếu `isValid=false` vì window shift, các field khác (`segments`, `approver`, `location`) vẫn được compute và trả về.
 
 **Request body:**
 
 ```json
 {
-	"overtimeDate": "2026-05-20",
-	"startTime": "2026-05-20T11:00:00.000Z",
-	"endTime": "2026-05-20T14:00:00.000Z",
+	"startTime": "2026-07-26T16:00:00.000Z",
+	"endTime": "2026-07-27T02:00:00.000Z",
 	"workMode": "OFFLINE",
+	"locationId": 1
+}
+```
+
+**Response 200:** `ApiSuccess<OvertimePreviewResponse>`
+
+```json
+{
+	"success": true,
+	"data": {
+		"isValid": true,
+		"reason": null,
+		"startTime": "2026-07-26T16:00:00.000Z",
+		"endTime": "2026-07-27T02:00:00.000Z",
+		"totalHours": 10,
+		"segments": [
+			{ "segmentDate": "2026-07-26", "hours": 1, "otRate": 150, "otRateLabel": "150%" },
+			{ "segmentDate": "2026-07-27", "hours": 9, "otRate": 200, "otRateLabel": "200%" }
+		],
+		"totalPaidHours": 19.5,
+		"workMode": "OFFLINE",
+		"location": { "id": 1, "name": "Trụ sở Q1" },
+		"approver": { "id": 3, "fullName": "Trần Thị B" },
+		"approverFallbackToHR": false
+	}
+}
+```
+
+**Response 200 khi invalid (best-effort — vẫn compute được gì thì trả):**
+
+```json
+{
+	"success": true,
+	"data": {
+		"isValid": false,
+		"reason": "Thời gian OT tối đa 12 giờ/đơn",
+		"startTime": "2026-07-26T16:00:00.000Z",
+		"endTime": "2026-07-27T10:00:00.000Z",
+		"totalHours": 18,
+		"segments": [],
+		"totalPaidHours": 0,
+		"workMode": "OFFLINE",
+		"location": { "id": 1, "name": "Trụ sở Q1" },
+		"approver": { "id": 3, "fullName": "Trần Thị B" },
+		"approverFallbackToHR": false
+	}
+}
+```
+
+**Errors:**
+
+- `400` — DTO validation lỗi (thiếu field bắt buộc, sai ISO 8601 format, workMode không nằm trong enum).
+- `401` — chưa auth.
+- `429 Too Many Requests` — vượt rate-limit `20 req / 60s / user`. Response body có `Retry-After` header.
+
+**FE UX gợi ý:**
+
+- Debounce 300–500ms trên các input `startTime`, `endTime`, `workMode`, `locationId` rồi gọi preview.
+- Hiển thị breakdown segments trong 1 bảng nhỏ dưới form: "Ngày 26/07: 1h × 150% = 1.5h" v.v.
+- Hiển thị approver name để user biết "Đơn này sẽ gửi cho ...".
+- Nếu 429 → show toast "Bạn thao tác quá nhanh, thử lại sau 60s" và disable auto-preview trong 60s.
+
+---
+
+## POST /v1/overtime-requests — Tạo đơn OT
+
+**Request body (OFFLINE, OT qua đêm):**
+
+```json
+{
+	"startTime": "2026-07-26T16:00:00.000Z",
+	"endTime": "2026-07-27T02:00:00.000Z",
+	"workMode": "OFFLINE",
+	"locationId": 1,
 	"reason": "Hoàn thành dự án X trước deadline"
+}
+```
+
+**Request body (ONLINE, OT trong 1 ngày):**
+
+```json
+{
+	"startTime": "2026-07-26T11:00:00.000Z",
+	"endTime": "2026-07-26T14:00:00.000Z",
+	"workMode": "ONLINE",
+	"reason": "Hoàn thành dự án X từ xa"
 }
 ```
 
 **Lưu ý quan trọng:**
 
-- `overtimeDate`: chỉ ngày `"YYYY-MM-DD"`, giờ không quan trọng
-- `startTime`/`endTime`: phải là ISO 8601 datetime đầy đủ — giờ UTC
-- `workMode`: bắt buộc, `'ONLINE' | 'OFFLINE'`
-- `reason`: tối thiểu 10 ký tự
-- OT qua đêm: `startTime` 23:00, `endTime` 02:00 ngày hôm sau → hợp lệ, `totalHours = 3`
-- `otRate` được BE tự detect theo ngày (150/200/300) — client không gửi
+- `startTime`/`endTime`: ISO 8601 datetime **đầy đủ ngày + giờ UTC**. `endTime > startTime` bắt buộc.
+- Đơn được phép **span nhiều ngày local VN** — BE tự tách segments theo boundary 00:00 VN, mỗi segment có rate riêng.
+- `workMode`: bắt buộc, `'ONLINE' | 'OFFLINE'`.
+- `locationId`: **bắt buộc** khi `workMode = OFFLINE`, **bỏ qua** khi `ONLINE`. Id phải là 1 `CheckInLocation` ACTIVE bất kỳ trong hệ thống (không cần user được assign trước). BE chỉ verify tồn tại + `isActive`.
+- `reason`: tối thiểu 10 ký tự.
+- Tổng `totalHours = (endTime - startTime) / 3600` ∈ `[0.5, 12]`.
+- `segments[]`, `otRate`, `otRateLabel` được BE tự tính — client không gửi.
 
-**Response 201:** `ApiSuccess<OvertimeRequestResponse>` — kèm `otRate`, `otRateLabel`, `workMode`, `locationStatus` (chưa check).
+**Response 201:** `ApiSuccess<OvertimeRequestResponse>` — kèm `segments[]` chi tiết từng ngày, `totalPaidHours` đã nhân hệ số, `location` (null khi ONLINE), `locationStatus` (chưa check).
 
 ---
 
@@ -434,8 +617,9 @@ Ngoài window → **400** kèm khoảng giờ hợp lệ (HH:mm).
 
 **Lưu ý:**
 
+- GPS được verify **strict theo `ot.locationId`** (địa điểm user khai khi tạo đơn) — không dùng nearest logic. GPS phải nằm trong radius của đúng location đó thì `isValid = true`.
 - Kết quả `isValid` được lưu vào `locStartValid` / `locEndValid` — cron `resolveOtWorkMode` dùng để quyết định `finalWorkMode`.
-- `locationName = null` và `distanceMeters = -1` khi employee chưa được assign location bất kỳ.
+- `locationName = null` và `distanceMeters = -1` khi `ot.locationId` không tồn tại hoặc đã bị deactivate (edge case: HR xoá location sau khi đơn được tạo).
 - BE chỉ lưu lat/lng phục vụ kiểm toán — **không expose lat/lng ra response chi tiết đơn**.
 
 **Error codes:**
@@ -487,7 +671,10 @@ Endpoint giống nhau cũng có tại `/v1/reports/overtime` (xem bridge docs re
 import type {
 	OvertimeRequestResponse,
 	OvertimeMonthlyStatsResponse,
+	AvailableLocationDto,
 	CreateOvertimeRequestDto,
+	PreviewOvertimeRequestDto,
+	OvertimePreviewResponse,
 	RejectOvertimeDto,
 	QueryOvertimeParams,
 	QueryOvertimeReportParams,
@@ -498,6 +685,8 @@ export function useOvertimeRequests() {
 
 	const fetchMyRequests = (params?: QueryOvertimeParams) =>
 		list<OvertimeRequestResponse>('/v1/overtime-requests/me', { params });
+
+	const fetchAvailableLocations = () => get<AvailableLocationDto[]>('/v1/overtime-requests/available-locations');
 
 	const fetchMyStats = (month: number, year: number) =>
 		get<{ month: number; year: number; totalHours: number; countByStatus: Record<string, number> }>(
@@ -510,6 +699,10 @@ export function useOvertimeRequests() {
 	const fetchOne = (id: number) => get<OvertimeRequestResponse>(`/v1/overtime-requests/${id}`);
 
 	const createRequest = (dto: CreateOvertimeRequestDto) => post<OvertimeRequestResponse>('/v1/overtime-requests', dto);
+
+	/** Preview đơn OT (không lưu DB, rate-limit 20 req/60s). FE nên debounce 300–500ms. */
+	const previewRequest = (dto: PreviewOvertimeRequestDto) =>
+		post<OvertimePreviewResponse>('/v1/overtime-requests/preview', dto);
 
 	const approve = (id: number) => patch<OvertimeRequestResponse>(`/v1/overtime-requests/${id}/approve`);
 
@@ -529,9 +722,11 @@ export function useOvertimeRequests() {
 	return {
 		fetchMyRequests,
 		fetchMyStats,
+		fetchAvailableLocations,
 		fetchAll,
 		fetchOne,
 		createRequest,
+		previewRequest,
 		approve,
 		reject,
 		cancel,
@@ -547,13 +742,18 @@ export function useOvertimeRequests() {
 
 | Tình huống | Kết quả |
 | --- | --- |
-| Tạo đơn OT > 30 ngày kể từ `overtimeDate` | **400** `"Đã quá 30 ngày kể từ ngày OT"` |
+| Tạo đơn OT > 30 ngày kể từ ngày `startTime` | **400** `"Đã quá 30 ngày kể từ ngày OT"` |
+| Tạo đơn OFFLINE mà thiếu `locationId` | **400** `"Bắt buộc chọn địa điểm khi OT offline"` |
+| `locationId` không tồn tại hoặc `isActive = false` | **400** `"Địa điểm không hợp lệ hoặc đã ngừng hoạt động"` |
 | `totalHours < 0.5` | **400** `"Thời gian OT tối thiểu 30 phút"` |
 | `totalHours > 12` | **400** `"Thời gian OT tối đa 12 giờ/đơn"` |
 | OT trong giờ ca (T2–T7) | **400** `"OT chỉ được đăng ký ngoài giờ ca..."` kèm tên ca |
 | OT ngày Chủ nhật | ✅ Hợp lệ, không kiểm tra ca |
 | Nhân viên không có ca làm việc | ✅ Hợp lệ, không kiểm tra giờ |
-| `endTime < startTime` (qua đêm) | ✅ Hợp lệ — tự động `+24h` để tính `totalHours` |
+| `endTime <= startTime` | **400** `"endTime phải sau startTime"` — không còn tự +24h vì DTO yêu cầu full datetime |
+| OT span 2 ngày VN, mỗi ngày rate khác nhau | ✅ Tách 2 segments trong `segments[]`; rate detect độc lập per-segment |
+| OT span 2 ngày mà 1 ngày có ca T2–T7 | Check window shift chỉ cho segment ngày đó — segment ngày CN/lễ skip |
+| Tổng `endTime - startTime` > 12h dù span nhiều ngày | **400** `"Thời gian OT tối đa 12 giờ/đơn"` — ràng buộc trên tổng, không per-segment |
 | HR gọi `PATCH /:id/approve` | **403** `"HR không được phép duyệt đơn OT"` |
 | MANAGER duyệt đơn không được phân công | **403** `"Chỉ trưởng phòng được phân công mới có thể xử lý đơn này"` |
 | `PATCH /:id/reject` không có `reviewNote` | **400** `"Lý do từ chối là bắt buộc"` |
@@ -563,5 +763,6 @@ export function useOvertimeRequests() {
 | `canBeCancelled = false` | `status !== 'PENDING'` — ẩn nút thu hồi trên UI |
 | OT rơi vào Chủ nhật trùng ngày lễ | `otRate = 300` (ưu tiên ngày lễ) |
 | Đơn OFFLINE nhưng user không xác nhận vị trí lần nào | Cron chuyển `finalWorkMode = ONLINE`, notify `OT_LOCATION_RESOLVED` |
-| Employee chưa được assign check-in location | `check-location` trả `isValid = false`, `locationName = null`, `distanceMeters = -1` — đơn sẽ bị resolve thành ONLINE |
+| GPS ngoài radius của `ot.locationId` | `check-location` trả `isValid = false` (kèm distance thực) — đơn sẽ bị cron resolve thành `ONLINE` |
+| `ot.locationId` bị HR deactivate sau khi tạo đơn | `check-location` trả `isValid = false, locationName = null, distanceMeters = -1` — đơn bị resolve thành `ONLINE` |
 | Gọi `check-location` sau khi cron đã resolve | **400** `"Đơn OT đã được kết chốt, không thể xác nhận vị trí"` |

@@ -125,7 +125,7 @@ const statusOptions: SelectOption[] = [
 const approvingId = ref<number | null>(null);
 
 async function handleApprove(req: OvertimeRequestResponse) {
-	if (!confirm(`Duyệt đơn OT ${req.hoursDisplay} ngày ${format(new Date(req.overtimeDate), 'dd/MM/yyyy')} của ${req.employee.fullName}?`)) return;
+	if (!confirm(`Duyệt đơn OT ${req.hoursDisplay} ngày ${format(new Date(req.startTime), 'dd/MM/yyyy')} của ${req.employee.fullName}?`)) return;
 	approvingId.value = req.id;
 	try {
 		const updated = await approve(req.id);
@@ -380,7 +380,13 @@ watch(activeTab, tab => {
 
 								<!-- Ngày OT -->
 								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-									{{ formatDate(req.overtimeDate) }}
+									{{ formatDate(req.startTime) }}
+									<span
+										v-if="formatDate(req.startTime) !== formatDate(req.endTime)"
+										class="text-xs font-normal text-gray-400"
+									>
+										→ {{ formatDate(req.endTime) }}
+									</span>
 								</td>
 
 								<!-- Thời gian -->

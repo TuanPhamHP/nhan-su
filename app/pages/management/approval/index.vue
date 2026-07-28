@@ -543,7 +543,15 @@
 									<p class="font-medium text-gray-900 dark:text-white">{{ req.employee.fullName }}</p>
 									<p class="text-xs text-gray-400 dark:text-gray-500">{{ req.employee.employeeCode }}</p>
 								</td>
-								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">{{ fmtDate(req.overtimeDate) }}</td>
+								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+									{{ fmtDate(req.startTime) }}
+									<span
+										v-if="fmtDate(req.startTime) !== fmtDate(req.endTime)"
+										class="text-xs font-normal text-gray-400"
+									>
+										→ {{ fmtDate(req.endTime) }}
+									</span>
+								</td>
 								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
 									{{ fmtTime(req.startTime) }} → {{ fmtTime(req.endTime) }}
 									<p class="text-xs text-gray-400 mt-0.5">{{ req.hoursDisplay }}</p>

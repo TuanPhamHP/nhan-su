@@ -3,6 +3,7 @@ import { format, differenceInDays } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import OvertimeStatusBadge from '~/components/modules/overtime/OvertimeStatusBadge.vue';
 import { useOvertimeRequestService } from '~/services/overtime-request.service';
+import { getRateBadge, rateBadgeClass, rateBadgeClassCompact } from '~/utils/overtime.utils';
 import type { OvertimeRequestResponse, OtLocationCheckType } from '~/types/overtime.types';
 
 const props = defineProps<{ request: OvertimeRequestResponse }>();
@@ -32,6 +33,9 @@ function formatDateTime(d: string) {
 function formatTime(d: string) {
 	return format(new Date(d), 'HH:mm');
 }
+
+const rateBadge = computed(() => getRateBadge(props.request));
+const isOvernight = computed(() => formatDate(props.request.startTime) !== formatDate(props.request.endTime));
 
 const daysUntilExpire = computed(() => {
 	if (props.request.status !== 'PENDING') return null;
@@ -78,6 +82,8 @@ function handleCheckLocation(checkType: OtLocationCheckType) {
 				});
 				if (result.isValid) {
 					toast.success(`Vị trí hợp lệ — ${result.locationName ?? 'Trong phạm vi'}`);
+				} else if (result.locationName === null && result.distanceMeters === -1) {
+					toast.warning('Địa điểm OT không còn hoạt động. Hệ thống đã ghi nhận.');
 				} else {
 					toast.warning('Vị trí ngoài phạm vi. Hệ thống đã ghi nhận.');
 				}
@@ -153,16 +159,9 @@ const timelineSteps = computed(() => {
 				<!-- OT Rate + WorkMode badges -->
 				<div class="flex items-center gap-2 flex-wrap">
 					<span
-						:class="[
-							'inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold',
-							request.otRate === 300
-								? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-								: request.otRate === 200
-									? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
-									: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-						]"
+						:class="['inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold', rateBadgeClass(rateBadge.maxRate)]"
 					>
-						⏱ {{ request.otRateLabel }}
+						⏱ {{ rateBadge.label }}
 					</span>
 
 					<span
@@ -199,7 +198,12 @@ const timelineSteps = computed(() => {
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-500 dark:text-gray-400">Ngày OT</span>
-						<span class="font-medium text-gray-900 dark:text-white">{{ formatDate(request.overtimeDate) }}</span>
+						<span class="font-medium text-gray-900 dark:text-white">
+							{{ formatDate(request.startTime) }}
+							<span v-if="isOvernight" class="text-xs font-normal text-gray-400">
+								→ {{ formatDate(request.endTime) }}
+							</span>
+						</span>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-500 dark:text-gray-400">Thời gian</span>
@@ -210,6 +214,41 @@ const timelineSteps = computed(() => {
 					<div class="flex justify-between">
 						<span class="text-gray-500 dark:text-gray-400">Số giờ OT</span>
 						<span class="font-medium text-gray-900 dark:text-white">{{ request.hoursDisplay }}</span>
+					</div>
+					<div v-if="request.totalPaidHours != null" class="flex justify-between">
+						<span class="text-gray-500 dark:text-gray-400">Giờ trả lương</span>
+						<span class="font-medium text-green-600 dark:text-green-400">
+							{{ request.totalPaidHours.toFixed(1) }} giờ
+							<span class="text-xs font-normal text-gray-400 ml-1">(đã nhân hệ số)</span>
+						</span>
+					</div>
+
+					<!-- Segments breakdown — chỉ show khi span nhiều ngày -->
+					<div v-if="rateBadge.isMulti" class="rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 p-3">
+						<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Chi tiết theo ngày</p>
+						<ul class="space-y-1.5">
+							<li
+								v-for="(seg, idx) in rateBadge.segments"
+								:key="idx"
+								class="flex items-center justify-between text-xs"
+							>
+								<span class="text-gray-600 dark:text-gray-300">{{ formatDate(seg.segmentDate) }}</span>
+								<span class="flex items-center gap-2">
+									<span class="text-gray-900 dark:text-white font-medium">{{ seg.hours.toFixed(1) }}h</span>
+									<span
+										:class="['px-1.5 py-0.5 rounded text-[10px] font-semibold', rateBadgeClassCompact(seg.otRate)]"
+									>
+										{{ seg.otRateLabel }}
+									</span>
+								</span>
+							</li>
+						</ul>
+					</div>
+					<div v-if="request.location" class="flex justify-between">
+						<span class="text-gray-500 dark:text-gray-400">Địa điểm OT</span>
+						<span class="font-medium text-gray-900 dark:text-white flex items-center gap-1">
+							<span>📍</span>{{ request.location.name }}
+						</span>
 					</div>
 					<div class="flex justify-between gap-4">
 						<span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Lý do</span>

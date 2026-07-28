@@ -5,8 +5,9 @@ const props = withDefaults(
 		placeholder?: string;
 		disabled?: boolean;
 		error?: string;
+		minuteStep?: number; // bước phút: 1 = full 0–59, 30 = [00, 30], 15 = [00, 15, 30, 45]
 	}>(),
-	{ placeholder: '--:--' },
+	{ placeholder: '--:--', minuteStep: 1 },
 );
 
 const emit = defineEmits<{
@@ -18,7 +19,11 @@ const ITEM_H = 36;
 const VISIBLE = 5;
 
 const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+const minutes = computed(() => {
+	const step = Math.max(1, Math.min(60, Math.floor(props.minuteStep)));
+	const count = Math.ceil(60 / step);
+	return Array.from({ length: count }, (_, i) => String(i * step).padStart(2, '0'));
+});
 
 const isOpen = ref(false);
 const triggerRef = ref<HTMLElement>();
@@ -45,7 +50,7 @@ function updatePosition() {
 function scrollToSelected() {
 	const containerH = ITEM_H * VISIBLE;
 	const hIdx = hours.indexOf(selectedHour.value);
-	const mIdx = minutes.indexOf(selectedMinute.value);
+	const mIdx = minutes.value.indexOf(selectedMinute.value);
 	if (hourListRef.value) {
 		hourListRef.value.scrollTop = Math.max(0, hIdx * ITEM_H - containerH / 2 + ITEM_H / 2);
 	}

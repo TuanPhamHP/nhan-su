@@ -5,11 +5,14 @@ import type {
 	OvertimeMonthlyStatsResponse,
 	OvertimeMyStats,
 	CreateOvertimeRequestDto,
+	PreviewOvertimeRequestDto,
+	OvertimePreviewResponse,
 	RejectOvertimeDto,
 	QueryOvertimeParams,
 	QueryOvertimeReportParams,
 	CheckOtLocationDto,
 	CheckOtLocationResponse,
+	AvailableLocationDto,
 } from '~/types/overtime.types';
 
 export const useOvertimeRequestService = () => {
@@ -31,6 +34,11 @@ export const useOvertimeRequestService = () => {
 			return { data: res.data, meta: res.meta };
 		},
 
+		async fetchAvailableLocations(): Promise<AvailableLocationDto[]> {
+			const res = await authFetch<ApiResponse<AvailableLocationDto[]>>('/v1/overtime-requests/available-locations');
+			return res.data;
+		},
+
 		async getMyStats(month: number, year: number): Promise<OvertimeMyStats> {
 			const res = await authFetch<ApiResponse<OvertimeMyStats>>('/v1/overtime-requests/me/stats', {
 				params: { month, year },
@@ -40,6 +48,14 @@ export const useOvertimeRequestService = () => {
 
 		async create(dto: CreateOvertimeRequestDto): Promise<OvertimeRequestResponse> {
 			const res = await authFetch<ApiResponse<OvertimeRequestResponse>>('/v1/overtime-requests', {
+				method: 'POST',
+				body: dto,
+			});
+			return res.data;
+		},
+
+		async preview(dto: PreviewOvertimeRequestDto): Promise<OvertimePreviewResponse> {
+			const res = await authFetch<ApiResponse<OvertimePreviewResponse>>('/v1/overtime-requests/preview', {
 				method: 'POST',
 				body: dto,
 			});

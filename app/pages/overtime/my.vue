@@ -7,6 +7,7 @@ import OvertimeRequestCard from '~/components/modules/overtime/OvertimeRequestCa
 import type { OvertimeRequestResponse, OvertimeStatus, QueryOvertimeParams } from '~/types/overtime.types';
 import type { PaginatedMeta } from '~/types/api.types';
 import type { SelectOption } from '~/components/ui/Select.vue';
+import { getRateBadge, rateBadgeClassCompact } from '~/utils/overtime.utils';
 
 definePageMeta({ title: 'Đơn OT của tôi' });
 
@@ -84,7 +85,7 @@ function applyFilter() {
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────
 async function handleCancel(req: OvertimeRequestResponse) {
-	if (!confirm(`Thu hồi đơn OT ngày ${formatDate(req.overtimeDate)}?`)) return;
+	if (!confirm(`Thu hồi đơn OT ngày ${formatDate(req.startTime)}?`)) return;
 	cancellingId.value = req.id;
 	try {
 		const updated = await service.cancel(req.id);
@@ -105,6 +106,10 @@ function formatDate(d: string) {
 
 function formatTime(d: string) {
 	return format(new Date(d), 'HH:mm');
+}
+
+function isOvernight(req: OvertimeRequestResponse): boolean {
+	return formatDate(req.startTime) !== formatDate(req.endTime);
 }
 
 function isInWindow(time: string, windowMinutes: number) {
@@ -313,6 +318,7 @@ onMounted(fetchRequests);
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thời gian</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Số giờ</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Hệ số</th>
+							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Địa điểm</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Lý do</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Người duyệt</th>
 							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
@@ -321,7 +327,7 @@ onMounted(fetchRequests);
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 						<tr v-if="loading">
-							<td colspan="8" class="px-4 py-8 text-center">
+							<td colspan="9" class="px-4 py-8 text-center">
 								<svg class="animate-spin w-5 h-5 mx-auto text-brand-500" fill="none" viewBox="0 0 24 24">
 									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
 									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -329,7 +335,7 @@ onMounted(fetchRequests);
 							</td>
 						</tr>
 						<tr v-else-if="requests.length === 0">
-							<td colspan="8" class="px-4 py-12 text-center">
+							<td colspan="9" class="px-4 py-12 text-center">
 								<div class="flex flex-col items-center gap-3">
 									<svg class="w-10 h-10 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -348,7 +354,14 @@ onMounted(fetchRequests);
 						>
 							<!-- Ngày OT -->
 							<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap font-medium">
-								{{ formatDate(req.overtimeDate) }}
+								{{ formatDate(req.startTime) }}
+								<span
+									v-if="isOvernight(req)"
+									class="ml-1 text-xs font-normal text-gray-400"
+									:title="`Kết thúc ${formatDate(req.endTime)}`"
+								>
+									→ {{ formatDate(req.endTime) }}
+								</span>
 							</td>
 
 							<!-- Thời gian -->
@@ -359,22 +372,31 @@ onMounted(fetchRequests);
 							<!-- Số giờ -->
 							<td class="px-4 py-3">
 								<span class="font-medium text-gray-900 dark:text-white">{{ req.hoursDisplay }}</span>
+								<span
+									v-if="req.totalPaidHours && req.totalPaidHours !== req.totalHours"
+									class="ml-1 text-xs text-gray-400"
+									:title="`Giờ trả lương (đã nhân hệ số): ${req.totalPaidHours.toFixed(1)}h`"
+								>
+									({{ req.totalPaidHours.toFixed(1) }}h trả lương)
+								</span>
 							</td>
 
 							<!-- Hệ số -->
 							<td class="px-4 py-3">
 								<span
-									:class="[
-										'text-xs font-semibold px-1.5 py-0.5 rounded',
-										req.otRate === 300
-											? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300'
-											: req.otRate === 200
-												? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300'
-												: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300',
-									]"
+									:class="['text-xs font-semibold px-1.5 py-0.5 rounded whitespace-nowrap', rateBadgeClassCompact(getRateBadge(req).maxRate)]"
+									:title="getRateBadge(req).isMulti ? getRateBadge(req).segments.map(s => `${s.segmentDate}: ${s.hours}h × ${s.otRateLabel}`).join('\n') : undefined"
 								>
-									{{ req.otRateLabel }}
+									{{ getRateBadge(req).label }}
 								</span>
+							</td>
+
+							<!-- Địa điểm -->
+							<td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+								<span v-if="req.location" class="inline-flex items-center gap-1">
+									<span>📍</span>{{ req.location.name }}
+								</span>
+								<span v-else class="text-gray-400">—</span>
 							</td>
 
 							<!-- Lý do -->

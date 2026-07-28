@@ -37,6 +37,8 @@ Module cho phép **HR/ADMIN** broadcast thông báo tới nhiều nhân viên c�
 
 > ⚠️ **BREAKING (2026-07):** payload của `GET /` (HR list) và `GET /my` (employee list) đã **bỏ** các field `body`, `attachments`, `links`, `recipientCount`, `recalledBy`. Thêm field mới `status: 'ACTIVE' | 'RECALLED'` + `createdAt`. Nếu cần các field trên → gọi `GET /:id` (HR/ADMIN) hoặc endpoint mới `GET /my/:id` (recipient).
 
+> 🔌 **Realtime (2026-07):** Có WebSocket gateway `/announcements` namespace để push live comments/reactions. Xem section **[Realtime — WebSocket](#realtime--websocket-comments--reactions)** ở cuối doc.
+
 ---
 
 ## Presigned URLs — Attachment & avatar đã được sign
@@ -210,6 +212,7 @@ export interface ReactAnnouncementDto {
 export interface ReactActionResponse {
 	action: 'added' | 'changed' | 'removed';
 	emoji: ReactionEmoji;
+	summary: ReactionSummary; // ✅ MỚI: counts sau khi apply action, dùng cho FE cập nhật ngay
 }
 
 // ── Request DTOs ──
@@ -680,12 +683,16 @@ BE chỉ lưu **key string** (không lưu glyph unicode để tránh vấn đề
 { "emoji": "heart" }
 ```
 
-**Response 200:** `ApiSuccess<ReactActionResponse>`
+**Response 200:** `ApiSuccess<ReactActionResponse>` — kèm `summary` đã cập nhật để FE khỏi tự tính.
 
 ```json
 {
 	"success": true,
-	"data": { "action": "added", "emoji": "heart" }
+	"data": {
+		"action": "added",
+		"emoji": "heart",
+		"summary": { "heart": 4, "thumbsup": 5, "haha": 1, "sad": 0, "wow": 0 }
+	}
 }
 ```
 
@@ -1131,3 +1138,127 @@ const deleteComment = (commentId: number) => del<void>(`/v1/company-announcement
 | GET danh sách khi mọi comment đã bị xóa | Trả `[]` |
 | User không đăng nhập | 401 (JwtAuthGuard) — endpoint không yêu cầu role đặc biệt |
 | React notification `ANNOUNCEMENT_COMMENT_MENTION` khi user tap trên mobile | Mobile navigate tới màn announcement detail dùng `refId` từ FCM data |
+
+---
+
+## Realtime — WebSocket (comments & reactions)
+
+Backend expose 1 Socket.IO namespace `/announcements` để push live event khi user đang mở màn chi tiết announcement. **Không thay thế FCM** — FCM vẫn dùng cho notification off-app (bell icon, mobile push khi app closed). WebSocket dùng để **sync UI real-time** giữa các client cùng đang xem 1 announcement.
+
+### Connection
+
+- URL: `ws://<host>:<port>/announcements` (dev) hoặc `wss://<host>/announcements` (prod)
+- Client library: `socket.io-client` (web) / `socket_io_client` (Flutter mobile). Bắt buộc dùng Socket.IO client — không phải native WebSocket.
+- Auth: đưa **access token** vào `auth.token` của handshake. Có thể fallback qua header `Authorization: Bearer <token>` hoặc query `?token=`.
+- Server tự `disconnect` client nếu token thiếu / hết hạn (emit event `error` với `{ code: 'UNAUTHENTICATED', message }` trước khi cắt).
+- Không dùng cùng token 15p JWT vì phải reconnect mỗi lần refresh — pattern gợi ý: FE **reconnect socket sau khi refresh token**, hoặc dùng token dài hơn (tương lai).
+
+### Rooms
+
+Mỗi announcement là 1 room `announcement:{id}`. Client phải **gửi event `join`** để nhận broadcast của announcement đó. Rời trang → gửi `leave` (hoặc để tự disconnect).
+
+Không có concept "chỉ recipient mới nhận" — bất kỳ authenticated user nào cũng có thể join room (consistent với việc comment/reaction endpoint hiện tại mở cho mọi authenticated user).
+
+### Event contracts
+
+**Client → Server:**
+
+| Event | Payload | Ack response | Ghi chú |
+| --- | --- | --- | --- |
+| `join` | `{ announcementId: number }` hoặc `announcementId` trực tiếp | `{ joined: number }` hoặc `{ error: string }` | Gọi khi vào màn detail |
+| `leave` | `{ announcementId: number }` | `{ left: number }` | Gọi khi rời màn / unmount |
+
+**Server → Client (broadcast trong room):**
+
+| Event | Payload shape | Khi nào emit |
+| --- | --- | --- |
+| `comment.added` | Full `AnnouncementComment` (như response của `POST /:id/comments`) | Sau khi bất kỳ ai POST comment/reply thành công |
+| `comment.deleted` | `{ announcementId: number, commentId: number }` | Sau khi bất kỳ ai DELETE comment thành công |
+| `reaction.changed` | `{ announcementId, action: 'added'\|'changed'\|'removed', emoji, actor: { id, fullName, avatarUrl }, summary: ReactionSummary }` | Sau khi bất kỳ ai POST react thành công |
+
+### Đặc điểm
+
+- **Actor cũng nhận event của chính mình** (không self-filter). FE có thể so `actor.id === currentUser.id` để bỏ qua nếu đang optimistic update — hoặc dùng luôn event để reconcile state.
+- Emit là **fire-and-forget** — nếu socket layer lỗi thì log ở server, không rollback DB / REST response.
+- Avatar (`author.avatarUrl`, `actor.avatarUrl`) đã được **presigned TTL 3600s** giống REST — dùng trực tiếp.
+- Không có event cho announcement CRUD (`recall`, `delete` announcement) — FE dùng FCM/polling như cũ.
+
+### FE composable gợi ý (Vue/Nuxt)
+
+```typescript
+// composables/useAnnouncementRealtime.ts
+import { io, type Socket } from 'socket.io-client';
+
+let socket: Socket | null = null;
+
+export function useAnnouncementRealtime() {
+	const { token } = useAuth();
+
+	function connect(): Socket {
+		if (socket?.connected) return socket;
+		socket = io(`${useRuntimeConfig().public.apiBase}/announcements`, {
+			auth: { token: token.value },
+			transports: ['websocket'],
+			autoConnect: true,
+		});
+		return socket;
+	}
+
+	function subscribe(
+		announcementId: number,
+		handlers: {
+			onCommentAdded?: (c: AnnouncementComment) => void;
+			onCommentDeleted?: (p: { commentId: number }) => void;
+			onReactionChanged?: (p: ReactionChangedEvent) => void;
+		},
+	): () => void {
+		const s = connect();
+		s.emit('join', { announcementId });
+
+		if (handlers.onCommentAdded) s.on('comment.added', handlers.onCommentAdded);
+		if (handlers.onCommentDeleted) s.on('comment.deleted', handlers.onCommentDeleted);
+		if (handlers.onReactionChanged) s.on('reaction.changed', handlers.onReactionChanged);
+
+		return () => {
+			s.emit('leave', { announcementId });
+			if (handlers.onCommentAdded) s.off('comment.added', handlers.onCommentAdded);
+			if (handlers.onCommentDeleted) s.off('comment.deleted', handlers.onCommentDeleted);
+			if (handlers.onReactionChanged) s.off('reaction.changed', handlers.onReactionChanged);
+		};
+	}
+
+	function disconnect() {
+		socket?.disconnect();
+		socket = null;
+	}
+
+	return { subscribe, disconnect };
+}
+```
+
+### FE flow — trang detail announcement
+
+1. `onMounted`: gọi `GET /my/:id` → render.
+2. Gọi `GET /:id/comments` + `GET /:id/reactions` → render lần đầu.
+3. Gọi `subscribe(announcementId, { ... })` → nhận live event và patch local state:
+   - `comment.added`: nếu `parentId === null` push vào top-level; nếu có `parentId` push vào `.replies` của comment cha đó.
+   - `comment.deleted`: filter `comment.id !== commentId` (cả top-level lẫn replies).
+   - `reaction.changed`: nhận `summary` mới → thay thế toàn bộ counts. Nếu `actor.id === currentUser.id` → cũng cập nhật `myReaction`.
+4. `onBeforeUnmount`: gọi unsubscribe (đã return từ `subscribe`).
+
+### Error handling
+
+- Socket rớt kết nối (network / server restart) → Socket.IO tự reconnect. Khi reconnect xong, FE **phải re-join room** vì server không nhớ room state qua reconnect. Pattern: lưu `announcementId` đang xem trong composable, bắt event `connect` để re-emit `join`.
+- Token hết hạn → server emit `error` + disconnect. FE nhận `error` với `code: 'UNAUTHENTICATED'` → refresh token và reconnect với token mới.
+- Nếu WebSocket hoàn toàn không dùng được (proxy chặn) → app vẫn hoạt động qua REST + FCM, chỉ mất tính năng live update.
+
+### Edge Cases
+
+| Tình huống | Kết quả |
+| --- | --- |
+| Client join room với `announcementId` không tồn tại | Server vẫn cho join (không check). Không có event nào broadcast → vô hại |
+| Cùng 1 user mở 2 tab | Cả 2 socket cùng join room → cả 2 tab đều nhận event |
+| User rời trang mà không gửi `leave` | Khi socket disconnect, Socket.IO tự cleanup room membership |
+| Broadcast trong khi user đang offline | Event mất (Socket.IO không lưu). Reload trang sẽ refetch REST → có state mới nhất |
+| Comment/reaction do chính mình tạo | Vẫn nhận event `comment.added`/`reaction.changed` của mình — FE có thể dedupe theo `id` (comment) hoặc `actor.id === me` (reaction) nếu đã optimistic update |
+| Cùng 1 announcement có 20 người đang mở | 20 client cùng room → 1 broadcast tới cả 20 (Socket.IO fan-out, không phải 20 request riêng) |

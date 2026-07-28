@@ -1,4 +1,6 @@
 <script setup lang="ts">
+	import { useAnnouncementRealtime } from '~/composables/useAnnouncementRealtime';
+	import { useAuth } from '~/composables/useAuth';
 	import { useCompanyAnnouncements } from '~/composables/useCompanyAnnouncements';
 	import { EMOJI_KEYS, EMOJI_MAP, type EmojiKey, type ReactionResponse } from '~/types/announcement.types';
 
@@ -12,6 +14,8 @@
 	}>();
 
 	const { react, getReactions } = useCompanyAnnouncements();
+	const { subscribe: subscribeRealtime } = useAnnouncementRealtime();
+	const { user } = useAuth();
 	const toast = useToast();
 
 	const reactions = ref<ReactionResponse | null>(props.initialReactions ?? null);
@@ -109,8 +113,37 @@
 			.join('');
 	}
 
+	// ── Realtime ──────────────────────────────────────────────────────────────
+	// Server broadcast payload.summary là source-of-truth cho counts. Actor tự bấm
+	// đã optimistic update rồi → khi event của chính mình về, replace bằng summary
+	// server-authoritative để đồng bộ với các tab khác.
+	let unsubscribeRealtime: (() => void) | null = null;
+
 	onMounted(() => {
 		if (!reactions.value) loadReactions();
+		unsubscribeRealtime = subscribeRealtime(props.announcementId, {
+			onReactionChanged: payload => {
+				if (!reactions.value) return;
+				reactions.value.summary = { ...payload.summary };
+				if (user.value?.id === payload.actor.id) {
+					reactions.value.myReaction = payload.action === 'removed' ? null : payload.emoji;
+				}
+				// Chi tiết ai react — refetch để cập nhật list trong modal (avatar/tên).
+				// Chỉ fetch khi modal đang mở để tránh spam request.
+				if (showModal.value) {
+					getReactions(props.announcementId)
+						.then(r => {
+							reactions.value = r;
+						})
+						.catch(() => {});
+				}
+			},
+		});
+	});
+
+	onBeforeUnmount(() => {
+		unsubscribeRealtime?.();
+		unsubscribeRealtime = null;
 	});
 </script>
 
