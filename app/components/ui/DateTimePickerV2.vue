@@ -109,7 +109,7 @@
 
 <script setup lang="ts">
 	interface Props {
-		modelValue: string;
+		modelValue?: string;
 		placeholder?: string;
 		min?: string;
 		max?: string;
@@ -117,6 +117,7 @@
 	}
 
 	const props = withDefaults(defineProps<Props>(), {
+		modelValue: '',
 		placeholder: '–/– dd/mm/yyyy',
 		min: undefined,
 		max: undefined,
@@ -126,6 +127,7 @@
 	const emit = defineEmits<{
 		'update:modelValue': [value: string];
 		change: [event: Event];
+		blur: [];
 	}>();
 
 	const effectivePlaceholder = computed(() => props.placeholder);
@@ -137,7 +139,7 @@
 
 	// ─── Value parsing ───────────────────────────────────────────────────────────
 
-	function parseValue(v: string) {
+	function parseValue(v?: string) {
 		if (!v) return { date: '', hour: 0, minute: 0 };
 		const [datePart, timePart] = v.split('T');
 		const [hStr, mStr] = (timePart || '00:00').split(':');
@@ -320,6 +322,7 @@
 	function toggleOpen() {
 		if (isOpen.value) {
 			isOpen.value = false;
+			emit('blur');
 			return;
 		}
 		const p = parseValue(props.modelValue);
@@ -355,7 +358,10 @@
 	function handleClickOutside(e: MouseEvent) {
 		const t = e.target as Node;
 		if (wrapperRef.value?.contains(t) || dropdownRef.value?.contains(t)) return;
-		isOpen.value = false;
+		if (isOpen.value) {
+			isOpen.value = false;
+			emit('blur');
+		}
 	}
 
 	onMounted(() => window.addEventListener('mousedown', handleClickOutside));
