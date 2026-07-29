@@ -45,7 +45,6 @@
 		return Math.round((readCount.value / totalCount.value) * 100);
 	});
 
-
 	async function load() {
 		if (!id.value || Number.isNaN(id.value)) {
 			notFound.value = true;
@@ -74,8 +73,6 @@
 		recalling.value = true;
 		try {
 			await recall(announcement.value.id);
-			// Response của recall giờ tinh gọn (không có recalledBy). Refetch để lấy full detail
-			// bao gồm recalledBy để hiển thị banner đầy đủ.
 			announcement.value = await fetchById(announcement.value.id);
 			toast.success('Đã thu hồi thông báo');
 		} catch (e) {
@@ -100,12 +97,28 @@
 		return '📎';
 	}
 
+	function initials(name: string): string {
+		return name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(-2)
+			.map(w => w.charAt(0).toUpperCase())
+			.join('');
+	}
+
+	function formatDomain(url: string): string {
+		try {
+			return new URL(url).hostname.replace(/^www\./, '');
+		} catch {
+			return url;
+		}
+	}
 
 	onMounted(load);
 </script>
 
 <template>
-	<div class="max-w-5xl mx-auto space-y-4">
+	<div class="max-w-3xl mx-auto space-y-4">
 		<!-- Back nav -->
 		<NuxtLink
 			to="/management/announcements"
@@ -131,10 +144,21 @@
 		<!-- Not found -->
 		<div
 			v-else-if="notFound || !announcement || !config"
-			class="p-16 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
+			class="p-16 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3"
 		>
-			<p class="text-4xl mb-2">🔍</p>
-			<p class="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy thông báo</p>
+			<p class="text-4xl">🔍</p>
+			<p class="text-base font-semibold text-gray-800 dark:text-gray-200">
+				Không tìm thấy thông báo
+			</p>
+			<NuxtLink
+				to="/management/announcements"
+				class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
+			>
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+				</svg>
+				Quay lại danh sách
+			</NuxtLink>
 		</div>
 
 		<!-- Content -->
@@ -157,37 +181,46 @@
 				</div>
 			</div>
 
-			<!-- Merged Main Card -->
-			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-				<!-- Header -->
-				<div class="px-8 py-6 flex items-start justify-between gap-4 flex-wrap border-b border-gray-100 dark:border-gray-800">
-					<div class="space-y-2 min-w-0 flex-1">
-						<div
-							class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold"
-						>
-							<span>{{ config.icon }}</span>
-							<span>{{ config.label }}</span>
+			<!-- Main Card (Sleek unified card giống bên nhân viên) -->
+			<div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 sm:p-8 shadow-xs">
+				<!-- Header / Sender Info -->
+				<div class="flex items-start justify-between gap-4 flex-wrap">
+					<div class="flex items-center gap-3.5 min-w-0">
+						<!-- Sender Avatar -->
+						<div class="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-sm flex-shrink-0 select-none overflow-hidden">
+							<img
+								v-if="announcement.createdBy.avatarUrl"
+								:src="announcement.createdBy.avatarUrl"
+								:alt="announcement.createdBy.fullName"
+								class="w-full h-full object-cover"
+							/>
+							<span v-else>{{ initials(announcement.createdBy.fullName) }}</span>
 						</div>
-						<h1
-							:class="[
-								'text-2xl font-bold leading-tight',
-								isRecalled
-									? 'text-gray-500 dark:text-gray-500 line-through'
-									: 'text-gray-900 dark:text-white',
-							]"
-						>
-							{{ announcement.title }}
-						</h1>
-						<p class="text-xs text-gray-500 dark:text-gray-400">
-							Gửi bởi
-							<span class="font-medium text-gray-700 dark:text-gray-300">
-								{{ announcement.createdBy.fullName }}
-							</span>
-							<span class="mx-1.5">·</span>
-							{{ formatRelativeTime(announcement.sentAt) }}
-						</p>
+
+						<div class="min-w-0">
+							<!-- Name & Role -->
+							<div class="flex items-center gap-1.5 flex-wrap">
+								<span class="font-bold text-gray-900 dark:text-white text-base">
+									{{ announcement.createdBy?.fullName }}
+								</span>
+							</div>
+
+							<!-- Type Badge & Date -->
+							<div class="flex items-center gap-2 mt-1">
+								<span
+									class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium"
+								>
+									<span>{{ config.icon }}</span>
+									<span>{{ config.label }}</span>
+								</span>
+								<span class="text-xs text-gray-500 dark:text-gray-400">
+									{{ formatRelativeTime(announcement?.sentAt) }}
+								</span>
+							</div>
+						</div>
 					</div>
 
+					<!-- Admin Action Badges/Buttons (Giữ nguyên badge "Đã gửi" và nút "Thu hồi") -->
 					<div class="flex items-center gap-2.5 flex-shrink-0">
 						<!-- Reader Badge Button -->
 						<button
@@ -196,8 +229,7 @@
 							title="Click để xem danh sách người đọc"
 							@click="showReadersModal = true"
 						>
-							<span>{{ readCount }}/{{ totalCount }} người đã đọc</span>
-							<span class="text-xs font-semibold opacity-75">({{ progressPercent }}%)</span>
+							<span>Đã gửi</span>
 						</button>
 
 						<!-- Recall Button -->
@@ -205,7 +237,7 @@
 							v-if="!isRecalled"
 							type="button"
 							:disabled="recalling"
-							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-sm font-medium transition-colors disabled:opacity-50"
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"
 							@click="handleRecall"
 						>
 							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -216,77 +248,76 @@
 					</div>
 				</div>
 
-				<!-- Body & Content -->
-				<div class="px-8 py-6 space-y-5">
-					<div
-						class="announcement-body text-gray-800 dark:text-gray-200"
-						v-html="sanitizedBody"
-					/>
+				<!-- Title -->
+				<h1
+					:class="[
+						'text-lg md:text-xl font-bold mt-4 leading-tight',
+						isRecalled
+							? 'text-gray-500 dark:text-gray-500 line-through'
+							: 'text-gray-900 dark:text-white',
+					]"
+				>
+					{{ announcement?.title }}
+				</h1>
 
+				<!-- Body -->
+				<div
+					class="announcement-body text-gray-800 dark:text-gray-200 mt-2 text-sm leading-relaxed"
+					v-html="sanitizedBody"
+				/>
+
+				<!-- Attachments & Links Grid (Sleek 2-column grid giống bên nhân viên) -->
+				<div
+					v-if="(announcement.links?.length ?? 0) > 0 || (announcement.attachments?.length ?? 0) > 0"
+					class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"
+				>
 					<!-- Links -->
-					<div
-						v-if="(announcement.links?.length ?? 0) > 0"
-						class="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-800"
+					<a
+						v-for="(l, i) in announcement.links"
+						:key="`link-${i}`"
+						:href="l.url"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
 					>
-						<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-							Liên kết đính kèm ({{ announcement.links.length }})
-						</p>
-						<div class="space-y-1.5">
-							<a
-								v-for="(l, i) in announcement.links"
-								:key="i"
-								:href="l.url"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/10 transition-colors text-sm"
-							>
-								<span class="flex-shrink-0">🔗</span>
-								<div class="flex-1 min-w-0">
-									<p class="text-gray-800 dark:text-gray-200 font-medium truncate">{{ l.label || l.url }}</p>
-									<p v-if="l.label" class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ l.url }}</p>
-								</div>
-								<svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-								</svg>
-							</a>
+						<div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 text-lg flex-shrink-0 group-hover:bg-brand-50 dark:group-hover:bg-brand-900/30 group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
+							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+							</svg>
 						</div>
-					</div>
+						<div class="flex-1 min-w-0">
+							<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ l.label || l.url }}</p>
+							<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ formatDomain(l.url) }}</p>
+						</div>
+					</a>
 
 					<!-- Attachments -->
-					<div
-						v-if="(announcement.attachments?.length ?? 0) > 0"
-						class="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-800"
+					<a
+						v-for="(a, idx) in announcement.attachments"
+						:key="`attachment-${idx}`"
+						:href="a.url"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
 					>
-						<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-							File đính kèm ({{ announcement.attachments.length }})
-						</p>
-						<div class="space-y-1.5">
-							<a
-								v-for="(a, idx) in announcement.attachments"
-								:key="`${a.name}-${idx}`"
-								:href="a.url"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/10 transition-colors text-sm text-gray-700 dark:text-gray-300"
-							>
-								<span>{{ attachmentIcon(a.name) }}</span>
-								<span class="truncate flex-1">{{ a.name }}</span>
-								<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-								</svg>
-							</a>
+						<div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-lg flex-shrink-0 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/60 transition-colors">
+							<span>{{ attachmentIcon(a.name) }}</span>
 						</div>
-					</div>
+						<div class="flex-1 min-w-0">
+							<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ a.name }}</p>
+							<p class="text-xs text-gray-400 dark:text-gray-500 truncate">48 KB</p>
+						</div>
+					</a>
+				</div>
 
-					<!-- Reactions -->
-					<div class="border-t border-gray-100 dark:border-gray-800 pt-3 mt-4">
-						<AnnouncementReactions :announcement-id="announcement.id" />
-					</div>
+				<!-- Reactions bar -->
+				<div class="border-t border-b border-gray-100 dark:border-gray-800 py-3 mt-5">
+					<AnnouncementReactions :announcement-id="announcement.id" />
+				</div>
 
-					<!-- Comments -->
-					<div class="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
-						<AnnouncementComments :announcement-id="announcement.id" />
-					</div>
+				<!-- Comments -->
+				<div class="pt-4">
+					<AnnouncementComments :announcement-id="announcement.id" />
 				</div>
 			</div>
 
