@@ -85,7 +85,7 @@
 		</div>
 
 		<!-- List -->
-		<div class="space-y-2">
+		<div class="space-y-2 w-[75%] mx-auto">
 			<div v-if="myLoading" class="py-12 flex justify-center">
 				<svg class="animate-spin w-6 h-6 text-brand-500" fill="none" viewBox="0 0 24 24">
 					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

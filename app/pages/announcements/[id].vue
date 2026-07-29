@@ -48,6 +48,23 @@
 			: null,
 	);
 
+	function initials(name: string): string {
+		return name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(-2) 
+			.map(w => w.charAt(0).toUpperCase())
+			.join('');
+	}
+
+	function formatDomain(url: string): string {
+		try {
+			return new URL(url).hostname.replace(/^www\./, '');
+		} catch {
+			return url;
+		}
+	}
+
 	function attachmentIcon(name: string): string {
 		const lower = name.toLowerCase();
 		if (lower.endsWith('.pdf')) return '📕';
@@ -107,113 +124,150 @@
 		<!-- Content -->
 		<div
 			v-else
-			class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+			class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 sm:p-8 shadow-xs"
 		>
-			<!-- Header -->
-			<div class="px-8 py-6 space-y-2 border-b border-gray-100 dark:border-gray-800">
-				<div
-					class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold"
-				>
-					<span>{{ config.icon }}</span>
-					<span>{{ config.label }}</span>
+			<!-- Header / Sender Info -->
+			<div class="flex items-start justify-between gap-4">
+				<div class="flex items-center gap-3.5 min-w-0">
+					<!-- Sender Avatar -->
+					<div class="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-sm flex-shrink-0 select-none overflow-hidden">
+						<img
+							v-if="announcement.createdBy.avatarUrl"
+							:src="announcement.createdBy.avatarUrl"
+							:alt="announcement.createdBy.fullName"
+							class="w-full h-full object-cover"
+						/>
+						<span v-else>{{ initials(announcement.createdBy.fullName) }}</span>
+					</div>
+
+					<div class="min-w-0">
+						<!-- Name & Role -->
+						<div class="flex items-center gap-1.5 flex-wrap">
+							<span class="font-bold text-gray-900 dark:text-white text-base">
+								{{ announcement.createdBy?.fullName }}
+							</span>
+							<!-- <template v-if="announcement.createdBy.departmentName || announcement.createdBy.positionName || announcement.createdBy.roleName">
+								<span class="text-gray-400">·</span>
+								<span class="text-sm text-gray-500 dark:text-gray-400">
+									{{ announcement.createdBy.departmentName || announcement.createdBy.positionName || announcement.createdBy.roleName }}
+								</span>
+							</template> -->
+						</div>
+
+						<!-- Type Badge & Date -->
+						<div class="flex items-center gap-2 mt-1">
+							<span
+								class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium"
+							>
+								<span>{{ config.icon }}</span>
+								<span>{{ config.label }}</span>
+							</span>
+							<span class="text-xs text-gray-500 dark:text-gray-400">
+								{{ formatRelativeTime(announcement?.sentAt) }}
+							</span>
+						</div>
+					</div>
 				</div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white leading-tight">
-					{{ announcement.title }}
-				</h1>
-				<p class="text-xs text-gray-500 dark:text-gray-400">
-					Gửi bởi
-					<span class="font-medium text-gray-700 dark:text-gray-300">
-						{{ announcement.createdBy.fullName }}
-					</span>
-					<span class="mx-1.5">·</span>
-					{{ formatRelativeTime(announcement.sentAt) }}
-				</p>
+
+				<!-- Action Icons -->
+				<div class="flex items-center gap-1 text-gray-400 flex-shrink-0">
+					<button
+						type="button"
+						class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+						title="Ghim thông báo"
+					>
+						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M3 21l3-3m0 0l3-3m-3 3l9-9a2 2 0 00-2.828-2.828l-9 9m12-12L18 3l3 3-3 3" />
+						</svg>
+					</button>
+					<button
+						type="button"
+						class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+						title="Thêm tùy chọn"
+					>
+						<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+							<path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
-			<!-- Body -->
-			<div class="px-8 py-6 space-y-5">
-				<div
-					class="announcement-body text-gray-800 dark:text-gray-200"
-					v-html="sanitizedBody"
-				/>
+			<!-- Title -->
+			<h1 class="text-lg md:text-xl font-bold text-gray-900 dark:text-white mt-4 leading-tight">
+				{{ announcement?.title }}
+			</h1>
 
+			<!-- Body -->
+			<div
+				class="announcement-body text-gray-800 dark:text-gray-200 mt-2 text-sm leading-relaxed"
+				v-html="sanitizedBody"
+			/>
+
+			<!-- Attachments & Links Grid -->
+			<div
+				v-if="(announcement.links?.length ?? 0) > 0 || (announcement.attachments?.length ?? 0) > 0"
+				class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"
+			>
 				<!-- Links -->
-				<div
-					v-if="(announcement.links?.length ?? 0) > 0"
-					class="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-800"
+				<a
+					v-for="(l, i) in announcement.links"
+					:key="`link-${i}`"
+					:href="l.url"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
 				>
-					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-						Liên kết đính kèm ({{ announcement.links.length }})
-					</p>
-					<div class="space-y-1.5">
-						<a
-							v-for="(l, i) in announcement.links"
-							:key="i"
-							:href="l.url"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/10 transition-colors text-sm"
-						>
-							<span class="flex-shrink-0">🔗</span>
-							<div class="flex-1 min-w-0">
-								<p class="text-gray-800 dark:text-gray-200 font-medium truncate">{{ l.label || l.url }}</p>
-								<p v-if="l.label" class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ l.url }}</p>
-							</div>
-							<svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-							</svg>
-						</a>
+					<div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 text-lg flex-shrink-0 group-hover:bg-brand-50 dark:group-hover:bg-brand-900/30 group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
+						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+						</svg>
 					</div>
-				</div>
+					<div class="flex-1 min-w-0">
+						<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ l.label || l.url }}</p>
+						<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ formatDomain(l.url) }}</p>
+					</div>
+				</a>
 
 				<!-- Attachments -->
-				<div
-					v-if="(announcement.attachments?.length ?? 0) > 0"
-					class="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-800"
+				<a
+					v-for="(a, idx) in announcement.attachments"
+					:key="`attachment-${idx}`"
+					:href="a.url"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
 				>
-					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-						File đính kèm ({{ announcement.attachments.length }})
-					</p>
-					<div class="space-y-1.5">
-						<a
-							v-for="(a, idx) in announcement.attachments"
-							:key="`${a.name}-${idx}`"
-							:href="a.url"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/10 transition-colors text-sm text-gray-700 dark:text-gray-300"
-						>
-							<span>{{ attachmentIcon(a.name) }}</span>
-							<span class="truncate flex-1">{{ a.name }}</span>
-							<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-							</svg>
-						</a>
+					<div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-lg flex-shrink-0 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/60 transition-colors">
+						<span>{{ attachmentIcon(a.name) }}</span>
 					</div>
-				</div>
+					<div class="flex-1 min-w-0">
+						<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ a.name }}</p>
+						<p class="text-xs text-gray-400 dark:text-gray-500 truncate">48 KB</p>
+					</div>
+				</a>
+			</div>
 
-				<!-- CTA -->
-				<div v-if="config.actionUrl" class="pt-4 border-t border-gray-100 dark:border-gray-800">
-					<NuxtLink
-						:to="config.actionUrl"
-						class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
-					>
-						{{ config.actionLabel }}
-						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-						</svg>
-					</NuxtLink>
-				</div>
+			<!-- CTA -->
+			<div v-if="config.actionUrl" class="mt-4">
+				<NuxtLink
+					:to="config.actionUrl"
+					class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
+				>
+					{{ config.actionLabel }}
+					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+					</svg>
+				</NuxtLink>
+			</div>
 
-				<!-- Reactions -->
-				<div class="border-t border-gray-100 dark:border-gray-800 pt-3 mt-4">
-					<AnnouncementReactions :announcement-id="announcement.id" />
-				</div>
+			<!-- Reactions bar (Giữ nguyên UI hiển thị reactions, bỏ phần Đã đọc 24/31) -->
+			<div class="border-t border-b border-gray-100 dark:border-gray-800 py-3 mt-5">
+				<AnnouncementReactions :announcement-id="announcement.id" />
+			</div>
 
-				<!-- Comments -->
-				<div class="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
-					<AnnouncementComments :announcement-id="announcement.id" />
-				</div>
+			<!-- Comments -->
+			<div class="pt-4">
+				<AnnouncementComments :announcement-id="announcement.id" />
 			</div>
 		</div>
 	</div>

@@ -17,6 +17,7 @@ export interface AnnouncementLink {
 export interface AnnouncementCreator {
 	id: number;
 	fullName: string;
+	avatarUrl?: string | null;
 }
 
 export type AnnouncementStatus = 'ACTIVE' | 'RECALLED';
