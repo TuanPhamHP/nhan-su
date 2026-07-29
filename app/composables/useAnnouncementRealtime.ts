@@ -1,6 +1,9 @@
-import { io, type Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
+import { useSocket } from './useSocket';
 import type { AnnouncementComment, EmojiKey, ReactionSummary } from '~/types/announcement.types';
-import { getCookie } from '~/utils/cookie';
+
+// Xem @docs/realtime-websocket.md — Rule 1: composable chỉ join/leave room + bind event,
+// KHÔNG sở hữu connection (Manager singleton do plugins/socket.client.ts quản lý).
 
 export interface ReactionChangedEvent {
 	announcementId: number;
@@ -21,84 +24,37 @@ export interface RealtimeHandlers {
 	onReactionChanged?: (payload: ReactionChangedEvent) => void;
 }
 
-interface WsError {
-	code: string;
-	message: string;
-}
+const NAMESPACE = '/announcements';
 
-// Singleton socket + shared registry of active rooms — sống suốt tab session.
-let socket: Socket | null = null;
+// Rooms user đang xem — cần re-join sau mỗi lần socket reconnect.
 const activeRooms = new Set<number>();
 
-function buildNamespaceUrl(baseApiUrl: string): string {
-	// baseApiUrl có thể là "https://api.example.com" hoặc "https://api.example.com/api"
-	// Socket.IO namespace là "/announcements" — nối vào origin, không nối vào path.
-	try {
-		const u = new URL(baseApiUrl);
-		return `${u.origin}/announcements`;
-	} catch {
-		// Fallback nếu baseApiUrl không parse được như URL tuyệt đối
-		return `${baseApiUrl.replace(/\/+$/, '')}/announcements`;
-	}
+// Bind `connect` handler tối đa 1 lần / instance socket.
+// WeakSet cho phép socket cũ được GC khi Manager reset (login/logout).
+const connectHandlerBoundSockets = new WeakSet<Socket>();
+
+function ensureRejoinHandler(s: Socket) {
+	if (connectHandlerBoundSockets.has(s)) return;
+	connectHandlerBoundSockets.add(s);
+	s.on('connect', () => {
+		for (const id of activeRooms) s.emit('join', { announcementId: id });
+	});
 }
 
 export function useAnnouncementRealtime() {
-	const config = useRuntimeConfig();
-
-	function currentToken(): string | null {
-		return getCookie('access_token');
-	}
-
-	function ensureConnected(): Socket {
-		if (socket?.connected) return socket;
-		if (socket) {
-			// Có socket cũ nhưng chưa connect — cập nhật token mới nhất rồi thử connect lại.
-			socket.auth = { token: currentToken() ?? '' };
-			socket.connect();
-			return socket;
-		}
-
-		const url = buildNamespaceUrl(config.public.baseApiUrl as string);
-		socket = io(url, {
-			auth: { token: currentToken() ?? '' },
-			transports: ['websocket'],
-			autoConnect: true,
-			reconnection: true,
-		});
-
-		// Sau khi reconnect, tự động re-join mọi room đang active.
-		socket.on('connect', () => {
-			for (const id of activeRooms) {
-				socket?.emit('join', { announcementId: id });
-			}
-		});
-
-		socket.on('error', (err: WsError) => {
-			if (err?.code === 'UNAUTHENTICATED') {
-				// Refresh cookie có thể đã được update bởi auth.fetch — thử reconnect với token mới.
-				const fresh = currentToken();
-				if (fresh && socket) {
-					socket.auth = { token: fresh };
-					socket.disconnect().connect();
-				}
-			}
-		});
-
-		return socket;
-	}
-
 	function subscribe(announcementId: number, handlers: RealtimeHandlers): () => void {
-		const s = ensureConnected();
+		const s = useSocket(NAMESPACE);
+		ensureRejoinHandler(s);
 
 		activeRooms.add(announcementId);
+		// Socket.IO buffer emit khi chưa connect và flush khi ready — an toàn gọi ngay.
 		s.emit('join', { announcementId });
 
 		const onAdded = handlers.onCommentAdded;
 		const onDeleted = handlers.onCommentDeleted;
 		const onReaction = handlers.onReactionChanged;
 
-		// Wrap handler để filter theo announcementId (server broadcast chỉ đúng room,
-		// nhưng vì socket singleton nên vẫn cần guard nếu tương lai có sự cố cross-room).
+		// Wrap để filter theo announcementId — phòng cross-room leak nếu server broadcast sai.
 		const wrappedAdded = onAdded
 			? (c: AnnouncementComment) => {
 					if (c.announcementId === announcementId) onAdded(c);
@@ -124,16 +80,9 @@ export function useAnnouncementRealtime() {
 			if (wrappedDeleted) s.off('comment.deleted', wrappedDeleted);
 			if (wrappedReaction) s.off('reaction.changed', wrappedReaction);
 			activeRooms.delete(announcementId);
-			// leave room nếu socket còn connect — nếu đang offline thì bỏ qua, room sẽ không được re-join sau reconnect nữa
 			if (s.connected) s.emit('leave', { announcementId });
 		};
 	}
 
-	function disconnect() {
-		socket?.disconnect();
-		socket = null;
-		activeRooms.clear();
-	}
-
-	return { subscribe, disconnect };
+	return { subscribe };
 }

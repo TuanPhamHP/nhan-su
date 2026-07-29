@@ -34,9 +34,7 @@
 	const parsedContent = computed(() => parseMentionContent(props.comment.content));
 
 	const canDelete = computed(
-		() =>
-			props.comment.author.id === props.currentUserId ||
-			['HR', 'ADMIN'].includes(props.currentUserRole),
+		() => props.comment.author.id === props.currentUserId || ['HR', 'ADMIN'].includes(props.currentUserRole),
 	);
 
 	const isTopLevel = computed(() => props.depth === 0);
@@ -45,9 +43,7 @@
 		return 'replies' in c;
 	}
 
-	const replyList = computed(() =>
-		isFullComment(props.comment) ? props.comment.replies ?? [] : [],
-	);
+	const replyList = computed(() => (isFullComment(props.comment) ? (props.comment.replies ?? []) : []));
 	const replyCount = computed(() => replyList.value.length);
 
 	async function submitReply() {
@@ -77,50 +73,22 @@
 		if (!confirm('Xóa bình luận này?')) return;
 		emit('deleted', props.comment.id);
 	}
-
-	function initials(name: string): string {
-		return name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(-2)
-			.map(w => w.charAt(0).toUpperCase())
-			.join('');
-	}
 </script>
 
 <template>
 	<div :class="['comment-item flex gap-2', depth === 1 ? 'ml-8 mt-2' : 'mt-3']">
-		<div class="flex-shrink-0">
-			<div
-				class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center text-sm font-medium"
-			>
-				<img
-					v-if="comment.author.avatarUrl"
-					:src="comment.author.avatarUrl"
-					:alt="comment.author.fullName"
-					class="w-full h-full object-cover"
-				/>
-				<span v-else class="text-gray-600 dark:text-gray-300 text-xs">
-					{{ initials(comment.author.fullName) }}
-				</span>
-			</div>
-		</div>
+		<CommonAppAvatar :src="comment.author.avatarUrl" :name="comment.author.fullName" size="sm" />
 
 		<div class="flex-1 min-w-0">
 			<div class="bg-gray-50 dark:bg-gray-800/60 rounded-2xl px-3 py-2 inline-block max-w-full">
 				<p class="text-xs font-semibold text-gray-800 dark:text-gray-100 mb-0.5">
 					{{ comment.author.fullName }}
-					<span
-						v-if="comment.author.positionName"
-						class="text-gray-400 dark:text-gray-500 font-normal ml-1"
-					>
+					<span v-if="comment.author.positionName" class="text-gray-400 dark:text-gray-500 font-normal ml-1">
 						· {{ comment.author.positionName }}
 					</span>
 				</p>
 
-				<p v-if="comment.isDeleted" class="text-sm text-gray-400 italic">
-					[Bình luận đã bị xóa]
-				</p>
+				<p v-if="comment.isDeleted" class="text-sm text-gray-400 italic">[Bình luận đã bị xóa]</p>
 				<div
 					v-else
 					class="text-sm text-gray-700 dark:text-gray-200 comment-content whitespace-pre-wrap break-words"
@@ -184,7 +152,7 @@
 			<button
 				v-if="isTopLevel && replyCount > 0"
 				type="button"
-				class="mt-1 ml-1 inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+				class="mt-1 ml-1 inline-flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-blue-400 hover:underline"
 				@click="showReplies = !showReplies"
 			>
 				<svg

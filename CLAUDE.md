@@ -301,4 +301,5 @@ await directoryStore.load();
 - api endpoints: @docs/api-enpoint.json
 - backend bridges: @docs/bridges/
 - front-end docs: @docs/frontend/nuxt-conventions.md
+- Realtime / WebSocket rules: @docs/realtime-websocket.md
 - Code review checklist: @docs/review.md
