@@ -3,7 +3,9 @@
 	import { vi } from 'date-fns/locale';
 	import { formatRelativeTime } from '~/utils/date';
 	import { useDashboard, isCompanyDashboard, isDepartmentDashboard, isMyDashboard } from '~/composables/useDashboard';
+	import { isEmployeeRole } from '~/utils/role';
 	import type { ActivityItem, ActivityType } from '~/types/dashboard.types';
+	import DashboardMyAttendanceWidget from '~/components/modules/dashboard/DashboardMyAttendanceWidget.vue';
 
 	const { user } = useAuth();
 	const router = useRouter();
@@ -465,6 +467,15 @@
 					</div>
 				</div>
 			</template>
+		</div>
+
+		
+
+		<!-- Personal Monthly Attendance Report (1/3 Horizontal Bar Breakdown + 2/3 Detail & KPI Panel) -->
+		<div v-if="isEmployeeRole(effectiveRole) || (dashboard && isMyDashboard(dashboard))">
+			<ClientOnly>
+				<DashboardMyAttendanceWidget />
+			</ClientOnly>
 		</div>
 
 		<!-- Quick access -->

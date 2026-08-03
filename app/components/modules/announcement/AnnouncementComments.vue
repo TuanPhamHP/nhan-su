@@ -224,11 +224,23 @@
 					<template #trailing>
 						<button
 							type="button"
-							class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg disabled:opacity-40 hover:bg-blue-600 transition-colors"
+							class="p-1.5 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none"
+							:class="
+								newComment.trim() && !isSubmitting
+									? 'text-[#0866FF] hover:text-[#0054D1] dark:text-blue-400 dark:hover:text-blue-300 hover:scale-110 active:scale-95 cursor-pointer'
+									: 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-60'
+							"
 							:disabled="!newComment.trim() || isSubmitting"
+							title="Gửi bình luận"
 							@click="submitComment"
 						>
-							{{ isSubmitting ? 'Đang gửi...' : 'Gửi' }}
+							<svg v-if="isSubmitting" class="animate-spin w-5 h-5 text-[#0866FF] dark:text-blue-400" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+							</svg>
+							<svg v-else class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.993.993 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z" />
+							</svg>
 						</button>
 					</template>
 				</MentionInput>
