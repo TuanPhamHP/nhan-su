@@ -1,10 +1,12 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
+	import { safeRedirectPath } from '~/utils/redirect';
 
 	definePageMeta({ layout: 'auth' });
 
 	const { login } = useAuth();
 	const toast = useToast();
+	const route = useRoute();
 	const { isDark, toggle: toggleDark } = useColorMode();
 
 	const { handleSubmit, defineField, errors, isSubmitting } = useForm({
@@ -40,7 +42,8 @@
 		try {
 			await login({ email: values.email, password: values.password });
 			toast.success('Đăng nhập thành công! Chào mừng trở lại.');
-			await navigateTo('/');
+			const redirect = safeRedirectPath(route.query.redirect);
+			await navigateTo(redirect ?? '/');
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Tài khoản hoặc mật khẩu không đúng');
 		}

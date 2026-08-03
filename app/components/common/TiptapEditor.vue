@@ -8,22 +8,97 @@
 	import Color from '@tiptap/extension-color';
 	import Highlight from '@tiptap/extension-highlight';
 	import Placeholder from '@tiptap/extension-placeholder';
+	import Image from '@tiptap/extension-image';
+	import { BubbleMenuPlugin } from '@tiptap/extension-bubble-menu';
 
 	const props = withDefaults(
 		defineProps<{
 			modelValue: string;
 			placeholder?: string;
 			readonly?: boolean;
+			// Callback upload ảnh — parent tự xử lý API call, trả về URL của ảnh sau upload.
+			// Khi prop này có mặt, toolbar sẽ hiện nút chèn ảnh + hỗ trợ paste ảnh.
+			onImageUpload?: (file: File) => Promise<string>;
 		}>(),
-		{ placeholder: 'Nhập nội dung...', readonly: false },
+		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined },
 	);
 
 	const emit = defineEmits<{
 		'update:modelValue': [value: string];
 	}>();
 
+	const toast = useToast();
+
 	const showLinkPopover = ref(false);
 	const linkUrl = ref('');
+	const imageInputRef = ref<HTMLInputElement | null>(null);
+	const isUploadingImage = ref(false);
+	const imageBubbleMenuRef = ref<HTMLDivElement | null>(null);
+
+	type ImageAlign = 'left' | 'center' | 'right';
+	type ImageWidth = '25%' | '50%' | '75%' | '100%';
+	const IMAGE_WIDTHS: ImageWidth[] = ['25%', '50%', '75%', '100%'];
+	const IMAGE_ALIGNS: ImageAlign[] = ['left', 'center', 'right'];
+
+	// Image extension mở rộng thêm 2 attr: `width` (HTML attr) và `align` (class `img-align-*`).
+	// DOMPurify mặc định giữ nguyên cả 2 → render đúng ở view mode qua v-html.
+	const CustomImage = Image.extend({
+		addAttributes() {
+			return {
+				...this.parent?.(),
+				width: {
+					default: null,
+					parseHTML: el => el.getAttribute('width'),
+					renderHTML: attrs => (attrs.width ? { width: attrs.width } : {}),
+				},
+				align: {
+					default: 'center',
+					parseHTML: el => {
+						const cls = el.getAttribute('class') ?? '';
+						if (cls.includes('img-align-left')) return 'left';
+						if (cls.includes('img-align-right')) return 'right';
+						return 'center';
+					},
+					renderHTML: attrs => (attrs.align ? { class: `img-align-${attrs.align}` } : {}),
+				},
+			};
+		},
+	});
+
+	// Limit khớp với backend: ảnh JPG/PNG/GIF/WebP, 5MB.
+	const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+	const IMAGE_MAX_SIZE = 5 * 1024 * 1024;
+
+	function validateImage(file: File): string | null {
+		if (!IMAGE_MIMES.includes(file.type)) return 'Chỉ hỗ trợ ảnh JPG, PNG, GIF, WebP';
+		if (file.size > IMAGE_MAX_SIZE) return 'Ảnh không được vượt quá 5MB';
+		return null;
+	}
+
+	async function uploadAndInsertImage(file: File) {
+		if (!props.onImageUpload || !editor.value) return;
+		const err = validateImage(file);
+		if (err) {
+			toast.error(err);
+			return;
+		}
+		isUploadingImage.value = true;
+		try {
+			const url = await props.onImageUpload(file);
+			editor.value.chain().focus().setImage({ src: url, alt: file.name }).run();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Tải ảnh lên thất bại');
+		} finally {
+			isUploadingImage.value = false;
+		}
+	}
+
+	function onImageChosen(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (file) uploadAndInsertImage(file);
+		input.value = '';
+	}
 
 	const editor = useEditor({
 		content: props.modelValue,
@@ -40,6 +115,7 @@
 			Color,
 			Highlight,
 			Placeholder.configure({ placeholder: () => props.placeholder }),
+			CustomImage.configure({ inline: false, HTMLAttributes: { class: 'tt-image' } }),
 		],
 		onUpdate: ({ editor }) => {
 			emit('update:modelValue', editor.getHTML());
@@ -47,6 +123,22 @@
 		editorProps: {
 			attributes: {
 				class: 'tt-prose',
+			},
+			handlePaste: (_view, event) => {
+				if (!props.onImageUpload) return false;
+				const items = event.clipboardData?.items;
+				if (!items) return false;
+				for (const item of items) {
+					if (item.kind === 'file' && item.type.startsWith('image/')) {
+						const file = item.getAsFile();
+						if (file) {
+							event.preventDefault();
+							uploadAndInsertImage(file);
+							return true;
+						}
+					}
+				}
+				return false;
 			},
 		},
 	});
@@ -67,9 +159,37 @@
 		},
 	);
 
+	onMounted(() => {
+		if (!editor.value || !imageBubbleMenuRef.value) return;
+		editor.value.registerPlugin(
+			BubbleMenuPlugin({
+				pluginKey: 'imageBubbleMenu',
+				editor: editor.value,
+				element: imageBubbleMenuRef.value,
+				shouldShow: ({ editor }) => editor.isActive('image'),
+				options: { placement: 'top', offset: 8 },
+			}),
+		);
+	});
+
 	onBeforeUnmount(() => {
+		// editor.destroy() tự cleanup plugin đã register.
 		editor.value?.destroy();
 	});
+
+	const currentImageAttrs = computed(() => editor.value?.getAttributes('image') ?? {});
+
+	function setImageWidth(w: ImageWidth) {
+		editor.value?.chain().focus().updateAttributes('image', { width: w }).run();
+	}
+
+	function setImageAlign(a: ImageAlign) {
+		editor.value?.chain().focus().updateAttributes('image', { align: a }).run();
+	}
+
+	function deleteImage() {
+		editor.value?.chain().focus().deleteSelection().run();
+	}
 
 	function openLinkPopover() {
 		if (!editor.value) return;
@@ -243,7 +363,7 @@
 
 			<div class="tt-divider" />
 
-			<!-- Link + clear -->
+			<!-- Link + Image + clear -->
 			<button
 				type="button"
 				class="tt-btn"
@@ -253,6 +373,46 @@
 			>
 				<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" /></svg>
 			</button>
+			<template v-if="onImageUpload">
+				<input
+					ref="imageInputRef"
+					type="file"
+					accept="image/jpeg,image/png,image/gif,image/webp"
+					class="hidden"
+					@change="onImageChosen"
+				/>
+				<button
+					type="button"
+					class="tt-btn"
+					:disabled="isUploadingImage"
+					:title="isUploadingImage ? 'Đang tải ảnh...' : 'Chèn ảnh (tối đa 5MB)'"
+					@click="imageInputRef?.click()"
+				>
+					<svg
+						v-if="isUploadingImage"
+						class="w-4 h-4 animate-spin"
+						viewBox="0 0 24 24"
+						fill="none"
+					>
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+					</svg>
+					<svg
+						v-else
+						class="w-4 h-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<rect x="3" y="3" width="18" height="18" rx="2" />
+						<circle cx="8.5" cy="8.5" r="1.5" />
+						<path d="M21 15l-5-5L5 21" />
+					</svg>
+				</button>
+			</template>
 			<button
 				type="button"
 				class="tt-btn"
@@ -296,6 +456,99 @@
 			class="tiptap-content"
 			:class="readonly ? 'tiptap-content-readonly' : ''"
 		/>
+
+		<!-- Bubble menu — chỉ hiện khi image node được chọn (BubbleMenuPlugin toggle visibility) -->
+		<div ref="imageBubbleMenuRef" class="tt-image-bubble">
+			<div class="tt-bubble-group">
+				<button
+					v-for="w in IMAGE_WIDTHS"
+					:key="w"
+					type="button"
+					class="tt-btn tt-btn-text"
+					:class="{ 'tt-btn-active': currentImageAttrs.width === w }"
+					:title="`Kích thước ${w}`"
+					@click="setImageWidth(w)"
+				>
+					{{ w }}
+				</button>
+			</div>
+			<div class="tt-divider" />
+			<div class="tt-bubble-group">
+				<button
+					v-for="a in IMAGE_ALIGNS"
+					:key="a"
+					type="button"
+					class="tt-btn"
+					:class="{ 'tt-btn-active': (currentImageAttrs.align ?? 'center') === a }"
+					:title="a === 'left' ? 'Căn trái' : a === 'center' ? 'Căn giữa' : 'Căn phải'"
+					@click="setImageAlign(a)"
+				>
+					<svg
+						v-if="a === 'left'"
+						class="w-4 h-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<line x1="4" y1="6" x2="20" y2="6" />
+						<line x1="4" y1="12" x2="14" y2="12" />
+						<line x1="4" y1="18" x2="18" y2="18" />
+					</svg>
+					<svg
+						v-else-if="a === 'center'"
+						class="w-4 h-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<line x1="4" y1="6" x2="20" y2="6" />
+						<line x1="7" y1="12" x2="17" y2="12" />
+						<line x1="5" y1="18" x2="19" y2="18" />
+					</svg>
+					<svg
+						v-else
+						class="w-4 h-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<line x1="4" y1="6" x2="20" y2="6" />
+						<line x1="10" y1="12" x2="20" y2="12" />
+						<line x1="6" y1="18" x2="20" y2="18" />
+					</svg>
+				</button>
+			</div>
+			<div class="tt-divider" />
+			<button
+				type="button"
+				class="tt-btn tt-btn-danger"
+				title="Xoá ảnh"
+				@click="deleteImage"
+			>
+				<svg
+					class="w-4 h-4"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d="M3 6h18" />
+					<path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+					<path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+				</svg>
+			</button>
+		</div>
 	</div>
 </template>
 
@@ -406,6 +659,67 @@
 	.tiptap-content :deep(a) {
 		color: #1e40af;
 		text-decoration: underline;
+	}
+	.tiptap-content :deep(img.tt-image),
+	.tiptap-content :deep(img) {
+		max-width: 100%;
+		height: auto;
+		border-radius: 0.5rem;
+		margin: 0.5rem 0;
+		display: block;
+	}
+	.tiptap-content :deep(img.img-align-left) {
+		margin-left: 0;
+		margin-right: auto;
+	}
+	.tiptap-content :deep(img.img-align-center) {
+		margin-left: auto;
+		margin-right: auto;
+	}
+	.tiptap-content :deep(img.img-align-right) {
+		margin-left: auto;
+		margin-right: 0;
+	}
+	/* Highlight image node được chọn — báo hiệu bubble menu đang apply cho ảnh này */
+	.tiptap-content :deep(img.ProseMirror-selectednode) {
+		outline: 2px solid #1e40af;
+		outline-offset: 2px;
+	}
+	.tt-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.tt-btn-danger {
+		color: #dc2626;
+	}
+	.tt-btn-danger:hover {
+		background-color: #fee2e2;
+		color: #b91c1c;
+	}
+	:global(.dark) .tt-btn-danger:hover {
+		background-color: rgba(153, 27, 27, 0.3);
+	}
+
+	/* Bubble menu — plugin tự toggle visibility, ta chỉ style container */
+	.tt-image-bubble {
+		display: flex;
+		align-items: center;
+		gap: 0;
+		padding: 4px;
+		background-color: #ffffff;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.5rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+		z-index: 50;
+	}
+	.tt-bubble-group {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	:global(.dark) .tt-image-bubble {
+		background-color: #1f2937;
+		border-color: #374151;
 	}
 	.tiptap-content :deep(.ProseMirror p.is-editor-empty:first-child::before) {
 		content: attr(data-placeholder);

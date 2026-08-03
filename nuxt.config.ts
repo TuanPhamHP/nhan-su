@@ -28,9 +28,9 @@ export default defineNuxtConfig({
 			],
 			meta: [
 				{ name: 'theme-color', content: '#0e7e42' },
-				{ name: 'apple-mobile-web-app-capable', content: 'yes' },
-				{ name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
-				{ name: 'apple-mobile-web-app-title', content: 'HR System' },
+				{ name: 'mobile-web-app-capable', content: 'yes' },
+				{ name: 'mobile-web-app-status-bar-style', content: 'default' },
+				{ name: 'mobile-web-app-title', content: 'HR System' },
 			],
 		},
 	},

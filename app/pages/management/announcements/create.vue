@@ -19,7 +19,7 @@
 
 	const toast = useToast();
 	const router = useRouter();
-	const { create } = useCompanyAnnouncements();
+	const { create, uploadInlineMedia } = useCompanyAnnouncements();
 	const directoryStore = useDirectoryStore();
 	const { departments, employees: directoryEmployees, loading: directoryLoading } = storeToRefs(directoryStore);
 
@@ -327,7 +327,11 @@
 					<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
 						Nội dung thông báo <span class="text-red-500">*</span>
 					</label>
-					<TiptapEditor v-model="form.body" placeholder="Nhập nội dung thông báo..." />
+					<TiptapEditor
+					v-model="form.body"
+					placeholder="Nhập nội dung thông báo..."
+					:on-image-upload="uploadInlineMedia"
+				/>
 					<p class="text-xs text-gray-400 dark:text-gray-500">{{ bodyCharCount }} ký tự</p>
 				</div>
 

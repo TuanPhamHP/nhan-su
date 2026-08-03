@@ -51,6 +51,16 @@ export const useCompanyAnnouncementService = () => {
 			return res.data;
 		},
 
+		async uploadInlineMedia(file: File): Promise<{ url: string }> {
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await authFetch<ApiResponse<{ url: string }>>(
+				'/v1/company-announcements/upload-inline-media',
+				{ method: 'POST', body: formData },
+			);
+			return res.data;
+		},
+
 		async deleteAnnouncement(id: number): Promise<void> {
 			await authFetch<void>(`/v1/company-announcements/${id}`, { method: 'DELETE' });
 		},
