@@ -1,3 +1,5 @@
+import { safeRedirectPath } from '~/utils/redirect';
+
 const PUBLIC_ROUTES = ['/login', '/forgot-password', '/reset-password'];
 
 export default defineNuxtRouteMiddleware(to => {
@@ -6,10 +8,17 @@ export default defineNuxtRouteMiddleware(to => {
 	const isPublicRoute = PUBLIC_ROUTES.includes(to.path);
 
 	if (isPublicRoute && store.isAuthenticated) {
-		return navigateTo('/', { replace: true });
+		const redirect = safeRedirectPath(to.query.redirect);
+		return navigateTo(redirect ?? '/', { replace: true });
 	}
 
 	if (!isPublicRoute && !store.isAuthenticated) {
-		return navigateTo('/login', { replace: true });
+		// Preserve intended URL (path + query) so login can redirect back after success.
+		// Skip when target is '/' — that's already the default landing.
+		const target = to.fullPath && to.fullPath !== '/' ? to.fullPath : null;
+		return navigateTo(
+			target ? { path: '/login', query: { redirect: target } } : '/login',
+			{ replace: true },
+		);
 	}
 });

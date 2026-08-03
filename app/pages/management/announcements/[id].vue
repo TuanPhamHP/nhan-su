@@ -30,6 +30,57 @@
 		announcement.value ? DOMPurify.sanitize(announcement.value.body) : '',
 	);
 
+	const MAX_CHARS_BEFORE_COLLAPSE = 200;
+	const MAX_LINES_BEFORE_COLLAPSE = 4;
+	const bodyRef = ref<HTMLElement | null>(null);
+	const isBodyExpanded = ref(false);
+	const isBodyLong = ref(false);
+	const collapsedMaxHeight = ref('none');
+
+	const bodyPlainTextLength = computed(() => {
+		if (!import.meta.client || !sanitizedBody.value) return 0;
+		const tmp = document.createElement('div');
+		tmp.innerHTML = sanitizedBody.value;
+		return (tmp.textContent || '').trim().length;
+	});
+
+	async function measureBody() {
+		if (!import.meta.client) return;
+		await nextTick();
+		const el = bodyRef.value;
+		if (!el) {
+			isBodyLong.value = false;
+			return;
+		}
+		const prevMaxHeight = el.style.maxHeight;
+		const prevOverflow = el.style.overflow;
+		el.style.maxHeight = 'none';
+		el.style.overflow = 'visible';
+
+		const cs = getComputedStyle(el);
+		const lineHeight = parseFloat(cs.lineHeight) || 20;
+		const totalHeight = el.scrollHeight;
+		const approxLines = totalHeight / lineHeight;
+		const maxLinesHeight = Math.round(lineHeight * MAX_LINES_BEFORE_COLLAPSE);
+
+		el.style.maxHeight = prevMaxHeight;
+		el.style.overflow = prevOverflow;
+
+		collapsedMaxHeight.value = `${maxLinesHeight}px`;
+		isBodyLong.value =
+			bodyPlainTextLength.value > MAX_CHARS_BEFORE_COLLAPSE ||
+			approxLines > MAX_LINES_BEFORE_COLLAPSE;
+	}
+
+	watch(
+		sanitizedBody,
+		() => {
+			isBodyExpanded.value = false;
+			measureBody();
+		},
+		{ immediate: true },
+	);
+
 	const config = computed(() =>
 		announcement.value
 			? ANNOUNCEMENT_TYPE_CONFIG[announcement.value.announcementType]
@@ -244,11 +295,41 @@
 					{{ announcement?.title }}
 				</h1>
 
-				<!-- Body -->
-				<div
-					class="announcement-body text-gray-800 dark:text-gray-200 mt-2 text-sm leading-relaxed"
-					v-html="sanitizedBody"
-				/>
+				<!-- Body (auto collapse khi > 4 dòng hoặc > 200 ký tự) -->
+				<div class="mt-2">
+					<div class="relative">
+						<div
+							ref="bodyRef"
+							class="announcement-body text-gray-800 dark:text-gray-200 text-sm leading-relaxed overflow-hidden transition-[max-height] duration-300"
+							:style="{
+								maxHeight: isBodyLong && !isBodyExpanded ? collapsedMaxHeight : 'none',
+							}"
+							v-html="sanitizedBody"
+						/>
+						<div
+							v-if="isBodyLong && !isBodyExpanded"
+							class="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white dark:from-gray-900 to-transparent"
+						/>
+					</div>
+					<button
+						v-if="isBodyLong"
+						type="button"
+						class="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors cursor-pointer"
+						@click="isBodyExpanded = !isBodyExpanded"
+					>
+						{{ isBodyExpanded ? 'Thu gọn' : 'Xem thêm' }}
+						<svg
+							class="w-3.5 h-3.5 transition-transform"
+							:class="{ 'rotate-180': isBodyExpanded }"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2.5"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+						</svg>
+					</button>
+				</div>
 
 				<!-- Attachments (ảnh dạng gallery Facebook) & Links -->
 				<AnnouncementAttachments
