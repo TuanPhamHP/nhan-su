@@ -28,6 +28,11 @@ export function useCompanyAnnouncements() {
 		return service.create(formData);
 	}
 
+	async function uploadInlineMedia(file: File): Promise<string> {
+		const { url } = await service.uploadInlineMedia(file);
+		return url;
+	}
+
 	async function fetchById(id: number): Promise<CompanyAnnouncementResponse> {
 		return service.fetchById(id);
 	}
@@ -90,6 +95,7 @@ export function useCompanyAnnouncements() {
 	return {
 		fetchAll,
 		create,
+		uploadInlineMedia,
 		fetchById,
 		getReadStatus,
 		deleteAnnouncement,

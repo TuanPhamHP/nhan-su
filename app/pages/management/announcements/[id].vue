@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import DOMPurify from 'dompurify';
+	import AnnouncementAttachments from '~/components/modules/announcement/AnnouncementAttachments.vue';
 	import AnnouncementComments from '~/components/modules/announcement/AnnouncementComments.vue';
 	import AnnouncementReactions from '~/components/modules/announcement/AnnouncementReactions.vue';
 	import AnnouncementReadersModal from '~/components/modules/announcement/AnnouncementReadersModal.vue';
@@ -27,6 +28,57 @@
 
 	const sanitizedBody = computed(() =>
 		announcement.value ? DOMPurify.sanitize(announcement.value.body) : '',
+	);
+
+	const MAX_CHARS_BEFORE_COLLAPSE = 200;
+	const MAX_LINES_BEFORE_COLLAPSE = 4;
+	const bodyRef = ref<HTMLElement | null>(null);
+	const isBodyExpanded = ref(false);
+	const isBodyLong = ref(false);
+	const collapsedMaxHeight = ref('none');
+
+	const bodyPlainTextLength = computed(() => {
+		if (!import.meta.client || !sanitizedBody.value) return 0;
+		const tmp = document.createElement('div');
+		tmp.innerHTML = sanitizedBody.value;
+		return (tmp.textContent || '').trim().length;
+	});
+
+	async function measureBody() {
+		if (!import.meta.client) return;
+		await nextTick();
+		const el = bodyRef.value;
+		if (!el) {
+			isBodyLong.value = false;
+			return;
+		}
+		const prevMaxHeight = el.style.maxHeight;
+		const prevOverflow = el.style.overflow;
+		el.style.maxHeight = 'none';
+		el.style.overflow = 'visible';
+
+		const cs = getComputedStyle(el);
+		const lineHeight = parseFloat(cs.lineHeight) || 20;
+		const totalHeight = el.scrollHeight;
+		const approxLines = totalHeight / lineHeight;
+		const maxLinesHeight = Math.round(lineHeight * MAX_LINES_BEFORE_COLLAPSE);
+
+		el.style.maxHeight = prevMaxHeight;
+		el.style.overflow = prevOverflow;
+
+		collapsedMaxHeight.value = `${maxLinesHeight}px`;
+		isBodyLong.value =
+			bodyPlainTextLength.value > MAX_CHARS_BEFORE_COLLAPSE ||
+			approxLines > MAX_LINES_BEFORE_COLLAPSE;
+	}
+
+	watch(
+		sanitizedBody,
+		() => {
+			isBodyExpanded.value = false;
+			measureBody();
+		},
+		{ immediate: true },
 	);
 
 	const config = computed(() =>
@@ -88,15 +140,6 @@
 		}
 	}
 
-	function attachmentIcon(name: string): string {
-		const lower = name.toLowerCase();
-		if (lower.endsWith('.pdf')) return '📕';
-		if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return '📊';
-		if (lower.endsWith('.docx') || lower.endsWith('.doc')) return '📝';
-		if (/\.(jpg|jpeg|png|gif|webp)$/.test(lower)) return '🖼️';
-		return '📎';
-	}
-
 	function initials(name: string): string {
 		return name
 			.split(/\s+/)
@@ -104,14 +147,6 @@
 			.slice(-2)
 			.map(w => w.charAt(0).toUpperCase())
 			.join('');
-	}
-
-	function formatDomain(url: string): string {
-		try {
-			return new URL(url).hostname.replace(/^www\./, '');
-		} catch {
-			return url;
-		}
 	}
 
 	onMounted(load);
@@ -260,55 +295,47 @@
 					{{ announcement?.title }}
 				</h1>
 
-				<!-- Body -->
-				<div
-					class="announcement-body text-gray-800 dark:text-gray-200 mt-2 text-sm leading-relaxed"
-					v-html="sanitizedBody"
-				/>
-
-				<!-- Attachments & Links Grid (Sleek 2-column grid giống bên nhân viên) -->
-				<div
-					v-if="(announcement.links?.length ?? 0) > 0 || (announcement.attachments?.length ?? 0) > 0"
-					class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"
-				>
-					<!-- Links -->
-					<a
-						v-for="(l, i) in announcement.links"
-						:key="`link-${i}`"
-						:href="l.url"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
+				<!-- Body (auto collapse khi > 4 dòng hoặc > 200 ký tự) -->
+				<div class="mt-2">
+					<div class="relative">
+						<div
+							ref="bodyRef"
+							class="announcement-body text-gray-800 dark:text-gray-200 text-sm leading-relaxed overflow-hidden transition-[max-height] duration-300"
+							:style="{
+								maxHeight: isBodyLong && !isBodyExpanded ? collapsedMaxHeight : 'none',
+							}"
+							v-html="sanitizedBody"
+						/>
+						<div
+							v-if="isBodyLong && !isBodyExpanded"
+							class="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white dark:from-gray-900 to-transparent"
+						/>
+					</div>
+					<button
+						v-if="isBodyLong"
+						type="button"
+						class="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors cursor-pointer"
+						@click="isBodyExpanded = !isBodyExpanded"
 					>
-						<div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 text-lg flex-shrink-0 group-hover:bg-brand-50 dark:group-hover:bg-brand-900/30 group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
-							<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-							</svg>
-						</div>
-						<div class="flex-1 min-w-0">
-							<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ l.label || l.url }}</p>
-							<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ formatDomain(l.url) }}</p>
-						</div>
-					</a>
-
-					<!-- Attachments -->
-					<a
-						v-for="(a, idx) in announcement.attachments"
-						:key="`attachment-${idx}`"
-						:href="a.url"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
-					>
-						<div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-lg flex-shrink-0 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/60 transition-colors">
-							<span>{{ attachmentIcon(a.name) }}</span>
-						</div>
-						<div class="flex-1 min-w-0">
-							<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ a.name }}</p>
-							<p class="text-xs text-gray-400 dark:text-gray-500 truncate">48 KB</p>
-						</div>
-					</a>
+						{{ isBodyExpanded ? 'Thu gọn' : 'Xem thêm' }}
+						<svg
+							class="w-3.5 h-3.5 transition-transform"
+							:class="{ 'rotate-180': isBodyExpanded }"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2.5"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+						</svg>
+					</button>
 				</div>
+
+				<!-- Attachments (ảnh dạng gallery Facebook) & Links -->
+				<AnnouncementAttachments
+					:attachments="announcement.attachments"
+					:links="announcement.links"
+				/>
 
 				<!-- Reactions bar -->
 				<div class="border-t border-b border-gray-100 dark:border-gray-800 py-3 mt-5">
