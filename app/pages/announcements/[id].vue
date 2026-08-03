@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import DOMPurify from 'dompurify';
+	import AnnouncementAttachments from '~/components/modules/announcement/AnnouncementAttachments.vue';
 	import AnnouncementComments from '~/components/modules/announcement/AnnouncementComments.vue';
 	import AnnouncementReactions from '~/components/modules/announcement/AnnouncementReactions.vue';
 	import { useCompanyAnnouncements } from '~/composables/useCompanyAnnouncements';
@@ -55,23 +56,6 @@
 			.slice(-2) 
 			.map(w => w.charAt(0).toUpperCase())
 			.join('');
-	}
-
-	function formatDomain(url: string): string {
-		try {
-			return new URL(url).hostname.replace(/^www\./, '');
-		} catch {
-			return url;
-		}
-	}
-
-	function attachmentIcon(name: string): string {
-		const lower = name.toLowerCase();
-		if (lower.endsWith('.pdf')) return '📕';
-		if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return '📊';
-		if (lower.endsWith('.docx') || lower.endsWith('.doc')) return '📝';
-		if (/\.(jpg|jpeg|png|gif|webp)$/.test(lower)) return '🖼️';
-		return '📎';
 	}
 
 	onMounted(load);
@@ -203,49 +187,11 @@
 				v-html="sanitizedBody"
 			/>
 
-			<!-- Attachments & Links Grid -->
-			<div
-				v-if="(announcement.links?.length ?? 0) > 0 || (announcement.attachments?.length ?? 0) > 0"
-				class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"
-			>
-				<!-- Links -->
-				<a
-					v-for="(l, i) in announcement.links"
-					:key="`link-${i}`"
-					:href="l.url"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
-				>
-					<div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 text-lg flex-shrink-0 group-hover:bg-brand-50 dark:group-hover:bg-brand-900/30 group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
-						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-						</svg>
-					</div>
-					<div class="flex-1 min-w-0">
-						<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ l.label || l.url }}</p>
-						<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ formatDomain(l.url) }}</p>
-					</div>
-				</a>
-
-				<!-- Attachments -->
-				<a
-					v-for="(a, idx) in announcement.attachments"
-					:key="`attachment-${idx}`"
-					:href="a.url"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-sm group"
-				>
-					<div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-lg flex-shrink-0 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/60 transition-colors">
-						<span>{{ attachmentIcon(a.name) }}</span>
-					</div>
-					<div class="flex-1 min-w-0">
-						<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ a.name }}</p>
-						<p class="text-xs text-gray-400 dark:text-gray-500 truncate">48 KB</p>
-					</div>
-				</a>
-			</div>
+			<!-- Attachments (ảnh dạng gallery Facebook) & Links -->
+			<AnnouncementAttachments
+				:attachments="announcement.attachments"
+				:links="announcement.links"
+			/>
 
 			<!-- CTA -->
 			<div v-if="config.actionUrl" class="mt-4">
