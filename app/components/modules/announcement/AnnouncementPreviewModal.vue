@@ -2,6 +2,7 @@
 	import DOMPurify from 'dompurify';
 	import { format } from 'date-fns';
 	import { vi } from 'date-fns/locale';
+	import AttachmentImageGallery from '~/components/modules/announcement/AttachmentImageGallery.vue';
 	import { ANNOUNCEMENT_TYPE_CONFIG, type AnnouncementLink, type AnnouncementType } from '~/types/announcement.types';
 
 	const props = defineProps<{
@@ -18,6 +19,10 @@
 	}>();
 
 	const { user } = useAuth();
+	const imageViewer = useImageViewerStore();
+
+	const attachmentsRef = computed(() => props.attachments);
+	const { getUrl, isImage } = useFileImagePreviews(attachmentsRef);
 
 	const sanitizedBody = computed(() =>
 		DOMPurify.sanitize(props.body || '<p class="text-gray-400 italic">(Nội dung chưa có)</p>'),
@@ -27,8 +32,21 @@
 
 	const nowDisplay = computed(() => format(new Date(), "HH:mm 'ngày' dd/MM/yyyy", { locale: vi }));
 
+	const imageAttachments = computed(() => props.attachments.filter(isImage));
+	const fileAttachments = computed(() => props.attachments.filter(f => !isImage(f)));
+
+	const galleryImages = computed(() =>
+		imageAttachments.value.map(f => ({ url: getUrl(f), name: f.name })),
+	);
+
+	function openImage(idx: number) {
+		imageViewer.open(
+			galleryImages.value.map(g => g.url),
+			idx,
+		);
+	}
+
 	function fileIcon(f: File): string {
-		if (f.type.startsWith('image/')) return '🖼️';
 		if (f.type === 'application/pdf') return '📕';
 		if (f.type.includes('spreadsheet') || f.name.endsWith('.xlsx')) return '📊';
 		if (f.type.includes('word') || f.name.endsWith('.docx')) return '📝';
@@ -95,6 +113,13 @@
 						<!-- Body -->
 						<div class="announcement-body text-gray-800 dark:text-gray-200" v-html="sanitizedBody" />
 
+						<!-- Image gallery (Facebook-style) -->
+						<AttachmentImageGallery
+							v-if="imageAttachments.length > 0"
+							:images="galleryImages"
+							@image-click="openImage"
+						/>
+
 						<!-- Links -->
 						<div v-if="links.length > 0" class="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-800">
 							<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -114,14 +139,17 @@
 							</div>
 						</div>
 
-						<!-- Attachments -->
-						<div v-if="attachments.length > 0" class="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+						<!-- Non-image attachments -->
+						<div
+							v-if="fileAttachments.length > 0"
+							class="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-800"
+						>
 							<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-								File đính kèm ({{ attachments.length }})
+								File đính kèm ({{ fileAttachments.length }})
 							</p>
 							<div class="space-y-1.5">
 								<div
-									v-for="(f, idx) in attachments"
+									v-for="(f, idx) in fileAttachments"
 									:key="`${f.name}-${idx}`"
 									class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300"
 								>

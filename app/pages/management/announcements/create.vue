@@ -50,6 +50,7 @@
 	});
 
 	const attachmentFiles = ref<File[]>([]);
+	const { getUrl: getImagePreviewUrl, isImage: isImageFile } = useFileImagePreviews(attachmentFiles);
 	const sendToAll = ref(true);
 	const selectedIds = ref<Set<number>>(new Set());
 	const searchTerm = ref('');
@@ -191,7 +192,6 @@
 	}
 
 	function fileIcon(f: File): string {
-		if (f.type.startsWith('image/')) return '🖼️';
 		if (f.type === 'application/pdf') return '📕';
 		if (f.type.includes('spreadsheet') || f.name.endsWith('.xlsx')) return '📊';
 		if (f.type.includes('word') || f.name.endsWith('.docx')) return '📝';
@@ -412,7 +412,13 @@
 							:key="`${f.name}-${idx}`"
 							class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
 						>
-							<span class="text-lg flex-shrink-0">{{ fileIcon(f) }}</span>
+							<img
+								v-if="isImageFile(f)"
+								:src="getImagePreviewUrl(f)"
+								:alt="f.name"
+								class="w-10 h-10 rounded object-cover flex-shrink-0"
+							/>
+							<span v-else class="text-lg flex-shrink-0">{{ fileIcon(f) }}</span>
 							<div class="flex-1 min-w-0">
 								<p class="text-sm text-gray-700 dark:text-gray-300 truncate">{{ f.name }}</p>
 								<p class="text-xs text-gray-500 dark:text-gray-400">{{ formatSize(f.size) }}</p>
