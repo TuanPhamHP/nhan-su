@@ -169,27 +169,7 @@
 					</div>
 				</div>
 
-				<!-- Action Icons -->
-				<div class="flex items-center gap-1 text-gray-400 flex-shrink-0">
-					<button
-						type="button"
-						class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-						title="Ghim thông báo"
-					>
-						<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M3 21l3-3m0 0l3-3m-3 3l9-9a2 2 0 00-2.828-2.828l-9 9m12-12L18 3l3 3-3 3" />
-						</svg>
-					</button>
-					<button
-						type="button"
-						class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-						title="Thêm tùy chọn"
-					>
-						<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-							<path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-						</svg>
-					</button>
-				</div>
+				
 			</div>
 
 			<!-- Title -->

@@ -231,14 +231,14 @@
 			:data-placeholder="placeholder"
 			:class="[
 				'mention-input min-h-[40px] max-h-[120px] overflow-y-auto px-3 py-2 text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300',
-				$slots.trailing ? 'pr-28' : '',
+				$slots.trailing ? 'pr-14' : '',
 			]"
 			@input="onInput"
 			@keydown="onKeydown"
 			@paste="onPaste"
 		/>
 
-		<div v-if="$slots.trailing" class="absolute bottom-1.5 right-1.5 z-10">
+		<div v-if="$slots.trailing" class="absolute top-1/2 -translate-y-1/2 right-2.5 z-10 flex items-center justify-center">
 			<slot name="trailing" />
 		</div>
 
