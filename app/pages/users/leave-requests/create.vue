@@ -4,18 +4,12 @@
 	import * as z from 'zod';
 	import { eachDayOfInterval, isWeekend, parseISO, isValid } from 'date-fns';
 	import { isOverLateEarlyLimit, MAX_LATE_EARLY_MINUTES } from '~/utils/leave.utils';
-	import { useLeaveTypeService } from '~/services/leave-type.service';
+	import { useLeaveTypes } from '~/composables/useLeaveTypes';
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import { useLeaveBalanceService } from '~/services/leave-balance.service';
 	import { useEmployeeService } from '~/services/employee.service';
 	import { useShiftScheduleService } from '~/services/shift-schedule.service';
-	import type {
-		LeaveType,
-		LeaveBalance,
-		HalfDayPeriod,
-		CreateLeaveRequestDto,
-		LeavePreviewResponse,
-	} from '~/types/leave.types';
+	import type { LeaveBalance, HalfDayPeriod, CreateLeaveRequestDto, LeavePreviewResponse } from '~/types/leave.types';
 	import type { EmployeeSummary, EmploymentType } from '~/types/employee.types';
 	import type { WorkShiftSummary } from '~/types/shift.types';
 	import { canRequestLeaveType } from '~/utils/employment-type';
@@ -29,25 +23,20 @@
 	const isHrOrAdmin = computed(() => user.value?.role === 'HR' || user.value?.role === 'ADMIN');
 
 	// ─── Services ─────────────────────────────────────────────────────────────────
-	const leaveTypeService = useLeaveTypeService();
 	const leaveRequestService = useLeaveRequestService();
 	const leaveBalanceService = useLeaveBalanceService();
 	const employeeService = useEmployeeService();
 	const shiftScheduleService = useShiftScheduleService();
 
-	// ─── Leave types ───────────────────────────────────────────────────────────────
-	const leaveTypes = ref<LeaveType[]>([]);
-	const leaveTypesLoading = ref(false);
+	// ─── Leave types (dùng chung composable useLeaveTypes) ────────────────────────
+	const { leaveTypes: allLeaveTypes, fetchLeaveTypes } = useLeaveTypes();
+	const leaveTypes = computed(() => allLeaveTypes.value.filter(t => t.isActive));
 
 	async function loadLeaveTypes() {
-		leaveTypesLoading.value = true;
 		try {
-			const all = await leaveTypeService.findAll();
-			leaveTypes.value = all.filter(t => t.isActive);
+			await fetchLeaveTypes();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách loại phép');
-		} finally {
-			leaveTypesLoading.value = false;
 		}
 	}
 
@@ -69,9 +58,7 @@
 		() => selectedEmployee.value?.employmentType ?? myEmploymentType.value,
 	);
 
-	const filteredLeaveTypes = computed(() =>
-		leaveTypes.value.filter(t => canRequestLeaveType(activeEmploymentType.value, t.code)),
-	);
+	const filteredLeaveTypes = computed(() => leaveTypes.value);
 
 	// ─── Employee search (HR/ADMIN only) ──────────────────────────────────────────
 	const employeeQuery = ref('');
@@ -490,7 +477,9 @@
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────────
 	const metaDataStore = useMetaDataStore();
-	metaDataStore.load().catch(() => { /* metadata not critical */ });
+	metaDataStore.load().catch(() => {
+		/* metadata not critical */
+	});
 
 	onMounted(() => {
 		loadLeaveTypes();
@@ -503,9 +492,7 @@
 		const t = activeEmploymentType.value;
 		if (!t || t === 'FULL_TIME' || t === 'PART_TIME') return null;
 		const typeLabel = metaDataStore.labelForEmploymentType(t);
-		const who = selectedEmployee.value
-			? `${selectedEmployee.value.fullName} (${typeLabel})`
-			: typeLabel;
+		const who = selectedEmployee.value ? `${selectedEmployee.value.fullName} (${typeLabel})` : typeLabel;
 		return `${who} không được xin phép năm / nửa ngày / phép có lương. Chỉ hiển thị các loại đơn phù hợp.`;
 	});
 </script>
@@ -647,15 +634,14 @@
 								:value="lt.id"
 								:disabled="lt.code === 'HALF_DAY' && dayShiftFetched && !canHalfDay"
 							>
-								{{ lt.name }}<template v-if="lt.code === 'HALF_DAY' && dayShiftFetched && !canHalfDay">
-									(ca không hỗ trợ)</template>
+								{{ lt.name
+								}}<template v-if="lt.code === 'HALF_DAY' && dayShiftFetched && !canHalfDay">
+									(ca không hỗ trợ)</template
+								>
 							</option>
 						</select>
 						<p v-if="errors.leaveTypeId" class="mt-1 text-xs text-red-500">{{ errors.leaveTypeId }}</p>
-						<p
-							v-if="restrictedLeaveHint"
-							class="mt-1 text-xs text-amber-600 dark:text-amber-400 leading-snug"
-						>
+						<p v-if="restrictedLeaveHint" class="mt-1 text-xs text-amber-600 dark:text-amber-400 leading-snug">
 							{{ restrictedLeaveHint }}
 						</p>
 						<p

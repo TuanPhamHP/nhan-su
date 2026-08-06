@@ -32,7 +32,8 @@
       "Bash(npx --yes -p \"vue-tsc@^2.2.0\" -p \"typescript@~5.6.0\" vue-tsc --noEmit)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(npx --yes -p \"vue-tsc@^2.2.0\" -p \"typescript@~5.6.0\" vue-tsc -b --noEmit)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(npx vue-tsc *)"
     ]
   }
 }

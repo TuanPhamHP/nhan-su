@@ -1,118 +1,114 @@
 <script setup lang="ts">
-import type { ContractType, EmployeeMonthlyReportResponse } from '~/types/report.types';
-import { useReportService } from '~/services/report.service';
+	import type { ContractType, EmployeeMonthlyReportResponse } from '~/types/report.types';
+	import { useReportService } from '~/services/report.service';
 
-const props = defineProps<{
-	employeeId: number;
-	employeeName: string;
-	employeeCode: string;
-	initialYear: number;
-	initialMonth: number; // 1-12
-}>();
+	const props = defineProps<{
+		employeeId: number;
+		employeeName: string;
+		employeeCode: string;
+		initialYear: number;
+		initialMonth: number; // 1-12
+	}>();
 
-const emit = defineEmits<{ close: [] }>();
+	const emit = defineEmits<{ close: [] }>();
 
-const reportService = useReportService();
-const toast = useToast();
+	const reportService = useReportService();
+	const toast = useToast();
 
-const viewYear = ref(props.initialYear);
-const viewMonth = ref(props.initialMonth); // 1-12
+	const viewYear = ref(props.initialYear);
+	const viewMonth = ref(props.initialMonth); // 1-12
 
-const data = ref<EmployeeMonthlyReportResponse | null>(null);
-const loading = ref(false);
-const errorMessage = ref<string | null>(null);
+	const data = ref<EmployeeMonthlyReportResponse | null>(null);
+	const loading = ref(false);
+	const errorMessage = ref<string | null>(null);
 
-const MONTH_LABEL = computed(() => `Tháng ${viewMonth.value}, ${viewYear.value}`);
+	const MONTH_LABEL = computed(() => `Tháng ${viewMonth.value}, ${viewYear.value}`);
 
-const CONTRACT_TYPE_LABEL: Record<ContractType, string> = {
-	PROBATION: 'Thử việc',
-	FIXED_TERM: 'Có thời hạn',
-	INDEFINITE: 'Không thời hạn',
-	SEASONAL: 'Thời vụ',
-};
+	const CONTRACT_TYPE_LABEL: Record<ContractType, string> = {
+		PROBATION: 'Thử việc',
+		FIXED_TERM: 'Có thời hạn',
+		INDEFINITE: 'Không thời hạn',
+		SEASONAL: 'Thời vụ',
+	};
 
-const CONTRACT_TYPE_CLS: Record<ContractType, string> = {
-	PROBATION: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-	FIXED_TERM: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-	INDEFINITE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-	SEASONAL: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-};
+	const CONTRACT_TYPE_CLS: Record<ContractType, string> = {
+		PROBATION: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+		FIXED_TERM: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+		INDEFINITE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+		SEASONAL: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+	};
 
-// Số có `.5` → 1 chữ số thập phân; số nguyên → ẩn `.0`.
-function fmtDays(n: number): string {
-	return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
-
-function fmtHours(n: number): string {
-	if (Number.isInteger(n)) return `${n}h`;
-	return `${n.toFixed(2).replace(/\.?0+$/, '')}h`;
-}
-
-async function fetchReport() {
-	loading.value = true;
-	errorMessage.value = null;
-	try {
-		data.value = await reportService.fetchEmployeeMonthlyReport(
-			props.employeeId,
-			viewMonth.value,
-			viewYear.value,
-		);
-	} catch (e) {
-		data.value = null;
-		const msg = e instanceof Error ? e.message : 'Không tải được báo cáo công';
-		errorMessage.value = msg;
-		toast.error(msg);
-	} finally {
-		loading.value = false;
+	// Số có `.5` → 1 chữ số thập phân; số nguyên → ẩn `.0`.
+	function fmtDays(n: number): string {
+		return Number.isInteger(n) ? String(n) : n.toFixed(1);
 	}
-}
 
-function prevMonth() {
-	if (viewMonth.value === 1) {
-		viewMonth.value = 12;
-		viewYear.value--;
-	} else {
-		viewMonth.value--;
+	function fmtHours(n: number): string {
+		if (Number.isInteger(n)) return `${n}h`;
+		return `${n.toFixed(2).replace(/\.?0+$/, '')}h`;
 	}
-	fetchReport();
-}
 
-function nextMonth() {
-	if (viewMonth.value === 12) {
-		viewMonth.value = 1;
-		viewYear.value++;
-	} else {
-		viewMonth.value++;
+	async function fetchReport() {
+		loading.value = true;
+		errorMessage.value = null;
+		try {
+			data.value = await reportService.fetchEmployeeMonthlyReport(props.employeeId, viewMonth.value, viewYear.value);
+		} catch (e) {
+			data.value = null;
+			const msg = e instanceof Error ? e.message : 'Không tải được báo cáo công';
+			errorMessage.value = msg;
+			toast.error(msg);
+		} finally {
+			loading.value = false;
+		}
 	}
-	fetchReport();
-}
 
-// Bucket bar chart: chuẩn hoá theo giá trị lớn nhất trong 4 bucket
-const overtimeBuckets = computed(() => {
-	const o = data.value?.overtime;
-	if (!o) return [];
-	const items = [
-		{ label: 'Ngày thường (150%)', value: o.normalHours, cls: 'bg-emerald-500' },
-		{ label: 'Chủ nhật (200%)', value: o.sundayHours, cls: 'bg-sky-500' },
-		{ label: 'Ngày lễ · Online (300%)', value: o.holidayOnlineHours, cls: 'bg-orange-500' },
-		{ label: 'Ngày lễ · VP (300%)', value: o.holidayOfflineHours, cls: 'bg-red-500' },
-	];
-	const max = Math.max(...items.map(i => i.value), 0.0001);
-	return items.map(i => ({ ...i, pct: Math.round((i.value / max) * 100) }));
-});
+	function prevMonth() {
+		if (viewMonth.value === 1) {
+			viewMonth.value = 12;
+			viewYear.value--;
+		} else {
+			viewMonth.value--;
+		}
+		fetchReport();
+	}
 
-function onKeydown(e: KeyboardEvent) {
-	if (e.key === 'Escape') emit('close');
-}
+	function nextMonth() {
+		if (viewMonth.value === 12) {
+			viewMonth.value = 1;
+			viewYear.value++;
+		} else {
+			viewMonth.value++;
+		}
+		fetchReport();
+	}
 
-onMounted(() => {
-	fetchReport();
-	document.addEventListener('keydown', onKeydown);
-});
+	// Bucket bar chart: chuẩn hoá theo giá trị lớn nhất trong 4 bucket
+	const overtimeBuckets = computed(() => {
+		const o = data.value?.overtime;
+		if (!o) return [];
+		const items = [
+			{ label: 'Ngày thường (150%)', value: o.normalHours, cls: 'bg-emerald-500' },
+			{ label: 'Chủ nhật (200%)', value: o.sundayHours, cls: 'bg-sky-500' },
+			{ label: 'Ngày lễ · Online (300%)', value: o.holidayOnlineHours, cls: 'bg-orange-500' },
+			{ label: 'Ngày lễ · VP (300%)', value: o.holidayOfflineHours, cls: 'bg-red-500' },
+		];
+		const max = Math.max(...items.map(i => i.value), 0.0001);
+		return items.map(i => ({ ...i, pct: Math.round((i.value / max) * 100) }));
+	});
 
-onUnmounted(() => {
-	document.removeEventListener('keydown', onKeydown);
-});
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') emit('close');
+	}
+
+	onMounted(() => {
+		fetchReport();
+		document.addEventListener('keydown', onKeydown);
+	});
+
+	onUnmounted(() => {
+		document.removeEventListener('keydown', onKeydown);
+	});
 </script>
 
 <template>
@@ -126,9 +122,7 @@ onUnmounted(() => {
 			>
 				<div>
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ employeeName }}</h2>
-					<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-						{{ employeeCode }} · Báo cáo công tháng
-					</p>
+					<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ employeeCode }} · Báo cáo công tháng</p>
 				</div>
 				<button
 					type="button"
@@ -206,10 +200,7 @@ onUnmounted(() => {
 				</div>
 
 				<!-- Error state -->
-				<div
-					v-else-if="errorMessage && !data"
-					class="flex flex-col items-center justify-center py-10 text-center"
-				>
+				<div v-else-if="errorMessage && !data" class="flex flex-col items-center justify-center py-10 text-center">
 					<svg
 						class="w-10 h-10 text-red-400 mb-3"
 						fill="none"
@@ -224,9 +215,7 @@ onUnmounted(() => {
 						/>
 					</svg>
 					<p class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ errorMessage }}</p>
-					<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-						Vui lòng đổi tháng khác hoặc kiểm tra quyền xem.
-					</p>
+					<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Vui lòng đổi tháng khác hoặc kiểm tra quyền xem.</p>
 				</div>
 
 				<!-- Data -->
@@ -244,7 +233,7 @@ onUnmounted(() => {
 							<div class="p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
 								<p class="text-xs text-gray-500 dark:text-gray-400">Công thực tế</p>
 								<p class="text-lg font-bold text-green-600 dark:text-green-400 mt-1">
-									{{ fmtDays(data.attendance.actualWorkDays) }}
+									{{ fmtDays(data.attendance.actualWorkDays + data.attendance.onlineDays) }}
 								</p>
 							</div>
 							<div class="p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
@@ -318,11 +307,7 @@ onUnmounted(() => {
 									<span class="font-semibold text-gray-800 dark:text-gray-200">{{ fmtHours(b.value) }}</span>
 								</div>
 								<div class="h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-									<div
-										class="h-full rounded-full transition-all"
-										:class="b.cls"
-										:style="{ width: `${b.pct}%` }"
-									/>
+									<div class="h-full rounded-full transition-all" :class="b.cls" :style="{ width: `${b.pct}%` }" />
 								</div>
 							</div>
 							<p class="text-[10px] text-gray-400 dark:text-gray-500 leading-snug pt-1">
@@ -359,9 +344,7 @@ onUnmounted(() => {
 									{{ data.violations.forgotCheckCount }}
 								</p>
 							</div>
-							<div
-								class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-							>
+							<div class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
 								<p class="text-xs text-red-700 dark:text-red-300 font-medium">Tổng vi phạm</p>
 								<p class="text-lg font-bold text-red-700 dark:text-red-300 mt-1">
 									{{ data.violations.totalCount }}
