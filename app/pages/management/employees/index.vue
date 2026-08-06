@@ -1,6 +1,7 @@
 <script setup lang="ts">
-	import type { EmployeeQueryParams } from '~/types/employee.types';
+	import type { EmployeeQueryParams, EmploymentType } from '~/types/employee.types';
 	import EmployeeEmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBadge.vue';
+	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 
 	definePageMeta({ title: 'Nhân viên' });
 
@@ -10,15 +11,22 @@
 
 	const { items, meta, loading, fetchList, deactivate } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
+	const metaDataStore = useMetaDataStore();
+	metaDataStore.load().catch(() => { /* metadata not critical */ });
+	const { employmentTypes } = storeToRefs(metaDataStore);
 
 	const searchInput = ref(String(route.query.search || ''));
 	const search = ref(searchInput.value);
 	const departmentId = ref(route.query.departmentId ? Number(route.query.departmentId) : undefined);
+	const employmentType = ref<EmploymentType | undefined>(
+		(route.query.employmentType as EmploymentType | undefined) || undefined,
+	);
 	const page = ref(Number(route.query.page) || 1);
 
 	const queryParams = computed<EmployeeQueryParams>(() => ({
 		search: search.value || undefined,
 		departmentId: departmentId.value,
+		employmentType: employmentType.value,
 		page: page.value,
 		limit: 20,
 	}));
@@ -28,6 +36,7 @@
 			query: {
 				...(params.search ? { search: params.search } : {}),
 				...(params.departmentId ? { departmentId: String(params.departmentId) } : {}),
+				...(params.employmentType ? { employmentType: params.employmentType } : {}),
 				...(params.page && params.page > 1 ? { page: String(params.page) } : {}),
 			},
 		});
@@ -48,8 +57,18 @@
 		...departments.value.map(d => ({ value: d.id, label: d.name })),
 	]);
 
+	const employmentTypeOptions = computed(() => [
+		{ value: '' as EmploymentType | '', label: 'Tất cả loại hình' },
+		...employmentTypes.value.map(o => ({ value: o.value as EmploymentType | '', label: o.label })),
+	]);
+
 	function onDepartmentChange(val: string | number) {
 		departmentId.value = val === 0 ? undefined : (val as number);
+		page.value = 1;
+	}
+
+	function onEmploymentTypeChange(val: string | number | undefined) {
+		employmentType.value = val ? (val as EmploymentType) : undefined;
 		page.value = 1;
 	}
 
@@ -149,6 +168,14 @@
 			<div class="min-w-[200px]">
 				<UiSelectInput :model-value="departmentId ?? 0" :options="departmentOptions" placeholder="Tất cả phòng ban" @update:model-value="onDepartmentChange" />
 			</div>
+			<div class="min-w-[200px]">
+				<UiSelectInput
+					:model-value="employmentType ?? ''"
+					:options="employmentTypeOptions"
+					placeholder="Tất cả loại hình"
+					@update:model-value="onEmploymentTypeChange"
+				/>
+			</div>
 		</div>
 
 		<!-- Table card -->
@@ -215,6 +242,11 @@
 							<th
 								class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 							>
+								Loại hình
+							</th>
+							<th
+								class="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+							>
 								Trạng thái
 							</th>
 							<th
@@ -241,6 +273,10 @@
 							</td>
 							<td class="px-6 py-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">
 								{{ emp.position?.name ?? '—' }}
+							</td>
+							<td class="px-6 py-4 whitespace-nowrap">
+								<EmploymentTypeBadge v-if="emp.employmentType" :type="emp.employmentType" />
+								<span v-else class="text-xs text-gray-400">—</span>
 							</td>
 							<td class="px-6 py-4 whitespace-nowrap">
 								<EmployeeEmployeeStatusBadge :status="emp.status" />

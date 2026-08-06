@@ -1,7 +1,7 @@
 <script setup lang="ts">
 	const props = withDefaults(
 		defineProps<{
-			variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' | 'danger_outline';
+			variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' | 'danger_outline' | 'primary_outline';
 			size?: 'sm' | 'md' | 'lg';
 			loading?: boolean;
 			disabled?: boolean;
@@ -44,6 +44,8 @@
 					'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 focus:ring-gray-400 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700',
 				danger_outline:
 					'border border-red-600 bg-transparent text-red-600 hover:bg-red-50 focus:ring-red-400 dark:border-red-600 dark:text-red-300 dark:hover:bg-red-700',
+				primary_outline:
+					'border border-brand-600 bg-transparent text-brand-600 hover:bg-brand-50 focus:ring-brand-400 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700',
 			})[props.variant],
 	);
 </script>

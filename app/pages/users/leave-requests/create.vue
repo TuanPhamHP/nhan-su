@@ -16,8 +16,9 @@
 		CreateLeaveRequestDto,
 		LeavePreviewResponse,
 	} from '~/types/leave.types';
-	import type { EmployeeSummary } from '~/types/employee.types';
+	import type { EmployeeSummary, EmploymentType } from '~/types/employee.types';
 	import type { WorkShiftSummary } from '~/types/shift.types';
+	import { canRequestLeaveType } from '~/utils/employment-type';
 
 	definePageMeta({ title: 'Tạo đơn nghỉ phép' });
 
@@ -49,6 +50,28 @@
 			leaveTypesLoading.value = false;
 		}
 	}
+
+	// ─── Employment type của người đang tạo đơn ─────────────────────────────────
+	// Rule BE: INTERN/APPRENTICE/CONTRACTOR/PROBATION không được xin ANNUAL/HALF_DAY/WELFARE.
+	// FE hide các loại phép này khỏi dropdown; BE vẫn là hàng rào cuối và trả 403 nếu bypass.
+	const myEmploymentType = ref<EmploymentType | null>(null);
+
+	async function loadMyEmploymentType() {
+		try {
+			const me = await employeeService.findOne(user.value?.id ?? 0);
+			myEmploymentType.value = me.employmentType ?? null;
+		} catch {
+			myEmploymentType.value = null;
+		}
+	}
+
+	const activeEmploymentType = computed<EmploymentType | null>(
+		() => selectedEmployee.value?.employmentType ?? myEmploymentType.value,
+	);
+
+	const filteredLeaveTypes = computed(() =>
+		leaveTypes.value.filter(t => canRequestLeaveType(activeEmploymentType.value, t.code)),
+	);
 
 	// ─── Employee search (HR/ADMIN only) ──────────────────────────────────────────
 	const employeeQuery = ref('');
@@ -466,9 +489,24 @@
 	});
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────────
+	const metaDataStore = useMetaDataStore();
+	metaDataStore.load().catch(() => { /* metadata not critical */ });
+
 	onMounted(() => {
 		loadLeaveTypes();
 		loadBalances();
+		loadMyEmploymentType();
+	});
+
+	// Hiển thị hint dưới dropdown khi các loại phép hưởng lương bị hide do employmentType.
+	const restrictedLeaveHint = computed<string | null>(() => {
+		const t = activeEmploymentType.value;
+		if (!t || t === 'FULL_TIME' || t === 'PART_TIME') return null;
+		const typeLabel = metaDataStore.labelForEmploymentType(t);
+		const who = selectedEmployee.value
+			? `${selectedEmployee.value.fullName} (${typeLabel})`
+			: typeLabel;
+		return `${who} không được xin phép năm / nửa ngày / phép có lương. Chỉ hiển thị các loại đơn phù hợp.`;
 	});
 </script>
 
@@ -604,7 +642,7 @@
 						>
 							<option value="" disabled selected>Chọn hình thức nghỉ phép</option>
 							<option
-								v-for="lt in leaveTypes"
+								v-for="lt in filteredLeaveTypes"
 								:key="lt.id"
 								:value="lt.id"
 								:disabled="lt.code === 'HALF_DAY' && dayShiftFetched && !canHalfDay"
@@ -614,6 +652,12 @@
 							</option>
 						</select>
 						<p v-if="errors.leaveTypeId" class="mt-1 text-xs text-red-500">{{ errors.leaveTypeId }}</p>
+						<p
+							v-if="restrictedLeaveHint"
+							class="mt-1 text-xs text-amber-600 dark:text-amber-400 leading-snug"
+						>
+							{{ restrictedLeaveHint }}
+						</p>
 						<p
 							v-if="selectedCode !== 'HALF_DAY' && halfDayBlockedReason"
 							class="mt-1 text-xs text-gray-400 dark:text-gray-500 leading-snug"

@@ -3,6 +3,14 @@ import type { UserRole } from './auth.types';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
 export type EmployeeGender = 'Nam' | 'Nữ' | 'Khác';
 
+export type EmploymentType =
+	| 'FULL_TIME'
+	| 'PROBATION'
+	| 'APPRENTICE'
+	| 'INTERN'
+	| 'PART_TIME'
+	| 'CONTRACTOR';
+
 export interface DepartmentSummary {
 	id: number;
 	name: string;
@@ -26,6 +34,7 @@ export interface EmployeeSummary {
 	department: DepartmentSummary | null;
 	status: EmployeeStatus;
 	role: UserRole;
+	employmentType: EmploymentType;
 	position: {
 		name: string;
 		id: number;
@@ -46,6 +55,7 @@ export interface Employee {
 	email: string;
 	phone: string | null;
 	role: UserRole;
+	employmentType: EmploymentType;
 	status: EmployeeStatus;
 	joinDate: string;
 	dateOfBirth: string | null;
@@ -65,6 +75,7 @@ export interface CreateEmployeeDto {
 	password: string;
 	joinDate: string;
 	role: UserRole;
+	employmentType?: EmploymentType;
 	departmentId?: number;
 	positionId?: number;
 	managerId?: number;
@@ -79,6 +90,7 @@ export interface UpdateEmployeeDto {
 	fullName?: string;
 	joinDate?: string;
 	role?: UserRole;
+	employmentType?: EmploymentType;
 	departmentId?: number | null;
 	positionId?: number;
 	managerId?: number;
@@ -92,6 +104,7 @@ export interface EmployeeQueryParams {
 	departmentId?: number;
 	status?: EmployeeStatus;
 	role?: UserRole;
+	employmentType?: EmploymentType;
 	search?: string;
 	page?: number;
 	limit?: number;

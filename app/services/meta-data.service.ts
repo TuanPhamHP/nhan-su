@@ -1,6 +1,6 @@
 import { useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse } from '~/types/api.types';
-import type { RoleOption, BusinessTripStatusOption } from '~/types/meta-data.types';
+import type { RoleOption, BusinessTripStatusOption, EmploymentTypeOption } from '~/types/meta-data.types';
 
 export const useMetaDataService = () => {
 	const authFetch = useAuthFetch();
@@ -13,6 +13,11 @@ export const useMetaDataService = () => {
 
 		async findBusinessTripStatuses(): Promise<BusinessTripStatusOption[]> {
 			const res = await authFetch<ApiResponse<BusinessTripStatusOption[]>>('/v1/meta-data/business-trip-statuses');
+			return res.data;
+		},
+
+		async findEmploymentTypes(): Promise<EmploymentTypeOption[]> {
+			const res = await authFetch<ApiResponse<EmploymentTypeOption[]>>('/v1/meta-data/employment-types');
 			return res.data;
 		},
 	};

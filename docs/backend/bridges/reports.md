@@ -7,15 +7,18 @@
 ## Endpoints
 
 | Method | Path | Ai được gọi | Ghi chú |
-|--------|------|-------------|---------|
-| GET | `/v1/reports/attendance` | `ADMIN`, `HR`, `MANAGER` | Báo cáo chấm công theo tháng |
-| GET | `/v1/reports/attendance/export` | `ADMIN`, `HR`, `MANAGER` | Tải file `.xlsx` bảng công tổng hợp |
+| --- | --- | --- | --- |
+| GET | `/v1/reports/attendance` | `ADMIN`, `HR`, `DIRECTOR`, `MANAGER`, `CHIEF` | Báo cáo chấm công theo tháng (paginated + search) |
+| GET | `/v1/reports/attendance/export` | `ADMIN`, `HR`, `DIRECTOR`, `MANAGER`, `CHIEF` | Tải file `.xlsx` bảng công tổng hợp (không paginate; support search) |
 | GET | `/v1/reports/attendance/export-detail` | `ADMIN`, `HR`, `MANAGER` | Tải file `.xlsx` bảng chấm công chi tiết (1 dòng/ngày/NV) |
 | GET | `/v1/reports/leave` | `ADMIN`, `HR`, `MANAGER` | Báo cáo nghỉ phép theo năm / tháng |
 | GET | `/v1/reports/leave/export` | `ADMIN`, `HR`, `MANAGER` | Tải file `.xlsx` thống kê nghỉ phép |
 | GET | `/v1/reports/summary` | `ADMIN`, `HR` | Thống kê tổng quan toàn công ty |
+| GET | `/v1/reports/my/monthly` | Tất cả authenticated | Báo cáo công tháng cá nhân — xem [reports_me.md](./reports_me.md) |
+| GET | `/v1/reports/employees/:employeeId/monthly` | `ADMIN`, `HR`, `DIRECTOR`, `MANAGER`, `CHIEF` | Báo cáo công tháng của 1 nhân viên — xem [reports_me.md](./reports_me.md) |
+| GET | `/v1/reports/employees/monthly/export` | `ADMIN`, `HR`, `DIRECTOR`, `MANAGER`, `CHIEF` | Tải file `.xlsx` bảng công tháng cho toàn nhân sự (cột khớp với `/employees/:id/monthly`). MANAGER auto-scope theo phòng ban — xem [`_fe-prompt-employees-monthly-export.md`](./_fe-prompt-employees-monthly-export.md) |
 
-> `EMPLOYEE` và `MANAGER` gọi `/summary` → **403**. Chỉ HR và Admin xem được số liệu toàn công ty.
+> `EMPLOYEE` và `MANAGER` gọi `/summary` → **403**. Chỉ HR và Admin xem được số liệu toàn công ty. Chi tiết endpoint `/my/monthly` và `/employees/:id/monthly` (schema, công thức, edge cases, composable) nằm ở file riêng [reports_me.md](./reports_me.md).
 
 ---
 
@@ -25,109 +28,134 @@
 // types/reports.types.ts
 
 export interface AttendanceReportResponse {
-  employeeId: number;
-  employeeCode: string;        // "EMP001"
-  fullName: string;
-  departmentName: string | null;
-  positionName: string | null;
-  totalWorkDays: number;       // tổng ngày làm việc trong tháng (trừ Thứ 7, Chủ nhật)
-  presentDays: number;         // số ngày có mặt đúng giờ
-  lateDays: number;            // số ngày đi muộn
-  absentDays: number;          // số ngày vắng
-  onLeaveDays: number;         // số ngày nghỉ phép được duyệt
-  totalLateMinutes: number;    // tổng phút đi muộn cộng dồn
-  totalEarlyMinutes: number;   // tổng phút về sớm cộng dồn
-  attendanceRate: number;      // % = (presentDays + lateDays) / totalWorkDays * 100
+	employeeId: number;
+	employeeCode: string; // "EMP001"
+	fullName: string;
+	departmentName: string | null;
+	positionName: string | null;
+	totalWorkDays: number; // tổng ngày làm việc trong tháng (trừ Thứ 7, Chủ nhật)
+	presentDays: number; // số ngày có mặt đúng giờ
+	lateDays: number; // số ngày đi muộn
+	absentDays: number; // số ngày vắng
+	onLeaveDays: number; // số ngày nghỉ phép được duyệt
+	totalLateMinutes: number; // tổng phút đi muộn cộng dồn
+	totalEarlyMinutes: number; // tổng phút về sớm cộng dồn
+	attendanceRate: number; // % = (presentDays + lateDays) / totalWorkDays * 100
 }
 
 export interface LeaveReportResponse {
-  employeeId: number;
-  employeeCode: string;
-  fullName: string;
-  departmentName: string | null;
-  leaveTypeName: string;       // "Nghỉ phép năm"
-  leaveTypeCode: string;       // "ANNUAL"
-  totalRequests: number;       // tổng đơn (mọi trạng thái)
-  approvedRequests: number;    // đơn đã duyệt
-  totalDaysApproved: number;   // tổng ngày được duyệt (tính từ các đơn APPROVED)
-  pendingRequests: number;     // đơn đang chờ duyệt
-  remainingBalance: number | null; // null nếu loại phép không có hạn mức (daysPerYear = null)
+	employeeId: number;
+	employeeCode: string;
+	fullName: string;
+	departmentName: string | null;
+	leaveTypeName: string; // "Nghỉ phép năm"
+	leaveTypeCode: string; // "ANNUAL"
+	totalRequests: number; // tổng đơn (mọi trạng thái)
+	approvedRequests: number; // đơn đã duyệt
+	totalDaysApproved: number; // tổng ngày được duyệt (tính từ các đơn APPROVED)
+	pendingRequests: number; // đơn đang chờ duyệt
+	remainingBalance: number | null; // null nếu loại phép không có hạn mức (daysPerYear = null)
 }
 
 export interface SummaryStatsResponse {
-  totalEmployees: number;              // tổng nhân viên đang ACTIVE
-  presentToday: number;                // chấm công PRESENT hôm nay
-  lateToday: number;                   // chấm công LATE hôm nay
-  absentToday: number;                 // chấm công ABSENT hôm nay
-  pendingLeaveRequests: number;        // đơn nghỉ phép đang chờ duyệt (toàn công ty)
-  avgAttendanceRateThisMonth: number;  // % chuyên cần trung bình trong tháng
-  topAbsentDepartment: string | null;  // phòng ban vắng nhiều nhất; null nếu chưa có dữ liệu
+	totalEmployees: number; // tổng nhân viên đang ACTIVE
+	presentToday: number; // chấm công PRESENT hôm nay
+	lateToday: number; // chấm công LATE hôm nay
+	absentToday: number; // chấm công ABSENT hôm nay
+	pendingLeaveRequests: number; // đơn nghỉ phép đang chờ duyệt (toàn công ty)
+	avgAttendanceRateThisMonth: number; // % chuyên cần trung bình trong tháng
+	topAbsentDepartment: string | null; // phòng ban vắng nhiều nhất; null nếu chưa có dữ liệu
 }
 
 // Query params
 
 export interface QueryAttendanceReportParams {
-  year: number;           // bắt buộc, >= 2020
-  month: number;          // bắt buộc, 1-12
-  departmentId?: number;  // lọc theo phòng ban
-  employeeId?: number;    // lọc theo 1 nhân viên cụ thể
+	year: number; // bắt buộc, >= 2020
+	month: number; // bắt buộc, 1-12
+	departmentId?: number; // lọc theo phòng ban
+	employeeId?: number; // lọc theo 1 nhân viên cụ thể
+	search?: string; // tìm theo tên (unaccent + ILIKE) hoặc mã (ILIKE)
+	page?: number; // default 1
+	limit?: number; // default 20, max 100
 }
 
 export interface QueryLeaveReportParams {
-  year: number;            // bắt buộc, >= 2020
-  month?: number;          // tuỳ chọn, 1-12; bỏ qua → tổng hợp cả năm
-  departmentId?: number;
-  leaveTypeId?: number;
+	year: number; // bắt buộc, >= 2020
+	month?: number; // tuỳ chọn, 1-12; bỏ qua → tổng hợp cả năm
+	departmentId?: number;
+	leaveTypeId?: number;
 }
 
 export interface QuerySummaryStatsParams {
-  year: number;   // bắt buộc
-  month: number;  // bắt buộc, 1-12
+	year: number; // bắt buộc
+	month: number; // bắt buộc, 1-12
 }
 
 export interface QueryAttendanceDetailParams {
-  year: number;          // bắt buộc, >= 2020
-  month: number;         // bắt buộc, 1-12
-  departmentId?: number; // lọc theo phòng ban (bỏ qua → toàn công ty)
+	year: number; // bắt buộc, >= 2020
+	month: number; // bắt buộc, 1-12
+	departmentId?: number; // lọc theo phòng ban (bỏ qua → toàn công ty)
 }
 ```
+
+> Types cho `EmployeeMonthlyReportResponse` và `QueryMonthlyReportParams` (dùng bởi `/my/monthly` và `/employees/:id/monthly`) nằm ở [reports_me.md](./reports_me.md).
 
 ---
 
-## GET /v1/reports/attendance — Báo cáo chấm công
+## GET /v1/reports/attendance — Báo cáo chấm công (paginated)
 
-**Query params:** `?year=2025&month=5&departmentId=1`
+**Query params:**
 
-Trả về mảng — mỗi phần tử là thống kê chấm công của một nhân viên trong tháng.  
-Kết quả đã sort: phòng ban A-Z → họ tên A-Z.
+| Param | Type | Required | Mô tả |
+| --- | --- | --- | --- |
+| `year` | number (≥2020) | ✅ | Năm báo cáo |
+| `month` | number (1–12) | ✅ | Tháng báo cáo |
+| `departmentId` | number | ⬜ | Lọc theo phòng ban |
+| `employeeId` | number | ⬜ | Lọc theo 1 nhân viên cụ thể |
+| `search` | string | ⬜ | Tìm theo **tên** (unaccent + ILIKE, tiếng Việt không dấu vẫn match) hoặc **mã nhân viên** (ILIKE) |
+| `page` | number (≥1) | ⬜ | Default `1` |
+| `limit` | number (1–100) | ⬜ | Default `20` |
 
-**Response:** `ApiSuccess<AttendanceReportResponse[]>`
+Ví dụ: `?year=2026&month=5&departmentId=1&search=nguyen&page=2&limit=20`
+
+Kết quả sort: phòng ban A→Z, họ tên A→Z. Sort được áp trước khi paginate.
+
+**Response:** `ApiPaginated<AttendanceReportResponse>`
 
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "employeeId": 4,
-      "employeeCode": "EMP004",
-      "fullName": "Nguyễn Văn An",
-      "departmentName": "Kỹ thuật",
-      "positionName": "Software Engineer",
-      "totalWorkDays": 22,
-      "presentDays": 18,
-      "lateDays": 2,
-      "absentDays": 1,
-      "onLeaveDays": 1,
-      "totalLateMinutes": 35,
-      "totalEarlyMinutes": 0,
-      "attendanceRate": 90.9
-    }
-  ]
+	"success": true,
+	"data": [
+		{
+			"employeeId": 4,
+			"employeeCode": "EMP004",
+			"fullName": "Nguyễn Văn An",
+			"departmentName": "Kỹ thuật",
+			"positionName": "Software Engineer",
+			"totalWorkDays": 22,
+			"presentDays": 18,
+			"lateDays": 2,
+			"absentDays": 1,
+			"onLeaveDays": 1,
+			"totalLateMinutes": 35,
+			"totalEarlyMinutes": 0,
+			"attendanceRate": 90.9
+		}
+	],
+	"meta": {
+		"page": 1,
+		"limit": 20,
+		"total": 47,
+		"totalPages": 3
+	}
 }
 ```
 
-> `attendanceRate` được tính theo công thức: `(presentDays + lateDays) / totalWorkDays * 100`.  
-> Nhân viên đi muộn vẫn được tính là đã đi làm — không bị trừ vào tỷ lệ chuyên cần.
+> `attendanceRate` = `(presentDays + lateDays) / totalWorkDays * 100`. Nhân viên đi muộn vẫn được tính là đã đi làm.
+
+> **Search semantics:** tìm SUBSTRING (contains), không phân biệt hoa/thường, không phân biệt dấu tiếng Việt (`"nguyen"` match cả `"Nguyễn"`). Search rỗng/whitespace được coi như không có filter.
+
+> **Export vs List:** endpoint `/v1/reports/attendance/export` accept cùng bộ params nhưng **bỏ qua `page`/`limit`** — luôn trả full list matching filter dưới dạng Excel. `search` vẫn có tác dụng trên export.
 
 ---
 
@@ -142,35 +170,35 @@ Một nhân viên có thể xuất hiện nhiều lần nếu có nhiều loại
 
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "employeeId": 4,
-      "employeeCode": "EMP004",
-      "fullName": "Nguyễn Văn An",
-      "departmentName": "Kỹ thuật",
-      "leaveTypeName": "Nghỉ phép năm",
-      "leaveTypeCode": "ANNUAL",
-      "totalRequests": 2,
-      "approvedRequests": 1,
-      "totalDaysApproved": 3,
-      "pendingRequests": 1,
-      "remainingBalance": 9
-    },
-    {
-      "employeeId": 4,
-      "employeeCode": "EMP004",
-      "fullName": "Nguyễn Văn An",
-      "departmentName": "Kỹ thuật",
-      "leaveTypeName": "Nghỉ ốm",
-      "leaveTypeCode": "SICK",
-      "totalRequests": 1,
-      "approvedRequests": 1,
-      "totalDaysApproved": 1,
-      "pendingRequests": 0,
-      "remainingBalance": null
-    }
-  ]
+	"success": true,
+	"data": [
+		{
+			"employeeId": 4,
+			"employeeCode": "EMP004",
+			"fullName": "Nguyễn Văn An",
+			"departmentName": "Kỹ thuật",
+			"leaveTypeName": "Nghỉ phép năm",
+			"leaveTypeCode": "ANNUAL",
+			"totalRequests": 2,
+			"approvedRequests": 1,
+			"totalDaysApproved": 3,
+			"pendingRequests": 1,
+			"remainingBalance": 9
+		},
+		{
+			"employeeId": 4,
+			"employeeCode": "EMP004",
+			"fullName": "Nguyễn Văn An",
+			"departmentName": "Kỹ thuật",
+			"leaveTypeName": "Nghỉ ốm",
+			"leaveTypeCode": "SICK",
+			"totalRequests": 1,
+			"approvedRequests": 1,
+			"totalDaysApproved": 1,
+			"pendingRequests": 0,
+			"remainingBalance": null
+		}
+	]
 }
 ```
 
@@ -189,21 +217,29 @@ Một nhân viên có thể xuất hiện nhiều lần nếu có nhiều loại
 
 ```json
 {
-  "success": true,
-  "data": {
-    "totalEmployees": 50,
-    "presentToday": 45,
-    "lateToday": 3,
-    "absentToday": 2,
-    "pendingLeaveRequests": 5,
-    "avgAttendanceRateThisMonth": 92.5,
-    "topAbsentDepartment": "Kinh doanh"
-  }
+	"success": true,
+	"data": {
+		"totalEmployees": 50,
+		"presentToday": 45,
+		"lateToday": 3,
+		"absentToday": 2,
+		"pendingLeaveRequests": 5,
+		"avgAttendanceRateThisMonth": 92.5,
+		"topAbsentDepartment": "Kinh doanh"
+	}
 }
 ```
 
 > `presentToday` / `lateToday` / `absentToday` dựa trên ngày **hiện tại** khi gọi API, không phụ thuộc vào `year`/`month`.  
 > `avgAttendanceRateThisMonth` và `topAbsentDepartment` tính theo `year`+`month` truyền vào.
+
+---
+
+## Báo cáo cá nhân — `/my/monthly` và `/employees/:id/monthly`
+
+Xem file riêng: [reports_me.md](./reports_me.md).
+
+Bao gồm 2 endpoint cho nhân viên tự xem báo cáo tháng (`/my/monthly`) và cho HR/Admin/Manager xem báo cáo của 1 nhân viên cụ thể (`/employees/:employeeId/monthly`). Cả 2 dùng cùng schema `EmployeeMonthlyReportResponse` với chi tiết attendance / overtime / violations trong tháng.
 
 ---
 
@@ -225,63 +261,63 @@ Content-Length: <bytes>
 ```typescript
 // Bảng công
 const downloadAttendanceExcel = async (params: QueryAttendanceReportParams) => {
-  const blob = await $fetch('/v1/reports/attendance/export', {
-    params,
-    responseType: 'blob',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `bang-cong-${params.month}-${params.year}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
+	const blob = await $fetch('/v1/reports/attendance/export', {
+		params,
+		responseType: 'blob',
+	});
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = `bang-cong-${params.month}-${params.year}.xlsx`;
+	a.click();
+	URL.revokeObjectURL(url);
 };
 
 // Thống kê nghỉ phép
 const downloadLeaveExcel = async (params: QueryLeaveReportParams) => {
-  const blob = await $fetch('/v1/reports/leave/export', {
-    params,
-    responseType: 'blob',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `thong-ke-nghi-phep-${params.year}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
+	const blob = await $fetch('/v1/reports/leave/export', {
+		params,
+		responseType: 'blob',
+	});
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = `thong-ke-nghi-phep-${params.year}.xlsx`;
+	a.click();
+	URL.revokeObjectURL(url);
 };
 ```
 
 ### Cấu trúc file Excel bảng công tổng hợp (`/attendance/export`)
 
-| Cột | Key | Ghi chú |
-|-----|-----|---------|
-| Mã NV | `employeeCode` | |
-| Họ tên | `fullName` | |
-| Phòng ban | `departmentName` | |
-| Chức vụ | `positionName` | |
-| Đi làm | `presentDays` | |
-| Đi muộn | `lateDays` | |
-| Vắng | `absentDays` | |
-| Nghỉ phép | `onLeaveDays` | |
-| Phút muộn | `totalLateMinutes` | |
-| Phút sớm | `totalEarlyMinutes` | |
-| Tỷ lệ (%) | `attendanceRate` | Đỏ đậm nếu < 80%, cam nếu < 90% |
+| Cột       | Key                 | Ghi chú                         |
+| --------- | ------------------- | ------------------------------- |
+| Mã NV     | `employeeCode`      |                                 |
+| Họ tên    | `fullName`          |                                 |
+| Phòng ban | `departmentName`    |                                 |
+| Chức vụ   | `positionName`      |                                 |
+| Đi làm    | `presentDays`       |                                 |
+| Đi muộn   | `lateDays`          |                                 |
+| Vắng      | `absentDays`        |                                 |
+| Nghỉ phép | `onLeaveDays`       |                                 |
+| Phút muộn | `totalLateMinutes`  |                                 |
+| Phút sớm  | `totalEarlyMinutes` |                                 |
+| Tỷ lệ (%) | `attendanceRate`    | Đỏ đậm nếu < 80%, cam nếu < 90% |
 
 Dòng cuối là hàng **TỔNG CỘNG** (nền xanh nhạt).
 
 ### Cấu trúc file Excel nghỉ phép (`/leave/export`)
 
-| Cột | Key |
-|-----|-----|
-| Mã NV | `employeeCode` |
-| Họ tên | `fullName` |
-| Phòng ban | `departmentName` |
-| Loại phép | `leaveTypeName` |
-| Tổng đơn | `totalRequests` |
-| Đã duyệt | `approvedRequests` |
+| Cột       | Key                 |
+| --------- | ------------------- |
+| Mã NV     | `employeeCode`      |
+| Họ tên    | `fullName`          |
+| Phòng ban | `departmentName`    |
+| Loại phép | `leaveTypeName`     |
+| Tổng đơn  | `totalRequests`     |
+| Đã duyệt  | `approvedRequests`  |
 | Tổng ngày | `totalDaysApproved` |
-| Còn lại | `remainingBalance` |
+| Còn lại   | `remainingBalance`  |
 
 ### Cấu trúc file Excel bảng chấm công chi tiết (`/attendance/export-detail`)
 
@@ -294,10 +330,10 @@ File có **3 dòng header** (tiếng Anh nhóm cột → tiếng Anh sub-header 
 **24 cột (A → X):**
 
 | Cột | Tên VN | Ghi chú |
-|-----|--------|---------|
+| --- | --- | --- |
 | A | Họ và tên | Lặp lại trên mỗi dòng của cùng nhân viên |
-| B | *(trống)* | — |
-| C | Mã nhân viên | |
+| B | _(trống)_ | — |
+| C | Mã nhân viên |  |
 | D | Nhóm chấm công | Tên ca mặc định của nhân viên |
 | E | Ngày | Định dạng `dd/mm/yyyy` |
 | F | Thứ | `Monday` … `Sunday` (tiếng Anh) |
@@ -321,6 +357,7 @@ File có **3 dòng header** (tiếng Anh nhóm cột → tiếng Anh sub-header 
 | X | Số lần về sớm | `1` nếu earlyMinutes > 0; `0` nếu không |
 
 **Màu sắc:**
+
 - Header row 1: nền `#1E3A5F` (xanh đậm), chữ trắng
 - Header row 2: nền `#2E5491`, chữ trắng
 - Header row 3 (VN): nền `#4472C4`, chữ trắng
@@ -343,6 +380,7 @@ Content-Length: <bytes>
 ```
 
 **Lưu ý quan trọng:**
+
 - File bao gồm **tất cả ngày dương lịch** trong tháng, kể cả cuối tuần. Cuối tuần → cột G = `"Break"`, dòng nền xám.
 - Giờ chấm công (cột H, J) theo **múi giờ Việt Nam (UTC+7)**.
 - Nhân viên không có record chấm công trong 1 ngày làm việc → dòng đó hiển thị cột H/J = `"-"`, R = `0`.
@@ -355,77 +393,79 @@ Content-Length: <bytes>
 ```typescript
 // composables/useReports.ts
 import type {
-  AttendanceReportResponse,
-  LeaveReportResponse,
-  SummaryStatsResponse,
-  QueryAttendanceReportParams,
-  QueryAttendanceDetailParams,
-  QueryLeaveReportParams,
-  QuerySummaryStatsParams,
+	AttendanceReportResponse,
+	LeaveReportResponse,
+	SummaryStatsResponse,
+	QueryAttendanceReportParams,
+	QueryAttendanceDetailParams,
+	QueryLeaveReportParams,
+	QuerySummaryStatsParams,
 } from '~/types/reports.types';
 
 // Helper dùng lại cho tất cả các export
 async function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = filename;
+	a.click();
+	URL.revokeObjectURL(url);
 }
 
 export function useReports() {
-  const fetchAttendanceReport = (params: QueryAttendanceReportParams) =>
-    $fetch<{ success: true; data: AttendanceReportResponse[] }>('/v1/reports/attendance', {
-      params,
-    }).then((r) => r.data);
+	const fetchAttendanceReport = (params: QueryAttendanceReportParams) =>
+		$fetch<{
+			success: true;
+			data: AttendanceReportResponse[];
+			meta: { page: number; limit: number; total: number; totalPages: number };
+		}>('/v1/reports/attendance', { params }).then(r => ({ items: r.data, meta: r.meta }));
 
-  const fetchLeaveReport = (params: QueryLeaveReportParams) =>
-    $fetch<{ success: true; data: LeaveReportResponse[] }>('/v1/reports/leave', {
-      params,
-    }).then((r) => r.data);
+	const fetchLeaveReport = (params: QueryLeaveReportParams) =>
+		$fetch<{ success: true; data: LeaveReportResponse[] }>('/v1/reports/leave', {
+			params,
+		}).then(r => r.data);
 
-  const fetchSummaryStats = (params: QuerySummaryStatsParams) =>
-    $fetch<{ success: true; data: SummaryStatsResponse }>('/v1/reports/summary', {
-      params,
-    }).then((r) => r.data);
+	const fetchSummaryStats = (params: QuerySummaryStatsParams) =>
+		$fetch<{ success: true; data: SummaryStatsResponse }>('/v1/reports/summary', {
+			params,
+		}).then(r => r.data);
 
-  const exportAttendanceExcel = async (params: QueryAttendanceReportParams) => {
-    const blob = await $fetch<Blob>('/v1/reports/attendance/export', {
-      params,
-      responseType: 'blob',
-    });
-    await triggerDownload(blob, `bang-cong-${params.month}-${params.year}.xlsx`);
-  };
+	const exportAttendanceExcel = async (params: QueryAttendanceReportParams) => {
+		const blob = await $fetch<Blob>('/v1/reports/attendance/export', {
+			params,
+			responseType: 'blob',
+		});
+		await triggerDownload(blob, `bang-cong-${params.month}-${params.year}.xlsx`);
+	};
 
-  /**
-   * Bảng chấm công chi tiết — 1 dòng/ngày/nhân viên, gộp theo phòng ban.
-   * File lớn hơn export tổng hợp; đặt timeout >= 30s nếu công ty > 100 NV.
-   */
-  const exportAttendanceDetailExcel = async (params: QueryAttendanceDetailParams) => {
-    const blob = await $fetch<Blob>('/v1/reports/attendance/export-detail', {
-      params,
-      responseType: 'blob',
-    });
-    await triggerDownload(blob, `bang-cong-chi-tiet-${params.month}-${params.year}.xlsx`);
-  };
+	/**
+	 * Bảng chấm công chi tiết — 1 dòng/ngày/nhân viên, gộp theo phòng ban.
+	 * File lớn hơn export tổng hợp; đặt timeout >= 30s nếu công ty > 100 NV.
+	 */
+	const exportAttendanceDetailExcel = async (params: QueryAttendanceDetailParams) => {
+		const blob = await $fetch<Blob>('/v1/reports/attendance/export-detail', {
+			params,
+			responseType: 'blob',
+		});
+		await triggerDownload(blob, `bang-cong-chi-tiet-${params.month}-${params.year}.xlsx`);
+	};
 
-  const exportLeaveExcel = async (params: QueryLeaveReportParams) => {
-    const blob = await $fetch<Blob>('/v1/reports/leave/export', {
-      params,
-      responseType: 'blob',
-    });
-    await triggerDownload(blob, `thong-ke-nghi-phep-${params.year}.xlsx`);
-  };
+	const exportLeaveExcel = async (params: QueryLeaveReportParams) => {
+		const blob = await $fetch<Blob>('/v1/reports/leave/export', {
+			params,
+			responseType: 'blob',
+		});
+		await triggerDownload(blob, `thong-ke-nghi-phep-${params.year}.xlsx`);
+	};
 
-  return {
-    fetchAttendanceReport,
-    fetchLeaveReport,
-    fetchSummaryStats,
-    exportAttendanceExcel,
-    exportAttendanceDetailExcel,
-    exportLeaveExcel,
-  };
+	return {
+		fetchAttendanceReport,
+		fetchLeaveReport,
+		fetchSummaryStats,
+		exportAttendanceExcel,
+		exportAttendanceDetailExcel,
+		exportLeaveExcel,
+	};
 }
 ```
 
@@ -433,23 +473,23 @@ export function useReports() {
 
 ```vue
 <script setup lang="ts">
-const { exportAttendanceDetailExcel } = useReports()
-const loading = ref(false)
+	const { exportAttendanceDetailExcel } = useReports();
+	const loading = ref(false);
 
-async function handleExport() {
-  loading.value = true
-  try {
-    await exportAttendanceDetailExcel({ year: 2025, month: 5 })
-  } finally {
-    loading.value = false
-  }
-}
+	async function handleExport() {
+		loading.value = true;
+		try {
+			await exportAttendanceDetailExcel({ year: 2025, month: 5 });
+		} finally {
+			loading.value = false;
+		}
+	}
 </script>
 
 <template>
-  <button :disabled="loading" @click="handleExport">
-    {{ loading ? 'Đang xuất...' : 'Xuất bảng công chi tiết' }}
-  </button>
+	<button :disabled="loading" @click="handleExport">
+		{{ loading ? 'Đang xuất...' : 'Xuất bảng công chi tiết' }}
+	</button>
 </template>
 ```
 
@@ -458,7 +498,7 @@ async function handleExport() {
 ## Edge Cases
 
 | Tình huống | Kết quả |
-|-----------|---------|
+| --- | --- |
 | `month=0` hoặc `month=13` | **400** — validation reject |
 | `year=2019` | **400** — `year` phải >= 2020 |
 | `employeeId` không tồn tại | **200** — trả mảng rỗng `[]` |
