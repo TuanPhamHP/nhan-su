@@ -7,24 +7,30 @@ import type {
 	QueryAttendanceDetailParams,
 	QueryLeaveReportParams,
 	QuerySummaryStatsParams,
+	QueryEmployeesMonthlyExportParams,
 } from '~/types/report.types';
+import type { PaginatedMeta } from '~/types/api.types';
 
 export function useReports() {
 	const service = useReportService();
 
 	const attendanceReport = ref<AttendanceReportResponse[]>([]);
+	const attendanceMeta = ref<PaginatedMeta | null>(null);
 	const leaveReport = ref<LeaveReportResponse[]>([]);
 	const summaryStats = ref<SummaryStatsResponse | null>(null);
 	const loadingAttendance = ref(false);
 	const loadingLeave = ref(false);
 	const exportingAttendance = ref(false);
 	const exportingAttendanceDetail = ref(false);
+	const exportingEmployeesMonthly = ref(false);
 	const exportingLeave = ref(false);
 
 	async function fetchAttendanceReport(params: QueryAttendanceReportParams) {
 		loadingAttendance.value = true;
 		try {
-			attendanceReport.value = await service.fetchAttendanceReport(params);
+			const res = await service.fetchAttendanceReport(params);
+			attendanceReport.value = res.data;
+			attendanceMeta.value = res.meta;
 		} finally {
 			loadingAttendance.value = false;
 		}
@@ -73,6 +79,21 @@ export function useReports() {
 		}
 	}
 
+	async function exportEmployeesMonthlyExcel(params: QueryEmployeesMonthlyExportParams) {
+		exportingEmployeesMonthly.value = true;
+		try {
+			const blob = await service.exportEmployeesMonthlyExcel(params);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `bang-cong-thang-${params.month}-${params.year}.xlsx`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} finally {
+			exportingEmployeesMonthly.value = false;
+		}
+	}
+
 	async function exportLeaveExcel(params: QueryLeaveReportParams) {
 		exportingLeave.value = true;
 		try {
@@ -90,18 +111,21 @@ export function useReports() {
 
 	return {
 		attendanceReport,
+		attendanceMeta,
 		leaveReport,
 		summaryStats,
 		loadingAttendance,
 		loadingLeave,
 		exportingAttendance,
 		exportingAttendanceDetail,
+		exportingEmployeesMonthly,
 		exportingLeave,
 		fetchAttendanceReport,
 		fetchLeaveReport,
 		fetchSummaryStats,
 		exportAttendanceExcel,
 		exportAttendanceDetailExcel,
+		exportEmployeesMonthlyExcel,
 		exportLeaveExcel,
 	};
 }

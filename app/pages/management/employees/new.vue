@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useForm } from 'vee-validate';
-import type { CreateEmployeeDto, EmployeeGender } from '~/types/employee.types';
+import type { CreateEmployeeDto, EmployeeGender, EmploymentType } from '~/types/employee.types';
 import type { UserRole } from '~/types/auth.types';
 import { usePositionService } from '~/services/position.service';
 import { useWorkShiftService } from '~/services/work-shift.service';
@@ -63,6 +63,7 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	phone: string;
 	joinDate: string;
 	role: UserRole;
+	employmentType: EmploymentType;
 	departmentId: number | undefined;
 	positionId: number | undefined;
 	defaultShiftId: number | undefined;
@@ -70,6 +71,24 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	dateOfBirth: string;
 	address: string;
 }>({
+	initialValues: {
+		employmentType: 'FULL_TIME',
+	} as Partial<{
+		fullName: string;
+		email: string;
+		password: string;
+		confirmPassword: string;
+		phone: string;
+		joinDate: string;
+		role: UserRole;
+		employmentType: EmploymentType;
+		departmentId: number | undefined;
+		positionId: number | undefined;
+		defaultShiftId: number | undefined;
+		gender: EmployeeGender | '';
+		dateOfBirth: string;
+		address: string;
+	}>,
 	validationSchema: {
 		fullName: (v: string) => (v && v.trim().length >= 2 ? true : 'Tối thiểu 2 ký tự'),
 		email: (v: string) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : 'Email không hợp lệ'),
@@ -89,6 +108,7 @@ const [confirmPassword, confirmPasswordAttrs] = defineField('confirmPassword');
 const [phone, phoneAttrs] = defineField('phone');
 const [joinDate] = defineField('joinDate');
 const [role] = defineField('role');
+const [employmentType] = defineField('employmentType');
 const [departmentId] = defineField('departmentId');
 const [positionId] = defineField('positionId');
 const [defaultShiftId] = defineField('defaultShiftId');
@@ -108,6 +128,7 @@ const onSubmit = handleSubmit(async values => {
 		password: values.password,
 		joinDate: values.joinDate,
 		role: values.role,
+		employmentType: values.employmentType,
 		phone: values.phone || undefined,
 		departmentId: values.departmentId ? Number(values.departmentId) : undefined,
 		positionId: values.positionId ? Number(values.positionId) : undefined,
@@ -138,7 +159,7 @@ const onSubmit = handleSubmit(async values => {
 
 const metaDataStore = useMetaDataStore();
 metaDataStore.load().catch(() => { /* metadata not critical */ });
-const { roles: roleOptions } = storeToRefs(metaDataStore);
+const { roles: roleOptions, employmentTypes: employmentTypeOptions } = storeToRefs(metaDataStore);
 
 const genderOptions = [
 	{ value: undefined, label: '-- Không rõ --' },
@@ -272,6 +293,11 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 							<label :class="labelCls">Vai trò <span class="text-red-500">*</span></label>
 							<UiSelect v-model="role" :options="roleOptions" />
 							<p v-if="errors.role" class="mt-1 text-xs text-red-500">{{ errors.role }}</p>
+						</div>
+
+						<div>
+							<label :class="labelCls">Loại hình lao động</label>
+							<UiSelect v-model="employmentType" :options="employmentTypeOptions" />
 						</div>
 
 						<div>

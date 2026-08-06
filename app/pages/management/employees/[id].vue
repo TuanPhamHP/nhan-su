@@ -1,7 +1,7 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
 	import { formatDate, formatDateTime } from '~/utils/date';
-	import type { UpdateEmployeeDto, EmployeeGender, EmployeeSummary } from '~/types/employee.types';
+	import type { UpdateEmployeeDto, EmployeeGender, EmployeeSummary, EmploymentType } from '~/types/employee.types';
 	import type { UserRole } from '~/types/auth.types';
 	import { usePositionService } from '~/services/position.service';
 	import { useEmployeeService } from '~/services/employee.service';
@@ -10,6 +10,7 @@
 	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
 	import EmployeeContracts from '~/components/modules/employee/EmployeeContracts.vue';
 	import EmployeeSocialInsurance from '~/components/modules/employee/EmployeeSocialInsurance.vue';
+	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 
 	definePageMeta({ title: 'Chi tiết nhân viên' });
 
@@ -80,6 +81,7 @@
 		phone: string;
 		joinDate: string;
 		role: UserRole;
+		employmentType: EmploymentType | '';
 		departmentId: number | undefined;
 		positionId: number | undefined;
 		managerId: number | undefined;
@@ -97,6 +99,7 @@
 	const [phone, phoneAttrs] = defineField('phone');
 	const [joinDate] = defineField('joinDate');
 	const [role] = defineField('role');
+	const [employmentType] = defineField('employmentType');
 	const [departmentId] = defineField('departmentId');
 	const [positionId] = defineField('positionId');
 	const [managerId] = defineField('managerId');
@@ -119,6 +122,7 @@
 				phone: emp.phone ?? '',
 				joinDate: emp.joinDate,
 				role: emp.role,
+				employmentType: emp.employmentType ?? 'FULL_TIME',
 				departmentId: deptId,
 				positionId: emp.position?.id ?? undefined,
 				managerId: emp.manager?.id ?? undefined,
@@ -145,6 +149,7 @@
 			phone: values.phone || undefined,
 			joinDate: values.joinDate,
 			role: values.role,
+			employmentType: (values.employmentType as EmploymentType) || undefined,
 			departmentId: values.departmentId ? Number(values.departmentId) : undefined,
 			positionId: values.positionId ? Number(values.positionId) : undefined,
 			managerId: values.managerId ? Number(values.managerId) : undefined,
@@ -200,6 +205,13 @@
 		{ value: 'Nữ', label: 'Nữ' },
 		{ value: 'Khác', label: 'Khác' },
 	];
+
+	const { employmentTypes: employmentTypeOptions } = storeToRefs(metaDataStore);
+
+	const employmentTypeLabel = computed(() => {
+		const t = currentEmployee.value?.employmentType;
+		return t ? metaDataStore.labelForEmploymentType(t) : null;
+	});
 
 	const departmentOptions = computed(() => [
 		{ value: undefined as number | undefined, label: '-- Không thuộc phòng ban --' },
@@ -327,6 +339,7 @@
 						<div class="flex flex-wrap items-center gap-2">
 							<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentEmployee.fullName }}</h2>
 							<EmployeeEmployeeStatusBadge :status="currentEmployee.status" />
+							<EmploymentTypeBadge v-if="currentEmployee.employmentType" :type="currentEmployee.employmentType" />
 						</div>
 						<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
 							{{ currentEmployee.email }}
@@ -432,6 +445,10 @@
 							<p :class="valueCls">{{ roleLabel }}</p>
 						</div>
 						<div>
+							<p :class="labelCls">Loại hình lao động</p>
+							<p :class="valueCls">{{ employmentTypeLabel ?? '—' }}</p>
+						</div>
+						<div>
 							<p :class="labelCls">Phòng ban</p>
 							<p :class="valueCls">{{ currentEmployee.department?.name ?? '—' }}</p>
 						</div>
@@ -518,6 +535,12 @@
 						<div>
 							<label :class="labelCls">Vai trò</label>
 							<UiSelect v-model="role" :options="roleOptions" />
+						</div>
+
+						<!-- Employment type -->
+						<div>
+							<label :class="labelCls">Loại hình lao động</label>
+							<UiSelect v-model="employmentType" :options="employmentTypeOptions" />
 						</div>
 
 						<!-- Department -->

@@ -43,6 +43,9 @@ export interface QueryAttendanceReportParams {
 	month: number;
 	departmentId?: number;
 	employeeId?: number;
+	search?: string;
+	page?: number;
+	limit?: number;
 }
 
 export interface QueryLeaveReportParams {
@@ -50,6 +53,7 @@ export interface QueryLeaveReportParams {
 	month?: number;
 	departmentId?: number;
 	leaveTypeId?: number;
+	search?: string;
 }
 
 export interface QuerySummaryStatsParams {
@@ -61,4 +65,54 @@ export interface QueryAttendanceDetailParams {
 	year: number;
 	month: number;
 	departmentId?: number;
+	search?: string;
+}
+
+export interface QueryEmployeesMonthlyExportParams {
+	month: number;
+	year: number;
+	departmentId?: number;
+	search?: string;
+}
+
+export type ContractType = 'PROBATION' | 'FIXED_TERM' | 'INDEFINITE' | 'SEASONAL';
+
+export interface EmployeeMonthlyReportResponse {
+	employee: {
+		id: number;
+		fullName: string;
+		employeeCode: string;
+		joinDate: string;
+		position: string | null;
+		department: string | null;
+		contractType: ContractType | null;
+	};
+	period: {
+		month: number;
+		year: number;
+	};
+	attendance: {
+		workingDays: number;
+		actualWorkDays: number;
+		businessTripDays: number;
+		annualLeaveDays: number;
+		unpaidLeaveDays: number;
+		welfareLeaveDays: number;
+		publicHolidayDays: number;
+		totalPayrollDays: number;
+		totalActualDays: number;
+	};
+	overtime: {
+		normalHours: number;
+		sundayHours: number;
+		holidayOnlineHours: number;
+		holidayOfflineHours: number;
+		totalHours: number;
+	};
+	violations: {
+		lateCount: number;
+		earlyCount: number;
+		forgotCheckCount: number;
+		totalCount: number;
+	};
 }
