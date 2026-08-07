@@ -15,6 +15,8 @@ const toast = useToast();
 const { create } = useEmployee();
 const { departments, fetchAll: fetchDepartments } = useDepartment();
 const directoryStore = useDirectoryStore();
+const { hasPermission } = usePermissions();
+const canCreate = computed(() => hasPermission('employee:create'));
 const positionService = usePositionService();
 const workShiftService = useWorkShiftService();
 const checkInLocationService = useCheckInLocationService();
@@ -122,6 +124,11 @@ const [dateOfBirth] = defineField('dateOfBirth');
 const [address, addressAttrs] = defineField('address');
 
 const onSubmit = handleSubmit(async values => {
+	// Defense-in-depth: middleware đã chặn URL nhưng vẫn re-check trước BE call.
+	if (!canCreate.value) {
+		toast.error('Bạn không có quyền tạo nhân viên');
+		return;
+	}
 	const payload: CreateEmployeeDto = {
 		fullName: values.fullName,
 		email: values.email,
@@ -354,7 +361,14 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 				<NuxtLink to="/management/employees">
 					<CommonAppButton type="button" variant="outline">Hủy</CommonAppButton>
 				</NuxtLink>
-				<CommonAppButton type="submit" :loading="isSubmitting">Tạo nhân viên</CommonAppButton>
+				<CommonAppButton
+					type="submit"
+					:loading="isSubmitting"
+					:disabled="!canCreate"
+					:title="!canCreate ? 'Bạn không có quyền tạo nhân viên' : ''"
+				>
+					Tạo nhân viên
+				</CommonAppButton>
 			</div>
 		</form>
 	</div>

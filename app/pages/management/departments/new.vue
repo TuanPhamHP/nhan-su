@@ -7,6 +7,8 @@
 	const toast = useToast();
 	const router = useRouter();
 	const directoryStore = useDirectoryStore();
+	const { hasPermission } = usePermissions();
+	const canCreate = computed(() => hasPermission('department:create'));
 
 	const deptService = useDepartmentService();
 	const empService = useEmployeeService();
@@ -59,6 +61,11 @@
 	const nameLength = computed(() => name.value?.length ?? 0);
 
 	const onSubmit = handleSubmit(async values => {
+		// Defense-in-depth: middleware đã chặn nhưng vẫn re-check trước khi call BE.
+		if (!canCreate.value) {
+			toast.error('Bạn không có quyền tạo phòng ban');
+			return;
+		}
 		try {
 			const created = await deptService.create({
 				name: values.name.trim(),
@@ -203,7 +210,12 @@
 					<NuxtLink to="/management/departments">
 						<CommonAppButton type="button" variant="outline">Hủy</CommonAppButton>
 					</NuxtLink>
-					<CommonAppButton type="submit" :loading="isSubmitting" :disabled="meta.dirty && !meta.valid">
+					<CommonAppButton
+						type="submit"
+						:loading="isSubmitting"
+						:disabled="!canCreate || (meta.dirty && !meta.valid)"
+						:title="!canCreate ? 'Bạn không có quyền tạo phòng ban' : ''"
+					>
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
 						</svg>

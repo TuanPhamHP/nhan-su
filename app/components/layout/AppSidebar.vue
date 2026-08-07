@@ -10,6 +10,8 @@
 		roles?: UserRole[];
 		/** Hiện cho tất cả role !== 'EMPLOYEE'. */
 		management?: boolean;
+		/** Yêu cầu quyền `<module>:<action>`. Chuỗi = phải có đúng quyền đó; mảng = có ít nhất 1. */
+		permission?: string | string[];
 		dataTour?: string;
 		matchQuery?: Record<string, string>;
 		/** Reactive badge count — nếu > 0 thì hiển thị bên cạnh label. */
@@ -23,6 +25,7 @@
 
 	const { isOpen, close } = useSidebar();
 	const { user } = useAuth();
+	const { hasPermission } = usePermissions();
 	const route = useRoute();
 	const metaDataStore = useMetaDataStore();
 	const approvalStore = useApprovalStore();
@@ -76,12 +79,14 @@
 					route: '/management/employees',
 					icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
 					management: true,
+					permission: 'employee:read',
 				},
 				{
 					label: 'Phòng ban',
 					route: '/management/departments',
 					icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
 					management: true,
+					permission: 'department:read',
 				},
 				{
 					label: 'Chức vụ',
@@ -218,8 +223,11 @@
 			.map(section => ({
 				...section,
 				items: section.items.filter(item => {
-					if (item.roles) return item.roles.includes(user.value!.role);
-					if (item.management) return isManagementRole(user.value!.role);
+					// Role guard trước
+					if (item.roles && !item.roles.includes(user.value!.role)) return false;
+					if (item.management && !item.roles && !isManagementRole(user.value!.role)) return false;
+					// Permission guard sau (item khai báo permission thì phải có)
+					if (item.permission && !hasPermission(item.permission)) return false;
 					return true;
 				}),
 			}))

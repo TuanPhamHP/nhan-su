@@ -11,8 +11,14 @@
 
 	const { items, meta, loading, fetchList, deactivate } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
+	const { hasPermission } = usePermissions();
+	const canCreate = computed(() => hasPermission('employee:create'));
+	const canUpdate = computed(() => hasPermission('employee:update'));
+	const canDelete = computed(() => hasPermission('employee:delete'));
 	const metaDataStore = useMetaDataStore();
-	metaDataStore.load().catch(() => { /* metadata not critical */ });
+	metaDataStore.load().catch(() => {
+		/* metadata not critical */
+	});
 	const { employmentTypes } = storeToRefs(metaDataStore);
 
 	const searchInput = ref(String(route.query.search || ''));
@@ -28,7 +34,7 @@
 		departmentId: departmentId.value,
 		employmentType: employmentType.value,
 		page: page.value,
-		limit: 20,
+		limit: 10,
 	}));
 
 	watch(queryParams, params => {
@@ -100,6 +106,11 @@
 
 	async function confirmDeactivate() {
 		if (!confirmId.value) return;
+		// Defense-in-depth: modal không mở nếu thiếu quyền, nhưng vẫn re-check trước BE call.
+		if (!canDelete.value) {
+			toast.error('Bạn không có quyền vô hiệu hóa nhân viên');
+			return;
+		}
 		deactivating.value = true;
 		try {
 			await deactivate(confirmId.value);
@@ -126,13 +137,14 @@
 				label: 'Chỉnh sửa',
 				icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
 				action: () => router.push(`/management/employees/${emp.id}?edit=true`),
+				hidden: !canUpdate.value,
 			},
 			{
 				label: 'Vô hiệu hóa',
 				icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636',
 				variant: 'danger',
 				action: () => openConfirm(emp.id),
-				hidden: emp.status === 'INACTIVE',
+				hidden: emp.status === 'INACTIVE' || !canDelete.value,
 			},
 		];
 	}
@@ -146,7 +158,7 @@
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Nhân viên</h1>
 				<p v-if="meta" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tổng {{ meta.total }} nhân viên</p>
 			</div>
-			<NuxtLink to="/management/employees/new">
+			<NuxtLink v-if="canCreate" to="/management/employees/new">
 				<CommonAppButton>
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
@@ -166,7 +178,12 @@
 				/>
 			</div>
 			<div class="min-w-[200px]">
-				<UiSelectInput :model-value="departmentId ?? 0" :options="departmentOptions" placeholder="Tất cả phòng ban" @update:model-value="onDepartmentChange" />
+				<UiSelectInput
+					:model-value="departmentId ?? 0"
+					:options="departmentOptions"
+					placeholder="Tất cả phòng ban"
+					@update:model-value="onDepartmentChange"
+				/>
 			</div>
 			<div class="min-w-[200px]">
 				<UiSelectInput

@@ -2,23 +2,24 @@ import { storeToRefs } from 'pinia';
 import { useAuthStore } from '~/stores/auth';
 
 /**
- * isContainPermissions(codes):
- *   null          → true  (auto pass)
- *   []            → false (auto fail)
- *   string[]      → true nếu user có ÍT NHẤT 1 code trong mảng
+ * Kiểm tra user hiện tại có quyền theo `<module>:<action>` không.
  *
- * ADMIN luôn trả true bất kể codes là gì (trừ [] — auto fail vẫn ưu tiên).
+ * hasPermission(input):
+ *   null       → true  (bỏ qua kiểm tra, auto pass)
+ *   string     → true nếu user có đúng quyền này
+ *   string[]   → true nếu user có ít nhất 1 quyền trong mảng, false nếu không có quyền nào
+ *
+ * Nguồn `permissions` = `authStore.permissions`, populate qua `/v1/auth/me`.
  */
 export function usePermissions() {
 	const store = useAuthStore();
-	const { user, permissions } = storeToRefs(store);
+	const { permissions } = storeToRefs(store);
 
-	function isContainPermissions(codes: string[] | null): boolean {
-		if (codes === null) return true;
-		if (codes.length === 0) return false;
-		if (user.value?.role === 'ADMIN') return true;
-		return codes.some(code => permissions.value.includes(code));
+	function hasPermission(input: string | string[] | null): boolean {
+		if (input === null) return true;
+		if (typeof input === 'string') return permissions.value.includes(input);
+		return input.some(code => permissions.value.includes(code));
 	}
 
-	return { isContainPermissions };
+	return { permissions, hasPermission };
 }

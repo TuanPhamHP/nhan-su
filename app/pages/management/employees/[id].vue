@@ -15,16 +15,21 @@
 	definePageMeta({ title: 'Chi tiết nhân viên' });
 
 	const route = useRoute();
+	const router = useRouter();
 	const toast = useToast();
 	const id = Number(route.params.id);
 	const authStore = useAuthStore();
 	const imageViewer = useImageViewerStore();
+	const { hasPermission } = usePermissions();
 
 	function openAvatar(url: string) {
 		imageViewer.open([url], 0);
 	}
 
+	// canEdit (role-based) giữ nguyên chỉ cho "Reset mật khẩu" — feature riêng của HR/ADMIN.
 	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
+	const canUpdate = computed(() => hasPermission('employee:update'));
+	const canDelete = computed(() => hasPermission('employee:delete'));
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -56,7 +61,8 @@
 	const activeTab = ref<TabId>(
 		validTabs.includes(route.query.tab as TabId) ? (route.query.tab as TabId) : 'info',
 	);
-	const isEditing = ref(route.query.edit === 'true');
+	// Không auto-enter edit mode khi user không có employee:update.
+	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 	const confirmDeactivate = ref(false);
 	const deactivating = ref(false);
 	const confirmResetPassword = ref(false);
@@ -135,15 +141,36 @@
 	}
 
 	function startEditing() {
+		if (!canUpdate.value) {
+			toast.error('Bạn không có quyền chỉnh sửa nhân viên');
+			return;
+		}
 		resetFormFromEmployee();
 		isEditing.value = true;
 	}
+
+	// URL guard: paste `?edit=true` mà không có quyền → strip query + toast.
+	watch(
+		() => route.query.edit,
+		v => {
+			if (v === 'true' && !canUpdate.value) {
+				toast.error('Bạn không có quyền chỉnh sửa nhân viên');
+				router.replace({ query: { ...route.query, edit: undefined } });
+			}
+		},
+		{ immediate: true },
+	);
 
 	function cancelEditing() {
 		isEditing.value = false;
 	}
 
 	const onSubmit = handleSubmit(async values => {
+		// Defense-in-depth: form không hiển thị nếu thiếu quyền, nhưng vẫn re-check trước BE call.
+		if (!canUpdate.value) {
+			toast.error('Bạn không có quyền chỉnh sửa nhân viên');
+			return;
+		}
 		const payload: UpdateEmployeeDto = {
 			fullName: values.fullName,
 			phone: values.phone || undefined,
@@ -180,6 +207,10 @@
 	}
 
 	async function handleDeactivate() {
+		if (!canDelete.value) {
+			toast.error('Bạn không có quyền vô hiệu hóa nhân viên');
+			return;
+		}
 		deactivating.value = true;
 		try {
 			await deactivate(id);
@@ -257,7 +288,7 @@
 			</NuxtLink>
 
 			<div v-if="currentEmployee && (activeTab === 'info') && !isEditing" class="flex items-center gap-2">
-				<CommonAppButton variant="primary" @click="startEditing">
+				<CommonAppButton v-if="canUpdate" variant="primary" @click="startEditing">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"
@@ -278,7 +309,7 @@
 					Reset mật khẩu
 				</CommonAppButton>
 				<CommonAppButton
-					v-if="currentEmployee.status !== 'INACTIVE'"
+					v-if="canDelete && currentEmployee.status !== 'INACTIVE'"
 					variant="danger"
 					@click="confirmDeactivate = true"
 				>

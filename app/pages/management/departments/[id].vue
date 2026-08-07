@@ -13,6 +13,9 @@
 	const toast = useToast();
 	const id = Number(route.params.id);
 	const directoryStore = useDirectoryStore();
+	const { hasPermission } = usePermissions();
+	const canUpdate = computed(() => hasPermission('department:update'));
+	const canManage = computed(() => hasPermission('department:manage'));
 
 	const {
 		department,
@@ -31,7 +34,8 @@
 
 	// ─── Edit dept form ───────────────────────────────────────────────────────────
 
-	const isEditing = ref(route.query.edit === 'true');
+	// Bỏ qua ?edit=true nếu user không có quyền update — tránh render form ngay khi mount.
+	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 
 	const { handleSubmit, defineField, errors, isSubmitting, resetForm } = useForm<{ name: string }>({
 		validationSchema: {
@@ -41,6 +45,10 @@
 	const [deptName, deptNameAttrs] = defineField('name');
 
 	function startEditing() {
+		if (!canUpdate.value) {
+			toast.error('Bạn không có quyền chỉnh sửa phòng ban');
+			return;
+		}
 		resetForm({ values: { name: department.value?.name ?? '' } });
 		isEditing.value = true;
 	}
@@ -50,6 +58,11 @@
 	}
 
 	const onSubmit = handleSubmit(async values => {
+		// Defense-in-depth: form không hiển thị cho user thiếu quyền, nhưng vẫn re-check trước BE call.
+		if (!canUpdate.value) {
+			toast.error('Bạn không có quyền chỉnh sửa phòng ban');
+			return;
+		}
 		try {
 			await updateDept({ name: values.name.trim() });
 			directoryStore.reset();
@@ -59,6 +72,18 @@
 			toast.error(e instanceof Error ? e.message : 'Lỗi cập nhật phòng ban');
 		}
 	});
+
+	// URL guard: user paste link `?edit=true` mà không có quyền → strip query + toast.
+	watch(
+		() => route.query.edit,
+		v => {
+			if (v === 'true' && !canUpdate.value) {
+				toast.error('Bạn không có quyền chỉnh sửa phòng ban');
+				router.replace({ query: { ...route.query, edit: undefined } });
+			}
+		},
+		{ immediate: true },
+	);
 
 	// ─── Add member modal ────────────────────────────────────────────────────────
 
@@ -190,6 +215,10 @@
 	}
 
 	function openChangeManagerModal() {
+		if (!canManage.value) {
+			toast.error('Bạn không có quyền thay đổi trưởng phòng');
+			return;
+		}
 		managerSearch.value = '';
 		managerCandidates.value = [];
 		showChangeManagerModal.value = true;
@@ -201,6 +230,11 @@
 	}
 
 	async function handleChangeManager(emp: EmployeeSummary) {
+		// Defense-in-depth: modal không mở nếu thiếu quyền, nhưng vẫn re-check trước BE call.
+		if (!canManage.value) {
+			toast.error('Bạn không có quyền thay đổi trưởng phòng');
+			return;
+		}
 		changingManagerId.value = emp.id;
 		try {
 			await changeManager(emp.id);
@@ -401,7 +435,7 @@
 			</NuxtLink>
 
 			<div v-if="department && !isEditing" class="flex items-center gap-2">
-				<CommonAppButton variant="outline" @click="openChangeManagerModal">
+				<CommonAppButton v-if="canManage" variant="outline" @click="openChangeManagerModal">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"
@@ -411,7 +445,7 @@
 					</svg>
 					Thay đổi trưởng phòng
 				</CommonAppButton>
-				<CommonAppButton variant="outline" @click="startEditing">
+				<CommonAppButton v-if="canUpdate" variant="outline" @click="startEditing">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"

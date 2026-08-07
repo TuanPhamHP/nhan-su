@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { isOpen, close } = useSidebar();
 const { user } = useAuth();
+const { hasPermission } = usePermissions();
 const route = useRoute();
 const { isDark } = useColorMode();
 const metaDataStore = useMetaDataStore();
@@ -35,6 +36,8 @@ interface EmployeeNavItem {
 	icon: string;
 	dataTour?: string;
 	badge?: () => number;
+	/** Yêu cầu quyền `<module>:<action>`. Chuỗi = phải có đúng quyền đó; mảng = có ít nhất 1. */
+	permission?: string | string[];
 }
 interface EmployeeNavSection {
 	label: string;
@@ -117,6 +120,16 @@ const navSections: EmployeeNavSection[] = [
 	},
 ];
 
+const visibleSections = computed(() => {
+	if (!user.value) return [];
+	return navSections
+		.map(section => ({
+			...section,
+			items: section.items.filter(item => !item.permission || hasPermission(item.permission)),
+		}))
+		.filter(section => section.items.length > 0);
+});
+
 function isActive(itemRoute: string) {
 	if (itemRoute === '/') return route.path === '/';
 	if (route.path === itemRoute) return true;
@@ -176,7 +189,7 @@ function hideTooltip() {
 
 		<!-- Nav -->
 		<nav class="flex-1 px-2 py-3 overflow-y-auto space-y-4">
-			<div v-for="section in navSections" :key="section.label">
+			<div v-for="section in visibleSections" :key="section.label">
 				<!-- Section label — only when expanded -->
 				<Transition
 					enter-active-class="transition-opacity duration-150"

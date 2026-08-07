@@ -11,6 +11,9 @@
 
 	const authStore = useAuthStore();
 	const { user } = storeToRefs(authStore);
+	const { hasPermission } = usePermissions();
+	const canCreate = computed(() => hasPermission('department:create'));
+	const canUpdate = computed(() => hasPermission('department:update'));
 
 	const { departments, meta, loading, fetchList } = useDepartment();
 
@@ -64,6 +67,7 @@
 				label: 'Chỉnh sửa',
 				icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
 				action: () => router.push(`/management/departments/${dept.id}?edit=true`),
+				hidden: !canUpdate.value,
 			},
 		];
 	}
@@ -77,7 +81,7 @@
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Phòng ban</h1>
 				<p v-if="meta" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tổng {{ meta.total }} phòng ban</p>
 			</div>
-			<NuxtLink to="/management/departments/new">
+			<NuxtLink v-if="canCreate" to="/management/departments/new">
 				<CommonAppButton>
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
