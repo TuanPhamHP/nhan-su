@@ -461,7 +461,7 @@
 					</span>
 				</div>
 				<!-- Export dropdown -->
-				<div ref="exportMenuRef" class="relative">
+				<div ref="exportMenuRef" class="relative flex">
 					<CommonAppButton
 						variant="primary_outline"
 						:loading="isExporting"

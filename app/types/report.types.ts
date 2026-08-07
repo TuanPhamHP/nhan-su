@@ -77,6 +77,41 @@ export interface QueryEmployeesMonthlyExportParams {
 
 export type ContractType = 'PROBATION' | 'FIXED_TERM' | 'INDEFINITE' | 'SEASONAL';
 
+export type MonthlyReportSymbol =
+	| 'X'
+	| 'X/2'
+	| 'X/2 (Q)'
+	| 'CT'
+	| 'CT/X'
+	| 'OL'
+	| 'P'
+	| 'P/X'
+	| 'P/2'
+	| 'R'
+	| 'L'
+	| 'K'
+	| '0';
+
+export interface MonthlyReportDayDetail {
+	date: string; // "YYYY-MM-DD" (VN)
+	value: number; // 0 | 0.5 | 1
+	symbol: MonthlyReportSymbol;
+	reason: string; // BE format sẵn tiếng Việt — hiển thị nguyên văn
+}
+
+export interface EmployeeMonthlyReportBreakdown {
+	workingDays: MonthlyReportDayDetail[];
+	actualWorkDays: MonthlyReportDayDetail[];
+	onlineDays: MonthlyReportDayDetail[];
+	businessTripDays: MonthlyReportDayDetail[];
+	annualLeaveDays: MonthlyReportDayDetail[];
+	welfareLeaveDays: MonthlyReportDayDetail[];
+	unpaidLeaveDays: MonthlyReportDayDetail[];
+	publicHolidayDays: MonthlyReportDayDetail[];
+}
+
+export type EmployeeMonthlyReportBreakdownKey = keyof EmployeeMonthlyReportBreakdown;
+
 export interface EmployeeMonthlyReportResponse {
 	employee: {
 		id: number;
@@ -92,15 +127,19 @@ export interface EmployeeMonthlyReportResponse {
 		year: number;
 	};
 	attendance: {
-		workingDays: number;
 		actualWorkDays: number;
-		businessTripDays: number;
 		annualLeaveDays: number;
+		businessTripDays: number;
+		onlineDays: number;
+		publicHolidayDays: number;
+
+		totalActualDays: number;
+		totalPayrollDays: number;
+		mealAllowanceDays: number; // = actualWorkDays — Tổng công tính ăn ca
 		unpaidLeaveDays: number;
 		welfareLeaveDays: number;
-		publicHolidayDays: number;
-		totalPayrollDays: number;
-		totalActualDays: number;
+		workingDays: number;
+		breakdown: EmployeeMonthlyReportBreakdown;
 	};
 	overtime: {
 		normalHours: number;
