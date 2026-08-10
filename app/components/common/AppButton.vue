@@ -33,8 +33,7 @@
 	const variantClass = computed(
 		() =>
 			({
-				primary:
-					'bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500 dark:bg-brand-500 dark:hover:bg-brand-600',
+				primary: 'btn-theme-primary text-white',
 				secondary:
 					'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-400 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600',
 				danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
@@ -44,8 +43,7 @@
 					'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 focus:ring-gray-400 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700',
 				danger_outline:
 					'border border-red-600 bg-transparent text-red-600 hover:bg-red-50 focus:ring-red-400 dark:border-red-600 dark:text-red-300 dark:hover:bg-red-700',
-				primary_outline:
-					'border border-brand-600 bg-transparent text-brand-600 hover:bg-brand-50 focus:ring-brand-400 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700',
+				primary_outline: 'btn-theme-primary-outline bg-transparent',
 			})[props.variant],
 	);
 </script>

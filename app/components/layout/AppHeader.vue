@@ -3,7 +3,6 @@
 	import { isManagementRole } from '~/utils/role';
 
 	const { toggle } = useSidebar();
-	const { isDark, toggle: toggleDark } = useColorMode();
 	const { user, logout } = useAuth();
 	const toast = useToast();
 	const router = useRouter();
@@ -64,11 +63,16 @@
 
 <template>
 	<header
-		class="h-16 flex items-center justify-between px-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex-shrink-0"
+		class="h-16 flex items-center justify-between px-4 border-b flex-shrink-0"
+		:style="{
+			backgroundColor: 'var(--color-header-bg)',
+			color: 'var(--color-header-text)',
+			borderColor: 'var(--color-border-theme)',
+		}"
 	>
 		<!-- Left: hamburger -->
 		<button
-			class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400 transition-colors"
+			class="p-2 rounded-lg opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 			@click="toggle"
 		>
 			<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -78,32 +82,10 @@
 
 		<!-- Right: actions -->
 		<div class="flex items-center gap-2">
-			<!-- Dark mode toggle -->
-			<button
-				class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400 transition-colors"
-				:title="isDark ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'"
-				@click="toggleDark"
-			>
-				<svg v-if="isDark" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-					/>
-				</svg>
-				<svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-					/>
-				</svg>
-			</button>
-
 			<!-- Notification bell -->
 			<div class="relative" data-notif-panel>
 				<button
-					class="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400 transition-colors"
+					class="relative p-2 rounded-lg opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 					title="Thông báo"
 					@click.stop="toggleNotificationPanel"
 				>
@@ -128,15 +110,15 @@
 			<!-- User menu -->
 			<div class="relative" data-user-menu>
 				<button
-					class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+					class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 					@click.stop="showUserMenu = !showUserMenu"
 				>
 					<CommonAppAvatar :src="user?.avatarUrl" :name="user?.fullName" size="sm" />
 					<div class="hidden sm:block text-left">
-						<p class="text-sm font-medium text-gray-800 dark:text-gray-200 leading-tight">{{ user?.fullName }}</p>
-						<p class="text-xs text-gray-500 dark:text-gray-400 leading-tight">{{ user?.employeeCode }}</p>
+						<p class="text-sm font-medium leading-tight">{{ user?.fullName }}</p>
+						<p class="text-xs opacity-70 leading-tight">{{ user?.employeeCode }}</p>
 					</div>
-					<svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<svg class="w-4 h-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
 					</svg>
 				</button>

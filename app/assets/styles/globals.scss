@@ -7,6 +7,20 @@
 	--primary-color: #0e6938;
 	--primary-dark: #0e6938;
 	--primary-light: #dcfce7;
+
+	/* Theme (default = Sky). Plugin `theme.client.ts` overrides these
+	   from `localStorage[app.theme]` before the app paints. */
+	--color-header-bg: #eff6ff;
+	--color-header-text: #1e3a8a;
+	--color-sidebar-bg: #eff6ff;
+	--color-sidebar-text: #1e3a8a;
+	--color-accent: #2563eb;
+	--color-border-theme: #bfdbfe;
+	--color-nav-hover-bg: #dbeafe;
+	--color-nav-hover-text: #1e3a8a;
+	--color-nav-active-bg: #bfdbfe;
+	--color-nav-active-text: #2563eb;
+
 	color-scheme: light;
 }
 
@@ -35,10 +49,6 @@ body {
 
 a {
 	@apply text-inherit no-underline transition-colors duration-200;
-
-	&:hover {
-		@apply text-green-600;
-	}
 }
 
 /* Scrollbar Styling */
@@ -98,6 +108,76 @@ button {
 table {
 	border-collapse: collapse;
 	border-spacing: 0;
+}
+
+/* Themed sidebar nav item — all colors driven by CSS vars from the active theme
+   (see `app/config/themes.ts`). Left indicator uses `--color-accent`. */
+.nav-item {
+	position: relative;
+	transition:
+		background-color 150ms ease,
+		color 150ms ease;
+
+	&:hover:not(.is-active) {
+		background-color: var(--color-nav-hover-bg);
+		color: var(--color-nav-hover-text);
+	}
+
+	&.is-active {
+		background-color: var(--color-nav-active-bg);
+		color: var(--color-nav-active-text);
+
+		&::before {
+			content: '';
+			position: absolute;
+			left: 0;
+			top: 50%;
+			transform: translateY(-50%);
+			width: 3px;
+			height: 60%;
+			background-color: var(--color-accent);
+			border-radius: 0 3px 3px 0;
+		}
+	}
+}
+
+/* Themed button variants — use `--color-accent` from current theme */
+.btn-theme-primary {
+	background-color: var(--color-accent);
+	color: #fff;
+	transition:
+		filter 150ms ease,
+		box-shadow 150ms ease;
+
+	&:hover:not(:disabled) {
+		filter: brightness(0.92);
+	}
+
+	&:focus-visible {
+		box-shadow:
+			0 0 0 2px #fff,
+			0 0 0 4px var(--color-accent);
+	}
+}
+
+.btn-theme-primary-outline {
+	border: 1px solid var(--color-accent);
+	color: var(--color-accent);
+	transition:
+		background-color 150ms ease,
+		color 150ms ease,
+		box-shadow 150ms ease;
+
+	&:hover:not(:disabled) {
+		background-color: var(--color-accent);
+		color: #fff;
+	}
+
+	&:focus-visible {
+		box-shadow:
+			0 0 0 2px #fff,
+			0 0 0 4px var(--color-accent);
+	}
 }
 
 /* Utility Classes */

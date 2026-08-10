@@ -7,6 +7,7 @@
 	import { useAuthService } from '~/services';
 	import { formatDate } from '~/utils/date';
 	import { deleteCookie } from '~/utils/cookie';
+	import ThemeSelector from '~/components/modules/theme/ThemeSelector.vue';
 
 	definePageMeta({ title: 'Hồ sơ cá nhân' });
 
@@ -369,6 +370,15 @@
 						</CommonAppButton>
 					</div>
 				</form>
+			</div>
+
+			<!-- Theme selector card -->
+			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+				<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Giao diện</h3>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mb-5">
+					Chọn màu chủ đề cho header và sidebar. Nhấn "Lưu" để áp dụng.
+				</p>
+				<ThemeSelector />
 			</div>
 
 			<!-- Change password card -->

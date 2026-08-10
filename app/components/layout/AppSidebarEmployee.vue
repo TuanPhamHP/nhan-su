@@ -3,7 +3,11 @@ const { isOpen, close } = useSidebar();
 const { user } = useAuth();
 const { hasPermission } = usePermissions();
 const route = useRoute();
-const { isDark } = useColorMode();
+const uiStore = useUiStore();
+const { activeTheme } = storeToRefs(uiStore);
+const logoSrc = computed(() =>
+	activeTheme.value.logo === 'dark' ? '/app-logo-dark-mode.svg' : '/app-logo-light-mode.svg',
+);
 const metaDataStore = useMetaDataStore();
 const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
 
@@ -158,20 +162,24 @@ function hideTooltip() {
 <template>
 	<aside
 		:class="[
-			'flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 overflow-hidden',
+			'flex flex-col border-r overflow-hidden',
 			'fixed top-0 bottom-0 left-0 z-30 lg:static lg:z-auto',
 			'transition-transform lg:transition-[width] duration-300 ease-in-out',
 			isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0 lg:w-16',
 		]"
+		:style="{
+			backgroundColor: 'var(--color-sidebar-bg)',
+			color: 'var(--color-sidebar-text)',
+			borderColor: 'var(--color-border-theme)',
+		}"
 	>
 		<!-- Logo -->
-		<div class="flex items-center h-16 px-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+		<div
+			class="flex items-center h-16 px-4 border-b flex-shrink-0"
+			:style="{ borderColor: 'var(--color-border-theme)' }"
+		>
 			<div class="flex items-center gap-3 min-w-0">
-				<img
-					:src="isDark ? '/app-logo-dark-mode.svg' : '/app-logo-light-mode.svg'"
-					alt="HR System Logo"
-					class="w-8 h-8 flex-shrink-0"
-				/>
+				<img :src="logoSrc" alt="HR System Logo" class="w-8 h-8 flex-shrink-0" />
 				<Transition
 					enter-active-class="transition-opacity duration-200"
 					enter-from-class="opacity-0"
@@ -180,7 +188,7 @@ function hideTooltip() {
 					leave-from-class="opacity-100"
 					leave-to-class="opacity-0"
 				>
-					<span v-if="isOpen" class="text-sm font-bold text-gray-900 dark:text-white whitespace-nowrap">
+					<span v-if="isOpen" class="text-sm font-bold whitespace-nowrap">
 						8Hours - Solution
 					</span>
 				</Transition>
@@ -201,14 +209,18 @@ function hideTooltip() {
 				>
 					<p
 						v-if="isOpen"
-						class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap"
+						class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 whitespace-nowrap"
 					>
 						{{ section.label }}
 					</p>
 				</Transition>
 
 				<!-- Divider when collapsed -->
-				<div v-if="!isOpen" class="mx-2 h-px bg-gray-100 dark:bg-gray-800 mb-1" />
+				<div
+					v-if="!isOpen"
+					class="mx-2 h-px mb-1"
+					:style="{ backgroundColor: 'var(--color-border-theme)' }"
+				/>
 
 				<!-- Items -->
 				<div class="space-y-0.5">
@@ -218,22 +230,15 @@ function hideTooltip() {
 						:to="item.route"
 						:data-tour="item.dataTour"
 						:class="[
-							'group relative flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
-							!isOpen && 'justify-center',
-							isActive(item.route)
-								? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
-								: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200',
+							'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+							!isOpen && 'justify-center px-2',
+							isActive(item.route) && 'is-active',
 						]"
 						@mouseenter="!isOpen && showTooltip($event, item.label)"
 						@mouseleave="hideTooltip"
 					>
 						<svg
-							:class="[
-								'w-5 h-5 flex-shrink-0 transition-colors',
-								isActive(item.route)
-									? 'text-brand-600 dark:text-brand-400'
-									: 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300',
-							]"
+							class="w-5 h-5 flex-shrink-0"
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
@@ -267,10 +272,13 @@ function hideTooltip() {
 		</nav>
 
 		<!-- User Info Bottom -->
-		<div class="border-t border-gray-200 dark:border-gray-700 p-3 flex-shrink-0">
+		<div class="border-t p-3 flex-shrink-0" :style="{ borderColor: 'var(--color-border-theme)' }">
 			<div class="flex items-center gap-3 min-w-0">
-				<div class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center flex-shrink-0">
-					<span class="text-xs font-semibold text-brand-700 dark:text-brand-300">
+				<div
+					class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+					:style="{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }"
+				>
+					<span class="text-xs font-semibold">
 						{{ user?.fullName?.charAt(0)?.toUpperCase() ?? '?' }}
 					</span>
 				</div>
@@ -283,8 +291,8 @@ function hideTooltip() {
 					leave-to-class="opacity-0"
 				>
 					<div v-if="isOpen" class="flex-1 min-w-0">
-						<p class="text-xs font-medium text-gray-900 dark:text-white truncate">{{ user?.fullName }}</p>
-						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ userRoleLabel }}</p>
+						<p class="text-xs font-medium truncate">{{ user?.fullName }}</p>
+						<p class="text-xs opacity-70 truncate">{{ userRoleLabel }}</p>
 					</div>
 				</Transition>
 			</div>
