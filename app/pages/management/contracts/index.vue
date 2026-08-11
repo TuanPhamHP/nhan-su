@@ -141,9 +141,13 @@
 				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Quản lý hợp đồng</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Hợp đồng lao động toàn công ty</p>
 			</div>
-			<CommonAppButton v-if="canImport" variant="outline" @click="showImportModal = true">
+			<CommonAppButton v-if="canImport" variant="primary" @click="showImportModal = true">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+					/>
 				</svg>
 				Import Excel
 			</CommonAppButton>
@@ -155,15 +159,26 @@
 			<div
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 flex items-center gap-3"
 			>
-				<div class="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-					<svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<div
+					class="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0"
+				>
+					<svg
+						class="w-5 h-5 text-green-600 dark:text-green-400"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
 						<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 					</svg>
 				</div>
 				<div>
 					<p class="text-xs text-gray-500 dark:text-gray-400">Đang hiệu lực</p>
 					<p class="text-xl font-bold text-gray-900 dark:text-white">
-						<span v-if="summaryLoading" class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+						<span
+							v-if="summaryLoading"
+							class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+						/>
 						<span v-else>{{ countActive }}</span>
 					</p>
 				</div>
@@ -173,15 +188,30 @@
 			<div
 				class="bg-white dark:bg-gray-900 rounded-xl border border-amber-200 dark:border-amber-700/50 shadow-sm p-4 flex items-center gap-3"
 			>
-				<div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-					<svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+				<div
+					class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0"
+				>
+					<svg
+						class="w-5 h-5 text-amber-600 dark:text-amber-400"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+						/>
 					</svg>
 				</div>
 				<div>
 					<p class="text-xs text-gray-500 dark:text-gray-400">Hết hạn trong 30 ngày</p>
 					<p class="text-xl font-bold text-amber-600 dark:text-amber-400">
-						<span v-if="summaryLoading" class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+						<span
+							v-if="summaryLoading"
+							class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+						/>
 						<span v-else>{{ countExpiring }}</span>
 					</p>
 				</div>
@@ -191,15 +221,26 @@
 			<div
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 flex items-center gap-3"
 			>
-				<div class="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center flex-shrink-0">
-					<svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<div
+					class="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center flex-shrink-0"
+				>
+					<svg
+						class="w-5 h-5 text-rose-600 dark:text-rose-400"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
 						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 					</svg>
 				</div>
 				<div>
 					<p class="text-xs text-gray-500 dark:text-gray-400">Đã chấm dứt</p>
 					<p class="text-xl font-bold text-gray-900 dark:text-white">
-						<span v-if="summaryLoading" class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+						<span
+							v-if="summaryLoading"
+							class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+						/>
 						<span v-else>{{ countTerminated }}</span>
 					</p>
 				</div>
@@ -210,14 +251,27 @@
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 flex items-center gap-3"
 			>
 				<div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-					<svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+					<svg
+						class="w-5 h-5 text-gray-500 dark:text-gray-400"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+						/>
 					</svg>
 				</div>
 				<div>
 					<p class="text-xs text-gray-500 dark:text-gray-400">Bản nháp</p>
 					<p class="text-xl font-bold text-gray-900 dark:text-white">
-						<span v-if="summaryLoading" class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+						<span
+							v-if="summaryLoading"
+							class="inline-block w-8 h-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+						/>
 						<span v-else>{{ countDraft }}</span>
 					</p>
 				</div>
@@ -258,16 +312,25 @@
 		</div>
 
 		<!-- Table -->
-		<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+		<div
+			class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden"
+		>
 			<!-- Loading skeleton -->
 			<div v-if="loading" class="p-6 space-y-3">
 				<div v-for="i in 5" :key="i" class="h-10 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
 			</div>
 
 			<!-- Empty state -->
-			<div v-else-if="!contracts.length" class="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
+			<div
+				v-else-if="!contracts.length"
+				class="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500"
+			>
 				<svg class="w-10 h-10 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+					/>
 				</svg>
 				<p class="text-sm">Không tìm thấy hợp đồng nào</p>
 			</div>
@@ -277,25 +340,39 @@
 				<table class="w-full text-sm">
 					<thead>
 						<tr class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Nhân viên
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Số HĐ
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Loại
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Ngày bắt đầu
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Ngày kết thúc
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Lương CB
 							</th>
-							<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							<th
+								class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+							>
 								Trạng thái
 							</th>
 							<th class="px-4 py-3" />
@@ -334,12 +411,18 @@
 										/>
 									</svg>
 								</div>
-								<p v-if="c.isExpiringSoon && c.daysUntilExpiry !== null" class="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+								<p
+									v-if="c.isExpiringSoon && c.daysUntilExpiry !== null"
+									class="text-xs text-amber-600 dark:text-amber-400 mt-0.5"
+								>
 									Còn {{ c.daysUntilExpiry }} ngày
 								</p>
 							</td>
 							<td class="px-4 py-3">
-								<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="typeCls[c.contractType]">
+								<span
+									class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+									:class="typeCls[c.contractType]"
+								>
 									{{ c.contractTypeLabel }}
 								</span>
 							</td>
@@ -349,7 +432,10 @@
 							</td>
 							<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ formatCurrency(c.baseSalary) }}</td>
 							<td class="px-4 py-3">
-								<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusCls[c.status]">
+								<span
+									class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+									:class="statusCls[c.status]"
+								>
 									{{ c.statusLabel }}
 								</span>
 							</td>
@@ -375,31 +461,15 @@
 					{{ (page - 1) * limit + 1 }}–{{ Math.min(page * limit, meta.total) }} / {{ meta.total }} hợp đồng
 				</p>
 				<div class="flex items-center gap-1">
-					<CommonAppButton
-						size="sm"
-						variant="outline"
-						:disabled="page <= 1"
-						@click="page--"
-					>
-						‹
-					</CommonAppButton>
+					<CommonAppButton size="sm" variant="outline" :disabled="page <= 1" @click="page--"> ‹ </CommonAppButton>
 					<span class="px-3 py-1 text-xs text-gray-600 dark:text-gray-400">{{ page }} / {{ meta.totalPages }}</span>
-					<CommonAppButton
-						size="sm"
-						variant="outline"
-						:disabled="page >= meta.totalPages"
-						@click="page++"
-					>
+					<CommonAppButton size="sm" variant="outline" :disabled="page >= meta.totalPages" @click="page++">
 						›
 					</CommonAppButton>
 				</div>
 			</div>
 		</div>
 
-		<ContractImportModal
-			v-if="showImportModal"
-			@close="showImportModal = false"
-			@imported="onImportSuccess"
-		/>
+		<ContractImportModal v-if="showImportModal" @close="showImportModal = false" @imported="onImportSuccess" />
 	</div>
 </template>
