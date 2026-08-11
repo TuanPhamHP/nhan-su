@@ -6,6 +6,7 @@ import type {
 	UpdateContractDto,
 	TerminateContractDto,
 	QueryContractParams,
+	ImportContractsResponse,
 } from '~/types/contract.types';
 
 export const useContractService = () => {
@@ -64,6 +65,20 @@ export const useContractService = () => {
 			const res = await authFetch<ApiResponse<ContractResponse>>(`/v1/contracts/${id}/terminate`, {
 				method: 'PATCH',
 				body: dto ?? {},
+			});
+			return res.data;
+		},
+
+		async downloadImportTemplate(): Promise<Blob> {
+			return authFetch<Blob>('/v1/contracts/import/template', { responseType: 'blob' });
+		},
+
+		async importFromExcel(file: File): Promise<ImportContractsResponse> {
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await authFetch<ApiResponse<ImportContractsResponse>>('/v1/contracts/import', {
+				method: 'POST',
+				body: formData,
 			});
 			return res.data;
 		},

@@ -2,10 +2,14 @@
 	import { formatDate } from '~/utils/date';
 	import type { ContractStatus, ContractType } from '~/types/contract.types';
 	import { useContractService } from '~/services/contract.service';
+	import ContractImportModal from '~/components/modules/contract/ContractImportModal.vue';
 
 	definePageMeta({ title: 'Quản lý hợp đồng' });
 
 	const toast = useToast();
+	const authStore = useAuthStore();
+	const canImport = computed(() => authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HR');
+	const showImportModal = ref(false);
 	const { departments, fetchAll: fetchDepts } = useDepartment();
 
 	// ─── Filters ──────────────────────────────────────────────────────────────────
@@ -69,6 +73,12 @@
 
 	watch(page, () => loadTable());
 
+	async function onImportSuccess() {
+		showImportModal.value = false;
+		page.value = 1;
+		await Promise.all([loadSummary(), loadTable()]);
+	}
+
 	// ─── Debounce search ──────────────────────────────────────────────────────────
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 	function onSearchInput(e: Event) {
@@ -126,9 +136,17 @@
 <template>
 	<div class="space-y-6">
 		<!-- Page header -->
-		<div>
-			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Quản lý hợp đồng</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Hợp đồng lao động toàn công ty</p>
+		<div class="flex items-start justify-between gap-3 flex-wrap">
+			<div>
+				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Quản lý hợp đồng</h1>
+				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Hợp đồng lao động toàn công ty</p>
+			</div>
+			<CommonAppButton v-if="canImport" variant="outline" @click="showImportModal = true">
+				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+				</svg>
+				Import Excel
+			</CommonAppButton>
 		</div>
 
 		<!-- Summary cards -->
@@ -377,5 +395,11 @@
 				</div>
 			</div>
 		</div>
+
+		<ContractImportModal
+			v-if="showImportModal"
+			@close="showImportModal = false"
+			@imported="onImportSuccess"
+		/>
 	</div>
 </template>

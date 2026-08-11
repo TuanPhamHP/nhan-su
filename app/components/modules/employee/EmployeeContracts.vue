@@ -9,9 +9,16 @@
 
 	const toast = useToast();
 	const authStore = useAuthStore();
+	const { hasPermission } = usePermissions();
 	const { contracts, loading, fetchByEmployee, create, update, activate, terminate } = useContracts();
 
-	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
+	// Create + edit form vẫn giới hạn ADMIN/HR vì POST /v1/contracts còn role-based.
+	const canCreate = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
+	// 3 mutation còn lại đã chuyển sang permission-based ở backend (contract:update/activate/terminate).
+	const canUpdate = computed(() => hasPermission('contract:update'));
+	const canActivate = computed(() => hasPermission('contract:activate'));
+	const canTerminate = computed(() => hasPermission('contract:terminate'));
+	const canManage = computed(() => canUpdate.value || canActivate.value || canTerminate.value);
 
 	// ─── Modal state ──────────────────────────────────────────────────────────────
 	const showContractModal = ref(false);
@@ -235,7 +242,7 @@
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Hợp đồng lao động</h3>
-			<CommonAppButton v-if="canEdit" size="sm" @click="openCreate">
+			<CommonAppButton v-if="canCreate" size="sm" @click="openCreate">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
 				</svg>
@@ -363,11 +370,11 @@
 								Xem file hợp đồng
 							</a>
 
-							<template v-if="canEdit">
+							<template v-if="canManage">
 								<div class="ml-auto flex items-center gap-2">
-									<!-- Activate (DRAFT only) -->
+									<!-- Activate (DRAFT only, permission contract:activate) -->
 									<CommonAppButton
-										v-if="contract.status === 'DRAFT'"
+										v-if="contract.status === 'DRAFT' && canActivate"
 										size="sm"
 										variant="outline"
 										:loading="activatingId === contract.id"
@@ -376,9 +383,9 @@
 										Kích hoạt
 									</CommonAppButton>
 
-									<!-- Edit (DRAFT only) -->
+									<!-- Edit (DRAFT only, permission contract:update) -->
 									<CommonAppButton
-										v-if="contract.status === 'DRAFT'"
+										v-if="contract.status === 'DRAFT' && canUpdate"
 										size="sm"
 										variant="outline"
 										@click="openEdit(contract)"
@@ -386,9 +393,9 @@
 										Sửa
 									</CommonAppButton>
 
-									<!-- Terminate (ACTIVE only) -->
+									<!-- Terminate (ACTIVE only, permission contract:terminate) -->
 									<CommonAppButton
-										v-if="contract.status === 'ACTIVE'"
+										v-if="contract.status === 'ACTIVE' && canTerminate"
 										size="sm"
 										variant="danger_outline"
 										@click="openTerminate(contract)"

@@ -37,7 +37,9 @@
       "Bash(mkdir -p /home/tuanpham/work/hr-system/nhan-su/app/config /home/tuanpham/work/hr-system/nhan-su/app/components/modules/theme)",
       "Bash(yarn start *)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3001/)",
-      "Bash(pkill -f \"nuxt dev\")"
+      "Bash(pkill -f \"nuxt dev\")",
+      "Bash(grep -E \"^\\(vue-tsc|tsc\\)$\")",
+      "Bash(npx --package typescript@5.9 --package vue-tsc@2.2 -- vue-tsc --noEmit -p .nuxt/tsconfig.json)"
     ],
     "additionalDirectories": [
       "/home/tuanpham/work/hr-system/nhan-su/app"

@@ -91,7 +91,12 @@ export const useAuthFetch = () => {
 			}
 
 			const message = e?.data?.error?.message;
-			if (message) throw new Error(message);
+			if (message) {
+				const wrapped = new Error(message) as Error & { data?: unknown; status?: number };
+				wrapped.data = e.data;
+				wrapped.status = e.response?.status;
+				throw wrapped;
+			}
 			throw err;
 		}
 	};
