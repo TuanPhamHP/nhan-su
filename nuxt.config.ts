@@ -62,42 +62,7 @@ export default defineNuxtConfig({
 	},
 	compatibilityDate: '2025-07-15',
 	devtools: { enabled: true },
-	modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@vee-validate/nuxt', '@nuxt/icon', '@vite-pwa/nuxt'],
-	pwa: {
-		registerType: 'autoUpdate',
-		manifest: {
-			name: 'Hệ thống nhân sự',
-			short_name: 'HR System',
-			description: 'Web Admin quản trị nhân sự — HR, Admin, Manager',
-			lang: 'vi',
-			display: 'standalone',
-			orientation: 'portrait',
-			start_url: '/',
-			scope: '/',
-			theme_color: '#0e7e42',
-			background_color: '#ffffff',
-			categories: ['business', 'productivity'],
-			icons: [
-				{ src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-				{ src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-				{ src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-			],
-		},
-		workbox: {
-			navigateFallback: '/',
-			navigateFallbackDenylist: [/^\/cdn-cgi\//, /^\/firebase-messaging-sw\.js$/],
-			globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-			globIgnores: ['**/firebase-messaging-sw.js'],
-			runtimeCaching: [
-				{
-					urlPattern: ({ url }) => url.origin !== self.location.origin,
-					handler: 'NetworkOnly',
-				},
-			],
-		},
-		client: { installPrompt: true },
-		devOptions: { enabled: false },
-	},
+	modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@vee-validate/nuxt', '@nuxt/icon'],
 	css: ['~/assets/styles/globals.scss', '~/assets/styles/announcement.css', 'leaflet/dist/leaflet.css'],
 	vite: {
 		plugins: [svgLoader({ defaultImport: 'component' })],
