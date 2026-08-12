@@ -45,7 +45,8 @@
       "Bash(pkill -f \"nuxi dev\")",
       "Bash(yarn start > /tmp/nuxt-dev.log 2>&1 & *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/management/employees/1)",
-      "Bash(pkill -f \"yarn start\")"
+      "Bash(pkill -f \"yarn start\")",
+      "Bash(git -C /home/tuanpham/work/hr-system/nhan-su mv public/import-employees-template.xlsx public/import-templates/employees-import-template.xlsx)"
     ],
     "additionalDirectories": [
       "/home/tuanpham/work/hr-system/nhan-su/app",
