@@ -39,10 +39,17 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3001/)",
       "Bash(pkill -f \"nuxt dev\")",
       "Bash(grep -E \"^\\(vue-tsc|tsc\\)$\")",
-      "Bash(npx --package typescript@5.9 --package vue-tsc@2.2 -- vue-tsc --noEmit -p .nuxt/tsconfig.json)"
+      "Bash(npx --package typescript@5.9 --package vue-tsc@2.2 -- vue-tsc --noEmit -p .nuxt/tsconfig.json)",
+      "Bash(yarn dlx *)",
+      "Bash(grep -E '^\\(vue-tsc|tsc\\)$')",
+      "Bash(pkill -f \"nuxi dev\")",
+      "Bash(yarn start > /tmp/nuxt-dev.log 2>&1 & *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/management/employees/1)",
+      "Bash(pkill -f \"yarn start\")"
     ],
     "additionalDirectories": [
-      "/home/tuanpham/work/hr-system/nhan-su/app"
+      "/home/tuanpham/work/hr-system/nhan-su/app",
+      "/tmp"
     ]
   }
 }

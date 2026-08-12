@@ -14,6 +14,8 @@ export * from './leave-request.service';
 export * from './leave-type.service';
 export * from './leave-balance.service';
 export * from './employee-document.service';
+export * from './employee-citizen-id.service';
+export * from './employee-passport.service';
 export * from './report.service';
 export * from './position.service';
 export * from './notification.service';
