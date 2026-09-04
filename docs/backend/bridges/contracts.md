@@ -6,17 +6,21 @@
 
 ## Endpoints
 
-| Method | Path | Ai được gọi | Ghi chú |
-|--------|------|-------------|---------|
-| GET | `/v1/contracts` | `ADMIN`, `HR`, `CHIEF`, `MANAGER` | Danh sách hợp đồng — MANAGER chỉ thấy phòng mình |
+| Method | Path | Điều kiện gọi | Ghi chú |
+| --- | --- | --- | --- |
+| GET | `/v1/contracts` | Role `ADMIN`/`HR`/`CHIEF`/`MANAGER`/`DIRECTOR` | Danh sách hợp đồng — MANAGER chỉ thấy phòng mình |
 | GET | `/v1/contracts/me` | Mọi user đã đăng nhập | Hợp đồng của bản thân |
-| GET | `/v1/contracts/:id` | Bản thân hoặc `ADMIN`/`HR`/`CHIEF`/`MANAGER` | Chi tiết một hợp đồng |
-| POST | `/v1/contracts` | `ADMIN`, `HR` | Tạo hợp đồng mới (multipart/form-data) |
-| PATCH | `/v1/contracts/:id` | `ADMIN`, `HR` | Cập nhật hợp đồng (chỉ khi DRAFT, multipart/form-data) |
-| PATCH | `/v1/contracts/:id/activate` | `ADMIN`, `HR` | Kích hoạt DRAFT → ACTIVE |
-| PATCH | `/v1/contracts/:id/terminate` | `ADMIN`, `HR` | Chấm dứt ACTIVE → TERMINATED |
+| GET | `/v1/contracts/:id` | Bản thân hoặc role privileged | Chi tiết một hợp đồng |
+| POST | `/v1/contracts` | Role `ADMIN`/`HR` | Tạo hợp đồng mới (multipart/form-data) |
+| PATCH | `/v1/contracts/:id` | Permission `contract:update` | Cập nhật hợp đồng (chỉ khi DRAFT, multipart/form-data) |
+| PATCH | `/v1/contracts/:id/activate` | Permission `contract:activate` | Kích hoạt DRAFT → ACTIVE |
+| PATCH | `/v1/contracts/:id/terminate` | Permission `contract:terminate` | Chấm dứt ACTIVE → TERMINATED |
+| GET | `/v1/contracts/import/template` | Role `ADMIN`/`HR` | Tải file Excel template — xem [`_fe-prompt-contracts-import-excel.md`](./_fe-prompt-contracts-import-excel.md) |
+| POST | `/v1/contracts/import` | Role `ADMIN`/`HR` | Import hàng loạt từ Excel (all-or-nothing) — xem [`_fe-prompt-contracts-import-excel.md`](./_fe-prompt-contracts-import-excel.md) |
 
-> **Lưu ý thứ tự route:** `/contracts/me` được khai báo **trước** `/contracts/:id`.
+> **Lưu ý thứ tự route:** `/contracts/me`, `/contracts/import/template`, `/contracts/import` đều được khai báo **trước** `/contracts/:id`.
+
+> **Model quyền:** 3 mutation endpoints (`PATCH /:id`, `/:id/activate`, `/:id/terminate`) dùng **permission-based** (`PermissionsGuard`), không dùng role cứng. HR có thể cấp/thu quyền `contract:update`, `contract:activate`, `contract:terminate` cho bất kỳ role nào ở màn Phân quyền. `ADMIN` mặc định bypass. Các endpoint còn lại vẫn dùng role-based như trước.
 
 ---
 
@@ -39,47 +43,47 @@ export type ContractStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
 // TERMINATED      → 'Đã chấm dứt'
 
 export interface ContractEmployeeSummary {
-  id: number;
-  employeeCode: string;
-  fullName: string;
-  department: string | null;   // tên phòng ban (đã flatten)
+	id: number;
+	employeeCode: string;
+	fullName: string;
+	department: string | null; // tên phòng ban (đã flatten)
 }
 
 export interface ContractCreator {
-  id: number;
-  fullName: string;
+	id: number;
+	fullName: string;
 }
 
 export interface ContractResponse {
-  id: number;
-  contractNumber: string;        // VD: "HĐ-2025-001"
-  contractType: ContractType;
-  contractTypeLabel: string;     // nhãn tiếng Việt
-  startDate: string;             // "YYYY-MM-DD"
-  endDate: string | null;        // "YYYY-MM-DD" — null nếu INDEFINITE
-  baseSalary: number | null;
-  position: string | null;
-  status: ContractStatus;
-  statusLabel: string;           // nhãn tiếng Việt
-  fileUrl: string | null;        // presigned URL, hợp lệ ~1 giờ
-  note: string | null;
-  employee: ContractEmployeeSummary;
-  createdBy: ContractCreator;
-  daysUntilExpiry: number | null; // null nếu INDEFINITE hoặc không có endDate
-  isExpiringSoon: boolean;        // true khi daysUntilExpiry ∈ [0, 30]
-  createdAt: string;             // ISO 8601 full datetime
+	id: number;
+	contractNumber: string; // VD: "HĐ-2025-001"
+	contractType: ContractType;
+	contractTypeLabel: string; // nhãn tiếng Việt
+	startDate: string; // "YYYY-MM-DD"
+	endDate: string | null; // "YYYY-MM-DD" — null nếu INDEFINITE
+	baseSalary: number | null;
+	position: string | null;
+	status: ContractStatus;
+	statusLabel: string; // nhãn tiếng Việt
+	fileUrl: string | null; // presigned URL, hợp lệ ~1 giờ
+	note: string | null;
+	employee: ContractEmployeeSummary;
+	createdBy: ContractCreator;
+	daysUntilExpiry: number | null; // null nếu INDEFINITE hoặc không có endDate
+	isExpiringSoon: boolean; // true khi daysUntilExpiry ∈ [0, 30]
+	createdAt: string; // ISO 8601 full datetime
 }
 
 // Dùng cho POST /contracts (không kèm file — xem mục Upload bên dưới)
 export interface CreateContractDto {
-  employeeId: number;
-  contractNumber: string;
-  contractType: ContractType;
-  startDate: string;           // "YYYY-MM-DD"
-  endDate?: string;            // bắt buộc với PROBATION, FIXED_TERM, SEASONAL
-  baseSalary?: number;
-  position?: string;
-  note?: string;
+	employeeId: number;
+	contractNumber: string;
+	contractType: ContractType;
+	startDate: string; // "YYYY-MM-DD"
+	endDate?: string; // bắt buộc với PROBATION, FIXED_TERM, SEASONAL
+	baseSalary?: number;
+	position?: string;
+	note?: string;
 }
 
 // Dùng cho PATCH /contracts/:id (chỉ khi DRAFT)
@@ -88,17 +92,17 @@ export type UpdateContractDto = Partial<Omit<CreateContractDto, 'employeeId'>>;
 
 // Dùng cho PATCH /contracts/:id/terminate
 export interface TerminateContractDto {
-  note?: string;
+	note?: string;
 }
 
 // Query params cho GET /contracts và GET /contracts/me
 export interface QueryContractParams {
-  page?: number;          // default 1
-  limit?: number;         // default 20, max 100
-  employeeId?: number;
-  status?: ContractStatus;
-  contractType?: ContractType;
-  departmentId?: number;
+	page?: number; // default 1
+	limit?: number; // default 20, max 100
+	employeeId?: number;
+	status?: ContractStatus;
+	contractType?: ContractType;
+	departmentId?: number;
 }
 ```
 
@@ -109,15 +113,15 @@ export interface QueryContractParams {
 `POST /v1/contracts` và `PATCH /v1/contracts/:id` nhận `multipart/form-data`.
 
 | Field | Type | Bắt buộc | Ghi chú |
-|-------|------|----------|---------|
-| `employeeId` | integer | ✅ (POST) | |
+| --- | --- | --- | --- |
+| `employeeId` | integer | ✅ (POST) |  |
 | `contractNumber` | string | ✅ | unique toàn hệ thống |
 | `contractType` | enum | ✅ | `PROBATION` / `FIXED_TERM` / `INDEFINITE` / `SEASONAL` |
 | `startDate` | string (date) | ✅ | `"YYYY-MM-DD"` |
 | `endDate` | string (date) | Bắt buộc nếu không phải INDEFINITE | `"YYYY-MM-DD"` |
-| `baseSalary` | number | ❌ | |
-| `position` | string | ❌ | |
-| `note` | string | ❌ | |
+| `baseSalary` | number | ❌ |  |
+| `position` | string | ❌ |  |
+| `note` | string | ❌ |  |
 | `file` | binary | ❌ | PDF / DOCX / JPG / PNG, tối đa 10 MB |
 
 ```typescript
@@ -166,54 +170,51 @@ await $fetch('/v1/contracts', { method: 'POST', body: formData });
 ```typescript
 // composables/useContracts.ts
 import type {
-  ContractResponse,
-  CreateContractDto,
-  UpdateContractDto,
-  TerminateContractDto,
-  QueryContractParams,
+	ContractResponse,
+	CreateContractDto,
+	UpdateContractDto,
+	TerminateContractDto,
+	QueryContractParams,
 } from '~/types/contract.types';
 
 export function useContracts() {
-  const { get, list, post, patch } = useFetch();
+	const { get, list, post, patch } = useFetch();
 
-  const fetchAll = (params?: QueryContractParams) =>
-    list<ContractResponse>('/v1/contracts', { params });
+	const fetchAll = (params?: QueryContractParams) => list<ContractResponse>('/v1/contracts', { params });
 
-  const fetchMyContracts = (params?: Pick<QueryContractParams, 'page' | 'limit' | 'status'>) =>
-    list<ContractResponse>('/v1/contracts/me', { params });
+	const fetchMyContracts = (params?: Pick<QueryContractParams, 'page' | 'limit' | 'status'>) =>
+		list<ContractResponse>('/v1/contracts/me', { params });
 
-  const fetchById = (id: number) =>
-    get<ContractResponse>(`/v1/contracts/${id}`);
+	const fetchById = (id: number) => get<ContractResponse>(`/v1/contracts/${id}`);
 
-  const createContract = (dto: CreateContractDto, file?: File) => {
-    const formData = new FormData();
-    Object.entries(dto).forEach(([k, v]) => v != null && formData.append(k, String(v)));
-    if (file) formData.append('file', file);
-    return post<ContractResponse>('/v1/contracts', formData);
-  };
+	const createContract = (dto: CreateContractDto, file?: File) => {
+		const formData = new FormData();
+		Object.entries(dto).forEach(([k, v]) => v != null && formData.append(k, String(v)));
+		if (file) formData.append('file', file);
+		return post<ContractResponse>('/v1/contracts', formData);
+	};
 
-  const updateContract = (id: number, dto: UpdateContractDto, file?: File) => {
-    const formData = new FormData();
-    Object.entries(dto).forEach(([k, v]) => v != null && formData.append(k, String(v)));
-    if (file) formData.append('file', file);
-    return patch<ContractResponse>(`/v1/contracts/${id}`, formData);
-  };
+	const updateContract = (id: number, dto: UpdateContractDto, file?: File) => {
+		const formData = new FormData();
+		Object.entries(dto).forEach(([k, v]) => v != null && formData.append(k, String(v)));
+		if (file) formData.append('file', file);
+		return patch<ContractResponse>(`/v1/contracts/${id}`, formData);
+	};
 
-  const activateContract = (id: number) =>
-    patch<ContractResponse>(`/v1/contracts/${id}/activate`);
+	const activateContract = (id: number) => patch<ContractResponse>(`/v1/contracts/${id}/activate`);
 
-  const terminateContract = (id: number, note?: string) =>
-    patch<ContractResponse>(`/v1/contracts/${id}/terminate`, { note } as TerminateContractDto);
+	const terminateContract = (id: number, note?: string) =>
+		patch<ContractResponse>(`/v1/contracts/${id}/terminate`, { note } as TerminateContractDto);
 
-  return {
-    fetchAll,
-    fetchMyContracts,
-    fetchById,
-    createContract,
-    updateContract,
-    activateContract,
-    terminateContract,
-  };
+	return {
+		fetchAll,
+		fetchMyContracts,
+		fetchById,
+		createContract,
+		updateContract,
+		activateContract,
+		terminateContract,
+	};
 }
 ```
 
@@ -222,12 +223,11 @@ export function useContracts() {
 ## Edge Cases
 
 | Tình huống | Kết quả |
-|-----------|---------|
+| --- | --- |
 | `contractType = 'INDEFINITE'` | `endDate` không bắt buộc, `endDate = null`, `daysUntilExpiry = null`, `isExpiringSoon = false` |
 | `contractType != 'INDEFINITE'` mà không truyền `endDate` | 400 — `endDate là bắt buộc với hợp đồng có thời hạn` |
 | Activate hợp đồng không ở trạng thái `DRAFT` | 400 Bad Request |
-| Activate khi nhân viên đã có hợp đồng `ACTIVE` | 400 Bad Request |
-| Activate khi `startDate` còn ở tương lai | 400 Bad Request |
+| Activate khi nhân viên đã có hợp đồng `ACTIVE` | 409 Conflict |
 | Update hợp đồng không ở trạng thái `DRAFT` | 400 Bad Request |
 | Terminate hợp đồng không ở trạng thái `ACTIVE` | 400 Bad Request |
 | `contractNumber` trùng | 409 Conflict |

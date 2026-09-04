@@ -2,6 +2,7 @@
 	import type { EmployeeQueryParams, EmploymentType } from '~/types/employee.types';
 	import EmployeeEmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBadge.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
+	import EmployeeImportModal from '~/components/modules/employee/EmployeeImportModal.vue';
 
 	definePageMeta({ title: 'Nhân viên' });
 
@@ -15,6 +16,8 @@
 	const canCreate = computed(() => hasPermission('employee:create'));
 	const canUpdate = computed(() => hasPermission('employee:update'));
 	const canDelete = computed(() => hasPermission('employee:delete'));
+	const canImport = computed(() => hasPermission('employee:import'));
+	const showImportModal = ref(false);
 	const metaDataStore = useMetaDataStore();
 	metaDataStore.load().catch(() => {
 		/* metadata not critical */
@@ -92,6 +95,12 @@
 		fetchDepartments();
 	});
 
+	async function onImportSuccess() {
+		showImportModal.value = false;
+		page.value = 1;
+		await load();
+	}
+
 	// Deactivate confirm modal
 	const confirmId = ref<number | null>(null);
 	const deactivating = ref(false);
@@ -158,14 +167,26 @@
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Nhân viên</h1>
 				<p v-if="meta" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tổng {{ meta.total }} nhân viên</p>
 			</div>
-			<NuxtLink v-if="canCreate" to="/management/employees/new">
-				<CommonAppButton>
+			<div class="flex items-center gap-2">
+				<CommonAppButton v-if="canImport" variant="primary" @click="showImportModal = true">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+						/>
 					</svg>
-					Thêm nhân viên
+					Import Excel
 				</CommonAppButton>
-			</NuxtLink>
+				<NuxtLink v-if="canCreate" to="/management/employees/new">
+					<CommonAppButton>
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+						</svg>
+						Thêm nhân viên
+					</CommonAppButton>
+				</NuxtLink>
+			</div>
 		</div>
 
 		<!-- Filters -->
@@ -368,5 +389,8 @@
 				</div>
 			</Transition>
 		</Teleport>
+
+		<!-- Import Excel modal -->
+		<EmployeeImportModal v-if="showImportModal" @close="showImportModal = false" @imported="onImportSuccess" />
 	</div>
 </template>

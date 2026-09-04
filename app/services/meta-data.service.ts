@@ -1,6 +1,11 @@
 import { useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse } from '~/types/api.types';
-import type { RoleOption, BusinessTripStatusOption, EmploymentTypeOption } from '~/types/meta-data.types';
+import type {
+	RoleOption,
+	BusinessTripStatusOption,
+	EmploymentTypeOption,
+	PassportTypeOption,
+} from '~/types/meta-data.types';
 
 export const useMetaDataService = () => {
 	const authFetch = useAuthFetch();
@@ -18,6 +23,11 @@ export const useMetaDataService = () => {
 
 		async findEmploymentTypes(): Promise<EmploymentTypeOption[]> {
 			const res = await authFetch<ApiResponse<EmploymentTypeOption[]>>('/v1/meta-data/employment-types');
+			return res.data;
+		},
+
+		async findPassportTypes(): Promise<PassportTypeOption[]> {
+			const res = await authFetch<ApiResponse<PassportTypeOption[]>>('/v1/meta-data/passport-types');
 			return res.data;
 		},
 	};

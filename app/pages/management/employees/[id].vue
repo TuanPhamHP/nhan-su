@@ -7,9 +7,10 @@
 	import { useEmployeeService } from '~/services/employee.service';
 	import type { PositionSummary } from '~/types/position.types';
 	import EmployeeEmployeeStatusBadge from '@/components/modules/employee/EmployeeStatusBadge.vue';
-	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
 	import EmployeeContracts from '~/components/modules/employee/EmployeeContracts.vue';
 	import EmployeeSocialInsurance from '~/components/modules/employee/EmployeeSocialInsurance.vue';
+	import EmployeeCitizenId from '~/components/modules/employee/EmployeeCitizenId.vue';
+	import EmployeePassport from '~/components/modules/employee/EmployeePassport.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 
 	definePageMeta({ title: 'Chi tiết nhân viên' });
@@ -56,7 +57,7 @@
 		}
 	}
 
-	const validTabs = ['info', 'documents', 'contracts', 'social-insurance'] as const;
+	const validTabs = ['info', 'contracts', 'social-insurance', 'identity'] as const;
 	type TabId = (typeof validTabs)[number];
 	const activeTab = ref<TabId>(
 		validTabs.includes(route.query.tab as TabId) ? (route.query.tab as TabId) : 'info',
@@ -400,21 +401,6 @@
 						type="button"
 						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
 						:class="
-							activeTab === 'documents'
-								? 'border-brand-500 text-brand-600 dark:text-brand-400'
-								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
-						"
-						@click="
-							activeTab = 'documents';
-							isEditing = false;
-						"
-					>
-						Tài liệu
-					</button>
-					<button
-						type="button"
-						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
-						:class="
 							activeTab === 'contracts'
 								? 'border-brand-500 text-brand-600 dark:text-brand-400'
 								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
@@ -440,6 +426,21 @@
 						"
 					>
 						BHXH &amp; Thuế
+					</button>
+					<button
+						type="button"
+						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+						:class="
+							activeTab === 'identity'
+								? 'border-brand-500 text-brand-600 dark:text-brand-400'
+								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+						"
+						@click="
+							activeTab = 'identity';
+							isEditing = false;
+						"
+					>
+						Định danh
 					</button>
 				</nav>
 			</div>
@@ -624,9 +625,6 @@
 				</form>
 			</template>
 
-			<!-- Tab: Tài liệu -->
-			<EmployeeDocuments v-else-if="activeTab === 'documents'" :employee-id="id" :readonly="!canEdit" />
-
 			<!-- Tab: Hợp đồng -->
 			<div
 				v-else-if="activeTab === 'contracts'"
@@ -637,6 +635,12 @@
 
 			<!-- Tab: BHXH & Thuế -->
 			<EmployeeSocialInsurance v-else-if="activeTab === 'social-insurance'" :employee-id="id" />
+
+			<!-- Tab: Định danh (CCCD + Hộ chiếu) -->
+			<div v-else-if="activeTab === 'identity'" class="space-y-6">
+				<EmployeeCitizenId :employee-id="id" />
+				<EmployeePassport :employee-id="id" />
+			</div>
 		</template>
 
 		<!-- Confirm reset password modal -->

@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Import Nhân Sự — Hướng dẫn nhanh</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+        color: #1f2937;
+        background: #f8fafc;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 32px 32px 60px;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, #1e40af, #3b82f6);
+        color: #fff;
+        padding: 28px 32px;
+        border-radius: 12px;
+        margin-bottom: 28px;
+      }
+      .hero h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+      }
+      .hero p {
+        margin: 0;
+        opacity: 0.92;
+        font-size: 15px;
+      }
+
+      section {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 24px 28px;
+        margin-bottom: 20px;
+      }
+      section h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+        color: #1e40af;
+      }
+      section p {
+        margin: 0 0 10px;
+      }
+
+      /* 4 bước */
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        counter-reset: step;
+      }
+      .step {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+        counter-increment: step;
+        position: relative;
+      }
+      .step::before {
+        content: counter(step);
+        display: block;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #1e40af;
+        color: #fff;
+        font-weight: 700;
+        line-height: 32px;
+        margin: 0 auto 8px;
+      }
+      .step .t {
+        font-weight: 600;
+        font-size: 14px;
+        color: #1e3a8a;
+      }
+      .step .d {
+        font-size: 12px;
+        color: #475569;
+        margin-top: 4px;
+      }
+      @media (max-width: 600px) {
+        .steps {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .required-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0 4px;
+      }
+      .chip {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .chip.must {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .chip.opt {
+        background: #e5e7eb;
+        color: #374151;
+      }
+
+      .rule {
+        background: #f8fafc;
+        border-left: 3px solid #1e40af;
+        padding: 10px 14px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .rule b {
+        color: #1e3a8a;
+      }
+
+      .callout {
+        border-left: 4px solid #f59e0b;
+        background: #fffbeb;
+        color: #78350f;
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin: 12px 0;
+        font-size: 14px;
+      }
+      .callout.note {
+        border-color: #10b981;
+        background: #ecfdf5;
+        color: #065f46;
+      }
+      .callout b {
+        display: block;
+        margin-bottom: 2px;
+      }
+
+      code {
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: Consolas, monospace;
+        font-size: 13px;
+        color: #be185d;
+      }
+
+      /* Nhóm điều kiện */
+      .group-box {
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin: 8px 0;
+      }
+      .group-box .title {
+        font-weight: 600;
+        color: #1e40af;
+        margin-bottom: 4px;
+      }
+
+      footer {
+        text-align: center;
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 20px;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+        }
+        section {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="hero">
+        <h1>Import nhân sự từ Excel</h1>
+        <p>Hướng dẫn nhanh cho phòng HR — làm theo 4 bước.</p>
+      </div>
+
+      <!-- ─── 4 BƯỚC ─── -->
+      <section>
+        <h2>Làm theo 4 bước</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="t">Tải file mẫu</div>
+            <div class="d">Nhấn "Tải file mẫu" trong màn Import</div>
+          </div>
+          <div class="step">
+            <div class="t">Điền dữ liệu</div>
+            <div class="d">Nhập nhân viên từ dòng 2 trở đi</div>
+          </div>
+          <div class="step">
+            <div class="t">Upload file</div>
+            <div class="d">Nhấn "Import Excel" → chọn file</div>
+          </div>
+          <div class="step">
+            <div class="t">Xong</div>
+            <div class="d">Nhân viên nhận email chào mừng</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── CỘT BẮT BUỘC ─── -->
+      <section>
+        <h2>Cột nào bắt buộc phải điền?</h2>
+        <p>Chỉ có <b>6 cột bắt buộc</b>. Còn lại có thể bỏ trống nếu chưa có thông tin:</p>
+        <div class="required-list">
+          <span class="chip must">Mã nhân viên</span>
+          <span class="chip must">Họ và tên</span>
+          <span class="chip must">Email</span>
+          <span class="chip must">Ngày vào làm</span>
+          <span class="chip must">Mật khẩu</span>
+          <span class="chip must">Vai trò hệ thống</span>
+        </div>
+        <p style="font-size: 13px; color: #64748b; margin-top: 12px">
+          Ngoài ra còn 18 cột <span class="chip opt" style="font-size: 12px">tuỳ chọn</span>
+          (SĐT, phòng ban, chức vụ, ngày sinh, CCCD, hộ chiếu…) — bỏ trống được nếu chưa cần.
+        </p>
+      </section>
+
+      <!-- ─── 3 QUY TẮC PHẢI NHỚ ─── -->
+      <section>
+        <h2>3 quy tắc phải nhớ</h2>
+
+        <div class="rule">
+          <b>1. Mật khẩu</b> — tối thiểu 8 ký tự, có <b>chữ hoa + số + ký tự đặc biệt</b>.
+          Ví dụ hợp lệ: <code>Test@1234</code>, <code>Hr@2026!</code>.
+        </div>
+
+        <div class="rule">
+          <b>2. Ngày tháng</b> — định dạng <code>yyyy-MM-dd</code>. Ví dụ:
+          <code>2025-01-15</code>. Excel tự nhận ngày cũng được, chỉ cần format cell là Date.
+        </div>
+
+        <div class="rule">
+          <b>3. Phòng ban phải có sẵn</b> — nếu điền tên phòng ban, tên phải khớp với danh sách
+          phòng ban đã tạo trong hệ thống. <b>Hệ thống không tự tạo phòng ban mới.</b>
+          <br />
+          <span style="color: #64748b; font-size: 13px">
+            (Chức vụ thì ngược lại — hệ thống tự tạo nếu chưa có.)
+          </span>
+        </div>
+      </section>
+
+      <!-- ─── NHÓM CCCD/HC ─── -->
+      <section>
+        <h2>Về thông tin CCCD và Hộ chiếu</h2>
+        <p>Có 2 nhóm cột đi cùng nhau — <b>điền đủ hoặc bỏ trống hết</b>, không điền nửa chừng:</p>
+
+        <div class="group-box">
+          <div class="title">Nhóm CCCD (6 cột: Số CCCD → Quê quán)</div>
+          Nếu nhân viên có CCCD → điền tối thiểu <b>Số CCCD (12 chữ số) + Ngày cấp + Ngày hết hạn</b>.
+          Nếu chưa có → bỏ trống cả nhóm.
+        </div>
+
+        <div class="group-box">
+          <div class="title">Nhóm Hộ chiếu (5 cột: Số HC → Ngày hết hạn)</div>
+          Nếu có → điền đủ <b>Số HC + Họ tên + Loại (Phổ thông/Ngoại giao/Công vụ) + 2 ngày</b>.
+          Nếu chưa có → bỏ trống cả nhóm.
+        </div>
+      </section>
+
+      <!-- ─── LỖI VÀ KHẮC PHỤC ─── -->
+      <section>
+        <h2>Nếu upload báo lỗi</h2>
+        <div class="callout">
+          <b>⚠ Nguyên tắc: Tất cả hoặc không có</b>
+          Chỉ cần <b>1 dòng lỗi</b> → hệ thống <b>không tạo bất kỳ nhân viên nào</b>.
+          Đây là cách bảo vệ dữ liệu — không có tình trạng "import nửa chừng".
+        </div>
+        <p>Khi lỗi, hệ thống hiển thị bảng như sau:</p>
+        <p>
+          <b>Dòng 5 · Cột Email · Giá trị "abc@" · Email sai định dạng</b>
+        </p>
+        <p style="margin-top: 10px">
+          → Mở file Excel, tìm đúng dòng đó, sửa theo mô tả lỗi, lưu file, upload lại.
+          Cứ lặp lại cho tới khi hết lỗi.
+        </p>
+      </section>
+
+      <!-- ─── SAU KHI IMPORT ─── -->
+      <section>
+        <h2>Sau khi import thành công</h2>
+        <div class="callout note">
+          <b>✓ Hệ thống tự động làm các việc sau</b>
+          • Tạo tài khoản đăng nhập cho từng nhân viên.<br />
+          • Gửi email chào mừng kèm email + mật khẩu để họ đăng nhập.<br />
+          • Khởi tạo số dư phép năm.<br />
+          • Tự tạo Chức vụ mới (nếu chưa có trong phòng ban).
+        </div>
+        <p style="font-size: 13px; color: #64748b">
+          <b>Nhắc nhân viên đổi mật khẩu</b> ngay sau lần đăng nhập đầu tiên để bảo mật tài khoản.
+        </p>
+      </section>
+
+      <!-- ─── MẸO NHỎ ─── -->
+      <section>
+        <h2>Mẹo dùng Excel</h2>
+        <ul style="margin: 0; padding-left: 20px; font-size: 14px">
+          <li>
+            <b>Số CCCD / SĐT bị mất số 0 đầu</b> → chọn cột đó, chuột phải → Format Cells →
+            chọn <code>Text</code>, rồi nhập lại.
+          </li>
+          <li>
+            <b>Ngày bị sai định dạng</b> → chọn cell → Format Cells → Date → chọn kiểu
+            <code>YYYY-MM-DD</code>.
+          </li>
+          <li>
+            <b>Không xoá dòng 1</b> (header). Dữ liệu bắt đầu từ dòng 2.
+          </li>
+          <li>
+            <b>Nếu chưa quen</b> — thử 2-3 nhân viên trước, import xong rồi mới nhân rộng.
+          </li>
+        </ul>
+      </section>
+
+      <footer>HR System · Nếu vướng mắc, liên hệ team IT</footer>
+    </div>
+  </body>
+</html>

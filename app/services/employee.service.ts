@@ -7,6 +7,7 @@ import type {
 	CreateEmployeeDto,
 	UpdateEmployeeDto,
 } from '~/types/employee.types';
+import type { ImportEmployeesResponse } from '~/types/employee-import.types';
 
 export const useEmployeeService = () => {
 	const authFetch = useAuthFetch();
@@ -54,6 +55,16 @@ export const useEmployeeService = () => {
 				method: 'POST',
 			});
 			return res.data.message;
+		},
+
+		async importFromExcel(file: File): Promise<ImportEmployeesResponse> {
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await authFetch<ApiResponse<ImportEmployeesResponse>>('/v1/employees/import', {
+				method: 'POST',
+				body: formData,
+			});
+			return res.data;
 		},
 	};
 };

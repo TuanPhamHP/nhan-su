@@ -59,3 +59,32 @@ export interface QueryContractParams {
 	departmentId?: number;
 	search?: string;
 }
+
+// ─── Import từ Excel ──────────────────────────────────────────────────────────
+
+export type ImportContractsRowErrorField =
+	| 'employeeCode'
+	| 'contractNumber'
+	| 'startDate'
+	| 'endDate'
+	| 'baseSalary'
+	| 'position';
+
+export interface ImportContractsRowError {
+	row: number;
+	field: ImportContractsRowErrorField | null;
+	value: string | null;
+	message: string;
+}
+
+export interface ImportContractsResponse {
+	importedCount: number;
+	fileUrl: string;
+	contracts: ContractResponse[];
+}
+
+export interface ImportContractsValidationErrorPayload {
+	code: 'CONTRACT_IMPORT_VALIDATION';
+	message: string;
+	errors: ImportContractsRowError[];
+}
