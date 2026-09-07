@@ -17,7 +17,7 @@ const emit = defineEmits<{
 	reject: [];
 }>();
 
-const { user } = useAuth();
+const { canApprove } = usePermissions();
 
 function formatDate(d: string) {
 	return format(new Date(d), 'dd/MM/yyyy');
@@ -84,10 +84,7 @@ const isTerminal = computed(() =>
 );
 
 const canReview = computed(
-	() =>
-		!isTerminal.value &&
-		!!user.value &&
-		props.request.canBeApprovedBy?.includes(user.value.id) === true,
+	() => !isTerminal.value && canApprove(props.request.canBeApprovedBy ?? null, APPROVE_PERMISSIONS.onlineWork),
 );
 </script>
 

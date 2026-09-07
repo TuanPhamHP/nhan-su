@@ -11,12 +11,17 @@ definePageMeta({ title: 'Quản lý đơn công tác' });
 
 const toast = useToast();
 const router = useRouter();
-const { user } = useAuth();
 const service = useBusinessTripService();
 const metaDataStore = useMetaDataStore();
 const { businessTripStatuses } = storeToRefs(metaDataStore);
 
-const isAdmin = computed(() => user.value?.role === 'ADMIN');
+const { canApprove, isAdmin } = usePermissions();
+
+// BE trả `canApprove` (assigned approver); permission `business-trip:approve` override được.
+function canApproveTrip(trip: BusinessTripResponse): boolean {
+	if (trip.status !== 'PENDING') return false;
+	return trip.canApprove || canApprove(trip.approver?.id ?? null, APPROVE_PERMISSIONS.businessTrip);
+}
 
 const trips = ref<BusinessTripResponse[]>([]);
 const meta = ref<PaginatedMeta | null>(null);
@@ -183,7 +188,7 @@ onMounted(() => {
 
 				<!-- Actions: Approve/Reject nếu có quyền duyệt -->
 				<div
-					v-if="trip.canApprove || (isAdmin && trip.status === 'PENDING')"
+					v-if="canApproveTrip(trip)"
 					class="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800"
 					@click.stop
 				>

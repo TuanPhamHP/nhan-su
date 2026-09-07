@@ -7,12 +7,10 @@ import RejectOvertimeModal from '~/components/modules/overtime/RejectOvertimeMod
 import type { OvertimeRequestResponse, OvertimeStatus, QueryOvertimeParams } from '~/types/overtime.types';
 import type { DepartmentSummary } from '~/types/department.types';
 import type { SelectOption } from '~/components/ui/Select.vue';
-import { isManagementRole } from '~/utils/role';
 
 definePageMeta({ title: 'Quản lý OT' });
 
 const toast = useToast();
-const { user } = useAuth();
 const {
 	requests,
 	requestsMeta,
@@ -26,7 +24,11 @@ const {
 } = useOvertimeRequests();
 const departmentService = useDepartmentService();
 
-const canApprove = computed(() => isManagementRole(user.value?.role));
+const { canApprove } = usePermissions();
+
+function canApproveOvertime(req: OvertimeRequestResponse): boolean {
+	return req.status === 'PENDING' && canApprove(req.assignedApprover?.id ?? null, APPROVE_PERMISSIONS.overtime);
+}
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 type Tab = 'requests' | 'report';
@@ -415,7 +417,7 @@ watch(activeTab, tab => {
 								<!-- Thao tác -->
 								<td class="px-4 py-3">
 									<div class="flex items-center justify-end gap-1.5">
-										<template v-if="req.status === 'PENDING' && canApprove">
+										<template v-if="canApproveOvertime(req)">
 											<CommonAppButton
 												size="sm"
 												variant="primary"

@@ -12,13 +12,26 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; permission: string | string[] }
 	{ prefix: '/management/employees/new', permission: 'employee:create' },
 	{ prefix: '/management/departments', permission: 'department:read' },
 	{ prefix: '/management/employees', permission: 'employee:read' },
+	{ prefix: '/management/approval', permission: ALL_APPROVE_PERMISSIONS },
+	{ prefix: '/management/attendance', permission: 'attendance:read' },
+	{ prefix: '/management/leave', permission: 'leave:read' },
+	{ prefix: '/management/overtime', permission: 'overtime:read' },
+	{ prefix: '/management/online-work', permission: 'online-work:read' },
+	{ prefix: '/management/violations', permission: 'violation:read' },
+	{ prefix: '/management/makeup-attendance', permission: 'makeup:read' },
+	{ prefix: '/management/business-trips', permission: 'business-trip:read' },
+	{ prefix: '/management/reports', permission: 'report:read' },
 ];
 
 export default defineNuxtRouteMiddleware(to => {
 	const authStore = useAuthStore();
 	if (!authStore.isAuthenticated || !authStore.user) return;
 
-	const { hasPermission } = usePermissions();
+	const { permissions, hasPermission } = usePermissions();
+
+	// `loadPermissions()` fail silently → mảng rỗng. Không khoá cứng user ra khỏi
+	// toàn bộ app vì một request lỗi: backend vẫn là source of truth (403 nếu thiếu quyền).
+	if (permissions.value.length === 0) return;
 
 	// Longest-prefix wins — tránh `/x/new` bị `/x` "nuốt" match trước.
 	const matched = ROUTE_PERMISSIONS

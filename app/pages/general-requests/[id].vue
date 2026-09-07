@@ -11,7 +11,6 @@ definePageMeta({ title: 'Chi tiết văn bản' });
 
 const route = useRoute();
 const toast = useToast();
-const { user } = useAuth();
 const service = useGeneralRequestService();
 const { printRequest, previewRequest } = usePrint();
 const generalRequestStore = useGeneralRequestStore();
@@ -28,11 +27,12 @@ const rejectNote = ref('');
 const showCancelConfirm = ref(false);
 const actionLoading = ref(false);
 
-const isAdmin = computed(() => user.value?.role === 'ADMIN');
+const { canApprove, isAdmin } = usePermissions();
 
-const isCurrentApprover = computed(() =>
-	(request.value?.currentApprover?.employeeId === user.value?.id || isAdmin.value) &&
-	request.value?.status === 'PENDING',
+const isCurrentApprover = computed(
+	() =>
+		request.value?.status === 'PENDING' &&
+		canApprove(request.value?.currentApprover?.employeeId ?? null, APPROVE_PERMISSIONS.generalRequest),
 );
 
 const canCancelNow = computed(() =>

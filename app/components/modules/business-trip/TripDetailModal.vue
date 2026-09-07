@@ -13,9 +13,12 @@ const emit = defineEmits<{
 	cancel: [trip: BusinessTripResponse];
 }>();
 
-const { user } = useAuth();
-const isAdmin = computed(() => user.value?.role === 'ADMIN');
-const canApproveNow = computed(() => props.trip.canApprove || (isAdmin.value && props.trip.status === 'PENDING'));
+const { canApprove, isAdmin } = usePermissions();
+const canApproveNow = computed(
+	() =>
+		props.trip.status === 'PENDING' &&
+		(props.trip.canApprove || canApprove(props.trip.approver?.id ?? null, APPROVE_PERMISSIONS.businessTrip)),
+);
 const canCancelNow = computed(() => props.trip.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(props.trip.status)));
 
 const transportLabels: Record<string, string> = {
