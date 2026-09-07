@@ -23,7 +23,8 @@ const {
 const departmentService = useDepartmentService();
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
-const canApprove = computed(() => isManagementRole(user.value?.role));
+const { canApprove: canApproveWith } = usePermissions();
+const canApprove = computed(() => canApproveWith(null, APPROVE_PERMISSIONS.onlineWork));
 const canViewAll = computed(() => isManagementRole(user.value?.role));
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────

@@ -18,19 +18,13 @@
 		reject: [];
 	}>();
 
-	const { user } = useAuth();
+	const { canApprove } = usePermissions();
 
 	const canReview = computed(() => {
 		const v = props.violationRequest;
 		if (v.status !== 'PENDING' && v.status !== 'PENDING_L2') return false;
-		if (!user.value) return false;
-		if (user.value.role === 'ADMIN') return true;
-		if (v.status === 'PENDING') {
-			if (v.assignedReviewer !== null) return v.assignedReviewer.id === user.value.id;
-			return user.value.role === 'HR';
-		}
-		if (v.approverL2 !== null) return v.approverL2.id === user.value.id;
-		return user.value.role === 'HR';
+		const reviewer = v.status === 'PENDING' ? v.assignedReviewer : v.approverL2;
+		return canApprove(reviewer?.id ?? null, APPROVE_PERMISSIONS.violation);
 	});
 
 	const approveButtonLabel = computed(() => {

@@ -31,6 +31,7 @@
 	const violationService = useViolationRequestService();
 	const departmentService = useDepartmentService();
 
+	const { canApprove } = usePermissions();
 	const canManage = computed(() => isManagementRole(user.value?.role));
 
 	// ─── Options ──────────────────────────────────────────────────────────────────
@@ -208,16 +209,12 @@
 		return text.length > len ? text.slice(0, len) + '…' : text;
 	}
 
+	// L1 (PENDING) check `assignedReviewer`, L2 (PENDING_L2) check `approverL2` —
+	// cả 2 cấp dùng chung permission `violation:approve` (override được identity).
 	function canReview(req: ViolationRequest): boolean {
-		if (!user.value) return false;
 		if (req.status !== 'PENDING' && req.status !== 'PENDING_L2') return false;
-		if (user.value.role === 'ADMIN') return true;
-		if (req.status === 'PENDING') {
-			if (req.assignedReviewer !== null) return req.assignedReviewer.id === user.value.id;
-			return user.value.role === 'HR';
-		}
-		if (req.approverL2 !== null) return req.approverL2.id === user.value.id;
-		return user.value.role === 'HR';
+		const reviewer = req.status === 'PENDING' ? req.assignedReviewer : req.approverL2;
+		return canApprove(reviewer?.id ?? null, APPROVE_PERMISSIONS.violation);
 	}
 
 	function approveButtonLabel(req: ViolationRequest): string {

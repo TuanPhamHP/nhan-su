@@ -28,9 +28,14 @@ const reportOpen = ref(false);
 const transportRoute = ref<TripRouteResponse | null>(null);
 
 const isHrOrAdmin = computed(() => !!user.value && ['HR', 'ADMIN'].includes(user.value.role));
-const isAdmin = computed(() => user.value?.role === 'ADMIN');
+const { canApprove, isAdmin } = usePermissions();
 
-const canApproveNow = computed(() => !!trip.value && (trip.value.canApprove || (isAdmin.value && trip.value.status === 'PENDING')));
+const canApproveNow = computed(
+	() =>
+		!!trip.value &&
+		trip.value.status === 'PENDING' &&
+		(trip.value.canApprove || canApprove(trip.value.approver?.id ?? null, APPROVE_PERMISSIONS.businessTrip)),
+);
 const canCancelNow = computed(() => !!trip.value && (trip.value.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(trip.value.status))));
 
 const allTicketImageUrls = computed<string[]>(() => {

@@ -17,13 +17,12 @@ const emit = defineEmits<{
 	reject: [];
 }>();
 
-const { user } = useAuth();
+const { canApprove } = usePermissions();
 
 const canReview = computed(
 	() =>
 		props.leaveRequest.status === 'PENDING' &&
-		!!user.value &&
-		(props.leaveRequest.assignedApprover?.id === user.value.id || user.value.role === 'ADMIN'),
+		canApprove(props.leaveRequest.assignedApprover?.id ?? null, APPROVE_PERMISSIONS.leave),
 );
 
 function formatDate(d: string) {

@@ -36,8 +36,13 @@
 	const leaveBalanceService = useLeaveBalanceService();
 	const departmentService = useDepartmentService();
 
+	const { canApprove } = usePermissions();
 	const isManager = computed(() => user.value?.role === 'MANAGER');
 	const managerDepartmentId = computed(() => user.value?.department?.id);
+
+	function canApproveLeave(req: LeaveRequest): boolean {
+		return req.status === 'PENDING' && canApprove(req.assignedApprover?.id ?? null, APPROVE_PERMISSIONS.leave);
+	}
 
 	// ─── Tabs ─────────────────────────────────────────────────────────────────────
 	type Tab = 'requests' | 'types' | 'balances';
@@ -643,7 +648,7 @@
 								<!-- Thao tác -->
 								<td class="px-4 py-3">
 									<div class="flex items-center justify-end gap-1.5">
-										<template v-if="req.status === 'PENDING' && (req.assignedApprover?.id === user?.id || user?.role === 'ADMIN')">
+										<template v-if="canApproveLeave(req)">
 											<CommonAppButton
 												size="sm"
 												variant="primary"

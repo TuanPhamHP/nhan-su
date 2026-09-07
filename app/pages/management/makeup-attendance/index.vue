@@ -27,7 +27,9 @@
 
 	const canManage = computed(() => isManagementRole(user.value?.role));
 	const isManager = computed(() => user.value?.role === 'MANAGER');
-	const canApprove = computed(() => isManagementRole(user.value?.role));
+	// Response bù công không expose `assignedApproverId` → chỉ gate bằng permission.
+	const { canApprove: canApproveWith } = usePermissions();
+	const canApprove = computed(() => canApproveWith(null, APPROVE_PERMISSIONS.makeup));
 	// Manager bị ẩn filter phòng ban — backend tự lock theo phòng ban của họ.
 	const showDepartmentFilter = computed(() => isManagementRole(user.value?.role) && user.value?.role !== 'MANAGER');
 
