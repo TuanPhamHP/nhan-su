@@ -45,7 +45,11 @@ const schema = toTypedSchema(
 		employeeId: z.number({ required_error: 'Vui lòng chọn nhân viên' }).positive(),
 		leaveTypeId: z.number({ required_error: 'Vui lòng chọn loại phép' }).positive(),
 		year: z.number().int().min(2020).max(2100),
-		totalDays: z.number().positive('Số ngày phải lớn hơn 0').int('Số ngày phải là số nguyên'),
+		totalDays: z
+			.number()
+			.positive('Số ngày phải lớn hơn 0')
+			// Quỹ phép trừ theo nửa ngày (HALF_DAY = 0.5) nên số dư phải là bội của 0.5.
+			.refine(v => Number.isInteger(v * 2), 'Số ngày phải là bội của 0.5 (VD: 1 | 1.5 | 2)'),
 	}),
 );
 
@@ -145,6 +149,8 @@ watch(searchQuery, q => searchEmployees(q));
 					v-bind="totalDaysAttrs"
 					label="Tổng số ngày phép"
 					type="number"
+					step="0.5"
+					min="0.5"
 					placeholder="12"
 					:error="errors.totalDays"
 					required
