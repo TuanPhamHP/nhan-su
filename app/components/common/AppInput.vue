@@ -10,6 +10,9 @@ const props = withDefaults(
 		disabled?: boolean;
 		required?: boolean;
 		id?: string;
+		/** Chỉ dùng với type="number" — mặc định của HTML là 1, chặn giá trị lẻ như 1.5. */
+		step?: string | number;
+		min?: string | number;
 	}>(),
 	{
 		type: 'text',
@@ -42,6 +45,8 @@ const inputId = computed(() => props.id ?? `input-${Math.random().toString(36).s
 			:value="modelValue"
 			:placeholder="placeholder"
 			:disabled="disabled"
+			:step="step"
+			:min="min"
 			:class="[
 				'block w-full rounded-lg border px-3 py-2.5 text-sm transition-colors',
 				'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
