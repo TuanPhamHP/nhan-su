@@ -54,7 +54,7 @@
 	const deadline = computed(() => {
 		if (!violationDate.value) return null;
 		const d = parseISO(violationDate.value);
-		return new Date(d.getFullYear(), d.getMonth() + 1, 5, 23, 59, 59);
+		return new Date(d.getFullYear(), d.getMonth() + 1, 10, 23, 59, 59);
 	});
 
 	const deadlinePassed = computed(() => {
