@@ -463,7 +463,8 @@
 										<td class="px-4 py-3">
 											<p class="font-semibold text-emerald-700 dark:text-emerald-300">Tổng công tính ăn ca</p>
 											<p class="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5 leading-tight">
-												= (2) — công thực tế offline có mặt, không gồm Công tác, Online, phép, lễ
+												= (2) + Ngày đi làm Online có chế độ — công thực tế offline có mặt, không gồm Công tác, Online
+												(không chế độ), phép, lễ
 											</p>
 										</td>
 										<td class="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300">
@@ -534,13 +535,13 @@
 						</div>
 						<div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-3">
 							<div class="p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-								<p class="text-xs text-gray-500 dark:text-gray-400">Đi muộn (bị từ chối)</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">Đi muộn</p>
 								<p class="text-lg font-bold text-orange-500 dark:text-orange-400 mt-1">
 									{{ data.violations.lateCount }}
 								</p>
 							</div>
 							<div class="p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-								<p class="text-xs text-gray-500 dark:text-gray-400">Về sớm (bị từ chối)</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">Về sớm</p>
 								<p class="text-lg font-bold text-yellow-500 dark:text-yellow-400 mt-1">
 									{{ data.violations.earlyCount }}
 								</p>

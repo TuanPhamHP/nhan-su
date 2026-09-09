@@ -8,6 +8,12 @@ import type {
 	EmployeeBalanceGroup,
 	QueryEmployeeBalanceParams,
 } from '~/types/leave.types';
+import type {
+	RecalculateLeaveSplitPayload,
+	LeaveSplitRecalcResult,
+	RecalculateLeaveBalancePayload,
+	LeaveBalanceRecalcResult,
+} from '~/types/leave-tools.types';
 
 export const useLeaveBalanceService = () => {
 	const authFetch = useAuthFetch();
@@ -50,6 +56,27 @@ export const useLeaveBalanceService = () => {
 			const res = await authFetch<ApiResponse<{ created: number; skipped: number }>>('/v1/leave-balances/bulk-init', {
 				method: 'POST',
 				body,
+			});
+			return res.data;
+		},
+
+		/**
+		 * BƯỚC 1 — tính lại phần P/KL của đơn ANNUAL + HALF_DAY đã duyệt.
+		 * Luôn chạy trước `recalculateBalances()`.
+		 */
+		async recalculateRequests(payload: RecalculateLeaveSplitPayload): Promise<LeaveSplitRecalcResult> {
+			const res = await authFetch<ApiResponse<LeaveSplitRecalcResult>>('/v1/leave-balances/recalculate-requests', {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		/** BƯỚC 2 — cộng lại `usedDays` từ toàn bộ đơn APPROVED của năm rồi ghi đè. */
+		async recalculateBalances(payload: RecalculateLeaveBalancePayload): Promise<LeaveBalanceRecalcResult> {
+			const res = await authFetch<ApiResponse<LeaveBalanceRecalcResult>>('/v1/leave-balances/recalculate', {
+				method: 'POST',
+				body: payload,
 			});
 			return res.data;
 		},
