@@ -46,7 +46,10 @@
 
 	// ─── Tabs ─────────────────────────────────────────────────────────────────────
 	type Tab = 'requests' | 'types' | 'balances';
-	const activeTab = ref<Tab>('requests');
+	// Cho phép deep-link tới tab (VD từ trang Tools: /management/leave?tab=balances)
+	const TABS: Tab[] = ['requests', 'types', 'balances'];
+	const queryTab = route.query.tab as Tab | undefined;
+	const activeTab = ref<Tab>(queryTab && TABS.includes(queryTab) ? queryTab : 'requests');
 
 	// ─── Shared: leave types ──────────────────────────────────────────────────────
 	const leaveTypes = ref<LeaveType[]>([]);
@@ -342,6 +345,8 @@
 		fetchRequests();
 		fetchSummary();
 		openByQueryId();
+		// Watcher chỉ chạy khi tab đổi — deep-link vào thẳng tab balances phải tự load.
+		if (activeTab.value === 'balances') fetchBalances();
 	});
 
 	watch(activeTab, tab => {
