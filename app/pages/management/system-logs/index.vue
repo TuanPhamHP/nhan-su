@@ -198,13 +198,7 @@
 						{{ activeFilterCount }}
 					</span>
 				</p>
-				<button
-					v-if="activeFilterCount > 0"
-					class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 underline transition-colors"
-					@click="resetFilter"
-				>
-					Xóa bộ lọc
-				</button>
+				<CommonAppResetFilterButton v-if="activeFilterCount > 0" size="sm" @click="resetFilter" />
 			</div>
 
 			<!-- Row 1: action, actorType, targetType, status -->

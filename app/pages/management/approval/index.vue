@@ -1,5 +1,5 @@
 <script setup lang="ts">
-	import { format } from 'date-fns';
+	import { format, startOfMonth, endOfMonth } from 'date-fns';
 	import { storeToRefs } from 'pinia';
 	import LeaveStatusBadge from '~/components/modules/leave/LeaveStatusBadge.vue';
 	import LeaveDetailModal from '~/components/modules/leave/LeaveDetailModal.vue';
@@ -25,14 +25,34 @@
 	import { useOvertimeRequestService } from '~/services/overtime-request.service';
 	import { useBusinessTripService } from '~/services/business-trip.service';
 	import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
-	import type { ApprovalModuleKey } from '~/types/approval.types';
-	import type { LeaveRequest } from '~/types/leave.types';
-	import type { MakeupRequestResponse } from '~/types/makeup-attendance.types';
-	import type { ViolationRequest } from '~/types/violation.types';
-	import type { OvertimeRequestResponse } from '~/types/overtime.types';
-	import type { BusinessTripResponse } from '~/types/business-trip.types';
-	import type { OnlineWorkRequestResponse } from '~/types/online-work-request.types';
+	import ApprovalFilterBar from '~/components/modules/approval/ApprovalFilterBar.vue';
+	import { VIOLATION_STATUS_OPTIONS } from '~/utils/violation.utils';
+	import { MAKEUP_STATUS_OPTIONS } from '~/utils/makeup-attendance.utils';
+	import type { ApprovalModuleKey, ApprovalFilterField, ApprovalFilterState } from '~/types/approval.types';
+	import type { LeaveRequest, LeaveStatus, QueryLeaveRequestParams } from '~/types/leave.types';
+	import type {
+		MakeupRequestResponse,
+		MakeupRequestStatus,
+		QueryMakeupRequestParams,
+	} from '~/types/makeup-attendance.types';
+	import type {
+		ViolationRequest,
+		ViolationRequestStatus,
+		QueryViolationRequestParams,
+	} from '~/types/violation.types';
+	import type { OvertimeRequestResponse, OvertimeStatus, QueryOvertimeParams } from '~/types/overtime.types';
+	import type {
+		BusinessTripResponse,
+		BusinessTripStatus,
+		QueryBusinessTripsParams,
+	} from '~/types/business-trip.types';
+	import type {
+		OnlineWorkRequestResponse,
+		OnlineWorkStatus,
+		QueryOnlineWorkParams,
+	} from '~/types/online-work-request.types';
 	import type { PaginatedMeta } from '~/types/api.types';
+	import type { SelectOption } from '~/components/ui/Select.vue';
 
 	definePageMeta({ title: 'Hộp thư phê duyệt' });
 
@@ -48,6 +68,7 @@
 	const onlineWorkService = useOnlineWorkRequestService();
 	const approvalStore = useApprovalStore();
 	const { counts } = storeToRefs(approvalStore);
+	const directoryStore = useDirectoryStore();
 
 	type Tab = ApprovalModuleKey;
 
@@ -72,6 +93,120 @@
 		router.replace({ query: { ...route.query, tab } });
 		loadCurrentTab();
 	});
+
+	// ─── Filters ──────────────────────────────────────────────────────────────────
+	// Mỗi tab giữ filter riêng — chuyển tab không mang filter cũ sang module khác.
+	const FILTER_FIELDS: Record<Tab, ApprovalFilterField[]> = {
+		leaveRequests: ['status', 'department', 'employee', 'dateRange'],
+		overtimeRequests: ['status', 'department', 'employee', 'dateRange'],
+		onlineWorkRequests: ['status', 'department', 'employee', 'dateRange'],
+		violationRequests: ['status', 'department', 'monthYear'],
+		makeupAttendance: ['status', 'department', 'employee', 'dateRange'],
+		businessTrips: ['status', 'department', 'employee'],
+	};
+
+	const STATUS_OPTIONS: Record<Tab, SelectOption[]> = {
+		leaveRequests: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			{ value: 'PENDING', label: 'Chờ duyệt' },
+			{ value: 'APPROVED', label: 'Đã duyệt' },
+			{ value: 'REJECTED', label: 'Từ chối' },
+			{ value: 'CANCELLED', label: 'Đã thu hồi' },
+		],
+		overtimeRequests: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			{ value: 'PENDING', label: 'Chờ duyệt' },
+			{ value: 'APPROVED', label: 'Đã duyệt' },
+			{ value: 'REJECTED', label: 'Từ chối' },
+			{ value: 'CANCELLED', label: 'Đã thu hồi' },
+			{ value: 'AUTO_CANCELLED', label: 'Hết hạn' },
+		],
+		onlineWorkRequests: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			{ value: 'PENDING_L1', label: 'Chờ cấp 1' },
+			{ value: 'PENDING_L2', label: 'Chờ cấp 2' },
+			{ value: 'PENDING_L3', label: 'Chờ Giám đốc' },
+			{ value: 'COMPLETED', label: 'Hoàn thành' },
+			{ value: 'REJECTED', label: 'Từ chối' },
+			{ value: 'CANCELLED', label: 'Đã huỷ' },
+		],
+		violationRequests: VIOLATION_STATUS_OPTIONS,
+		makeupAttendance: MAKEUP_STATUS_OPTIONS,
+		businessTrips: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			{ value: 'DRAFT', label: 'Nháp' },
+			{ value: 'PENDING', label: 'Chờ duyệt' },
+			{ value: 'APPROVED', label: 'Đã duyệt' },
+			{ value: 'IN_PROGRESS', label: 'Đang công tác' },
+			{ value: 'COMPLETED', label: 'Hoàn thành' },
+			{ value: 'REJECTED', label: 'Bị từ chối' },
+			{ value: 'CANCELLED', label: 'Đã huỷ' },
+		],
+	};
+
+	const PAGE_SIZE = 15;
+
+	// Trạng thái mặc định = "chờ duyệt". Violation (PENDING / PENDING_L2) và online-work
+	// (PENDING_L1/L2/L3) có nhiều mức chờ duyệt mà API chỉ nhận 1 status → để "Tất cả"
+	// cho khỏi ẩn mất đơn đang chờ chính mình ở cấp khác.
+	const DEFAULT_STATUS: Record<Tab, string | undefined> = {
+		leaveRequests: 'PENDING',
+		overtimeRequests: 'PENDING',
+		onlineWorkRequests: undefined,
+		violationRequests: undefined,
+		makeupAttendance: 'PENDING',
+		businessTrips: 'PENDING',
+	};
+
+	// Mặc định: trạng thái chờ duyệt + tháng hiện tại (tab violation dùng month/year)
+	function createFilterState(tab: Tab): ApprovalFilterState {
+		const now = new Date();
+		const fields = FILTER_FIELDS[tab];
+		const hasDateRange = fields.includes('dateRange');
+		const hasMonthYear = fields.includes('monthYear');
+		return {
+			status: DEFAULT_STATUS[tab],
+			departmentId: undefined,
+			employeeId: undefined,
+			startDate: hasDateRange ? format(startOfMonth(now), 'yyyy-MM-dd') : '',
+			endDate: hasDateRange ? format(endOfMonth(now), 'yyyy-MM-dd') : '',
+			month: hasMonthYear ? now.getMonth() + 1 : undefined,
+			year: hasMonthYear ? now.getFullYear() : undefined,
+			limit: PAGE_SIZE,
+		};
+	}
+
+	const DEFAULT_FILTERS: Record<Tab, ApprovalFilterState> = {
+		leaveRequests: createFilterState('leaveRequests'),
+		overtimeRequests: createFilterState('overtimeRequests'),
+		onlineWorkRequests: createFilterState('onlineWorkRequests'),
+		violationRequests: createFilterState('violationRequests'),
+		makeupAttendance: createFilterState('makeupAttendance'),
+		businessTrips: createFilterState('businessTrips'),
+	};
+
+	const filters = reactive<Record<Tab, ApprovalFilterState>>({
+		leaveRequests: { ...DEFAULT_FILTERS.leaveRequests },
+		overtimeRequests: { ...DEFAULT_FILTERS.overtimeRequests },
+		onlineWorkRequests: { ...DEFAULT_FILTERS.onlineWorkRequests },
+		violationRequests: { ...DEFAULT_FILTERS.violationRequests },
+		makeupAttendance: { ...DEFAULT_FILTERS.makeupAttendance },
+		businessTrips: { ...DEFAULT_FILTERS.businessTrips },
+	});
+
+	const activeFilter = computed<ApprovalFilterState>(() => filters[activeTab.value]);
+	const activeDefaultFilter = computed<ApprovalFilterState>(() => DEFAULT_FILTERS[activeTab.value]);
+	const activeFilterFields = computed<ApprovalFilterField[]>(() => FILTER_FIELDS[activeTab.value]);
+	const activeStatusOptions = computed<SelectOption[]>(() => STATUS_OPTIONS[activeTab.value]);
+
+	function onFilterUpdate(value: ApprovalFilterState) {
+		filters[activeTab.value] = value;
+	}
+
+	function onFilterChange() {
+		setPage(activeTab.value, 1);
+		loadCurrentTab();
+	}
 
 	// ─── Per-module state ─────────────────────────────────────────────────────────
 	const leaveList = ref<LeaveRequest[]>([]);
@@ -104,11 +239,39 @@
 	const onlineWorkLoading = ref(false);
 	const onlineWorkPage = ref(1);
 
+	const pageRefs: Record<Tab, Ref<number>> = {
+		leaveRequests: leavePage,
+		overtimeRequests: overtimePage,
+		onlineWorkRequests: onlineWorkPage,
+		violationRequests: violationPage,
+		makeupAttendance: makeupPage,
+		businessTrips: tripPage,
+	};
+
+	function setPage(tab: Tab, page: number) {
+		pageRefs[tab].value = page;
+	}
+
+	function goToPage(tab: Tab, page: number) {
+		setPage(tab, page);
+		loadCurrentTab();
+	}
+
 	// ─── Fetchers ─────────────────────────────────────────────────────────────────
 	async function fetchLeave() {
 		leaveLoading.value = true;
 		try {
-			const res = await approvalService.listLeaveRequests({ page: leavePage.value, limit: 20 });
+			const f = filters.leaveRequests;
+			const params: QueryLeaveRequestParams = {
+				page: leavePage.value,
+				limit: f.limit,
+				status: f.status as LeaveStatus | undefined,
+				departmentId: f.departmentId,
+				employeeId: f.employeeId,
+				startDate: f.startDate || undefined,
+				endDate: f.endDate || undefined,
+			};
+			const res = await approvalService.listLeaveRequests(params);
 			leaveList.value = res.data;
 			leaveMeta.value = res.meta;
 		} catch (e) {
@@ -121,7 +284,17 @@
 	async function fetchMakeup() {
 		makeupLoading.value = true;
 		try {
-			const res = await approvalService.listMakeupAttendance({ page: makeupPage.value, limit: 20 });
+			const f = filters.makeupAttendance;
+			const params: QueryMakeupRequestParams = {
+				page: makeupPage.value,
+				limit: f.limit,
+				status: f.status as MakeupRequestStatus | undefined,
+				departmentId: f.departmentId,
+				employeeId: f.employeeId,
+				startDate: f.startDate || undefined,
+				endDate: f.endDate || undefined,
+			};
+			const res = await approvalService.listMakeupAttendance(params);
 			makeupList.value = res.data;
 			makeupMeta.value = res.meta;
 		} catch (e) {
@@ -134,7 +307,16 @@
 	async function fetchViolation() {
 		violationLoading.value = true;
 		try {
-			const res = await approvalService.listViolationRequests({ page: violationPage.value, limit: 20 });
+			const f = filters.violationRequests;
+			const params: QueryViolationRequestParams = {
+				page: violationPage.value,
+				limit: f.limit,
+				status: f.status as ViolationRequestStatus | undefined,
+				departmentId: f.departmentId,
+				month: f.month,
+				year: f.year,
+			};
+			const res = await approvalService.listViolationRequests(params);
 			violationList.value = res.data;
 			violationMeta.value = res.meta;
 		} catch (e) {
@@ -147,7 +329,17 @@
 	async function fetchOvertime() {
 		overtimeLoading.value = true;
 		try {
-			const res = await approvalService.listOvertimeRequests({ page: overtimePage.value, limit: 20 });
+			const f = filters.overtimeRequests;
+			const params: QueryOvertimeParams = {
+				page: overtimePage.value,
+				limit: f.limit,
+				status: f.status as OvertimeStatus | undefined,
+				departmentId: f.departmentId,
+				employeeId: f.employeeId,
+				startDate: f.startDate || undefined,
+				endDate: f.endDate || undefined,
+			};
+			const res = await approvalService.listOvertimeRequests(params);
 			overtimeList.value = res.data;
 			overtimeMeta.value = res.meta;
 		} catch (e) {
@@ -160,7 +352,15 @@
 	async function fetchTrip() {
 		tripLoading.value = true;
 		try {
-			const res = await approvalService.listBusinessTrips({ page: tripPage.value, limit: 20 });
+			const f = filters.businessTrips;
+			const params: QueryBusinessTripsParams = {
+				page: tripPage.value,
+				limit: f.limit,
+				status: f.status as BusinessTripStatus | undefined,
+				departmentId: f.departmentId,
+				employeeId: f.employeeId,
+			};
+			const res = await approvalService.listBusinessTrips(params);
 			tripList.value = res.data;
 			tripMeta.value = res.meta;
 		} catch (e) {
@@ -173,7 +373,17 @@
 	async function fetchOnlineWork() {
 		onlineWorkLoading.value = true;
 		try {
-			const res = await approvalService.listOnlineWorkRequests({ page: onlineWorkPage.value, limit: 20 });
+			const f = filters.onlineWorkRequests;
+			const params: QueryOnlineWorkParams = {
+				page: onlineWorkPage.value,
+				limit: f.limit,
+				status: f.status as OnlineWorkStatus | undefined,
+				departmentId: f.departmentId,
+				employeeId: f.employeeId,
+				startDate: f.startDate || undefined,
+				endDate: f.endDate || undefined,
+			};
+			const res = await approvalService.listOnlineWorkRequests(params);
 			onlineWorkList.value = res.data;
 			onlineWorkMeta.value = res.meta;
 		} catch (e) {
@@ -401,10 +611,22 @@
 		return counts.value[key] ?? 0;
 	}
 
+	// "1–20" cho dòng tổng kết dưới bảng
+	function rangeText(meta: PaginatedMeta): string {
+		const from = (meta.page - 1) * meta.limit + 1;
+		const to = Math.min(meta.page * meta.limit, meta.total);
+		return `${from}–${to}`;
+	}
+
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────────
-	onMounted(() => {
+	onMounted(async () => {
 		approvalStore.fetchCounts();
 		loadCurrentTab();
+		try {
+			await directoryStore.load();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách nhân viên / phòng ban');
+		}
 	});
 </script>
 
@@ -441,6 +663,16 @@
 				</span>
 			</button>
 		</div>
+
+		<!-- Filter bar — field hiển thị theo tab đang mở -->
+		<ApprovalFilterBar
+			:model-value="activeFilter"
+			:default-value="activeDefaultFilter"
+			:fields="activeFilterFields"
+			:status-options="activeStatusOptions"
+			@update:model-value="onFilterUpdate"
+			@change="onFilterChange"
+		/>
 
 		<!-- ══════════════════════════════ Nghỉ phép ══════════════════════════════ -->
 		<template v-if="activeTab === 'leaveRequests'">
@@ -502,14 +734,16 @@
 					</table>
 				</div>
 			</div>
-			<div v-if="leaveMeta && leaveMeta.totalPages > 1" class="flex items-center justify-between pt-1">
+			<div v-if="leaveMeta && leaveMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ leaveMeta.total }}</strong> đơn
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(leaveMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ leaveMeta.total }}</strong> đơn
 				</p>
 				<CommonAppPagination
+					v-if="leaveMeta.totalPages > 1"
 					:current-page="leavePage"
 					:total-pages="leaveMeta.totalPages"
-					@update:current-page="p => { leavePage = p; fetchLeave(); }"
+					@update:current-page="p => goToPage('leaveRequests', p)"
 				/>
 			</div>
 		</template>
@@ -581,14 +815,16 @@
 					</table>
 				</div>
 			</div>
-			<div v-if="overtimeMeta && overtimeMeta.totalPages > 1" class="flex items-center justify-between pt-1">
+			<div v-if="overtimeMeta && overtimeMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ overtimeMeta.total }}</strong> đơn
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(overtimeMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ overtimeMeta.total }}</strong> đơn
 				</p>
 				<CommonAppPagination
+					v-if="overtimeMeta.totalPages > 1"
 					:current-page="overtimePage"
 					:total-pages="overtimeMeta.totalPages"
-					@update:current-page="p => { overtimePage = p; fetchOvertime(); }"
+					@update:current-page="p => goToPage('overtimeRequests', p)"
 				/>
 			</div>
 		</template>
@@ -651,14 +887,16 @@
 					</table>
 				</div>
 			</div>
-			<div v-if="onlineWorkMeta && onlineWorkMeta.totalPages > 1" class="flex items-center justify-between pt-1">
+			<div v-if="onlineWorkMeta && onlineWorkMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ onlineWorkMeta.total }}</strong> đơn
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(onlineWorkMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ onlineWorkMeta.total }}</strong> đơn
 				</p>
 				<CommonAppPagination
+					v-if="onlineWorkMeta.totalPages > 1"
 					:current-page="onlineWorkPage"
 					:total-pages="onlineWorkMeta.totalPages"
-					@update:current-page="p => { onlineWorkPage = p; fetchOnlineWork(); }"
+					@update:current-page="p => goToPage('onlineWorkRequests', p)"
 				/>
 			</div>
 		</template>
@@ -733,14 +971,16 @@
 					</table>
 				</div>
 			</div>
-			<div v-if="violationMeta && violationMeta.totalPages > 1" class="flex items-center justify-between pt-1">
+			<div v-if="violationMeta && violationMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ violationMeta.total }}</strong> phiếu
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(violationMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ violationMeta.total }}</strong> phiếu
 				</p>
 				<CommonAppPagination
+					v-if="violationMeta.totalPages > 1"
 					:current-page="violationPage"
 					:total-pages="violationMeta.totalPages"
-					@update:current-page="p => { violationPage = p; fetchViolation(); }"
+					@update:current-page="p => goToPage('violationRequests', p)"
 				/>
 			</div>
 		</template>
@@ -803,14 +1043,16 @@
 					</table>
 				</div>
 			</div>
-			<div v-if="makeupMeta && makeupMeta.totalPages > 1" class="flex items-center justify-between pt-1">
+			<div v-if="makeupMeta && makeupMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ makeupMeta.total }}</strong> đơn
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(makeupMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ makeupMeta.total }}</strong> đơn
 				</p>
 				<CommonAppPagination
+					v-if="makeupMeta.totalPages > 1"
 					:current-page="makeupPage"
 					:total-pages="makeupMeta.totalPages"
-					@update:current-page="p => { makeupPage = p; fetchMakeup(); }"
+					@update:current-page="p => goToPage('makeupAttendance', p)"
 				/>
 			</div>
 		</template>
@@ -874,14 +1116,16 @@
 					</table>
 				</div>
 			</div>
-			<div v-if="tripMeta && tripMeta.totalPages > 1" class="flex items-center justify-between pt-1">
+			<div v-if="tripMeta && tripMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Tổng <strong class="text-gray-700 dark:text-gray-300">{{ tripMeta.total }}</strong> đơn
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(tripMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ tripMeta.total }}</strong> đơn
 				</p>
 				<CommonAppPagination
+					v-if="tripMeta.totalPages > 1"
 					:current-page="tripPage"
 					:total-pages="tripMeta.totalPages"
-					@update:current-page="p => { tripPage = p; fetchTrip(); }"
+					@update:current-page="p => goToPage('businessTrips', p)"
 				/>
 			</div>
 		</template>

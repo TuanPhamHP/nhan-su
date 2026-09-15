@@ -253,7 +253,7 @@
 				<p v-if="dateRangeError" class="text-xs text-red-500">{{ dateRangeError }}</p>
 			</div>
 			<div class="flex items-center gap-3">
-				<CommonAppButton variant="outline" @click="resetFilter">Xoá lọc</CommonAppButton>
+				<CommonAppResetFilterButton @click="resetFilter" />
 			</div>
 		</div>
 

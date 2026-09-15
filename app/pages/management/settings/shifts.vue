@@ -1,6 +1,16 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
-	import { startOfWeek, addDays, format, addWeeks, subWeeks, startOfYear, endOfYear } from 'date-fns';
+	import {
+		startOfWeek,
+		addDays,
+		format,
+		addWeeks,
+		subWeeks,
+		startOfYear,
+		endOfYear,
+		startOfMonth,
+		endOfMonth,
+	} from 'date-fns';
 	import type { WorkShiftResponse, CreateWorkShiftDto, CalendarDayEmployee } from '~/types/shift.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
@@ -39,7 +49,6 @@
 		assignShift,
 		bulkAssignRange,
 		removeShift,
-		setDefaultShift,
 		bulkAssignOnlineSaturday,
 	} = useShiftSchedules();
 	const directoryStore = useDirectoryStore();
@@ -506,8 +515,8 @@
 		bulkShiftId.value = typeof v === 'number' ? v : undefined;
 	}
 
-	function onDefaultShiftChange(v: string | number | undefined) {
-		selectedDefaultShiftId.value = typeof v === 'number' ? v : undefined;
+	function onEmpOverrideShiftChange(v: string | number | undefined) {
+		empOverrideShiftId.value = typeof v === 'number' ? v : undefined;
 	}
 
 	// ─── Cell assign modal ───
@@ -563,32 +572,88 @@
 		}
 	}
 
-	// ─── Default shift modal ───
-	const showDefaultShiftModal = ref(false);
-	const defaultShiftTarget = ref<EmployeeSummary | null>(null);
-	const selectedDefaultShiftId = ref<number | undefined>(undefined);
-	const settingDefault = ref(false);
+	// ─── Employee override modal ───
+	// Gán ca override theo khoảng ngày cho 1 nhân viên (ca mặc định đã ngừng dùng).
+	const showEmpOverrideModal = ref(false);
+	const empOverrideTarget = ref<EmployeeSummary | null>(null);
+	const empOverrideShiftId = ref<number | undefined>(undefined);
+	const empOverrideStartDate = ref('');
+	const empOverrideEndDate = ref('');
+	const assigningEmpOverride = ref(false);
 
-	function openDefaultShiftModal(emp: EmployeeSummary) {
-		defaultShiftTarget.value = emp;
-		selectedDefaultShiftId.value = undefined;
-		showDefaultShiftModal.value = true;
+	function openEmpOverrideModal(emp: EmployeeSummary) {
+		empOverrideTarget.value = emp;
+		empOverrideShiftId.value = undefined;
+		// Mặc định = tuần đang xem
+		empOverrideStartDate.value = weekDateStrings.value[0] ?? '';
+		empOverrideEndDate.value = weekDateStrings.value[6] ?? '';
+		showEmpOverrideModal.value = true;
 	}
 
-	async function submitDefaultShift() {
-		if (!defaultShiftTarget.value || !selectedDefaultShiftId.value) {
-			toast.error('Vui lòng chọn ca mặc định');
+	// Preset khoảng ngày, neo theo tuần đang xem
+	type RangePreset = 'week' | 'month' | 'year';
+
+	const RANGE_PRESETS: { key: RangePreset; label: string }[] = [
+		{ key: 'week', label: 'Tuần này' },
+		{ key: 'month', label: 'Tháng này' },
+		{ key: 'year', label: 'Đến cuối năm' },
+	];
+
+	function presetRange(preset: RangePreset): { from: string; to: string } {
+		const anchor = weekDates.value[0] ?? new Date();
+		if (preset === 'week') {
+			return { from: weekDateStrings.value[0] ?? '', to: weekDateStrings.value[6] ?? '' };
+		}
+		if (preset === 'month') {
+			return { from: format(startOfMonth(anchor), 'yyyy-MM-dd'), to: format(endOfMonth(anchor), 'yyyy-MM-dd') };
+		}
+		return { from: format(anchor, 'yyyy-MM-dd'), to: format(endOfYear(anchor), 'yyyy-MM-dd') };
+	}
+
+	function setEmpOverrideRange(preset: RangePreset) {
+		const { from, to } = presetRange(preset);
+		empOverrideStartDate.value = from;
+		empOverrideEndDate.value = to;
+	}
+
+	// Preset nào đang khớp với khoảng ngày hiện tại — null nếu user tự chọn ngày khác
+	const activeRangePreset = computed<RangePreset | null>(() => {
+		for (const { key } of RANGE_PRESETS) {
+			const { from, to } = presetRange(key);
+			if (from === empOverrideStartDate.value && to === empOverrideEndDate.value) return key;
+		}
+		return null;
+	});
+
+	async function submitEmpOverride() {
+		if (!empOverrideTarget.value) return;
+		if (!empOverrideShiftId.value) {
+			toast.error('Vui lòng chọn ca');
 			return;
 		}
-		settingDefault.value = true;
+		if (!empOverrideStartDate.value || !empOverrideEndDate.value) {
+			toast.error('Vui lòng chọn khoảng thời gian');
+			return;
+		}
+		if (empOverrideStartDate.value > empOverrideEndDate.value) {
+			toast.error('Ngày bắt đầu phải trước ngày kết thúc');
+			return;
+		}
+		assigningEmpOverride.value = true;
 		try {
-			await setDefaultShift(defaultShiftTarget.value.id, { shiftId: selectedDefaultShiftId.value });
-			toast.success(`Đã cập nhật ca mặc định cho ${defaultShiftTarget.value.fullName}`);
-			showDefaultShiftModal.value = false;
+			const result = await bulkAssignRange({
+				fromDate: empOverrideStartDate.value,
+				toDate: empOverrideEndDate.value,
+				shiftId: empOverrideShiftId.value,
+				employeeIds: [empOverrideTarget.value.id],
+			});
+			toast.success(`Đã gán ca cho ${empOverrideTarget.value.fullName} (${result.totalAssignments} ngày)`);
+			showEmpOverrideModal.value = false;
+			await loadCalendar();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Lỗi cập nhật ca mặc định');
+			toast.error(e instanceof Error ? e.message : 'Lỗi gán ca');
 		} finally {
-			settingDefault.value = false;
+			assigningEmpOverride.value = false;
 		}
 	}
 
@@ -1081,8 +1146,8 @@
 								<td class="px-4 py-2 sticky left-0 bg-white dark:bg-gray-900 z-10 group">
 									<button
 										class="flex items-center gap-2 text-left w-full rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 px-1 py-1 transition-colors"
-										title="Đặt ca mặc định"
-										@click="openDefaultShiftModal(emp)"
+										title="Gán ca theo khoảng ngày"
+										@click="openEmpOverrideModal(emp)"
 									>
 										<div
 											class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0"
@@ -1716,7 +1781,7 @@
 	</Teleport>
 
 	<!-- ═══════════════════════════════════════════════════ -->
-	<!-- MODAL: Ca mặc định cho nhân viên                  -->
+	<!-- MODAL: Gán ca override cho 1 nhân viên            -->
 	<!-- ═══════════════════════════════════════════════════ -->
 	<Teleport to="body">
 		<Transition
@@ -1728,9 +1793,9 @@
 			leave-to-class="opacity-0"
 		>
 			<div
-				v-if="showDefaultShiftModal && defaultShiftTarget"
+				v-if="showEmpOverrideModal && empOverrideTarget"
 				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-				@click.self="showDefaultShiftModal = false"
+				@click.self="showEmpOverrideModal = false"
 			>
 				<div
 					class="bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-sm"
@@ -1740,16 +1805,16 @@
 							class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0"
 						>
 							<span class="text-sm font-bold text-brand-700 dark:text-brand-400">{{
-								defaultShiftTarget.fullName.charAt(0)
+								empOverrideTarget.fullName.charAt(0)
 							}}</span>
 						</div>
 						<div>
-							<p class="text-sm font-semibold text-gray-900 dark:text-white">{{ defaultShiftTarget.fullName }}</p>
-							<p class="text-xs text-gray-400 dark:text-gray-500">Cài đặt ca mặc định</p>
+							<p class="text-sm font-semibold text-gray-900 dark:text-white">{{ empOverrideTarget.fullName }}</p>
+							<p class="text-xs text-gray-400 dark:text-gray-500">Gán ca theo khoảng ngày</p>
 						</div>
 						<button
 							class="ml-auto w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-							@click="showDefaultShiftModal = false"
+							@click="showEmpOverrideModal = false"
 						>
 							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1759,20 +1824,49 @@
 
 					<div class="p-5 space-y-4">
 						<div>
-							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-								Ca mặc định hàng ngày
-							</label>
-							<UiSelect
-								:model-value="selectedDefaultShiftId"
-								:options="activeShiftOptions"
-								placeholder="Chọn ca..."
-								@update:model-value="onDefaultShiftChange"
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Khoảng thời gian</label>
+							<div class="flex items-center gap-2 mb-2">
+								<button
+									v-for="preset in RANGE_PRESETS"
+									:key="preset.key"
+									type="button"
+									:class="[
+										'flex-1 px-2 py-1.5 text-xs font-medium rounded-lg border transition-colors',
+										activeRangePreset === preset.key
+											? 'bg-brand-50 border-brand-300 text-brand-700 dark:bg-brand-900/30 dark:border-brand-600 dark:text-brand-300'
+											: 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800',
+									]"
+									@click="setEmpOverrideRange(preset.key)"
+								>
+									{{ preset.label }}
+								</button>
+							</div>
+							<UiDateRangePicker
+								:from-date="empOverrideStartDate"
+								:to-date="empOverrideEndDate"
+								placeholder="Chọn khoảng ngày"
+								@update:from-date="empOverrideStartDate = $event"
+								@update:to-date="empOverrideEndDate = $event"
 							/>
 						</div>
 
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ca làm việc</label>
+							<UiSelect
+								:model-value="empOverrideShiftId"
+								:options="activeShiftOptions"
+								placeholder="Chọn ca..."
+								@update:model-value="onEmpOverrideShiftChange"
+							/>
+						</div>
+
+						<p class="text-xs text-gray-400 dark:text-gray-500">
+							Server expand khoảng ngày thành từng ngày làm việc và gán override (ghi đè ca đã có).
+						</p>
+
 						<div class="flex justify-end gap-3">
-							<CommonAppButton variant="outline" @click="showDefaultShiftModal = false">Hủy</CommonAppButton>
-							<CommonAppButton :loading="settingDefault" @click="submitDefaultShift">Lưu</CommonAppButton>
+							<CommonAppButton variant="outline" @click="showEmpOverrideModal = false">Hủy</CommonAppButton>
+							<CommonAppButton :loading="assigningEmpOverride" @click="submitEmpOverride">Gán ca</CommonAppButton>
 						</div>
 					</div>
 				</div>
