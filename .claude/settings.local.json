@@ -46,11 +46,29 @@
       "Bash(yarn start > /tmp/nuxt-dev.log 2>&1 & *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/management/employees/1)",
       "Bash(pkill -f \"yarn start\")",
-      "Bash(git -C /home/tuanpham/work/hr-system/nhan-su mv public/import-employees-template.xlsx public/import-templates/employees-import-template.xlsx)"
+      "Bash(git -C /home/tuanpham/work/hr-system/nhan-su mv public/import-employees-template.xlsx public/import-templates/employees-import-template.xlsx)",
+      "Bash(npm run *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(node tests/e2e/*)",
+      "Bash(ss -ltn *)",
+      "Bash(ss -ltnp *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git ls-files *)",
+      "Bash(git check-ignore *)",
+      "Bash(git log *)"
     ],
     "additionalDirectories": [
       "/home/tuanpham/work/hr-system/nhan-su/app",
       "/tmp"
+    ],
+    "deny": [
+      "Bash(psql:*)",
+      "Bash(pg_dump:*)",
+      "Bash(dropdb:*)",
+      "Bash(createdb:*)",
+      "mcp__postgres__query"
     ]
   }
 }

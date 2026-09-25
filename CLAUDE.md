@@ -2,6 +2,43 @@
 
 Đây là Web Admin cho HR System. Đọc toàn bộ file này trước khi sinh code. Web Admin dashboard cho HR System, dành cho HR, Admin, Manager. Consume API từ repo hr-system-api (/v1/...).
 
+---
+
+## ⚠️ CÁCH GÕ LỆNH — đọc trước khi chạy lệnh đầu tiên
+
+Bản đầy đủ: **`../hr-system-be/docs/claude-command-style.md`**. Ba điều bắt buộc:
+
+**1. Một lệnh một lần. KHÔNG `cd X && ...`, KHÔNG tiền tố biến môi trường, KHÔNG nối
+`; echo $?`.** Luật cấp quyền khớp trên TOÀN BỘ chuỗi lệnh, nên `Bash(npm run *)` đã
+được cho phép mà `cd /home/... && npm run build > /tmp/x 2>&1; echo $?` vẫn phải hỏi lại.
+
+Sự cố thật ngày 2026-09-24: một yêu cầu → user phải bấm duyệt gần 30 lần, hầu hết do lỗi
+này.
+
+**Cần đổi sang repo kia (`hr-system-be`) thì làm một trong hai cách**, đừng gộp bằng `&&`
+(đường dẫn tuyệt đối KHÔNG cứu được `npm run`, vì npm chạy theo thư mục hiện tại):
+
+```bash
+cd /home/tuanpham/work/hr-system/hr-system-be   # đứng riêng một lời gọi
+npm run check -- --quick                         # rồi chạy trần; cwd đã giữ nguyên
+
+npm --prefix /home/tuanpham/work/hr-system/hr-system-be run check   # hoặc gọn một lệnh
+```
+
+**2. Đọc/sửa file thì dùng công cụ Read / Edit / Write, đừng dùng `cat`, `sed -i`,
+`printf >>`, hay `python3 - <<'PY'`.** Tìm file/tìm chuỗi thì vẫn dùng `find`/`grep`/`rg`
+qua Bash (bản dựng này không có Glob/Grep).
+
+**3. Kiểm tra trước khi giao code:**
+
+```bash
+npm run build                    # repo này không có eslint; build là cổng duy nhất
+npm run shots:agent-chart        # chụp + đo tràn ngang khung chat (cần BE 3999 + Nuxt 4100)
+```
+
+Hướng dẫn dựng BE/Nuxt cho `shots:agent-chart` nằm ở đầu
+`tests/e2e/agent-chart-shots.mjs`.
+
 ## Tech Stack
 
 - **Framework:** Nuxt 4

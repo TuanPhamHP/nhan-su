@@ -33,3 +33,5 @@ export * from './general-request.service';
 export * from './meta-data.service';
 export * from './approval.service';
 export * from './announcement.service';
+export * from './agent.service';
+export * from './agent-analytics.service';
