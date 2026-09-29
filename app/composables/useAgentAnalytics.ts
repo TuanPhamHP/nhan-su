@@ -1,5 +1,8 @@
 import { useAgentAnalyticsService } from '~/services/agent-analytics.service';
-import type { AgentAnalyticsOverview } from '~/types/agent-analytics.types';
+import type {
+	AgentAnalyticsOverview,
+	AgentFeedbackAnalytics,
+} from '~/types/agent-analytics.types';
 
 function isoDaysAgo(days: number): string {
 	const d = new Date();
@@ -14,6 +17,8 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 	const service = useAgentAnalyticsService();
 
 	const data = ref<AgentAnalyticsOverview | null>(null);
+	/** Bảng đánh giá chi tiết — chỉ có ở scope 'all', endpoint giới hạn ADMIN/HR/DIRECTOR. */
+	const feedback = ref<AgentFeedbackAnalytics | null>(null);
 	const loading = ref(false);
 	const error = ref<string | null>(null);
 	const from = ref(isoDaysAgo(30));
@@ -25,6 +30,14 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		try {
 			const params = { from: from.value, to: to.value };
 			data.value = scope === 'me' ? await service.me(params) : await service.overview(params);
+			// Bảng đánh giá hỏng (hoặc chưa có bảng trong DB) KHÔNG được làm trắng cả trang
+			// mức dùng — nó là phần thêm, không phải phần chính.
+			feedback.value =
+				scope === 'me'
+					? null
+					: await service
+							.feedback({ ...params, topLimit: 20 })
+							.catch(() => null);
 		} catch (err) {
 			error.value = (err as Error)?.message ?? 'Không tải được dữ liệu';
 			data.value = null;
@@ -44,5 +57,5 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		Math.max(1, ...(data.value?.daily ?? []).map((d) => d.promptTokens + d.completionTokens)),
 	);
 
-	return { data, loading, error, from, to, load, setRange, maxDailyTokens };
+	return { data, feedback, loading, error, from, to, load, setRange, maxDailyTokens };
 }

@@ -92,12 +92,51 @@ export interface AgentTokenUsage {
 
 export interface AgentChatResult {
 	conversationId: number;
+	/** ID tin nhắn trả lời — cần để gửi đánh giá. `null` khi BE không lưu được. */
+	messageId: number | null;
 	answer: string;
 	playbookId: string | null;
 	routerTier: 'RULE' | 'EMBEDDING' | 'LLM' | 'FALLBACK' | string;
 	toolsCalled: string[];
 	usage: AgentTokenUsage;
+	/** Có mặt khi server muốn mời chấm điểm lượt này. `null` = đừng hiện gì. */
+	feedbackPrompt: AgentFeedbackPrompt | null;
 }
+
+/** 4 mức, thứ tự từ tệ tới tốt. Nhãn tiếng Việt do server gửi kèm, FE không tự dịch. */
+export type AgentFeedbackRating = 'BAD' | 'AVERAGE' | 'USEFUL' | 'GREAT';
+
+export interface AgentFeedbackOption {
+	value: AgentFeedbackRating;
+	label: string;
+}
+
+/**
+ * Lời mời chấm điểm, do SERVER quyết định khi nào xuất hiện.
+ *
+ * FE KHÔNG tự đặt nhịp hỏi: web và mobile phải hỏi cùng nhịp, nếu không số liệu hai
+ * nền tảng không so được. Cứ thấy `feedbackPrompt` thì hiện, không thấy thì thôi.
+ */
+export interface AgentFeedbackPrompt {
+	messageId: number;
+	question: string;
+	/** Render đúng thứ tự trong mảng — server đã sắp từ tệ tới tốt. */
+	options: AgentFeedbackOption[];
+	commentPlaceholder: string;
+}
+
+/** Điểm đã chấm. Chỉ bao giờ là điểm của CHÍNH người đang đăng nhập. */
+export interface AgentFeedback {
+	messageId: number;
+	rating: AgentFeedbackRating;
+	ratingLabel: string;
+	comment: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/** Trạng thái gửi đánh giá của một tin nhắn. `failed` = gửi lỗi, cho bấm lại. */
+export type AgentFeedbackState = 'idle' | 'saving' | 'failed';
 
 /** `system` = dấu vết một thao tác đã thực thi, hiện dạng dải mảnh giữa khung chat. */
 export type AgentMessageRole = 'user' | 'assistant' | 'system';
@@ -127,6 +166,13 @@ export interface AgentChatMessage {
 	id: string;
 	role: AgentMessageRole;
 	text: string;
+	/** ID tin nhắn ở BE. Có thì mới chấm điểm được — tin nhắn của chính người dùng không có. */
+	messageId?: number;
+	/** Server đang mời chấm lượt này. */
+	feedbackPrompt?: AgentFeedbackPrompt | null;
+	/** Điểm người dùng đã chấm cho lượt này (kể cả khi nạp lại hội thoại cũ). */
+	feedback?: AgentFeedback | null;
+	feedbackState?: AgentFeedbackState;
 	/** Đang nhận stream — UI hiện con trỏ nhấp nháy. */
 	streaming?: boolean;
 	error?: boolean;
@@ -163,6 +209,8 @@ export interface AgentConversationMessage {
 	text: string;
 	/** Có khi lượt đó server dựng biểu đồ. Tin nhắn cũ không có trường này. */
 	charts?: AgentChart[];
+	/** Điểm chính người gọi đã chấm cho câu trả lời này. Vắng = chưa chấm. */
+	feedback?: AgentFeedback | null;
 	createdAt: string;
 }
 

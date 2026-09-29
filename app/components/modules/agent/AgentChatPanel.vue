@@ -1,9 +1,10 @@
 <script setup lang="ts">
+	import agentAvatar from '~/assets/icons/ONGO_AI_BOT.png';
 	import AgentMessageBubble from '~/components/modules/agent/AgentMessageBubble.vue';
 	import AgentConversationList from '~/components/modules/agent/AgentConversationList.vue';
 	import AgentComposer from '~/components/modules/agent/AgentComposer.vue';
 	import AgentEmptyState from '~/components/modules/agent/AgentEmptyState.vue';
-	import type { AgentSuggestion } from '~/types/agent.types';
+	import type { AgentFeedbackRating, AgentSuggestion } from '~/types/agent.types';
 
 	const {
 		messages,
@@ -21,6 +22,7 @@
 		archiveConversation,
 		confirmPending,
 		cancelPending,
+		rateMessage,
 	} = useAgentChat();
 
 	const toast = useToast();
@@ -162,6 +164,21 @@
 		if (!confirm('Lưu trữ hội thoại này? Dữ liệu vẫn được giữ, chỉ ẩn khỏi danh sách.')) return;
 		await archiveConversation(id);
 	}
+
+	/**
+	 * Người dùng chấm điểm một câu trả lời.
+	 *
+	 * KHÔNG toast khi thành công: thanh đánh giá đã tự đổi sang "Cảm ơn bạn đã đánh giá",
+	 * thêm toast nữa là làm to chuyện một cú bấm nhỏ. Lỗi thì composable đã đặt trạng thái
+	 * `failed` để thanh đó tự nói.
+	 */
+	async function onRate(
+		messageId: number,
+		rating: AgentFeedbackRating,
+		comment?: string,
+	): Promise<void> {
+		await rateMessage(messageId, rating, comment);
+	}
 </script>
 
 <template>
@@ -235,11 +252,12 @@
 							/>
 						</button>
 
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)] text-white shadow-sm"
-						>
-							<Icon name="heroicons:sparkles" class="h-5 w-5" />
-						</div>
+						<img
+							:src="agentAvatar"
+							alt=""
+							draggable="false"
+							class="h-9 w-9 shrink-0 object-contain select-none"
+						/>
 						<div class="min-w-0">
 							<h2 class="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
 								Trợ lý nhân sự
@@ -319,6 +337,7 @@
 								:message="m"
 								@confirm="onConfirm"
 								@cancel="cancelPending"
+								@rate="onRate"
 							/>
 						</div>
 					</div>

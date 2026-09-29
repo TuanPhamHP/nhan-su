@@ -34,6 +34,8 @@ export interface AgentAnalyticsSummary {
 	to: string;
 	conversations: number;
 	messages: number;
+	/** Riêng số câu trả lời của trợ lý — nền để tính tỷ lệ được chấm điểm. */
+	answers: number;
 	requests: number;
 	activeUsers: number;
 	promptTokens: number;
@@ -46,6 +48,56 @@ export interface AgentAnalyticsSummary {
 	costPerRequestUsd: number;
 }
 
+/** Đánh giá người dùng chấm cho câu trả lời của trợ lý. */
+export interface AgentFeedbackSummary {
+	total: number;
+	/** Đếm theo mức: BAD / AVERAGE / USEFUL / GREAT. */
+	byRating: Record<string, number>;
+	/** % lượt chấm USEFUL hoặc GREAT. */
+	satisfactionRate: number;
+	/** % lượt chấm BAD. */
+	negativeRate: number;
+	/** Điểm trung bình thang 1–4. `0` = chưa ai chấm, KHÔNG phải "toàn bộ đều tệ". */
+	score: number;
+	withComment: number;
+	/** % câu trả lời được chấm. Thấp là bình thường — server chỉ hỏi thi thoảng. */
+	responseRate: number;
+}
+
+export interface AgentFeedbackGroup {
+	/** playbookId, hoặc tier router — tuỳ cách chia nhóm. */
+	bucket: string;
+	total: number;
+	byRating: Record<string, number>;
+	satisfactionRate: number;
+	score: number;
+}
+
+/**
+ * Một góp ý chữ. KHÔNG có nội dung câu hỏi / câu trả lời của lượt đó — backend cố ý
+ * không trả, vì hội thoại chỉ chủ hội thoại được đọc.
+ */
+export interface AgentFeedbackComment {
+	id: number;
+	rating: string;
+	ratingLabel: string;
+	comment: string;
+	playbookId: string | null;
+	routerTier: string | null;
+	employeeId: number;
+	fullName: string;
+	createdAt: string;
+}
+
+export interface AgentFeedbackAnalytics {
+	from: string;
+	to: string;
+	summary: AgentFeedbackSummary;
+	byPlaybook: AgentFeedbackGroup[];
+	byTier: AgentFeedbackGroup[];
+	comments: AgentFeedbackComment[];
+}
+
 export interface AgentAnalyticsOverview {
 	summary: AgentAnalyticsSummary;
 	daily: AgentUsagePoint[];
@@ -53,6 +105,7 @@ export interface AgentAnalyticsOverview {
 	byPurpose: AgentUsagePoint[];
 	topics: AgentTopic[];
 	topUsers: AgentTopUser[];
+	feedback: AgentFeedbackSummary;
 }
 
 export interface AgentAnalyticsQuery {
@@ -81,6 +134,14 @@ export const TIER_LABELS: Record<string, string> = {
 	EMBEDDING: 'Embedding',
 	LLM: 'LLM',
 	FALLBACK: 'Không rõ',
+};
+
+/** Màu chip theo mức đánh giá — tệ thì đỏ, hay thì xanh. Nhãn chữ vẫn lấy từ API. */
+export const RATING_COLORS: Record<string, string> = {
+	BAD: 'bg-red-500',
+	AVERAGE: 'bg-amber-500',
+	USEFUL: 'bg-sky-500',
+	GREAT: 'bg-emerald-500',
 };
 
 export const TIER_COLORS: Record<string, string> = {

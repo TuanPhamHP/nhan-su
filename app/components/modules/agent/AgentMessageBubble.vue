@@ -1,8 +1,13 @@
 <script setup lang="ts">
 	import DOMPurify from 'dompurify';
+	import agentAvatar from '~/assets/icons/ONGO_AI_BOT.png';
 	import AgentActionForm from '~/components/modules/agent/AgentActionForm.vue';
 	import AgentChartBlock from '~/components/modules/agent/AgentChartBlock.vue';
-	import type { AgentChatMessage as ChatMsg } from '~/types/agent.types';
+	import AgentFeedbackBar from '~/components/modules/agent/AgentFeedbackBar.vue';
+	import type {
+		AgentChatMessage as ChatMsg,
+		AgentFeedbackRating,
+	} from '~/types/agent.types';
 	import { renderAgentMarkdown } from '~/utils/agent-markdown';
 
 	const props = defineProps<{ message: ChatMsg }>();
@@ -10,6 +15,7 @@
 	const emit = defineEmits<{
 		confirm: [pendingActionId: number, payload: Record<string, unknown>];
 		cancel: [pendingActionId: number];
+		rate: [messageId: number, rating: AgentFeedbackRating, comment?: string];
 	}>();
 
 	const toast = useToast();
@@ -60,17 +66,21 @@
 	</div>
 
 	<div v-else :class="['group flex w-full gap-3 animate-fade-in', isUser ? 'justify-end' : 'justify-start']">
+		<!-- Lỗi thì vẫn dùng icon cảnh báo; bình thường là mascot (ảnh tự đủ tương phản
+		     trên cả nền sáng lẫn tối nên không cần đĩa nền phía sau) -->
 		<div
-			v-if="!isUser"
-			:class="[
-				'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl shadow-sm',
-				message.error
-					? 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-300'
-					: 'bg-[var(--color-accent)] text-white',
-			]"
+			v-if="!isUser && message.error"
+			class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 shadow-sm dark:bg-red-500/20 dark:text-red-300"
 		>
-			<Icon :name="message.error ? 'heroicons:exclamation-triangle' : 'heroicons:sparkles'" class="h-4 w-4" />
+			<Icon name="heroicons:exclamation-triangle" class="h-4 w-4" />
 		</div>
+		<img
+			v-else-if="!isUser"
+			:src="agentAvatar"
+			alt=""
+			draggable="false"
+			class="h-8 w-8 shrink-0 object-contain select-none"
+		/>
 
 		<div
 			:class="[
@@ -159,6 +169,17 @@
 					{{ copied ? 'Đã chép' : 'Sao chép' }}
 				</button>
 			</div>
+
+			<!--
+				Thanh chấm điểm đứng CUỐI, sau cả nút sao chép: nó là việc làm thêm cho hệ
+				thống, không phải phần câu trả lời. Component tự ẩn khi server không mời và
+				lượt đó chưa được chấm.
+			-->
+			<AgentFeedbackBar
+				v-if="!isUser && !message.streaming"
+				:message="message"
+				@rate="(id, rating, comment) => emit('rate', id, rating, comment)"
+			/>
 		</div>
 	</div>
 </template>

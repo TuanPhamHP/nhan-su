@@ -4,6 +4,8 @@ import type {
 	AgentConversation,
 	AgentConversationMessage,
 	AgentConfirmResult,
+	AgentFeedback,
+	AgentFeedbackRating,
 	AgentPendingActionRow,
 } from '~/types/agent.types';
 import { useAuthFetch } from './http/auth.fetch';
@@ -71,6 +73,22 @@ export const useAgentService = () => {
 
 		async cancelAction(id: number): Promise<void> {
 			await authFetch(`/v1/agent/actions/${id}/cancel`, { method: 'POST' });
+		},
+
+		/**
+		 * Chấm điểm một câu trả lời. Gọi lại cho cùng `messageId` là SỬA điểm cũ —
+		 * backend upsert theo (messageId, người gọi), không sinh bản ghi mới.
+		 */
+		async submitFeedback(
+			messageId: number,
+			rating: AgentFeedbackRating,
+			comment?: string,
+		): Promise<AgentFeedback> {
+			const res = await authFetch<ApiResponse<AgentFeedback>>(
+				`/v1/agent/messages/${messageId}/feedback`,
+				{ method: 'POST', body: { rating, ...(comment ? { comment } : {}) } },
+			);
+			return res.data;
 		},
 
 		/**

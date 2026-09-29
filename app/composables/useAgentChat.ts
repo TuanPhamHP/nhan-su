@@ -3,6 +3,7 @@ import {
 	AGENT_TOOL_LABELS,
 	type AgentChatMessage,
 	type AgentConversation,
+	type AgentFeedbackRating,
 	type AgentMessageRole,
 	type AgentPendingActionRow,
 } from '~/types/agent.types';
@@ -73,6 +74,9 @@ export function useAgentChat() {
 					conversationId.value = ev.result.conversationId;
 					reply.toolsCalled = ev.result.toolsCalled;
 					reply.usage = ev.result.usage;
+					if (ev.result.messageId) reply.messageId = ev.result.messageId;
+					// Server quyết định có mời chấm điểm hay không — FE chỉ hiện theo.
+					reply.feedbackPrompt = ev.result.feedbackPrompt ?? null;
 					if (!reply.text) reply.text = ev.result.answer;
 				} else if (ev.type === 'error') {
 					reply.error = true;
@@ -140,8 +144,12 @@ export function useAgentChat() {
 					id: `h-${m.id}`,
 					role: m.role as AgentMessageRole,
 					text: m.text,
+					messageId: m.id,
 					// Biểu đồ đã lưu cùng tin nhắn nên mở lại hội thoại vẫn còn hình.
 					...(m.charts?.length ? { charts: m.charts } : {}),
+					// Điểm đã chấm phải hiện lại: không có thì người dùng tưởng mình chưa
+					// đánh giá và bấm lần nữa, hoặc tưởng góp ý đã bị bỏ đi.
+					...(m.feedback ? { feedback: m.feedback } : {}),
 				}));
 
 			// Gắn form vào câu trả lời cuối — đúng vị trí nó từng hiện lúc đang chat.
@@ -209,6 +217,44 @@ export function useAgentChat() {
 		await service.cancelAction(pendingActionId).catch(() => undefined);
 	}
 
+	/**
+	 * Chấm điểm một câu trả lời (hoặc đổi điểm / thêm góp ý cho lượt đã chấm).
+	 *
+	 * Cập nhật lạc quan: hiện lựa chọn ngay rồi mới gọi API, vì người dùng bấm xong là
+	 * đọc tiếp — chờ round-trip mới sáng nút thì cảm giác như bấm không ăn. Lỗi thì trả
+	 * lại nguyên trạng và nói rõ, KHÔNG âm thầm giả vờ đã lưu.
+	 */
+	async function rateMessage(
+		messageId: number,
+		rating: AgentFeedbackRating,
+		comment?: string,
+	): Promise<void> {
+		const host = messages.value.find((m) => m.messageId === messageId);
+		if (!host || host.feedbackState === 'saving') return;
+
+		const previous = host.feedback ?? null;
+		host.feedbackState = 'saving';
+		host.feedback = {
+			messageId,
+			rating,
+			// Nhãn thật do server trả; lấy tạm từ prompt để không phải đợi mới thấy chữ.
+			ratingLabel:
+				host.feedbackPrompt?.options.find((o) => o.value === rating)?.label ?? rating,
+			comment: comment ?? previous?.comment ?? null,
+			createdAt: previous?.createdAt ?? new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+		};
+
+		try {
+			host.feedback = await service.submitFeedback(messageId, rating, comment);
+			host.feedbackState = 'idle';
+		} catch (err) {
+			host.feedback = previous;
+			host.feedbackState = 'failed';
+			error.value = (err as Error)?.message ?? 'Không gửi được đánh giá';
+		}
+	}
+
 	async function archiveConversation(id: number): Promise<void> {
 		await service.archiveConversation(id);
 		conversations.value = conversations.value.filter((c) => c.id !== id);
@@ -241,5 +287,6 @@ export function useAgentChat() {
 		renameConversation,
 		confirmPending,
 		cancelPending,
+		rateMessage,
 	};
 }

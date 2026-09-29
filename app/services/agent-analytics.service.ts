@@ -1,6 +1,10 @@
 import { useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse } from '~/types/api.types';
-import type { AgentAnalyticsOverview, AgentAnalyticsQuery } from '~/types/agent-analytics.types';
+import type {
+	AgentAnalyticsOverview,
+	AgentAnalyticsQuery,
+	AgentFeedbackAnalytics,
+} from '~/types/agent-analytics.types';
 
 export const useAgentAnalyticsService = () => {
 	const authFetch = useAuthFetch();
@@ -11,6 +15,18 @@ export const useAgentAnalyticsService = () => {
 			const res = await authFetch<ApiResponse<AgentAnalyticsOverview>>('/v1/agent/analytics/overview', {
 				params,
 			});
+			return res.data;
+		},
+
+		/**
+		 * Bảng đánh giá chi tiết (chia theo chủ đề, theo tier, kèm góp ý chữ) —
+		 * chỉ ADMIN / HR / DIRECTOR. `topLimit` giới hạn số góp ý trả về.
+		 */
+		async feedback(params?: AgentAnalyticsQuery): Promise<AgentFeedbackAnalytics> {
+			const res = await authFetch<ApiResponse<AgentFeedbackAnalytics>>(
+				'/v1/agent/analytics/feedback',
+				{ params },
+			);
 			return res.data;
 		},
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+	import agentAvatar from '~/assets/icons/ONGO_AI_BOT.png';
 	import type { AgentSuggestion } from '~/types/agent.types';
 
 	defineProps<{ suggestions: AgentSuggestion[] }>();
@@ -13,17 +14,14 @@
 		trọn màn hình, đẩy ô nhập xuống sát mép dưới.
 	-->
 	<div class="flex h-full flex-col items-center justify-center gap-4 px-3 py-6 text-center sm:gap-6 sm:px-4 sm:py-10">
-		<div class="relative">
-			<span
-				class="absolute inset-0 rounded-3xl bg-[var(--color-accent)] opacity-20 blur-xl"
-				aria-hidden="true"
-			/>
-			<div
-				class="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)] text-white shadow-lg sm:h-16 sm:w-16 sm:rounded-3xl"
-			>
-				<Icon name="heroicons:sparkles" class="h-6 w-6 sm:h-8 sm:w-8" />
-			</div>
-		</div>
+		<!-- Không để vầng sáng accent phía sau: mascot tông cam, quầng xanh lá/xanh dương
+		     theo theme sẽ chỏi màu. Ảnh đứng một mình đã đủ nặng ký ở cỡ này. -->
+		<img
+			:src="agentAvatar"
+			alt=""
+			draggable="false"
+			class="h-14 w-14 object-contain select-none sm:h-20 sm:w-20"
+		/>
 
 		<div class="space-y-1">
 			<h3 class="text-base font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
