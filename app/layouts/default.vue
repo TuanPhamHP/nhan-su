@@ -32,6 +32,8 @@ onMounted(() => {
 			</main>
 		</div>
 
+		<LayoutAppAgentFab />
+
 		<ClientOnly><CommonAppToastContainer /></ClientOnly>
 		<ClientOnly><CommonAppImageViewer /></ClientOnly>
 	</div>

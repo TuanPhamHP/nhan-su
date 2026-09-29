@@ -1,0 +1,13 @@
+{
+	// Giảm số inotify watch của VSCode (Linux giới hạn fs.inotify.max_user_watches).
+	// Hết watch thì `nuxt dev` chết với lỗi ENOSPC: System limit for number of file watchers reached.
+	"files.watcherExclude": {
+		"**/node_modules/**": true,
+		"**/.git/objects/**": true,
+		"**/.git/subtree-cache/**": true,
+		"**/.nuxt/**": true,
+		"**/.output/**": true,
+		"**/dist/**": true,
+		"**/coverage/**": true
+	}
+}
