@@ -2,6 +2,7 @@
 	import AgentStatCard from '~/components/modules/agent/AgentStatCard.vue';
 	import AgentTopicTable from '~/components/modules/agent/AgentTopicTable.vue';
 	import AgentDailyChart from '~/components/modules/agent/AgentDailyChart.vue';
+	import AgentFeedbackPanel from '~/components/modules/agent/AgentFeedbackPanel.vue';
 	import { useAuth } from '~/composables/useAuth';
 
 	definePageMeta({ title: 'Trợ lý AI — Mức dùng' });
@@ -11,7 +12,9 @@
 	const canSeeAll = computed(() => ['ADMIN', 'HR', 'DIRECTOR'].includes(user.value?.role ?? ''));
 	const scope = computed<'all' | 'me'>(() => (canSeeAll.value ? 'all' : 'me'));
 
-	const { data, loading, error, from, to, load, setRange } = useAgentAnalytics(scope.value);
+	const { data, feedback, loading, error, from, to, load, setRange } = useAgentAnalytics(
+		scope.value,
+	);
 
 	onMounted(load);
 
@@ -24,6 +27,26 @@
 	const nf = new Intl.NumberFormat('vi-VN');
 	const fmtTok = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : nf.format(n));
 	const fmtUsd = (n: number) => '$' + n.toFixed(n < 1 ? 4 : 2);
+
+	/**
+	 * Khối đánh giá, có mặc định rỗng.
+	 *
+	 * Backend cũ chưa có trường `feedback` thì `data.feedback.total` sẽ nổ ngay trong
+	 * template và làm trắng cả trang mức dùng — một tính năng phụ không được phép làm sập
+	 * thứ người ta vào đây để xem.
+	 */
+	const fb = computed(
+		() =>
+			data.value?.feedback ?? {
+				total: 0,
+				byRating: {},
+				satisfactionRate: 0,
+				negativeRate: 0,
+				score: 0,
+				withComment: 0,
+				responseRate: 0,
+			},
+	);
 
 	/** Ước tính chi phí tháng theo nhịp dùng hiện tại — con số người duyệt ngân sách cần. */
 	const monthlyProjection = computed(() => {
@@ -82,7 +105,9 @@
 		<div v-else-if="loading && !data" class="py-16 text-center text-sm text-gray-500">Đang tải…</div>
 
 		<template v-else-if="data">
-			<section class="grid grid-cols-2 gap-3 lg:grid-cols-6">
+			<!-- 4 cột thay vì 6: thêm thẻ "Hài lòng" thành 7 thẻ, để 6 cột thì hàng hai
+			     còn trơ một thẻ lẻ. 4 cột chia 4+3, thẻ cũng rộng hơn cho dễ đọc. -->
+			<section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 				<AgentStatCard label="Lượt hỏi" :value="nf.format(data.summary.requests)" :hint="`${data.summary.conversations} hội thoại`" />
 				<AgentStatCard v-if="canSeeAll" label="Người dùng" :value="nf.format(data.summary.activeUsers)" hint="có phát sinh token" />
 				<AgentStatCard label="Tổng token" :value="fmtTok(data.summary.totalTokens)" :hint="`vào ${fmtTok(data.summary.promptTokens)} · ra ${fmtTok(data.summary.completionTokens)}`" />
@@ -92,6 +117,12 @@
 					hint="token nạp lại từ cache"
 					:tone="data.summary.cacheHitRate > 30 ? 'good' : 'default'"
 				/>
+				<AgentStatCard
+					label="Hài lòng"
+					:value="fb.total ? `${fb.satisfactionRate}%` : '—'"
+					:hint="fb.total ? `${fb.total} lượt chấm · ${fb.score}/4` : 'chưa ai chấm điểm'"
+					:tone="fb.total && fb.satisfactionRate >= 70 ? 'good' : 'default'"
+				/>
 				<AgentStatCard label="Chi phí" :value="fmtUsd(data.summary.costUsd)" :hint="`${fmtUsd(data.summary.costPerRequestUsd)}/lượt`" />
 				<AgentStatCard label="Ước tính / tháng" :value="fmtUsd(monthlyProjection)" hint="theo nhịp dùng hiện tại" />
 			</section>
@@ -99,6 +130,9 @@
 			<AgentDailyChart :daily="data.daily" />
 
 			<AgentTopicTable :topics="data.topics" />
+
+			<!-- Chỉ scope 'all': endpoint đánh giá chi tiết giới hạn ADMIN/HR/DIRECTOR -->
+			<AgentFeedbackPanel v-if="feedback" :data="feedback" />
 
 			<section class="grid gap-4 lg:grid-cols-2">
 				<div

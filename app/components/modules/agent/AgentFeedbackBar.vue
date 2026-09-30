@@ -71,9 +71,21 @@
 </script>
 
 <template>
-	<div v-if="options.length" class="flex flex-col gap-1.5 px-1 animate-fade-in">
+	<!-- `data-testid` là điểm neo cho tests/e2e/agent-feedback-shots.mjs — đừng đổi tên -->
+	<div
+		v-if="options.length"
+		data-testid="agent-feedback-bar"
+		class="flex flex-col gap-1.5 px-1 animate-fade-in"
+	>
 		<div class="flex flex-wrap items-center gap-1.5">
-			<span class="text-[11px] text-gray-400 dark:text-gray-500">{{ headline }}</span>
+			<!--
+				`w-full sm:w-auto`: ở khổ điện thoại, câu hỏi chiếm trọn một dòng để 4 nút
+				xuống hàng thành khối đều nhau. Để chung hàng thì nút đầu bị kéo lên cạnh
+				câu hỏi còn ba nút kia rơi xuống — nhìn như vỡ layout (đã chụp thấy trên iPhone 13).
+			-->
+			<span class="w-full text-[11px] text-gray-400 sm:w-auto dark:text-gray-500">
+				{{ headline }}
+			</span>
 
 			<button
 				v-for="o in options"

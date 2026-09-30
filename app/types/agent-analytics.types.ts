@@ -92,6 +92,8 @@ export interface AgentFeedbackComment {
 export interface AgentFeedbackAnalytics {
 	from: string;
 	to: string;
+	/** Nhãn tiếng Việt của từng mức, do server cấp — FE KHÔNG giữ bản sao. */
+	ratingLabels: Record<string, string>;
 	summary: AgentFeedbackSummary;
 	byPlaybook: AgentFeedbackGroup[];
 	byTier: AgentFeedbackGroup[];
@@ -125,6 +127,15 @@ export const PLAYBOOK_LABELS: Record<string, string> = {
 	'hr-org-overview': 'Tổng quan nhân sự',
 	'leave-team-overview': 'Nghỉ phép phòng ban',
 	'attendance-team-summary': 'Chuyên cần phòng ban',
+	'leave-request': 'Xin nghỉ phép',
+	'overtime-request': 'Xin tăng ca',
+	'makeup-request': 'Xin bù công',
+	'online-work-request': 'Đăng ký làm online',
+	'violation-explain': 'Giải trình chuyên cần',
+	'business-trip-request': 'Đăng ký đi công tác',
+	'approval-queue': 'Duyệt đơn',
+	capabilities: 'Hỏi trợ lý làm được gì',
+	unsupported: 'Ngoài phạm vi chat',
 	fallback: 'Không xác định được',
 };
 

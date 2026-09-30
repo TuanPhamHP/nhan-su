@@ -185,7 +185,13 @@ Management user có thể click **"Xem giao diện nhân viên"** trong AppHeade
 ### Khi cần làm việc với api, Types
 
 - Đọc file docs/api-endpoint.json để hiểu toàn bộ API shape.
-- Đọc các file docs/bridges/ để hiểu các nghiệp vụ đồng bộ từ phía backend.
+  ⚠️ **Bản này chốt từ 04/08/2026 — đã cũ**, không có module trợ lý AI và các endpoint thêm
+  sau đó. Bản sống là `../hr-system-be/docs/openapi.json` (BE tự ghi đè mỗi lần chạy
+  `npm run start:dev`), hoặc `{API_HOST}/api/docs-json` khi server đang chạy. Khi hai bản
+  lệch nhau thì tin bản của BE.
+- Đọc các file bridge doc của backend để hiểu nghiệp vụ đồng bộ. Chúng nằm ở repo kia:
+  `../hr-system-be/docs/bridges/` — **repo này KHÔNG có thư mục `docs/bridges/`**.
+  Trợ lý AI: `../hr-system-be/docs/bridges/ai-agent.md`.
 
 - Tạo toàn bộ types trong app/types/ dựa trên response schemas trong api-endpoint.json:
 
@@ -336,7 +342,7 @@ await directoryStore.load();
 - Component patterns: @docs/components.md
 - Forms & notifications: @docs/forms.md
 - api endpoints: @docs/api-enpoint.json
-- backend bridges: @docs/bridges/
+- backend bridges: `../hr-system-be/docs/bridges/` (ở repo backend, không phải repo này)
 - front-end docs: @docs/frontend/nuxt-conventions.md
 - Realtime / WebSocket rules: @docs/realtime-websocket.md
 - Code review checklist: @docs/review.md
