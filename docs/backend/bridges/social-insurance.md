@@ -9,11 +9,17 @@
 | Method | Path | Ai được gọi | Ghi chú |
 |--------|------|-------------|---------|
 | **POST** | **`/v1/social-insurance/me`** | **Mọi user đã đăng nhập** | **Nhân viên tự xem của mình — BẮT BUỘC gửi lại mật khẩu.** Xem mục "Tự xem" |
-| GET | `/v1/social-insurance` | `ADMIN`, `HR` | Danh sách toàn công ty (có phân trang) |
-| GET | `/v1/social-insurance/:employeeId` | **CHỈ** `ADMIN`/`HR`/`DIRECTOR`/`MANAGER`/`CHIEF` | Dành cho quản lý. **Nhân viên gọi id của chính mình cũng bị `403`** — phải dùng `POST /me` |
-| PUT | `/v1/social-insurance/:employeeId` | `ADMIN`, `HR` | Upsert — tạo mới hoặc cập nhật (multipart/form-data) |
+| GET | `/v1/social-insurance` | Permission `social-insurance:read` | Danh sách toàn công ty (có phân trang) |
+| GET | `/v1/social-insurance/:employeeId` | Permission `social-insurance:read` | Dành cho HR. **Nhân viên gọi id của chính mình cũng bị `403`** — phải dùng `POST /me` |
+| PUT | `/v1/social-insurance/:employeeId` | Permission `social-insurance:update` | Upsert — tạo mới hoặc cập nhật (multipart/form-data) |
 
 > ⚠️ **Thay đổi breaking:** `GET /:employeeId` trước đây cho chính chủ đọc, **nay không còn**.
+
+> ⚠️ **Thay đổi breaking (2026-10-05):** cả module nay gác bằng **permission**, không còn gác
+> bằng `SystemRole`. Trước đây `MANAGER`/`CHIEF`/`DIRECTOR` đọc được BHXH của bất kỳ ai —
+> kể cả nhân viên phòng khác — vì endpoint chỉ có `@Roles` và `PermissionsGuard` còn chưa
+> được khai trong `@UseGuards`, nên ô tick "Xem thông tin BHXH" trong UI phân quyền hoàn
+> toàn vô tác dụng. Nay bỏ tick là chặn thật.
 > Nếu còn cho, nhân viên chỉ cần gọi thẳng id của mình là lấy được dữ liệu mà không cần mật
 > khẩu — cửa mật khẩu ở `/me` sẽ thành vô nghĩa. FE phải chuyển mọi chỗ "nhân viên tự xem"
 > sang `POST /me`.
@@ -226,7 +232,7 @@ tầng API, không để FE tự ẩn:
 
 | Ai gọi | `note` nhận được |
 |---|---|
-| `HR`, `ADMIN`, `DIRECTOR`, `MANAGER`, `CHIEF` (qua `GET /:employeeId` hoặc `POST /me`) | giá trị thật |
+| Người có `social-insurance:read` (qua `GET /:employeeId`), hoặc HR/ADMIN tự xem qua `POST /me` | giá trị thật |
 | Nhân viên tự xem qua `POST /me` | **luôn `null`** |
 
 Các field còn lại **không** bị chặn — nhân viên vẫn đọc đủ mã số BHXH, mức lương tham gia,
@@ -325,7 +331,7 @@ export function useSocialInsurance() {
 | `EMPLOYEE` gọi `GET /social-insurance` (list) | 403 Forbidden |
 | `EMPLOYEE` gọi `GET /social-insurance/:id` với **id của mình** | **403 Forbidden** — phải dùng `POST /me` kèm mật khẩu |
 | `EMPLOYEE` gọi `GET /social-insurance/:id` với id người khác | 403 Forbidden |
-| `MANAGER` / `CHIEF` gọi `GET /social-insurance/:employeeId` | 200 OK |
+| `MANAGER` / `CHIEF` / `DIRECTOR` gọi `GET /social-insurance/:employeeId` | **403 Forbidden** — master list quy định `social-insurance:read` chỉ HR có |
 | `POST /me` đúng mật khẩu, nhân viên **chưa có** bản ghi | 201 + `data: null` |
 | `POST /me` đúng mật khẩu khi tài khoản **đang bị khoá** | 403 — khoá thắng cả mật khẩu đúng |
 | `POST /me` bởi `HR`/`ADMIN` cho chính mình | 201, và `note` trả **giá trị thật** (họ thuộc nhóm được đọc) |

@@ -8,14 +8,29 @@ export function useSocialInsurance() {
 	const service = useSocialInsuranceService();
 
 	const record = ref<SocialInsuranceResponse | null>(null);
+	/**
+	 * Lỗi tải, tách riêng khỏi `record = null`.
+	 *
+	 * Trước đây `fetchByEmployee` chỉ có try/finally, không catch — request hỏng thì
+	 * `record` vẫn là `null`, mà `null` lại được màn hình hiểu là "chưa có dữ liệu BHXH"
+	 * nên nó hiện form TẠO MỚI. Hệ quả thật: quản lý phòng khác bị 403/500 vẫn thấy form
+	 * nhập BHXH của người ta. "Tải hỏng" và "chưa có dữ liệu" phải là hai trạng thái khác
+	 * nhau.
+	 */
+	const loadError = ref<string | null>(null);
 	const loading = ref(false);
 	const saving = ref(false);
 	const unlocking = ref(false);
 
 	async function fetchByEmployee(employeeId: number) {
 		loading.value = true;
+		loadError.value = null;
 		try {
 			record.value = await service.findByEmployee(employeeId);
+		} catch (e) {
+			record.value = null;
+			loadError.value =
+				e instanceof Error ? e.message : 'Không tải được thông tin BHXH';
 		} finally {
 			loading.value = false;
 		}
@@ -52,6 +67,7 @@ export function useSocialInsurance() {
 
 	return {
 		record,
+		loadError,
 		loading,
 		saving,
 		unlocking,

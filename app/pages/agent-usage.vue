@@ -127,7 +127,7 @@
 				<AgentStatCard label="Ước tính / tháng" :value="fmtUsd(monthlyProjection)" hint="theo nhịp dùng hiện tại" />
 			</section>
 
-			<AgentDailyChart :daily="data.daily" />
+			<AgentDailyChart :daily="data.daily" :from="data.summary.from" :to="data.summary.to" />
 
 			<AgentTopicTable :topics="data.topics" />
 

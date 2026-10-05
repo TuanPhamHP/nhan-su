@@ -10,7 +10,8 @@
 	const toast = useToast();
 	const authStore = useAuthStore();
 	const { hasPermission } = usePermissions();
-	const { contracts, loading, fetchByEmployee, create, update, activate, terminate } = useContracts();
+	const { contracts, loadError, loading, fetchByEmployee, create, update, activate, terminate } =
+		useContracts();
 
 	// Create + edit form vẫn giới hạn ADMIN/HR vì POST /v1/contracts còn role-based.
 	const canCreate = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
@@ -253,6 +254,20 @@
 		<!-- Loading -->
 		<div v-if="loading" class="space-y-3">
 			<div v-for="i in 2" :key="i" class="h-28 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+		</div>
+
+		<!--
+			Tải hỏng (403 phòng ban khác, mất mạng…) phải hiện LÝ DO, không rơi xuống
+			"Chưa có hợp đồng nào" — hai chuyện khác hẳn mà trước đây nhìn giống hệt nhau.
+		-->
+		<div
+			v-else-if="loadError"
+			class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-5 py-4"
+		>
+			<p class="text-sm font-medium text-amber-800 dark:text-amber-300">
+				Không hiển thị được hợp đồng
+			</p>
+			<p class="mt-1 text-xs text-amber-700 dark:text-amber-400">{{ loadError }}</p>
 		</div>
 
 		<!-- Empty state -->

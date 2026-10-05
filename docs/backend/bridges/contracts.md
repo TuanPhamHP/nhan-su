@@ -44,8 +44,17 @@ Hợp đồng chứa lương cơ bản, nên có hai lớp kiểm tách bạch. 
 - `GET /contracts` và `GET /contracts/:id` dùng **chung một luật**. Trước đây danh sách lọc
   theo phòng ban còn chi tiết thì không — biết `id` là đọc được hợp đồng phòng khác, mà `id`
   là số nguyên tuần tự. Đừng giả định chi tiết lỏng hơn danh sách.
-- `MANAGER` gửi `?departmentId=` của phòng khác sẽ bị **bỏ qua**, không phải báo lỗi — server
-  ép về phòng của chính họ.
+- Lọc trỏ RA NGOÀI phạm vi → **403 kèm lý do**, không phải 200 + mảng rỗng. Vì `[]` vừa có
+  nghĩa "chưa có hợp đồng" vừa có nghĩa "không được xem" — FE không phân biệt được, người
+  dùng tưởng mất dữ liệu. Các ca:
+
+| Request của `MANAGER` phòng 7 | Kết quả |
+| --- | --- |
+| `?employeeId=` người phòng 6 | 403 — *Bạn không thể xem hợp đồng của nhân viên thuộc phòng ban khác* |
+| `?departmentId=6` | 403 — *Bạn không thể xem hợp đồng của phòng ban khác* |
+| `?employeeId=` id không tồn tại | 403 (cố ý không trả 404, tránh dò id) |
+| `?employeeId=` người phòng 7 | 200 |
+| không lọc gì | 200 — liệt kê trong phòng mình |
 
 > **Model quyền:** TOÀN BỘ endpoint của module này nay đều **permission-based** (`PermissionsGuard`) — đọc (`contract:read`), tạo (`contract:create`), import (`contract:import`), sửa/kích hoạt/chấm dứt (`contract:update`/`activate`/`terminate`). Cấp hoặc thu quyền ở màn Phân quyền là có hiệu lực thật. `@Roles` chỉ còn là bộ lọc thô chạy trước và phải phủ đủ các role được cấp quyền. `ADMIN` bypass toàn bộ. Ngoại lệ duy nhất: `GET /contracts/me` và ca tự-xem-hợp-đồng-của-mình ở `GET /:id` — self-service, không đòi quyền nào.
 
@@ -262,7 +271,8 @@ export function useContracts() {
 | `EMPLOYEE` gọi `GET /contracts/:id` với hợp đồng của mình | 200 OK |
 | `EMPLOYEE` gọi `GET /contracts/:id` với hợp đồng người khác | 403 Forbidden |
 | `MANAGER` gọi `GET /contracts` | 200 — chỉ trả hợp đồng nhân viên trong phòng mình |
-| `MANAGER` gọi `GET /contracts?departmentId=` phòng khác | 200 — param bị bỏ qua, vẫn chỉ phòng mình |
+| `MANAGER` gọi `GET /contracts?departmentId=` phòng khác | 403 Forbidden kèm lý do |
+| `MANAGER` gọi `GET /contracts?employeeId=` người phòng khác | 403 Forbidden kèm lý do |
 | `MANAGER` gọi `GET /contracts/:id` với hợp đồng phòng khác | 403 Forbidden |
 | `MANAGER` không có phòng ban gọi `GET /contracts` | 200 — chỉ hợp đồng của chính họ |
 | `CHIEF` gọi `GET /contracts` | 200 — toàn công ty (Tổng giám đốc) |

@@ -34,6 +34,9 @@
 	// Tab Hợp đồng lộ cả lương cơ bản → phải theo đúng quyền, không chỉ theo vai trò.
 	// BE đã chặn (contract:read), đây là để không hiện tab rồi mới báo lỗi.
 	const canReadContracts = computed(() => hasPermission('contract:read'));
+	// Tab BHXH lộ mức lương tham gia bảo hiểm + mã số thuế. BE chặn bằng
+	// `social-insurance:read` (chỉ HR theo master list).
+	const canReadSocialInsurance = computed(() => hasPermission('social-insurance:read'));
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -67,6 +70,7 @@
 		if (!validTabs.includes(requested)) return 'info';
 		// Chặn cả deep-link `?tab=contracts` của người không có quyền.
 		if (requested === 'contracts' && !canReadContracts.value) return 'info';
+		if (requested === 'social-insurance' && !canReadSocialInsurance.value) return 'info';
 		return requested;
 	}
 	const activeTab = ref<TabId>(initialTab());
@@ -422,6 +426,7 @@
 						Hợp đồng
 					</button>
 					<button
+						v-if="canReadSocialInsurance"
 						type="button"
 						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
 						:class="
@@ -643,7 +648,10 @@
 			</div>
 
 			<!-- Tab: BHXH & Thuế -->
-			<EmployeeSocialInsurance v-else-if="activeTab === 'social-insurance'" :employee-id="id" />
+			<EmployeeSocialInsurance
+				v-else-if="activeTab === 'social-insurance' && canReadSocialInsurance"
+				:employee-id="id"
+			/>
 
 			<!-- Tab: Định danh (CCCD + Hộ chiếu) -->
 			<div v-else-if="activeTab === 'identity'" class="space-y-6">

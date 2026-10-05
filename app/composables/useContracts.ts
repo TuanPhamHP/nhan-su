@@ -13,6 +13,14 @@ export function useContracts() {
 
 	const contracts = ref<ContractResponse[]>([]);
 	const meta = ref<PaginatedMeta | null>(null);
+	/**
+	 * Lỗi tải, tách riêng khỏi `contracts = []`.
+	 *
+	 * Mảng rỗng KHÔNG đủ để diễn đạt mọi thứ: "nhân viên chưa có hợp đồng" và "bạn không
+	 * được xem hợp đồng phòng ban khác" là hai chuyện khác hẳn, mà trước đây cùng hiện ra
+	 * dòng "Chưa có hợp đồng nào". BE nay trả 403 kèm lý do — giữ lại để hiển thị đúng.
+	 */
+	const loadError = ref<string | null>(null);
 	const loading = ref(false);
 
 	async function fetchAll(params?: QueryContractParams) {
@@ -28,10 +36,16 @@ export function useContracts() {
 
 	async function fetchByEmployee(employeeId: number, params?: Omit<QueryContractParams, 'employeeId'>) {
 		loading.value = true;
+		loadError.value = null;
 		try {
 			const res = await service.findAll({ ...params, employeeId });
 			contracts.value = res.data;
 			meta.value = res.meta;
+		} catch (e) {
+			contracts.value = [];
+			meta.value = null;
+			loadError.value =
+				e instanceof Error ? e.message : 'Không tải được danh sách hợp đồng';
 		} finally {
 			loading.value = false;
 		}
@@ -69,6 +83,7 @@ export function useContracts() {
 	return {
 		contracts,
 		meta,
+		loadError,
 		loading,
 		fetchAll,
 		fetchByEmployee,

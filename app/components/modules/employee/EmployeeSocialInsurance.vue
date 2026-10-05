@@ -9,7 +9,7 @@
 
 	const toast = useToast();
 	const authStore = useAuthStore();
-	const { record, loading, saving, fetchByEmployee, save } = useSocialInsurance();
+	const { record, loadError, loading, saving, fetchByEmployee, save } = useSocialInsurance();
 
 	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
 
@@ -195,6 +195,21 @@
 		<!-- Loading -->
 		<div v-if="loading" class="space-y-4">
 			<div v-for="i in 3" :key="i" class="h-32 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+		</div>
+
+		<!--
+			Tải hỏng thì DỪNG ở đây, không rơi xuống form.
+			`record = null` vừa có nghĩa "chưa nhập BHXH" vừa có nghĩa "tải hỏng", nên nếu
+			không chặn, người bị 403 vẫn thấy form nhập BHXH của nhân viên khác.
+		-->
+		<div
+			v-else-if="loadError"
+			class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-5 py-4"
+		>
+			<p class="text-sm font-medium text-amber-800 dark:text-amber-300">
+				Không hiển thị được thông tin BHXH
+			</p>
+			<p class="mt-1 text-xs text-amber-700 dark:text-amber-400">{{ loadError }}</p>
 		</div>
 
 		<form v-else class="space-y-6" @submit.prevent="onSubmit">
