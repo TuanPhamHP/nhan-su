@@ -13,6 +13,9 @@ export type TransportType = 'PLANE' | 'TRAIN' | 'CAR' | 'OTHER';
 
 export type DesiredTimeType = 'ARRIVAL' | 'PICKUP';
 
+/** Ai thanh toán phương tiện di chuyển — HR chốt khi cập nhật phương tiện. */
+export type TripPaymentMethod = 'COMPANY_PAID' | 'EMPLOYEE_PAID';
+
 export interface TripCompanion {
 	employeeId: number;
 }
@@ -31,6 +34,12 @@ export interface TripTransportResponse {
 	checkInTime: string | null;
 	ticketImageUrl: string | null;
 	note: string | null;
+	/** Ai trả tiền phương tiện này — HR chốt. */
+	paymentMethod: TripPaymentMethod;
+	/** 'Công ty thanh toán' | 'Nhân viên thanh toán' — hiển thị trực tiếp, không tự map. */
+	paymentMethodLabel: string;
+	/** VNĐ, số nguyên >= 0. Hiển thị #,###,###. */
+	paymentAmount: number;
 }
 
 export interface TripRouteResponse {
@@ -40,6 +49,11 @@ export interface TripRouteResponse {
 	dropPoint: string;
 	desiredTimeType: DesiredTimeType;
 	desiredTime: string | null;
+	/** MONG MUỐN của nhân viên: cần công ty đặt xe chặng này. KHÔNG phải phủ định của isSelfTransport. */
+	needsVehicleSupport: boolean;
+	/** 'Có' | 'Không' — hiển thị trực tiếp, không tự map. */
+	needsVehicleSupportLabel: string;
+	/** KẾT QUẢ HR xử lý: true = tự túc (transports[] rỗng). Độc lập với needsVehicleSupport. */
 	isSelfTransport: boolean;
 	transports: TripTransportResponse[];
 }
@@ -86,6 +100,10 @@ export interface BusinessTripResponse {
 	transportType: TransportType | null;
 	companions: TripCompanion[] | null;
 	routes: TripRouteResponse[];
+	/** GỘP cấp đơn: true khi CÓ ÍT NHẤT MỘT chặng cần đặt xe — dùng cho DANH SÁCH, đừng tự some() lại. */
+	needsVehicleSupport: boolean;
+	/** 'Có' | 'Không' — hiển thị trực tiếp. */
+	needsVehicleSupportLabel: string;
 	status: BusinessTripStatus;
 	statusLabel: string;
 	approver: BusinessTripApprover | null;
@@ -108,6 +126,8 @@ export interface CreateTripRouteDto {
 	dropPoint: string;
 	desiredTimeType: DesiredTimeType;
 	desiredTime?: string;
+	/** Bỏ trống = true. Nhân viên chọn Có/Không khi thêm chặng. */
+	needsVehicleSupport?: boolean;
 }
 
 export interface CreateBusinessTripDto {
@@ -145,6 +165,10 @@ export interface CreateTripTransportDto {
 	checkInTime?: string;
 	ticketImageUrl?: string;
 	note?: string;
+	/** Bỏ trống = 'COMPANY_PAID'. */
+	paymentMethod?: TripPaymentMethod;
+	/** Bỏ trống = 0. Số nguyên 0..2_000_000_000 (VNĐ). */
+	paymentAmount?: number;
 }
 
 export interface UpdateRouteTransportDto {

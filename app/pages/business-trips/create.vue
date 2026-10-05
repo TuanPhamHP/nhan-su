@@ -65,10 +65,12 @@ interface RouteRow {
 	dropPoint: string;
 	desiredTimeType: DesiredTimeType;
 	desiredTime: string;
+	/** Mong muốn của nhân viên: có cần công ty đặt xe chặng này. Mặc định "Có". */
+	needsVehicleSupport: boolean;
 }
 
 function makeEmptyRoute(): RouteRow {
-	return { pickupPoint: '', dropPoint: '', desiredTimeType: 'ARRIVAL', desiredTime: '' };
+	return { pickupPoint: '', dropPoint: '', desiredTimeType: 'ARRIVAL', desiredTime: '', needsVehicleSupport: true };
 }
 
 const routes = ref<RouteRow[]>([makeEmptyRoute()]);
@@ -97,6 +99,7 @@ function buildRoutesPayload(): CreateTripRouteDto[] {
 		dropPoint: r.dropPoint.trim(),
 		desiredTimeType: r.desiredTimeType,
 		desiredTime: r.desiredTime ? new Date(r.desiredTime).toISOString() : undefined,
+		needsVehicleSupport: r.needsVehicleSupport,
 	}));
 }
 
@@ -493,6 +496,25 @@ onMounted(() => {
 									{{ route.desiredTimeType === 'ARRIVAL' ? 'Giờ cần có mặt tại điểm đến' : 'Giờ cần xe đón' }}
 								</label>
 								<input v-model="route.desiredTime" type="datetime-local" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors" />
+							</div>
+						</div>
+
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<div class="space-y-1">
+								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Hỗ trợ phương tiện di chuyển</label>
+								<div class="flex gap-2">
+									<label class="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg border cursor-pointer transition-colors" :class="route.needsVehicleSupport ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
+										<input v-model="route.needsVehicleSupport" :value="true" type="radio" class="sr-only" />
+										<span class="text-sm">Có</span>
+									</label>
+									<label class="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg border cursor-pointer transition-colors" :class="!route.needsVehicleSupport ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
+										<input v-model="route.needsVehicleSupport" :value="false" type="radio" class="sr-only" />
+										<span class="text-sm">Không</span>
+									</label>
+								</div>
+								<p class="text-xs text-gray-500 dark:text-gray-400">
+									Chọn "Có" nếu cần công ty bố trí xe cho chặng này, "Không" nếu bạn tự lo.
+								</p>
 							</div>
 						</div>
 					</div>

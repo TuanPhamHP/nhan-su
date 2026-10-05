@@ -19,6 +19,7 @@ import { isManagementRole } from '~/utils/role';
  * | online_work_request  | /management/online-work?open_id=:id      | /online-work/my?open_id=:id       |
  * | attendance           | /management/attendance                   | /attendance/my                    |
  * | makeup_attendance_request | /management/makeup-attendance?open_id=:id | /makeup-attendance/my?open_id=:id |
+ * | business_trip        | /business-trips/:id (trang chi tiết dùng chung) | /business-trips/:id        |
  * | company_announcement | /management/announcements/:id (HR/ADMIN) | /announcements/:id (các role còn lại) |
  */
 export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
@@ -51,6 +52,13 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 		case 'makeup_attendance_request':
 			if (manage) return id ? `/management/makeup-attendance?open_id=${id}` : '/management/makeup-attendance';
 			return id ? `/makeup-attendance/my?open_id=${id}` : '/makeup-attendance/my';
+
+		case 'business_trip':
+			// Chi tiết đơn công tác chỉ có MỘT trang dùng chung `/business-trips/:id`
+			// (trang quản lý cũng `router.push` về đây), nên hai nhánh role chỉ khác nhau
+			// ở trang danh sách khi notification không mang refId.
+			if (id) return `/business-trips/${id}`;
+			return manage ? '/management/business-trips' : '/business-trips';
 
 		case 'general_request':
 			return id ? `/general-requests/${id}` : '/general-requests';

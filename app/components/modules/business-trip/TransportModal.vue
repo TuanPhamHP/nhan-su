@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { useBusinessTripService } from '~/services/business-trip.service';
+import {
+	formatTripPaymentAmount,
+	formatTripPaymentAmountInput,
+	parseTripPaymentAmount,
+	TRIP_PAYMENT_AMOUNT_MAX,
+} from '~/utils/business-trip.utils';
 import type {
 	BusinessTripResponse,
 	CreateTripTransportDto,
+	TripPaymentMethod,
 	TripRouteResponse,
 	TransportType,
 } from '~/types/business-trip.types';
@@ -26,6 +33,13 @@ const transportOptions: { value: TransportType; label: string }[] = [
 	{ value: 'OTHER', label: 'Khác' },
 ];
 
+// Nhãn radio phải khai tại chỗ: giá trị chưa lưu nên chưa có `paymentMethodLabel` từ BE.
+// Nhãn của dữ liệu ĐÃ lưu vẫn đọc từ BE (`paymentMethodLabel`) ở trang chi tiết.
+const paymentMethodOptions: { value: TripPaymentMethod; label: string }[] = [
+	{ value: 'COMPANY_PAID', label: 'Công ty thanh toán' },
+	{ value: 'EMPLOYEE_PAID', label: 'Nhân viên thanh toán' },
+];
+
 interface TransportRow {
 	transportType: TransportType;
 	pickupLocation: string;
@@ -38,6 +52,9 @@ interface TransportRow {
 	checkInTime: string;
 	ticketImageUrl: string;
 	note: string;
+	paymentMethod: TripPaymentMethod;
+	/** Số nguyên không âm (VNĐ). Dấu phân cách nghìn chỉ ở tầng hiển thị. */
+	paymentAmount: number;
 }
 
 function makeEmpty(): TransportRow {
@@ -53,6 +70,8 @@ function makeEmpty(): TransportRow {
 		checkInTime: '',
 		ticketImageUrl: '',
 		note: '',
+		paymentMethod: 'COMPANY_PAID',
+		paymentAmount: 0,
 	};
 }
 
@@ -87,12 +106,26 @@ const transports = ref<TransportRow[]>(
 			checkInTime: isoOrEmptyToInput(t.checkInTime),
 			ticketImageUrl: t.ticketImageUrl ?? '',
 			note: t.note ?? '',
+			paymentMethod: t.paymentMethod,
+			paymentAmount: t.paymentAmount,
 		}))
 		: [makeEmpty()],
 );
 
 function addTransport() {
 	transports.value.push(makeEmpty());
+}
+
+/**
+ * Ô tiền hiển thị `#,###,###` nhưng state giữ number thuần.
+ * Ghi lại `input.value` ngay để người dùng không giữ được ký tự không phải chữ số.
+ */
+function onPaymentAmountInput(index: number, event: Event) {
+	const input = event.target as HTMLInputElement;
+	const row = transports.value[index];
+	if (!row) return;
+	row.paymentAmount = parseTripPaymentAmount(input.value);
+	input.value = formatTripPaymentAmountInput(row.paymentAmount);
 }
 
 function removeTransport(index: number) {
@@ -156,6 +189,15 @@ async function save() {
 				toast.error('Cần tối thiểu 1 phương tiện');
 				return;
 			}
+			const badAmount = transports.value.findIndex(
+				t => !Number.isInteger(t.paymentAmount) || t.paymentAmount < 0 || t.paymentAmount > TRIP_PAYMENT_AMOUNT_MAX,
+			);
+			if (badAmount !== -1) {
+				toast.error(`Phương tiện #${badAmount + 1}: số tiền phải là số nguyên từ 0 đến ${formatTripPaymentAmount(TRIP_PAYMENT_AMOUNT_MAX)}`);
+				return;
+			}
+			// PATCH transport là REPLACE TOÀN BỘ — phải gửi lại cả mảng kèm tiền của MỌI phần tử,
+			// bỏ sót một phần tử là phần tử đó bị reset về COMPANY_PAID / 0.
 			const payload: CreateTripTransportDto[] = transports.value.map((t, idx) => ({
 				order: idx + 1,
 				transportType: t.transportType,
@@ -169,6 +211,8 @@ async function save() {
 				checkInTime: inputToIso(t.checkInTime),
 				ticketImageUrl: t.ticketImageUrl.trim() || undefined,
 				note: t.note.trim() || undefined,
+				paymentMethod: t.paymentMethod,
+				paymentAmount: t.paymentAmount,
 			}));
 			updated = await service.updateRouteTransport(props.route.id, { transports: payload });
 		}
@@ -278,6 +322,36 @@ async function save() {
 							<div class="space-y-1">
 								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">SĐT tài xế</label>
 								<input v-model="t.driverPhone" type="tel" placeholder="VD: 0901234567" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors" />
+							</div>
+						</div>
+
+						<!-- Thanh toán — cả khối nằm trong v-if="!isSelfTransport" nên tự ẩn khi chốt tự túc -->
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+							<div class="space-y-1">
+								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Hình thức thanh toán <span class="text-red-500">*</span></label>
+								<div class="flex gap-2">
+									<label
+										v-for="opt in paymentMethodOptions"
+										:key="opt.value"
+										class="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg border cursor-pointer transition-colors"
+										:class="t.paymentMethod === opt.value ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
+									>
+										<input v-model="t.paymentMethod" :value="opt.value" type="radio" class="sr-only" />
+										<span class="text-sm">{{ opt.label }}</span>
+									</label>
+								</div>
+							</div>
+							<div class="space-y-1">
+								<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Số tiền thanh toán (VNĐ)</label>
+								<input
+									:value="formatTripPaymentAmountInput(t.paymentAmount)"
+									type="text"
+									inputmode="numeric"
+									placeholder="0"
+									class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+									@input="e => onPaymentAmountInput(idx, e)"
+								/>
+								<p class="text-xs text-gray-400">Số nguyên, tối đa {{ formatTripPaymentAmount(TRIP_PAYMENT_AMOUNT_MAX) }}</p>
 							</div>
 						</div>
 

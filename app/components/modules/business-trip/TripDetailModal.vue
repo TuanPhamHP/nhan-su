@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { formatTripPaymentAmount } from '~/utils/business-trip.utils';
 import type { BusinessTripResponse, TripRouteResponse } from '~/types/business-trip.types';
 import TripStatusBadge from '~/components/modules/business-trip/TripStatusBadge.vue';
 
@@ -123,6 +124,11 @@ function fmtCurrency(n: number) {
 									<p class="text-xs text-gray-500 dark:text-gray-400">{{ desiredTimeTypeLabels[route.desiredTimeType] }}</p>
 									<p class="text-gray-700 dark:text-gray-300 mt-0.5">{{ fmtDateTime(route.desiredTime) }}</p>
 								</div>
+								<!-- Mong muốn của nhân viên cho CHẶNG này — độc lập với isSelfTransport -->
+								<div class="col-span-2">
+									<p class="text-xs text-gray-500 dark:text-gray-400">Hỗ trợ phương tiện di chuyển</p>
+									<p class="text-gray-700 dark:text-gray-300 mt-0.5">{{ route.needsVehicleSupportLabel }}</p>
+								</div>
 							</div>
 
 							<!-- Transports (HR-updated) -->
@@ -150,6 +156,14 @@ function fmtCurrency(n: number) {
 									</p>
 									<p v-if="tp.licensePlate" class="text-xs text-gray-600 dark:text-gray-400">
 										Biển số: {{ tp.licensePlate }}<span v-if="tp.driverPhone"> · SĐT: {{ tp.driverPhone }}</span>
+									</p>
+									<p class="text-xs text-gray-600 dark:text-gray-400">
+										Hình thức thanh toán:
+										<strong class="text-gray-800 dark:text-gray-200">{{ tp.paymentMethodLabel }}</strong>
+									</p>
+									<p class="text-xs text-gray-600 dark:text-gray-400">
+										Số tiền thanh toán:
+										<strong class="text-gray-800 dark:text-gray-200">{{ formatTripPaymentAmount(tp.paymentAmount) }}</strong>
 									</p>
 									<a
 										v-if="tp.ticketImageUrl"

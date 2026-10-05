@@ -90,6 +90,7 @@ export type TripReportStatus = 'DRAFT' | 'SUBMITTED';
 
 export type TransportType = 'PLANE' | 'TRAIN' | 'CAR' | 'OTHER';
 export type DesiredTimeType = 'ARRIVAL' | 'PICKUP';
+export type TripPaymentMethod = 'COMPANY_PAID' | 'EMPLOYEE_PAID';
 
 export interface TripCompanion {
   employeeId: number;
@@ -111,6 +112,9 @@ export interface TripTransportResponse {
   checkInTime: string | null;             // ISO 8601 — giờ check-in sân bay/bến
   ticketImageUrl: string | null;          // URL ảnh vé — đã presigned, dùng trực tiếp
   note: string | null;
+  paymentMethod: TripPaymentMethod;       // ai trả tiền phương tiện này — HR chốt
+  paymentMethodLabel: string;             // 'Công ty thanh toán' | 'Nhân viên thanh toán' — hiển thị trực tiếp
+  paymentAmount: number;                  // VNĐ, số nguyên ≥ 0. Hiển thị theo vi-VN: `1.850.000 ₫`
 }
 
 export interface TripRouteResponse {
@@ -120,7 +124,9 @@ export interface TripRouteResponse {
   dropPoint: string;                      // điểm đến mong muốn
   desiredTimeType: DesiredTimeType;       // 'ARRIVAL' = giờ phải có mặt tại dropPoint · 'PICKUP' = giờ xe/máy bay đón
   desiredTime: string | null;             // ISO 8601 — giờ mong muốn tương ứng desiredTimeType
-  isSelfTransport: boolean;               // true = nhân viên tự túc di chuyển (transports[] rỗng)
+  needsVehicleSupport: boolean;           // MONG MUỐN của nhân viên: cần công ty đặt xe chặng này
+  needsVehicleSupportLabel: string;       // 'Có' | 'Không' — hiển thị trực tiếp
+  isSelfTransport: boolean;               // KẾT QUẢ HR xử lý: true = tự túc (transports[] rỗng)
   transports: TripTransportResponse[];    // do HR cập nhật sau khi trip APPROVED
 }
 
@@ -171,6 +177,8 @@ export interface BusinessTripResponse {
   transportType: TransportType | null;    // legacy — luôn null cho đơn mới (transport nằm ở TripRoute.transports)
   companions: TripCompanion[] | null;
   routes: TripRouteResponse[];            // luôn ≥ 1
+  needsVehicleSupport: boolean;           // GỘP: true khi CÓ ÍT NHẤT MỘT chặng cần đặt xe — dùng cho DANH SÁCH
+  needsVehicleSupportLabel: string;       // 'Có' | 'Không' — hiển thị trực tiếp
   status: BusinessTripStatus;
   statusLabel: string;                    // "Nháp" | "Chờ duyệt" | "Đã duyệt" | "Đang công tác" | "Hoàn thành" | "Bị từ chối" | "Đã huỷ"
   approver: BusinessTripApprover | null;
@@ -196,6 +204,7 @@ export interface CreateTripRouteDto {
   dropPoint: string;                      // min 2 ký tự — điểm đến
   desiredTimeType: DesiredTimeType;
   desiredTime?: string;                   // ISO 8601 — có thể null nếu chưa xác định giờ
+  needsVehicleSupport?: boolean;          // Bỏ trống = true. Nhân viên chọn Có/Không khi thêm chặng
 }
 
 export interface CreateBusinessTripDto {
@@ -235,6 +244,8 @@ export interface CreateTripTransportDto {
   checkInTime?: string;                   // ISO 8601
   ticketImageUrl?: string;
   note?: string;
+  paymentMethod?: TripPaymentMethod;      // Bỏ trống = 'COMPANY_PAID'
+  paymentAmount?: number;                 // Bỏ trống = 0. Số nguyên 0..2_000_000_000 (VNĐ)
 }
 
 // Gửi một trong hai:
@@ -309,15 +320,44 @@ export interface QueryBusinessTripsParams {
 
 ---
 
+## needsVehicleSupport vs isSelfTransport — ĐỪNG SUY RA CÁI NÀY TỪ CÁI KIA
+
+Hai trường này nằm cạnh nhau trên `TripRouteResponse`, tên na ná nhau, và **không phải phủ
+định của nhau**. Trộn lẫn hai cái là lỗi dễ xảy ra nhất ở màn hình này.
+
+| | `needsVehicleSupport` | `isSelfTransport` |
+|---|---|---|
+| Ai đặt | **Nhân viên** | **HR** |
+| Khi nào | Lúc tạo đơn (`POST`, trong `routes[]`) | Sau khi đơn `APPROVED` (`PATCH .../transport`) |
+| Nghĩa | *Mong muốn*: có cần công ty đặt xe không | *Kết quả*: công ty có bố trí xe không |
+| Mặc định | `true` | `false` |
+| Ai sửa được sau đó | Không ai (chốt khi tạo đơn) | HR, sửa bao nhiêu lần cũng được |
+
+Hệ quả thực tế FE phải xử lý đúng:
+- Nhân viên xin hỗ trợ (`needsVehicleSupport = true`) nhưng HR vẫn có thể chốt tự túc
+  (`isSelfTransport = true`). Lúc đó **cả hai đều true** — không phải bug.
+- HR chốt tự túc KHÔNG ghi đè `needsVehicleSupport`. Đơn vẫn hiển thị "Hỗ trợ phương tiện
+  di chuyển: Có" ở danh sách, vì đó là thứ nhân viên đã yêu cầu.
+- Dùng `needsVehicleSupport` để lọc/đánh dấu "đơn cần HR đặt xe". Dùng `isSelfTransport`
+  để biết có render khối phương tiện hay không.
+
+**Ở cấp đơn** (`BusinessTripResponse.needsVehicleSupport`) là giá trị **GỘP**: `true` khi có
+**ít nhất một** chặng cần hỗ trợ. Đơn chưa có chặng nào → `false`. Dùng field này cho danh
+sách, đừng tự `some()` lại trên `routes[]` ở FE — gộp hai nơi là hai nơi có thể lệch nhau.
+
+---
+
 ## Route & Transport — Luồng HR cập nhật phương tiện
 
-Nhân viên khi tạo đơn chỉ khai báo **lộ trình mong muốn** (`pickupPoint`, `dropPoint`, `desiredTimeType`, `desiredTime`). Phương tiện cụ thể do **HR** cập nhật sau khi đơn được `APPROVED`.
+Nhân viên khi tạo đơn khai báo **lộ trình mong muốn** (`pickupPoint`, `dropPoint`, `desiredTimeType`, `desiredTime`) và **có cần công ty đặt xe hay không** (`needsVehicleSupport`). Phương tiện cụ thể + tiền do **HR** cập nhật sau khi đơn được `APPROVED`.
 
 **Luồng:**
 
 ```
 1. Employee POST /business-trips
-   body: { ..., routes: [{ pickupPoint, dropPoint, desiredTimeType, desiredTime }] }
+   body: { ..., routes: [{ pickupPoint, dropPoint, desiredTimeType, desiredTime,
+                          needsVehicleSupport }] }
+   → needsVehicleSupport bỏ trống = true ("cần công ty đặt xe")
    → mỗi route được lưu với isSelfTransport = false, transports = []
 
 2. Đơn được submit → approve (hoặc HR auto-approve)
@@ -332,12 +372,15 @@ Nhân viên khi tạo đơn chỉ khai báo **lộ trình mong muốn** (`pickup
    │     PATCH /business-trips/routes/:routeId/transport         │
    │     body: { "isSelfTransport": true }                       │
    │     → BE xoá hết transports, set isSelfTransport = true     │
+   │     → KHÔNG cần (và không có nghĩa) paymentMethod/Amount    │
    ├─────────────────────────────────────────────────────────────┤
    │ (b) Cung cấp phương tiện                                    │
    │     PATCH /business-trips/routes/:routeId/transport         │
-   │     body: { "transports": [ { order: 1, ... }, ... ] }      │
+   │     body: { "transports": [ { order: 1, ...,               │
+   │              paymentMethod, paymentAmount }, ... ] }        │
    │     → BE REPLACE toàn bộ transports cũ, isSelfTransport=false│
    │     → 1 route có thể có nhiều transports (đổi chặng)        │
+   │     → mỗi transport có hình thức thanh toán + tiền RIÊNG    │
    └─────────────────────────────────────────────────────────────┘
 
 5. Sau khi update:
@@ -350,6 +393,12 @@ Nhân viên khi tạo đơn chỉ khai báo **lộ trình mong muốn** (`pickup
 - Không có endpoint riêng để "thêm 1 transport" hay "sửa 1 transport" — luôn là **replace toàn bộ danh sách** của route đó.
 - Trường hợp muốn quay lại "tự túc" sau khi đã thêm transports → gọi lại với `{ isSelfTransport: true }`, BE tự xoá transports cũ.
 - Trường hợp muốn quay lại "có phương tiện" sau khi đã đánh dấu tự túc → gọi lại với `{ transports: [...] }`, BE tự set `isSelfTransport = false`.
+- **Replace toàn bộ nghĩa là tiền cũng bị replace.** FE sửa một transport thì phải gửi lại
+  **cả danh sách kèm `paymentMethod`/`paymentAmount` của mọi transport**, không chỉ cái vừa
+  sửa — bỏ sót là reset về `COMPANY_PAID`/`0`.
+- `paymentAmount` là `INTEGER` (trần ~2.1 tỷ), DTO chặn ở 2.000.000.000 để lỗi rơi về 400
+  thay vì 500. Số âm hoặc số lẻ → 400.
+- HR chốt tự túc không làm mất `needsVehicleSupport` của nhân viên (xem mục trên).
 
 ---
 
@@ -440,6 +489,8 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
           "dropPoint": "Sân bay Tân Sơn Nhất",
           "desiredTimeType": "ARRIVAL",
           "desiredTime": "2026-07-01T06:30:00.000Z",
+          "needsVehicleSupport": true,
+          "needsVehicleSupportLabel": "Có",
           "isSelfTransport": false,
           "transports": [
             {
@@ -455,7 +506,10 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
               "flightNumber": null,
               "checkInTime": null,
               "ticketImageUrl": null,
-              "note": "Xe công ty"
+              "note": "Xe công ty",
+              "paymentMethod": "COMPANY_PAID",
+              "paymentMethodLabel": "Công ty thanh toán",
+              "paymentAmount": 0
             }
           ]
         },
@@ -466,6 +520,8 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
           "dropPoint": "Sân bay Nội Bài",
           "desiredTimeType": "PICKUP",
           "desiredTime": "2026-07-01T08:00:00.000Z",
+          "needsVehicleSupport": false,
+          "needsVehicleSupportLabel": "Không",
           "isSelfTransport": false,
           "transports": [
             {
@@ -481,11 +537,16 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
               "flightNumber": "VN123",
               "checkInTime": "2026-07-01T07:00:00.000Z",
               "ticketImageUrl": "https://s3-read.example.com/hr-documents/tickets/vn123.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
-              "note": null
+              "note": null,
+              "paymentMethod": "EMPLOYEE_PAID",
+              "paymentMethodLabel": "Nhân viên thanh toán",
+              "paymentAmount": 1850000
             }
           ]
         }
       ],
+      "needsVehicleSupport": true,
+      "needsVehicleSupportLabel": "Có",
       "status": "APPROVED",
       "statusLabel": "Đã duyệt",
       "approver": { "id": 3, "fullName": "Trần Thị B" },
@@ -518,6 +579,11 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
 
 `routes` **bắt buộc** tối thiểu 1 lộ trình. `transportType` trên trip đã bị bỏ — phương tiện nằm trong `routes[].transports[]` do HR cập nhật sau khi duyệt.
 
+Mỗi chặng có `needsVehicleSupport` — nhân viên chọn **Có/Không** cho câu "Hỗ trợ phương tiện
+di chuyển". **Bỏ trống = `true`.** Mặc định "Có" là chủ ý: client chưa cập nhật vẫn phải ra
+cùng kết quả với chặng đã có trong DB, nếu không đơn sẽ âm thầm thành "tự lo" và HR không
+biết phải đặt xe — đúng vấn đề mà tính năng này sinh ra để chữa.
+
 **Request body (employee tự tạo):**
 ```json
 {
@@ -533,13 +599,15 @@ Ví dụ: `startDate = "2026-07-01"` (Thứ 4), `endDate = "2026-07-05"` (Chủ 
       "pickupPoint": "Văn phòng HCM",
       "dropPoint": "Sân bay Tân Sơn Nhất",
       "desiredTimeType": "ARRIVAL",
-      "desiredTime": "2026-07-01T06:30:00.000Z"
+      "desiredTime": "2026-07-01T06:30:00.000Z",
+      "needsVehicleSupport": true
     },
     {
       "pickupPoint": "Sân bay Nội Bài",
       "dropPoint": "Khách sạn Hà Nội",
       "desiredTimeType": "PICKUP",
-      "desiredTime": "2026-07-01T10:30:00.000Z"
+      "desiredTime": "2026-07-01T10:30:00.000Z",
+      "needsVehicleSupport": false
     }
   ]
 }
@@ -578,7 +646,7 @@ Chỉ khi `status === DRAFT`. Không cập nhật được `routes` qua endpoint
 
 **HR/ADMIN:**
 - Có `approverId` → như flow bình thường (`PENDING`).
-- Bỏ trống `approverId` → **auto-approve**: `status = APPROVED`, `autoApproved = true`, `approvedAt = now`, không cần approver, notify chủ đơn.
+- Bỏ trống `approverId` → **auto-approve**: `status = APPROVED`, `autoApproved = true`, `approvedAt = now`, không cần approver, notify chủ đơn **và toàn bộ HR/ADMIN** (xem phần `approve`).
 
 **Request body:**
 ```json
@@ -601,6 +669,17 @@ hoặc HR gửi rỗng:
 Không cần request body. Chỉ approver được chỉ định (hoặc HR/ADMIN/MANAGER/CHIEF theo role check) mới gọi được.
 
 **Response 200:** `BusinessTripResponse` với `status = "APPROVED"`.
+
+**Side effect — notification:**
+- Chủ đơn nhận `businessTripApprovedOwner` (title `✅ Đơn công tác được duyệt`).
+- **Mọi HR/ADMIN đang `ACTIVE`** nhận `businessTripApprovedHR` — title `📌 Đơn công tác cần xử lý`,
+  body `{fullName} - {employeeCode} đăng ký công tác "{title}" từ {DD/MM/YYYY} đến {DD/MM/YYYY}. Vui lòng kiểm tra và xử lý.`
+  Mục đích: HR biết để đặt xe/vé. Gửi **in-app + FCM**, cố ý **không gửi email**.
+- `refType = business_trip`, `refId = tripId`, `actionType = NAVIGATE_ONLY`,
+  `targetUrl = /business-trips?id={tripId}` → FE/Mobile mở **chi tiết đơn công tác**.
+- HR nào chính là chủ đơn thì chỉ nhận bản owner, không nhận bản "cần xử lý".
+- Nhánh HR nộp hộ không chọn người duyệt (auto-approve ở `submit`) cũng phát cùng bộ
+  notification này.
 
 ---
 
@@ -643,6 +722,9 @@ Chỉ **HR/ADMIN**. Chỉ khi trip cha đang `APPROVED`.
 { "isSelfTransport": true }
 ```
 Server sẽ xoá toàn bộ `transports[]` của route và set `isSelfTransport = true`.
+Tự túc thì **không có** hình thức thanh toán/số tiền — hai trường đó sống trên từng
+transport, mà transport đã bị xoá hết. FE ẩn khối thanh toán ở nhánh này.
+`needsVehicleSupport` của nhân viên **không bị ghi đè**.
 
 **Nhánh 2 — HR cập nhật danh sách phương tiện:**
 ```json
@@ -657,7 +739,9 @@ Server sẽ xoá toàn bộ `transports[]` của route và set `isSelfTransport 
       "dropTime": "2026-07-01T06:30:00.000Z",
       "licensePlate": "51G-12345",
       "driverPhone": "0901234567",
-      "note": "Xe công ty"
+      "note": "Xe công ty",
+      "paymentMethod": "COMPANY_PAID",
+      "paymentAmount": 0
     },
     {
       "order": 2,
@@ -666,12 +750,25 @@ Server sẽ xoá toàn bộ `transports[]` của route và set `isSelfTransport 
       "pickupTime": "2026-07-01T08:00:00.000Z",
       "dropTime": "2026-07-01T10:15:00.000Z",
       "checkInTime": "2026-07-01T07:00:00.000Z",
-      "ticketImageUrl": "https://s3/bucket/tickets/vn123.jpg"
+      "ticketImageUrl": "https://s3/bucket/tickets/vn123.jpg",
+      "paymentMethod": "EMPLOYEE_PAID",
+      "paymentAmount": 1850000
     }
   ]
 }
 ```
 Server sẽ **replace toàn bộ** transports cũ bằng danh sách mới, `isSelfTransport = false`.
+
+**Thanh toán — mỗi transport một giá trị riêng:**
+
+| Trường | Bỏ trống | Ràng buộc |
+|---|---|---|
+| `paymentMethod` | `COMPANY_PAID` | `'COMPANY_PAID'` \| `'EMPLOYEE_PAID'` |
+| `paymentAmount` | `0` | số **nguyên**, `0 .. 2_000_000_000` (VNĐ) |
+
+⚠ Vì đây là **replace toàn bộ**, FE sửa một transport vẫn phải gửi lại cả danh sách **kèm
+tiền của mọi transport**. Bỏ sót trường tiền ở một phần tử = phần tử đó bị reset về
+`COMPANY_PAID`/`0`, không phải "giữ nguyên giá trị cũ".
 
 `ticketImageUrl` trong body phải là URL **gốc** nhận từ module upload (chưa sign). BE lưu nguyên và sẽ tự sign khi trả về response.
 
@@ -682,6 +779,8 @@ Server sẽ **replace toàn bộ** transports cũ bằng danh sách mới, `isSe
 **400** nếu:
 - Trip cha không phải `APPROVED`
 - Không truyền `isSelfTransport: true` mà cũng không truyền `transports` (hoặc `transports` rỗng)
+- `paymentAmount` âm, có phần thập phân, hoặc > 2.000.000.000
+- `paymentMethod` không thuộc enum
 
 **403** nếu user không phải HR/ADMIN. **404** nếu `routeId` không tồn tại.
 
@@ -905,12 +1004,18 @@ export function useBusinessTrips() {
 | `updateRouteTransport` khi trip chưa APPROVED | 400 Bad Request |
 | `updateRouteTransport` với payload rỗng (không `isSelfTransport`, không `transports`) | 400 Bad Request |
 | Non-HR gọi `updateRouteTransport` | 403 Forbidden |
+| Tạo chặng không gửi `needsVehicleSupport` | Lưu `true` ("cần hỗ trợ đặt xe") |
+| Gửi `paymentAmount` âm / số lẻ / > 2.000.000.000 | 400 Bad Request |
+| Gửi transport không kèm `paymentMethod`/`paymentAmount` | Lưu `COMPANY_PAID` / `0` |
+| HR chốt `isSelfTransport: true` cho chặng nhân viên xin hỗ trợ | Hợp lệ. `needsVehicleSupport` giữ `true`, `transports` rỗng |
+| Đơn có 3 chặng, 1 chặng `needsVehicleSupport = true` | Cấp đơn gộp = `true` ("Có") |
 | Tạo báo cáo khi `status === DRAFT/PENDING/CANCELLED` | 400 Bad Request |
 | Tạo báo cáo khi đã có báo cáo rồi | 400 Bad Request |
 | Submit báo cáo khi đã SUBMITTED | 400 Bad Request |
 | `totalDays` trả về `0` | Xảy ra khi cả khoảng ngày đều rơi vào T7/CN/lễ |
 | `companions` là `null` | Đơn đi một mình, không có người đi cùng |
-| `routes[].isSelfTransport = true` | Nhân viên tự túc — `transports` rỗng, HR không cập nhật thêm |
+| `routes[].isSelfTransport = true` | HR đã chốt tự túc — `transports` rỗng. KHÔNG suy ra `needsVehicleSupport = false` |
+| `needsVehicleSupport = true` VÀ `isSelfTransport = true` cùng lúc | Hợp lệ: nhân viên xin hỗ trợ, HR chốt tự túc |
 | `canApprove = true` | Chỉ khi `user.id === approver.id && status === PENDING` |
 | `canCancel = true` | Chỉ khi `user.id === employee.id && status ∈ {DRAFT, PENDING}` |
 | `report = null` | Chưa tạo báo cáo |

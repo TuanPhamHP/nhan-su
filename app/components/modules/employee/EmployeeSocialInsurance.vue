@@ -35,6 +35,18 @@
 		dependentList.value.splice(idx, 1);
 	}
 
+	/**
+	 * Bỏ các field chuỗi rỗng trước khi gửi.
+	 *
+	 * Hàng người phụ thuộc mới thêm có `relationship`/`effectiveDate` = '' nếu người dùng
+	 * không chọn. BE validate `@IsOptional() @IsISO8601()` — `@IsOptional()` chỉ bỏ qua
+	 * `undefined`/`null`, chuỗi rỗng vẫn bị đem đi validate rồi trả 400
+	 * "dependentDetails.0.effectiveDate must be a valid ISO 8601 date string".
+	 */
+	function stripEmpty(d: DependentDetail): DependentDetail {
+		return Object.fromEntries(Object.entries(d).filter(([, v]) => v !== '' && v != null));
+	}
+
 	// ─── File upload ──────────────────────────────────────────────────────────────
 	const selectedFile = ref<File | null>(null);
 	const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -47,48 +59,79 @@
 	// ─── Form ─────────────────────────────────────────────────────────────────────
 	const schema = toTypedSchema(
 		z.object({
-			socialInsuranceNumber: z.string().optional(),
+			socialInsuranceNumber: z.string().min(1, 'Mã số BHXH không được để trống'),
+			// `z.coerce.number()` KHÔNG dùng được ở đây: Number('') === 0 nên ô để trống sẽ
+			// lọt qua min(0) và âm thầm gửi 0. preprocess đẩy chuỗi rỗng về undefined để
+			// required_error bắn đúng.
+			insuranceSalary: z.preprocess(
+				v => (v === '' || v === null || v === undefined ? undefined : Number(v)),
+				z
+					.number({
+						required_error: 'Vui lòng nhập mức lương tham gia BHXH',
+						invalid_type_error: 'Mức lương tham gia BHXH không hợp lệ',
+					})
+					.min(0, 'Mức lương tham gia BHXH không được âm'),
+			),
+			hasSocialInsuranceBook: z.boolean(),
 			healthInsuranceNumber: z.string().optional(),
 			healthInsuranceExpiry: z.string().optional(),
 			registeredHospital: z.string().optional(),
 			effectiveDate: z.string().optional(),
-			socialInsuranceRate: z.coerce.number().min(0, 'Tối thiểu 0').max(100, 'Tối đa 100').optional(),
-			healthInsuranceRate: z.coerce.number().min(0, 'Tối thiểu 0').max(100, 'Tối đa 100').optional(),
-			unemploymentInsuranceRate: z.coerce.number().min(0, 'Tối thiểu 0').max(100, 'Tối đa 100').optional(),
 			taxCode: z.string().optional(),
 			dependentsCount: z.coerce.number().min(0, 'Tối thiểu 0').optional(),
 			note: z.string().optional(),
 		}),
 	);
 
-	const { handleSubmit, defineField, errors, setValues, values: formValues } = useForm({
+	const { handleSubmit, defineField, errors, setValues } = useForm({
 		validationSchema: schema,
 		initialValues: {
-			socialInsuranceRate: 8,
-			healthInsuranceRate: 1.5,
-			unemploymentInsuranceRate: 1.0,
+			socialInsuranceNumber: '',
+			insuranceSalary: '' as unknown as number,
+			hasSocialInsuranceBook: false,
 			dependentsCount: 0,
 		},
 	});
 
 	const [socialInsuranceNumber, siNumAttrs] = defineField('socialInsuranceNumber');
+	const [insuranceSalary] = defineField('insuranceSalary');
+	const [hasSocialInsuranceBook] = defineField('hasSocialInsuranceBook');
 	const [healthInsuranceNumber, hiNumAttrs] = defineField('healthInsuranceNumber');
 	const [healthInsuranceExpiry] = defineField('healthInsuranceExpiry');
 	const [registeredHospital, hospitalAttrs] = defineField('registeredHospital');
 	const [effectiveDate] = defineField('effectiveDate');
-	const [socialInsuranceRate, siRateAttrs] = defineField('socialInsuranceRate');
-	const [healthInsuranceRate, hiRateAttrs] = defineField('healthInsuranceRate');
-	const [unemploymentInsuranceRate, uiRateAttrs] = defineField('unemploymentInsuranceRate');
 	const [taxCode, taxCodeAttrs] = defineField('taxCode');
 	const [dependentsCount, dependentsCountAttrs] = defineField('dependentsCount');
 	const [note, noteAttrs] = defineField('note');
 
-	const localTotalRate = computed(() => {
-		const si = Number(formValues.socialInsuranceRate) || 0;
-		const hi = Number(formValues.healthInsuranceRate) || 0;
-		const ui = Number(formValues.unemploymentInsuranceRate) || 0;
-		return (si + hi + ui).toFixed(1);
-	});
+	// ─── Mức lương: gõ số thuần, hiển thị có dấu nghìn ───────────────────────────
+	const salaryDisplay = ref('');
+
+	/** Khác helper bên Contracts ở chỗ GIỮ số 0 — 0 là mức lương hợp lệ, không phải "rỗng". */
+	function formatSalary(val: number | string | null | undefined): string {
+		if (val === '' || val === null || val === undefined) return '';
+		const num = Number(val);
+		if (Number.isNaN(num)) return '';
+		return new Intl.NumberFormat('vi-VN').format(num);
+	}
+
+	/**
+	 * Cập nhật `salaryDisplay` NGAY, không debounce.
+	 *
+	 * Ô nhập bind `:value="salaryDisplay"` một chiều. Mỗi phím gõ làm vee-validate đổi
+	 * `errors.insuranceSalary` → component re-render → Vue thấy DOM value lệch với
+	 * `salaryDisplay` và ghi đè ngược ô nhập. Nếu để debounce 100ms thì giữa hai phím ô
+	 * nhập bị trả về giá trị cũ, nên phím sau THAY THẾ phím trước thay vì nối vào: gõ
+	 * "12500000" chỉ còn đúng ký tự cuối → lưu nhầm 0. (Bẫy này cũng có ở
+	 * EmployeeContracts.vue, chỉ chưa lộ vì form đó không bật/tắt lỗi theo từng phím.)
+	 */
+	function handleSalaryInput(e: Event) {
+		const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '');
+		const num = digits ? Number(digits) : '';
+
+		insuranceSalary.value = num as unknown as number;
+		salaryDisplay.value = digits ? formatSalary(num) : '';
+	}
 
 	// Populate form when record loads
 	watch(
@@ -97,17 +140,17 @@
 			if (!r) return;
 			setValues({
 				socialInsuranceNumber: r.socialInsuranceNumber ?? '',
+				insuranceSalary: r.insuranceSalary,
+				hasSocialInsuranceBook: r.hasSocialInsuranceBook,
 				healthInsuranceNumber: r.healthInsuranceNumber ?? '',
 				healthInsuranceExpiry: r.healthInsuranceExpiry ?? '',
 				registeredHospital: r.registeredHospital ?? '',
 				effectiveDate: r.effectiveDate ?? '',
-				socialInsuranceRate: r.rates.socialInsurance,
-				healthInsuranceRate: r.rates.healthInsurance,
-				unemploymentInsuranceRate: r.rates.unemployment,
 				taxCode: r.taxInfo.taxCode ?? '',
 				dependentsCount: r.taxInfo.dependents,
 				note: r.note ?? '',
 			});
+			salaryDisplay.value = formatSalary(r.insuranceSalary);
 			dependentList.value = r.taxInfo.dependentDetails.map(d => ({ ...d }));
 		},
 		{ immediate: false },
@@ -118,17 +161,18 @@
 			await save(
 				props.employeeId,
 				{
-					socialInsuranceNumber: values.socialInsuranceNumber || undefined,
+					// Hai field này bắt buộc ở MỌI request (upsert, không phải PATCH từng phần)
+					// nên không được rơi về undefined như các field dưới.
+					socialInsuranceNumber: values.socialInsuranceNumber,
+					insuranceSalary: values.insuranceSalary,
+					hasSocialInsuranceBook: values.hasSocialInsuranceBook,
 					healthInsuranceNumber: values.healthInsuranceNumber || undefined,
 					healthInsuranceExpiry: values.healthInsuranceExpiry || undefined,
 					registeredHospital: values.registeredHospital || undefined,
 					effectiveDate: values.effectiveDate || undefined,
-					socialInsuranceRate: values.socialInsuranceRate,
-					healthInsuranceRate: values.healthInsuranceRate,
-					unemploymentInsuranceRate: values.unemploymentInsuranceRate,
 					taxCode: values.taxCode || undefined,
 					dependents: values.dependentsCount,
-					dependentDetails: dependentList.value.filter(d => d.name || d.idNumber),
+					dependentDetails: dependentList.value.filter(d => d.name || d.idNumber).map(stripEmpty),
 					note: values.note || undefined,
 				},
 				selectedFile.value ?? undefined,
@@ -169,14 +213,61 @@
 				</div>
 				<div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
-						<label :class="labelCls">Số sổ BHXH</label>
+						<label :class="labelCls">Mã số BHXH <span class="text-red-500">*</span></label>
 						<input
 							v-model="socialInsuranceNumber"
 							v-bind="siNumAttrs"
-							:class="inputCls"
+							:class="[inputCls, errors.socialInsuranceNumber ? 'border-red-400' : '']"
 							:disabled="!canEdit"
 							placeholder="10 chữ số"
 						/>
+						<p v-if="errors.socialInsuranceNumber" class="mt-1 text-xs text-red-500">
+							{{ errors.socialInsuranceNumber }}
+						</p>
+					</div>
+					<div>
+						<label :class="labelCls">Mức lương tham gia BHXH <span class="text-red-500">*</span></label>
+						<div class="relative">
+							<input
+								:value="salaryDisplay"
+								inputmode="numeric"
+								:class="[inputCls, 'pr-12', errors.insuranceSalary ? 'border-red-400' : '']"
+								:disabled="!canEdit"
+								placeholder="VD: 12.500.000"
+								@input="handleSalaryInput"
+							/>
+							<span
+								class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400"
+							>
+								VNĐ
+							</span>
+						</div>
+						<p v-if="errors.insuranceSalary" class="mt-1 text-xs text-red-500">
+							{{ errors.insuranceSalary }}
+						</p>
+					</div>
+					<div>
+						<label :class="labelCls">Có sổ BHXH</label>
+						<div class="flex items-center gap-2">
+							<button
+								v-for="opt in [
+									{ value: true, label: 'Có' },
+									{ value: false, label: 'Không' },
+								]"
+								:key="String(opt.value)"
+								type="button"
+								:disabled="!canEdit"
+								:class="[
+									'flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors disabled:opacity-50',
+									hasSocialInsuranceBook === opt.value
+										? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+										: 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800',
+								]"
+								@click="hasSocialInsuranceBook = opt.value"
+							>
+								{{ opt.label }}
+							</button>
+						</div>
 					</div>
 					<div>
 						<label :class="labelCls">Số thẻ BHYT</label>
@@ -209,68 +300,7 @@
 				</div>
 			</div>
 
-			<!-- ─── Section 2: Rates ───────────────────────────────────────────── -->
-			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-				<div class="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700">
-					<p :class="sectionTitleCls">Tỷ lệ đóng bảo hiểm (%)</p>
-				</div>
-				<div class="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
-					<div>
-						<label :class="labelCls">BHXH (%)</label>
-						<input
-							v-model="socialInsuranceRate"
-							v-bind="siRateAttrs"
-							type="number"
-							step="0.1"
-							min="0"
-							max="100"
-							:class="[inputCls, errors.socialInsuranceRate ? 'border-red-400' : '']"
-							:disabled="!canEdit"
-						/>
-						<p v-if="errors.socialInsuranceRate" class="mt-1 text-xs text-red-500">{{ errors.socialInsuranceRate }}</p>
-					</div>
-					<div>
-						<label :class="labelCls">BHYT (%)</label>
-						<input
-							v-model="healthInsuranceRate"
-							v-bind="hiRateAttrs"
-							type="number"
-							step="0.1"
-							min="0"
-							max="100"
-							:class="[inputCls, errors.healthInsuranceRate ? 'border-red-400' : '']"
-							:disabled="!canEdit"
-						/>
-						<p v-if="errors.healthInsuranceRate" class="mt-1 text-xs text-red-500">{{ errors.healthInsuranceRate }}</p>
-					</div>
-					<div>
-						<label :class="labelCls">BHTN (%)</label>
-						<input
-							v-model="unemploymentInsuranceRate"
-							v-bind="uiRateAttrs"
-							type="number"
-							step="0.1"
-							min="0"
-							max="100"
-							:class="[inputCls, errors.unemploymentInsuranceRate ? 'border-red-400' : '']"
-							:disabled="!canEdit"
-						/>
-						<p v-if="errors.unemploymentInsuranceRate" class="mt-1 text-xs text-red-500">{{ errors.unemploymentInsuranceRate }}</p>
-					</div>
-					<div>
-						<label :class="labelCls">Tổng khấu trừ (%)</label>
-						<input
-							type="text"
-							:value="localTotalRate"
-							:class="[inputCls, 'bg-gray-50 dark:bg-gray-800/60 font-semibold']"
-							readonly
-							disabled
-						/>
-					</div>
-				</div>
-			</div>
-
-			<!-- ─── Section 3: Tax ────────────────────────────────────────────── -->
+			<!-- ─── Section 2: Tax ────────────────────────────────────────────── -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
 				<div class="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700">
 					<p :class="sectionTitleCls">Thuế thu nhập cá nhân</p>
@@ -372,7 +402,7 @@
 				</div>
 			</div>
 
-			<!-- ─── Section 4: File upload ────────────────────────────────────── -->
+			<!-- ─── Section 3: File upload ────────────────────────────────────── -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
 				<div class="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700">
 					<p :class="sectionTitleCls">File đính kèm</p>

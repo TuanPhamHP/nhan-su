@@ -4,12 +4,6 @@ export interface SIEmployeeSummary {
 	fullName: string;
 }
 
-export interface InsuranceRates {
-	socialInsurance: number;
-	healthInsurance: number;
-	unemployment: number;
-}
-
 export interface DependentDetail {
 	name?: string;
 	relationship?: string;
@@ -27,26 +21,36 @@ export interface TaxInfo {
 export interface SocialInsuranceResponse {
 	id: number;
 	employee: SIEmployeeSummary;
-	socialInsuranceNumber: string | null;
+	/** Mã số BHXH — luôn có giá trị, không bao giờ null */
+	socialInsuranceNumber: string;
+	/** Mức lương tham gia BHXH (VND) — luôn có giá trị */
+	insuranceSalary: number;
+	/** Người lao động có sổ BHXH hay không */
+	hasSocialInsuranceBook: boolean;
 	healthInsuranceNumber: string | null;
 	healthInsuranceExpiry: string | null;
 	registeredHospital: string | null;
 	effectiveDate: string | null;
 	siDocUrl: string | null;
-	rates: InsuranceRates;
 	taxInfo: TaxInfo;
-	totalDeductionRate: number;
 	note: string | null;
 	updatedAt: string;
 }
 
+/**
+ * Dùng cho PUT /v1/social-insurance/:employeeId.
+ *
+ * Endpoint là upsert, KHÔNG phải PATCH từng phần: `socialInsuranceNumber` và
+ * `insuranceSalary` phải có trong mọi request, kể cả khi chỉ sửa ghi chú — thiếu một
+ * trong hai thì BE trả 400.
+ */
 export interface UpsertSocialInsuranceDto {
-	socialInsuranceNumber?: string;
+	socialInsuranceNumber: string;
+	insuranceSalary: number;
+	/** Bỏ trống: tạo mới → false; update → giữ giá trị cũ */
+	hasSocialInsuranceBook?: boolean;
 	healthInsuranceNumber?: string;
 	healthInsuranceExpiry?: string;
-	socialInsuranceRate?: number;
-	healthInsuranceRate?: number;
-	unemploymentInsuranceRate?: number;
 	registeredHospital?: string;
 	effectiveDate?: string;
 	taxCode?: string;

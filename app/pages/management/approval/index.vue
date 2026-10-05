@@ -1086,7 +1086,14 @@
 									<p class="font-medium text-gray-900 dark:text-white">{{ trip.employee.fullName }}</p>
 									<p class="text-xs text-gray-400 dark:text-gray-500">{{ trip.employee.employeeCode }}</p>
 								</td>
-								<td class="px-4 py-3 max-w-[220px] text-gray-700 dark:text-gray-300">{{ trip.title }}</td>
+								<td class="px-4 py-3 max-w-[220px] text-gray-700 dark:text-gray-300">
+									{{ trip.title }}
+									<!-- Nhãn GỘP cấp đơn do BE tính. Người duyệt/HR cần thấy ngay đơn nào phải đặt xe,
+									     không phải mở chi tiết ra đọc. Không suy ra từ isSelfTransport. -->
+									<p class="text-xs mt-0.5" :class="trip.needsVehicleSupport ? 'text-brand-600 dark:text-brand-400' : 'text-gray-400 dark:text-gray-500'">
+										Hỗ trợ phương tiện: {{ trip.needsVehicleSupportLabel }}
+									</p>
+								</td>
 								<td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ trip.destination }}</td>
 								<td class="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
 									{{ fmtDate(trip.startDate) }} → {{ fmtDate(trip.endDate) }}

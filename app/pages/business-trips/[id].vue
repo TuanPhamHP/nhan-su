@@ -6,6 +6,7 @@ import TripStatusBadge from '~/components/modules/business-trip/TripStatusBadge.
 import RejectTripModal from '~/components/modules/business-trip/RejectTripModal.vue';
 import TripReportModal from '~/components/modules/business-trip/TripReportModal.vue';
 import TransportModal from '~/components/modules/business-trip/TransportModal.vue';
+import { formatTripPaymentAmount } from '~/utils/business-trip.utils';
 import type { BusinessTripResponse, TripRouteResponse } from '~/types/business-trip.types';
 
 definePageMeta({ title: 'Chi tiết đơn công tác' });
@@ -285,6 +286,12 @@ watch(tripId, loadTrip);
 							<template v-else>Chưa có thông tin thời gian</template>
 						</p>
 
+						<!-- Mong muốn của nhân viên cho CHẶNG này — độc lập với isSelfTransport (kết quả HR chốt) -->
+						<p class="text-xs text-gray-500 dark:text-gray-400">
+							Hỗ trợ phương tiện di chuyển:
+							<strong class="text-gray-700 dark:text-gray-300">{{ route.needsVehicleSupportLabel }}</strong>
+						</p>
+
 						<!-- Transports sub-section -->
 						<div v-if="!route.isSelfTransport" class="pt-3 border-t border-gray-100 dark:border-gray-800">
 							<div class="flex items-center justify-between mb-2">
@@ -328,6 +335,14 @@ watch(tripId, loadTrip);
 									<p v-if="tp.licensePlate || tp.driverPhone" class="text-xs text-gray-600 dark:text-gray-400">
 										<template v-if="tp.licensePlate">Biển số: {{ tp.licensePlate }}</template>
 										<template v-if="tp.driverPhone"> · SĐT tài xế: {{ tp.driverPhone }}</template>
+									</p>
+									<p class="text-xs text-gray-600 dark:text-gray-400">
+										Hình thức thanh toán:
+										<strong class="text-gray-800 dark:text-gray-200">{{ tp.paymentMethodLabel }}</strong>
+									</p>
+									<p class="text-xs text-gray-600 dark:text-gray-400">
+										Số tiền thanh toán:
+										<strong class="text-gray-800 dark:text-gray-200">{{ formatTripPaymentAmount(tp.paymentAmount) }}</strong>
 									</p>
 									<button
 										v-if="tp.ticketImageUrl"

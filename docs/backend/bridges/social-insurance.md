@@ -25,12 +25,6 @@ export interface SIEmployeeSummary {
   fullName: string;
 }
 
-export interface InsuranceRates {
-  socialInsurance: number;    // % khấu trừ BHXH (mặc định 8.0)
-  healthInsurance: number;    // % khấu trừ BHYT (mặc định 1.5)
-  unemployment: number;       // % khấu trừ BHTN (mặc định 1.0)
-}
-
 export interface DependentDetail {
   name?: string;
   relationship?: string;      // VD: "CON", "VỢ", "CHỒNG", "BỐ", "MẸ"
@@ -48,30 +42,30 @@ export interface TaxInfo {
 export interface SocialInsuranceResponse {
   id: number;
   employee: SIEmployeeSummary;
-  socialInsuranceNumber: string | null;  // số sổ BHXH (10 số)
+  socialInsuranceNumber: string;         // mã số BHXH — LUÔN có giá trị, không bao giờ null
+  insuranceSalary: number;               // mức lương tham gia BHXH (VND), LUÔN có giá trị
+  hasSocialInsuranceBook: boolean;       // người lao động có sổ BHXH hay không
   healthInsuranceNumber: string | null;  // số thẻ BHYT (dạng "AB1234567890")
   healthInsuranceExpiry: string | null;  // "YYYY-MM-DD"
   registeredHospital: string | null;     // cơ sở KCB ban đầu
   effectiveDate: string | null;          // ngày tham gia BHXH, "YYYY-MM-DD"
   siDocUrl: string | null;               // presigned URL — scan thẻ BHYT hoặc sổ BHXH
-  rates: InsuranceRates;
   taxInfo: TaxInfo;
-  totalDeductionRate: number;            // = rates.socialInsurance + rates.healthInsurance + rates.unemployment
   note: string | null;
   updatedAt: string;                     // ISO 8601 full datetime
 }
 
 // Dùng cho PUT /social-insurance/:employeeId
-// Tất cả fields optional — chỉ truyền field cần thay đổi
+// ⚠️ socialInsuranceNumber và insuranceSalary là BẮT BUỘC ở MỌI lần gọi, kể cả khi chỉ
+// muốn sửa một field khác — endpoint là upsert, không phải PATCH từng phần.
 export interface UpsertSocialInsuranceDto {
-  socialInsuranceNumber?: string;
+  socialInsuranceNumber: string;         // BẮT BUỘC, không được rỗng
+  insuranceSalary: number;               // BẮT BUỘC, min 0
+  hasSocialInsuranceBook?: boolean;      // chỉ true/false; bỏ trống → false
   healthInsuranceNumber?: string;
   healthInsuranceExpiry?: string;        // "YYYY-MM-DD"
-  socialInsuranceRate?: number;          // min 0, max 100
-  healthInsuranceRate?: number;          // min 0, max 100
-  unemploymentInsuranceRate?: number;    // min 0, max 100
   registeredHospital?: string;
-  effectiveDate?: string;                // "YYYY-MM-DD"
+  effectiveDate?: string;                // "YYYY-MM-DD" — ngày tham gia BHXH
   taxCode?: string;
   dependents?: number;                   // min 0
   dependentDetails?: DependentDetail[];  // gửi dưới dạng JSON string khi multipart
@@ -97,20 +91,28 @@ export interface QuerySocialInsuranceParams {
 
 Mỗi nhân viên chỉ có **1 bản ghi duy nhất**. Frontend không cần phân biệt create vs update — luôn gọi `PUT`.
 
+> ⚠️ **Upsert không phải PATCH từng phần.** `socialInsuranceNumber` và `insuranceSalary`
+> phải có trong **mọi** request, kể cả khi người dùng chỉ đổi ghi chú. Thiếu một trong hai
+> → `400`. FE nên luôn submit toàn bộ form thay vì chỉ field vừa đổi.
+
 **Request là `multipart/form-data` khi có đính kèm file:**
 
 | Field | Type | Ghi chú |
 |-------|------|---------|
 | Tất cả fields DTO | string / number | Truyền bình thường qua form fields |
-| `dependentDetails` | string (JSON) | Serialize mảng thành JSON string: `JSON.stringify([...])` |
+| `hasSocialInsuranceBook` | string `"true"` / `"false"` | Multipart gửi boolean dạng chuỗi — BE tự chuyển. Giá trị khác hai chuỗi này → `400` |
+| `dependentDetails` | string (JSON) | Serialize mảng thành JSON string: `JSON.stringify([...])`. Mảng rỗng `"[]"` hợp lệ. Chuỗi không phải JSON → `400` |
 | `siDoc` | binary | PDF / JPG / PNG, tối đa 10 MB — scan thẻ BHYT hoặc sổ BHXH |
 
 ```typescript
 // Ví dụ gửi multipart với file
 const formData = new FormData();
-formData.append('socialInsuranceNumber', '1234567890');
+formData.append('socialInsuranceNumber', '0123456789');   // BẮT BUỘC
+formData.append('insuranceSalary', '12500000');           // BẮT BUỘC
+formData.append('hasSocialInsuranceBook', 'true');
+formData.append('effectiveDate', '2022-03-01');
+formData.append('registeredHospital', 'Bệnh viện Đại học Y Dược');
 formData.append('healthInsuranceNumber', 'AB1234567890');
-formData.append('socialInsuranceRate', '8');
 formData.append('dependentDetails', JSON.stringify([
   { name: 'Nguyễn Văn Con', relationship: 'CON', idNumber: '123456789', effectiveDate: '2023-01-01' }
 ]));
@@ -123,28 +125,27 @@ await $fetch(`/v1/social-insurance/${employeeId}`, { method: 'PUT', body: formDa
 
 ---
 
-## Payroll Integration
+## Tỉ lệ đóng bảo hiểm — ĐÃ BỎ khỏi API (thay đổi breaking)
 
-Module Payroll đọc rates từ đây để tính khấu trừ tự động:
+Trước đây response có `rates: { socialInsurance, healthInsurance, unemployment }` và
+`totalDeductionRate`, DTO có 3 field `*Rate`. **Tất cả đã bị bỏ.**
 
-```
-totalDeductionRate = rates.socialInsurance + rates.healthInsurance + rates.unemployment
-```
+Lý do: tỉ lệ đóng áp dụng **chung theo luật lao động**, không khác nhau giữa các nhân
+viên. Lưu riêng từng người chỉ tạo cơ hội lệch dữ liệu. Phần khác nhau thật sự giữa các
+nhân viên là **mức lương tham gia BHXH** (`insuranceSalary`) — chính là field mới.
 
-**Mặc định (nếu chưa cấu hình):**
+**FE phải làm gì:**
 
-| Loại | Rate mặc định |
-|------|--------------|
-| BHXH | 8.0% |
-| BHYT | 1.5% |
-| BHTN | 1.0% |
-| **Tổng** | **10.5%** |
+| Trước | Sau |
+|---|---|
+| Đọc `response.rates.socialInsurance` | Không còn — nếu cần hiển thị % thì hardcode theo luật ở FE hoặc hỏi BE thêm endpoint cấu hình |
+| Đọc `response.totalDeductionRate` | Không còn |
+| Gửi `socialInsuranceRate` / `healthInsuranceRate` / `unemploymentInsuranceRate` | Không gửi nữa — gửi vẫn không lỗi (bị `whitelist` loại), nhưng vô nghĩa |
+| — | Đọc / gửi `insuranceSalary` (bắt buộc) |
+| — | Đọc / gửi `hasSocialInsuranceBook` |
 
-```
-Khấu trừ BHXH = lương cơ sở × 10.5%
-```
-
-> `totalDeductionRate` được backend tính sẵn và trả về trong response — frontend hiển thị trực tiếp, không tự tính lại.
+> `hasSocialInsuranceBook` chỉ phục vụ việc **chốt sổ BHXH khi nhân viên nghỉ việc**. Hệ
+> thống cố ý không quản lý chi tiết sổ (số sổ, nơi cấp…) — chỉ cần biết có hay không.
 
 ---
 
@@ -196,8 +197,27 @@ export function useSocialInsurance() {
 | `PUT` lần đầu (chưa có bản ghi) | Tạo mới — 200 OK |
 | `PUT` lần tiếp theo | Update bản ghi hiện tại — 200 OK |
 | `dependentDetails` gửi dạng JSON string (multipart) | Backend tự parse — frontend serialize bằng `JSON.stringify` |
+| `dependentDetails` là chuỗi không phải JSON | 400 — cố ý báo lỗi thay vì âm thầm bỏ qua |
+| Field ngày optional gửi chuỗi rỗng (`effectiveDate`, `healthInsuranceExpiry`, và `effectiveDate` trong `dependentDetails`) | 200 — rỗng nghĩa là **xoá ngày**, lưu `null`. Form để trống ô không bắt buộc là hợp lệ |
+| Field ngày gửi sai định dạng mà **không** rỗng (vd `01/03/2022`) | 400 — chỉ nới cho chuỗi rỗng, không nới cho định dạng sai |
+| Thiếu `socialInsuranceNumber` | 400 — `"Mã số BHXH không được để trống"` |
+| `socialInsuranceNumber` là chuỗi rỗng | 400 |
+| Thiếu `insuranceSalary` | 400 |
+| `insuranceSalary` âm | 400 — `"Mức lương tham gia BHXH không được âm"` |
+| `hasSocialInsuranceBook` không phải `"true"`/`"false"` | 400 — `"Có sổ BHXH chỉ được là Có hoặc Không"` |
+| `hasSocialInsuranceBook` không gửi | Tạo mới → `false`; update → giữ giá trị cũ |
+| `EMPLOYEE` gọi `PUT /social-insurance/:id` (kể cả của chính mình) | 403 Forbidden |
+| `PUT` với `employeeId` không tồn tại | 404 — `"Nhân viên không tồn tại"` |
 | `EMPLOYEE` gọi `GET /social-insurance` (list) | 403 Forbidden |
 | `EMPLOYEE` gọi `GET /social-insurance/:id` với id của mình | 200 OK |
 | `EMPLOYEE` gọi `GET /social-insurance/:id` với id người khác | 403 Forbidden |
 | `MANAGER` / `CHIEF` gọi `GET /social-insurance/:employeeId` | 200 OK |
-| Rates mặc định khi chưa nhập | `socialInsurance: 8.0`, `healthInsurance: 1.5`, `unemployment: 1.0`, `total: 10.5` |
+
+Toàn bộ các dòng trên đã được chạy bằng request HTTP thật — xem
+`scripts/smoke-social-insurance.ts` (22 scenario).
+
+> **Màn hình cho nhân viên tự xem:** API cho `EMPLOYEE` đọc BHXH của chính mình (200), nhưng
+> web FE hiện **chưa có màn hình nào** dùng quyền đó — module chỉ nằm trong
+> `/management/employees/[id]`, mà `role-layout.global.ts` chặn `EMPLOYEE` khỏi toàn bộ
+> `/management/**`. Mobile dùng được endpoint này bình thường. Muốn web có thì cần một trang
+> mới ngoài `/management` (vd `/profile/social-insurance`) — chưa làm.
