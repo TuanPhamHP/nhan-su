@@ -31,6 +31,9 @@
 	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
 	const canUpdate = computed(() => hasPermission('employee:update'));
 	const canDelete = computed(() => hasPermission('employee:delete'));
+	// Tab Hợp đồng lộ cả lương cơ bản → phải theo đúng quyền, không chỉ theo vai trò.
+	// BE đã chặn (contract:read), đây là để không hiện tab rồi mới báo lỗi.
+	const canReadContracts = computed(() => hasPermission('contract:read'));
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -59,9 +62,14 @@
 
 	const validTabs = ['info', 'contracts', 'social-insurance', 'identity'] as const;
 	type TabId = (typeof validTabs)[number];
-	const activeTab = ref<TabId>(
-		validTabs.includes(route.query.tab as TabId) ? (route.query.tab as TabId) : 'info',
-	);
+	function initialTab(): TabId {
+		const requested = route.query.tab as TabId;
+		if (!validTabs.includes(requested)) return 'info';
+		// Chặn cả deep-link `?tab=contracts` của người không có quyền.
+		if (requested === 'contracts' && !canReadContracts.value) return 'info';
+		return requested;
+	}
+	const activeTab = ref<TabId>(initialTab());
 	// Không auto-enter edit mode khi user không có employee:update.
 	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 	const confirmDeactivate = ref(false);
@@ -398,6 +406,7 @@
 						Thông tin
 					</button>
 					<button
+						v-if="canReadContracts"
 						type="button"
 						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
 						:class="
@@ -627,7 +636,7 @@
 
 			<!-- Tab: Hợp đồng -->
 			<div
-				v-else-if="activeTab === 'contracts'"
+				v-else-if="activeTab === 'contracts' && canReadContracts"
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6"
 			>
 				<EmployeeContracts :employee-id="id" />

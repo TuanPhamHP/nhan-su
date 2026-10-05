@@ -8,19 +8,46 @@
 
 | Method | Path | Điều kiện gọi | Ghi chú |
 | --- | --- | --- | --- |
-| GET | `/v1/contracts` | Role `ADMIN`/`HR`/`CHIEF`/`MANAGER`/`DIRECTOR` | Danh sách hợp đồng — MANAGER chỉ thấy phòng mình |
-| GET | `/v1/contracts/me` | Mọi user đã đăng nhập | Hợp đồng của bản thân |
-| GET | `/v1/contracts/:id` | Bản thân hoặc role privileged | Chi tiết một hợp đồng |
-| POST | `/v1/contracts` | Role `ADMIN`/`HR` | Tạo hợp đồng mới (multipart/form-data) |
+| GET | `/v1/contracts` | Permission `contract:read` | Danh sách hợp đồng — áp phạm vi, xem mục dưới |
+| GET | `/v1/contracts/me` | Mọi user đã đăng nhập | Hợp đồng của bản thân — KHÔNG cần quyền |
+| GET | `/v1/contracts/:id` | Bản thân, hoặc `contract:read` **và** nằm trong phạm vi | Chi tiết một hợp đồng |
+| POST | `/v1/contracts` | Permission `contract:create` | Tạo hợp đồng mới (multipart/form-data) |
 | PATCH | `/v1/contracts/:id` | Permission `contract:update` | Cập nhật hợp đồng (chỉ khi DRAFT, multipart/form-data) |
 | PATCH | `/v1/contracts/:id/activate` | Permission `contract:activate` | Kích hoạt DRAFT → ACTIVE |
 | PATCH | `/v1/contracts/:id/terminate` | Permission `contract:terminate` | Chấm dứt ACTIVE → TERMINATED |
-| GET | `/v1/contracts/import/template` | Role `ADMIN`/`HR` | Tải file Excel template — xem [`_fe-prompt-contracts-import-excel.md`](./_fe-prompt-contracts-import-excel.md) |
-| POST | `/v1/contracts/import` | Role `ADMIN`/`HR` | Import hàng loạt từ Excel (all-or-nothing) — xem [`_fe-prompt-contracts-import-excel.md`](./_fe-prompt-contracts-import-excel.md) |
+| GET | `/v1/contracts/import/template` | Permission `contract:import` | Tải file Excel template — xem [`_fe-prompt-contracts-import-excel.md`](./_fe-prompt-contracts-import-excel.md) |
+| POST | `/v1/contracts/import` | Permission `contract:import` | Import hàng loạt từ Excel (all-or-nothing) — xem [`_fe-prompt-contracts-import-excel.md`](./_fe-prompt-contracts-import-excel.md) |
 
 > **Lưu ý thứ tự route:** `/contracts/me`, `/contracts/import/template`, `/contracts/import` đều được khai báo **trước** `/contracts/:id`.
 
-> **Model quyền:** 3 mutation endpoints (`PATCH /:id`, `/:id/activate`, `/:id/terminate`) dùng **permission-based** (`PermissionsGuard`), không dùng role cứng. HR có thể cấp/thu quyền `contract:update`, `contract:activate`, `contract:terminate` cho bất kỳ role nào ở màn Phân quyền. `ADMIN` mặc định bypass. Các endpoint còn lại vẫn dùng role-based như trước.
+---
+
+## Phạm vi xem hợp đồng — áp CHO CẢ danh sách lẫn chi tiết
+
+Hợp đồng chứa lương cơ bản, nên có hai lớp kiểm tách bạch. Phải qua **cả hai**:
+
+1. **Quyền** — `contract:read`. Bỏ tick quyền này trong UI phân quyền là chặn thật.
+   (Trước đây module chỉ gác `SystemRole`, bỏ tick không có tác dụng — ai mang
+   `SystemRole.MANAGER` vẫn đọc được hợp đồng + lương người khác.)
+2. **Phạm vi** — quyết định bởi `resolveContractScope()`:
+
+| Vai trò | Phạm vi |
+| --- | --- |
+| `ADMIN`, `HR`, `DIRECTOR`, `CHIEF` | Toàn công ty |
+| `MANAGER` có phòng ban | Chỉ nhân viên **trong phòng mình** |
+| `MANAGER` KHÔNG có phòng ban | Chỉ của chính mình (không mở thành toàn công ty) |
+| `EMPLOYEE` | Chỉ của chính mình |
+
+**Hợp đồng của chính mình luôn xem được**, bất kể quyền và phạm vi.
+
+⚠ Hai điều FE cần biết:
+- `GET /contracts` và `GET /contracts/:id` dùng **chung một luật**. Trước đây danh sách lọc
+  theo phòng ban còn chi tiết thì không — biết `id` là đọc được hợp đồng phòng khác, mà `id`
+  là số nguyên tuần tự. Đừng giả định chi tiết lỏng hơn danh sách.
+- `MANAGER` gửi `?departmentId=` của phòng khác sẽ bị **bỏ qua**, không phải báo lỗi — server
+  ép về phòng của chính họ.
+
+> **Model quyền:** TOÀN BỘ endpoint của module này nay đều **permission-based** (`PermissionsGuard`) — đọc (`contract:read`), tạo (`contract:create`), import (`contract:import`), sửa/kích hoạt/chấm dứt (`contract:update`/`activate`/`terminate`). Cấp hoặc thu quyền ở màn Phân quyền là có hiệu lực thật. `@Roles` chỉ còn là bộ lọc thô chạy trước và phải phủ đủ các role được cấp quyền. `ADMIN` bypass toàn bộ. Ngoại lệ duy nhất: `GET /contracts/me` và ca tự-xem-hợp-đồng-của-mình ở `GET /:id` — self-service, không đòi quyền nào.
 
 ---
 
@@ -235,3 +262,8 @@ export function useContracts() {
 | `EMPLOYEE` gọi `GET /contracts/:id` với hợp đồng của mình | 200 OK |
 | `EMPLOYEE` gọi `GET /contracts/:id` với hợp đồng người khác | 403 Forbidden |
 | `MANAGER` gọi `GET /contracts` | 200 — chỉ trả hợp đồng nhân viên trong phòng mình |
+| `MANAGER` gọi `GET /contracts?departmentId=` phòng khác | 200 — param bị bỏ qua, vẫn chỉ phòng mình |
+| `MANAGER` gọi `GET /contracts/:id` với hợp đồng phòng khác | 403 Forbidden |
+| `MANAGER` không có phòng ban gọi `GET /contracts` | 200 — chỉ hợp đồng của chính họ |
+| `CHIEF` gọi `GET /contracts` | 200 — toàn công ty (Tổng giám đốc) |
+| Role bị bỏ tick `contract:read` gọi `GET /contracts` | 403 Forbidden |

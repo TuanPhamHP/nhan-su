@@ -71,9 +71,24 @@ export const useAuthFetch = () => {
 		try {
 			return await $fetch<T>(url, options);
 		} catch (err: unknown) {
-			const e = err as { response?: { status?: number }; data?: { error?: { message?: string } } };
+			const e = err as {
+				response?: { status?: number };
+				data?: { error?: { message?: string; code?: string } };
+			};
 
-			if (e?.response?.status === 401) {
+			/**
+			 * 401 ở đây mang HAI nghĩa khác hẳn nhau:
+			 *
+			 * - Token hết hạn → refresh rồi gửi lại (luồng bên dưới).
+			 * - Endpoint từ chối MẬT KHẨU người dùng vừa nhập (VD `POST /v1/social-insurance/me`
+			 *   bắt xác thực lại mật khẩu). Refresh không cứu được gì: gửi lại vẫn sai mật
+			 *   khẩu, lần hai rơi vào `catch` → `_forceLogout()` đá người dùng về /login chỉ
+			 *   vì gõ nhầm mật khẩu. Tệ hơn: mỗi lần gõ nhầm tốn HAI lần sai trong bộ đếm
+			 *   khoá tài khoản của BE (khoá ở lần thứ 5, không có đường mở khoá).
+			 */
+			const isCredentialRejection = e?.data?.error?.code === 'AUTH_INVALID_CREDENTIALS';
+
+			if (e?.response?.status === 401 && !isCredentialRejection) {
 				try {
 					const newToken = await _getOrRefresh();
 					return await $fetch<T>(url, {

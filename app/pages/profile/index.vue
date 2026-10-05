@@ -8,6 +8,7 @@
 	import { formatDate } from '~/utils/date';
 	import { deleteCookie } from '~/utils/cookie';
 	import ThemeSelector from '~/components/modules/theme/ThemeSelector.vue';
+	import ProfileSocialInsurance from '~/components/modules/profile/ProfileSocialInsurance.vue';
 
 	definePageMeta({ title: 'Hồ sơ cá nhân' });
 
@@ -523,6 +524,9 @@
 					</div>
 				</div>
 			</div>
+
+			<!-- Chỉ đọc, có cửa mật khẩu. Không nhận employeeId: server lấy từ JWT. -->
+			<ProfileSocialInsurance />
 		</template>
 	</div>
 </template>
