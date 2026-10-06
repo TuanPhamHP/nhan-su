@@ -4,6 +4,7 @@
 	import AgentActionForm from '~/components/modules/agent/AgentActionForm.vue';
 	import AgentChartBlock from '~/components/modules/agent/AgentChartBlock.vue';
 	import AgentFeedbackBar from '~/components/modules/agent/AgentFeedbackBar.vue';
+	import AgentTableBlock from '~/components/modules/agent/AgentTableBlock.vue';
 	import type {
 		AgentChatMessage as ChatMsg,
 		AgentFeedbackRating,
@@ -139,6 +140,16 @@
 				v-for="(c, i) in message.charts ?? []"
 				:key="`chart-${i}`"
 				:chart="c"
+			/>
+
+			<!--
+				Bảng đứng SAU biểu đồ, vẫn trước form: một lượt có cả hai thì biểu đồ là cái
+				nhìn tổng, bảng là chi tiết từng dòng — đọc tổng trước rồi mới soi chi tiết.
+			-->
+			<AgentTableBlock
+				v-for="(t, i) in message.tables ?? []"
+				:key="`table-${i}`"
+				:table="t"
 			/>
 
 			<AgentActionForm

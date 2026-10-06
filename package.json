@@ -13,6 +13,7 @@
 		"preview": "nuxt preview",
 		"postinstall": "nuxt prepare",
 		"shots:agent-chart": "node tests/e2e/agent-chart-shots.mjs",
+		"shots:agent-table": "node tests/e2e/agent-table-shots.mjs",
 		"shots:agent-feedback": "node tests/e2e/agent-feedback-shots.mjs"
 	},
 	"dependencies": {

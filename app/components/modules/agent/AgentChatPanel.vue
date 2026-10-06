@@ -81,7 +81,16 @@
 	watch(
 		// Kèm cả trạng thái form: nó hiện ra sau khi chữ đã chảy xong, không theo dõi thì
 		// khung cao thêm cả trăm px mà không tự cuộn, người dùng không thấy nút xác nhận.
-		() => messages.value.map((m) => `${m.text}|${m.pending?.state ?? ''}`).join(''),
+		// Cùng lý do với biểu đồ và BẢNG: cả hai đến bằng event riêng SAU khi chữ đã chảy
+		// xong, và một bảng 30 dòng cao hơn cả màn hình — không theo dõi số lượng của
+		// chúng thì người dùng đọc xong câu trả lời mà không biết dưới còn bảng.
+		() =>
+			messages.value
+				.map(
+					(m) =>
+						`${m.text}|${m.pending?.state ?? ''}|${m.charts?.length ?? 0}|${m.tables?.length ?? 0}`,
+				)
+				.join(''),
 		async () => {
 			const stick = forceScroll.value || nearBottom();
 			await nextTick();

@@ -25,7 +25,18 @@
 	} = useEmployeeIdentity();
 
 	const isSelf = computed(() => authStore.user?.id === props.employeeId);
-	const canRead = computed(() => isSelf.value || hasPermission('employee:citizen-id:read'));
+	/**
+	 * CHỈ dựa trên permission — cố ý KHÔNG còn `isSelf.value ||`.
+	 *
+	 * BE đã bỏ ưu đãi "chính chủ" ở 3 route đọc (`GET .../citizen-id`,
+	 * `.../citizen-id/history`, `.../passport`): chính chủ gọi id của mình cũng `403`.
+	 * Giữ `isSelf` ở đây thì MANAGER/CHIEF (không có `employee:citizen-id:read`) mở hồ sơ
+	 * của CHÍNH MÌNH sẽ gọi API rồi ăn 403 → toast đỏ. Nhân viên tự xem đi đường khác:
+	 * `POST /v1/employees/me/identity` ở trang `/profile`, có cửa mật khẩu.
+	 *
+	 * canCreate/canUpdate/canDelete giữ nguyên — nhánh ghi của BE không đổi.
+	 */
+	const canRead = computed(() => hasPermission('employee:citizen-id:read'));
 	const canCreate = computed(() => hasPermission('employee:citizen-id:create'));
 	const canUpdate = computed(() => hasPermission('employee:citizen-id:update'));
 	const canDelete = computed(() => hasPermission('employee:citizen-id:delete'));
@@ -48,7 +59,11 @@
 		}
 	}
 
-	onMounted(() => loadCitizenId());
+	// Không có quyền đọc thì KHÔNG gọi API: request chắc chắn 403, chỉ tổ bắn toast đỏ.
+	onMounted(() => {
+		if (!canRead.value) return;
+		loadCitizenId();
+	});
 
 	const schema = toTypedSchema(
 		z.object({
@@ -241,7 +256,17 @@
 		</div>
 
 		<div v-if="!canRead" class="p-10 text-center text-sm text-gray-500 dark:text-gray-400">
-			Bạn không có quyền xem CCCD của nhân viên khác.
+			<!-- Đang xem hồ sơ của CHÍNH MÌNH: không phải "không đủ quyền", mà là có đường khác -->
+			<template v-if="isSelf">
+				<p>CCCD của bạn được bảo vệ, màn hình quản lý không hiển thị.</p>
+				<NuxtLink
+					to="/profile"
+					class="mt-2 inline-block font-medium text-brand-600 dark:text-brand-400 hover:underline"
+				>
+					Xem tại trang Hồ sơ cá nhân (nhập lại mật khẩu)
+				</NuxtLink>
+			</template>
+			<template v-else>Bạn không có quyền xem CCCD của nhân viên khác.</template>
 		</div>
 
 		<div v-else-if="citizenIdLoading" class="p-6 space-y-4">

@@ -16,6 +16,7 @@ export * from './leave-balance.service';
 export * from './employee-document.service';
 export * from './employee-citizen-id.service';
 export * from './employee-passport.service';
+export * from './employee-identity.service';
 export * from './report.service';
 export * from './position.service';
 export * from './notification.service';

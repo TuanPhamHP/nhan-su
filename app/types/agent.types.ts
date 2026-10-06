@@ -6,6 +6,7 @@ export type AgentStreamEvent =
 	| { type: 'delta'; text: string; conversationId?: number }
 	| { type: 'form'; pendingActionId: number; form: AgentForm; conversationId?: number }
 	| { type: 'chart'; chart: AgentChart; tool: string; conversationId?: number }
+	| { type: 'table'; table: AgentTable; tool: string; conversationId?: number }
 	| { type: 'done'; result: AgentChatResult }
 	| { type: 'error'; message: string };
 
@@ -162,6 +163,30 @@ export interface AgentChart {
 	source?: string;
 }
 
+/** Một cột của bảng chi tiết do server dựng. */
+export interface AgentTableColumn {
+	/** Khoá để tra giá trị trong mỗi phần tử `AgentTable.rows`. */
+	key: string;
+	label: string;
+	/** `number` canh phải. Mặc định `text`. */
+	align?: 'text' | 'number';
+}
+
+/**
+ * Bảng chi tiết do SERVER dựng, đính kèm câu trả lời.
+ *
+ * Cùng bất biến với `AgentChart`: tool tự dựng bảng từ đúng dữ liệu nó vừa đọc, model
+ * KHÔNG viết ô nào. FE chỉ vẽ lại y nguyên — không đếm lại, không cộng, không sắp xếp
+ * lại, không thêm dòng tổng. Bảng sai mà trông thật thì người đọc vẫn tin.
+ */
+export interface AgentTable {
+	title: string;
+	columns: AgentTableColumn[];
+	/** Mọi giá trị là chuỗi ĐÃ FORMAT sẵn — không phải number, không phải null. Ô trống là `'—'`. */
+	rows: Record<string, string>[];
+	source?: string;
+}
+
 export interface AgentChatMessage {
 	id: string;
 	role: AgentMessageRole;
@@ -184,6 +209,8 @@ export interface AgentChatMessage {
 	pending?: AgentPendingAction;
 	/** Biểu đồ server gửi kèm. Nhiều tool trong một lượt thì có nhiều biểu đồ. */
 	charts?: AgentChart[];
+	/** Bảng chi tiết server gửi kèm. Một lượt có thể có nhiều bảng, và có cả bảng lẫn biểu đồ. */
+	tables?: AgentTable[];
 }
 
 /** Nhãn tiếng Việt cho tên tool — hiện lúc agent đang tra cứu. */
@@ -209,6 +236,8 @@ export interface AgentConversationMessage {
 	text: string;
 	/** Có khi lượt đó server dựng biểu đồ. Tin nhắn cũ không có trường này. */
 	charts?: AgentChart[];
+	/** Có khi lượt đó server dựng bảng. Tin nhắn cũ không có trường này. */
+	tables?: AgentTable[];
 	/** Điểm chính người gọi đã chấm cho câu trả lời này. Vắng = chưa chấm. */
 	feedback?: AgentFeedback | null;
 	createdAt: string;

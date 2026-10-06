@@ -1,5 +1,6 @@
 import { useEmployeeCitizenIdService, type CitizenIdHistoryParams } from '~/services/employee-citizen-id.service';
 import { useEmployeePassportService } from '~/services/employee-passport.service';
+import { useEmployeeIdentityService } from '~/services/employee-identity.service';
 import type {
 	CitizenIdResponse,
 	CreateCitizenIdPayload,
@@ -11,12 +12,14 @@ import type {
 	UpdatePassportPayload,
 	PassportPhotoSide,
 } from '~/types/employee-passport.types';
+import type { MyIdentityResponse } from '~/types/employee-identity.types';
 import type { SystemLog } from '~/types/log.types';
 import type { PaginatedMeta } from '~/types/api.types';
 
 export function useEmployeeIdentity() {
 	const citizenService = useEmployeeCitizenIdService();
 	const passportService = useEmployeePassportService();
+	const identityService = useEmployeeIdentityService();
 
 	const citizenId = ref<CitizenIdResponse | null>(null);
 	const citizenIdFetchedAt = ref<number | null>(null);
@@ -33,6 +36,17 @@ export function useEmployeeIdentity() {
 	const history = ref<SystemLog[]>([]);
 	const historyMeta = ref<PaginatedMeta | null>(null);
 	const historyLoading = ref(false);
+
+	/**
+	 * Định danh của CHÍNH MÌNH, lấy qua cửa mật khẩu.
+	 *
+	 * Cố ý nằm trong state của lần gọi composable này (composable tạo ref mới mỗi lần gọi,
+	 * không phải store) — rời trang hoặc F5 là mất, lần sau phải nhập mật khẩu lại. KHÔNG
+	 * được đẩy sang localStorage / sessionStorage / cookie / pinia persist: cache lại thì
+	 * lần sau xem không cần mật khẩu, đúng cái mà cửa mật khẩu sinh ra để chặn.
+	 */
+	const ownIdentity = ref<MyIdentityResponse | null>(null);
+	const ownIdentityUnlocking = ref(false);
 
 	async function fetchCitizenId(employeeId: number) {
 		citizenIdLoading.value = true;
@@ -164,6 +178,25 @@ export function useEmployeeIdentity() {
 		}
 	}
 
+	/**
+	 * Mở khoá xem định danh của chính mình bằng mật khẩu.
+	 *
+	 * Mật khẩu chỉ đi qua đây một lần rồi thôi — KHÔNG giữ lại ở bất kỳ state nào, không
+	 * log ra console. Lỗi được throw nguyên vẹn (kèm `status` + `data.error.code` do
+	 * `auth.fetch.ts` gắn) để màn hình phân biệt: 400 → giữ modal cho nhập lại, 403 → khoá
+	 * tài khoản, 429 → chờ.
+	 */
+	async function viewOwnIdentity(password: string): Promise<MyIdentityResponse> {
+		ownIdentityUnlocking.value = true;
+		try {
+			const res = await identityService.viewOwn(password);
+			ownIdentity.value = res;
+			return res;
+		} finally {
+			ownIdentityUnlocking.value = false;
+		}
+	}
+
 	return {
 		// CCCD state
 		citizenId,
@@ -195,5 +228,9 @@ export function useEmployeeIdentity() {
 		deletePassport,
 		uploadPassportPhoto,
 		deletePassportPhoto,
+		// Tự xem (có cửa mật khẩu)
+		ownIdentity,
+		ownIdentityUnlocking,
+		viewOwnIdentity,
 	};
 }

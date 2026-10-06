@@ -63,6 +63,11 @@ export function useAgentChat() {
 					// Biểu đồ đến qua kênh riêng, KHÔNG nằm trong luồng chữ — nên cứ gom lại,
 					// không đụng tới reply.text. Một lượt có thể gọi nhiều tool nên có nhiều biểu đồ.
 					(reply.charts ??= []).push(ev.chart);
+				} else if (ev.type === 'table') {
+					// Bảng cũng đi kênh riêng như biểu đồ, KHÔNG nằm trong luồng chữ. Model được
+					// dặn không tự gõ bảng markdown, nên nếu FE bỏ qua event này thì người dùng
+					// chỉ còn câu trả lời bằng lời và mất hết phần chi tiết từng ngày.
+					(reply.tables ??= []).push(ev.table);
 				} else if (ev.type === 'form') {
 					reply.status = undefined;
 					reply.pending = {
@@ -147,6 +152,8 @@ export function useAgentChat() {
 					messageId: m.id,
 					// Biểu đồ đã lưu cùng tin nhắn nên mở lại hội thoại vẫn còn hình.
 					...(m.charts?.length ? { charts: m.charts } : {}),
+					// Bảng cũng được lưu cùng tin nhắn — mở lại hội thoại cũ phải còn bảng.
+					...(m.tables?.length ? { tables: m.tables } : {}),
 					// Điểm đã chấm phải hiện lại: không có thì người dùng tưởng mình chưa
 					// đánh giá và bấm lần nữa, hoặc tưởng góp ý đã bị bỏ đi.
 					...(m.feedback ? { feedback: m.feedback } : {}),

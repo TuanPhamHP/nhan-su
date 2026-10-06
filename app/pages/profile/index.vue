@@ -9,6 +9,7 @@
 	import { deleteCookie } from '~/utils/cookie';
 	import ThemeSelector from '~/components/modules/theme/ThemeSelector.vue';
 	import ProfileSocialInsurance from '~/components/modules/profile/ProfileSocialInsurance.vue';
+	import ProfileIdentity from '~/components/modules/profile/ProfileIdentity.vue';
 
 	definePageMeta({ title: 'Hồ sơ cá nhân' });
 
@@ -527,6 +528,9 @@
 
 			<!-- Chỉ đọc, có cửa mật khẩu. Không nhận employeeId: server lấy từ JWT. -->
 			<ProfileSocialInsurance />
+
+			<!-- Cùng mô hình: chỉ đọc, cửa mật khẩu riêng, server lấy employeeId từ JWT. -->
+			<ProfileIdentity />
 		</template>
 	</div>
 </template>

@@ -13,22 +13,28 @@ Cả 2 resource đều tách thành controller riêng, không nằm trong endpoi
 
 ## Endpoints
 
+### Nhân viên tự xem (có cửa mật khẩu)
+
+| Method | Path | Ai được gọi | Ghi chú |
+|--------|------|-------------|---------|
+| **POST** | **`/v1/employees/me/identity`** | **Mọi user đã đăng nhập** | **Trả CẢ CCCD + hộ chiếu của chính mình — BẮT BUỘC gửi lại mật khẩu.** Xem mục "Tự xem" |
+
 ### CCCD
 
 | Method | Path | Permission | Ghi chú |
 |--------|------|-----------|---------|
-| GET | `/v1/employees/:employeeId/citizen-id` | Chính chủ **hoặc** `employee:citizen-id:read` | Trả `null` nếu chưa có |
+| GET | `/v1/employees/:employeeId/citizen-id` | **CHỈ** `employee:citizen-id:read` | Trả `null` nếu chưa có. **Chính chủ gọi id của mình cũng bị `403`** |
 | POST | `/v1/employees/:employeeId/citizen-id` | `employee:citizen-id:create` | 409 nếu đã có |
 | PATCH | `/v1/employees/:employeeId/citizen-id` | `employee:citizen-id:update` | Cho update số CCCD |
 | DELETE | `/v1/employees/:employeeId/citizen-id` | `employee:citizen-id:delete` | Xoá bản ghi + ảnh |
 | POST | `/v1/employees/:employeeId/citizen-id/photos` | `employee:citizen-id:update` | `multipart` — cả 2 ảnh bắt buộc |
-| GET | `/v1/employees/:employeeId/citizen-id/history` | Chính chủ **hoặc** `employee:citizen-id:read` | Lịch sử thay đổi |
+| GET | `/v1/employees/:employeeId/citizen-id/history` | **CHỈ** `employee:citizen-id:read` | Lịch sử thay đổi. **Chính chủ cũng bị `403`** — payload log chứa số CCCD cũ |
 
 ### Hộ chiếu
 
 | Method | Path | Permission | Ghi chú |
 |--------|------|-----------|---------|
-| GET | `/v1/employees/:employeeId/passport` | Chính chủ **hoặc** `employee:passport:read` | Trả `null` nếu chưa có |
+| GET | `/v1/employees/:employeeId/passport` | **CHỈ** `employee:passport:read` | Trả `null` nếu chưa có. **Chính chủ cũng bị `403`** |
 | POST | `/v1/employees/:employeeId/passport` | `employee:passport:create` | 409 nếu đã có |
 | PATCH | `/v1/employees/:employeeId/passport` | `employee:passport:update` | |
 | DELETE | `/v1/employees/:employeeId/passport` | `employee:passport:delete` | |
@@ -43,11 +49,78 @@ Cả 2 resource đều tách thành controller riêng, không nằm trong endpoi
 
 ---
 
+## Tự xem — `POST /v1/employees/me/identity`
+
+Dữ liệu định danh là **nhạy cảm**, nên nhân viên phải **xác thực lại mật khẩu** mỗi lần
+xem. Không truyền `employeeId` — server lấy từ JWT, nên không thể xem của người khác.
+
+**Request:**
+
+```typescript
+POST /v1/employees/me/identity
+Content-Type: application/json
+
+{ "password": "mật khẩu của chính người đang đăng nhập" }
+```
+
+**Response thành công — HTTP `201`** (POST trong NestJS mặc định 201, **không phải 200** —
+FE đừng hardcode `status === 200`):
+
+```typescript
+export interface MyIdentityResponse {
+  citizenId: CitizenIdResponse | null;   // null nếu chưa được nhập CCCD
+  passport: PassportResponse | null;     // null nếu chưa có hộ chiếu
+}
+```
+
+Hai khối **độc lập** và đều nullable — nhân viên có thể có CCCD mà chưa có hộ chiếu, hoặc
+chưa có cả hai. `null` **không phải lỗi**, FE hiện trạng thái rỗng cho từng khối.
+
+Trả cả hai trong một lần gọi là có chủ ý: tách hai endpoint thì người dùng phải nhập mật
+khẩu hai lần. 4 URL ảnh (`frontPhotoUrl`, `backPhotoUrl`, `photoFrontUrl`, `photoBackUrl`)
+đều đã được **presign** như các endpoint khác.
+
+**Các mã lỗi:**
+
+| HTTP | Code | Message | Khi nào | FE nên làm gì |
+|---|---|---|---|---|
+| `400` | `BAD_REQUEST` | `Vui lòng nhập mật khẩu` | Không gửi `password` / chuỗi rỗng | Báo lỗi tại ô mật khẩu |
+| `400` | `AUTH_INVALID_CREDENTIALS` | `Mật khẩu không đúng. Còn N lần thử` | Sai mật khẩu | Hiện **nguyên message của API**, giữ modal mở |
+| `403` | `AUTH_ACCOUNT_LOCKED` | `Tài khoản bị khóa. Thử lại sau N phút` | Sai 5 lần → **khoá 30 phút** | Đóng modal, báo khoá, không cho thử tiếp |
+| `401` | `AUTH_SESSION_INVALID` | `Phiên đăng nhập không còn hợp lệ` | Tài khoản bị vô hiệu hoá giữa phiên | Đăng xuất — ca 401 **duy nhất** |
+| `429` | — | — | Quá 30 request / 5 phút từ cùng một IP | Yêu cầu chờ |
+
+Cơ chế chống dò mật khẩu, lý do dùng `400` thay vì `401`, và việc gọi đúng sẽ reset bộ
+đếm: **giống hệt** `POST /v1/social-insurance/me` — xem
+[social-insurance.md](./social-insurance.md), mục "Tự xem" và "⛔ Sai mật khẩu trả 400".
+Hai endpoint dùng **chung** `AuthService.verifyPasswordStepUp()` nên hành vi luôn khớp nhau.
+
+> ⚠️ Gõ sai mật khẩu 5 lần ở modal này sẽ **khoá luôn việc đăng nhập** 30 phút, và hệ
+> thống **chưa có đường mở khoá** cho HR/ADMIN. FE phải hiện số lần thử còn lại.
+
+Không cache kết quả vào `localStorage`/cookie: cache lại thì lần sau xem không cần mật
+khẩu nữa, đúng cái mà cửa mật khẩu sinh ra để chặn.
+
+---
+
 ## Rule "chính chủ" vs Permission
 
-- **GET** (read): nếu `user.id === :employeeId` → luôn được xem của mình. Người khác phải có permission `employee:citizen-id:read` hoặc `employee:passport:read`.
+> ⚠️ **Thay đổi breaking:** 3 route đọc dưới đây **trước đây cho chính chủ xem của mình**
+> mà không cần gì thêm. **Nay không còn.** Nếu còn cho, nhân viên chỉ cần gọi
+> `GET /v1/employees/{id-của-mình}/citizen-id` là lấy được dữ liệu mà không cần mật khẩu —
+> cửa mật khẩu ở `/me/identity` sẽ thành vô nghĩa.
+
+- **GET** (read) — `citizen-id`, `citizen-id/history`, `passport`: **chỉ** người có
+  permission `employee:citizen-id:read` / `employee:passport:read`. Chính chủ gọi id của
+  mình cũng `403`. Nhân viên tự xem → `POST /v1/employees/me/identity` kèm mật khẩu.
 - **POST / PATCH / DELETE**: **luôn** cần permission tương ứng, kể cả chính chủ. Điều này giúp HR kiểm soát dữ liệu định danh, tránh nhân viên tự sửa số CCCD sai lệch với giấy tờ thật.
 - Role `ADMIN` bypass mọi permission (theo mô hình auth hiện có). `HR` được seed sẵn cả 8 permission `employee:citizen-id:*` + `employee:passport:*`.
+- **Nhân viên không còn xem được lịch sử CCCD của chính mình.** `/me/identity` cố ý chỉ
+  trả dữ liệu hiện tại, không trả lịch sử. Hiện không màn hình FE nào dùng tới nên không
+  ai mất gì; cần thì mở thêm endpoint `/me/identity/history` sau.
+
+Toàn bộ các luật trên đã được chạy bằng request HTTP thật — xem
+`scripts/smoke-my-identity.ts` (17 scenario: 3 route bypass · MANAGER không có quyền cũng 403 · presign cả ảnh CCCD và ảnh hộ chiếu · 2 ca khối lệch nhau · khoá tài khoản · reset bộ đếm).
 
 ---
 
