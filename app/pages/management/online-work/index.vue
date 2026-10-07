@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useDepartmentService } from '~/services/department.service';
+import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
 import OnlineWorkStatusBadge from '~/components/modules/online-work/OnlineWorkStatusBadge.vue';
 import OnlineWorkDetailModal from '~/components/modules/online-work/OnlineWorkDetailModal.vue';
 import RejectOnlineWorkModal from '~/components/modules/online-work/RejectOnlineWorkModal.vue';
@@ -21,6 +22,9 @@ const {
 	approve, fetchReport, exportReport,
 } = useOnlineWorkRequests();
 const departmentService = useDepartmentService();
+const onlineWorkRequestService = useOnlineWorkRequestService();
+const route = useRoute();
+const router = useRouter();
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
 const { canApprove: canApproveWith } = usePermissions();
@@ -195,10 +199,30 @@ function truncate(text: string, len = 60) {
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
+// ─── Deep link từ email/notification ──────────────────────────────────────────
+// Link duyệt đơn trong email trỏ về `/management/online-work?open_id=:id` — mở thẳng đơn
+// cần duyệt thay vì bắt người duyệt tự dò trong danh sách.
+async function openByQueryId() {
+	const raw = route.query.open_id;
+	if (!raw) return;
+	const id = Number(raw);
+	if (!id || Number.isNaN(id)) return;
+
+	// Clear query string trước để tránh F5 mở lại
+	router.replace({ path: '/management/online-work' });
+
+	try {
+		detailTarget.value = await onlineWorkRequestService.findOne(id);
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Không thể mở chi tiết đơn làm online');
+	}
+}
+
 onMounted(async () => {
 	await loadDepartments();
 	if (canApprove.value) fetchPendingForMe();
 	if (canViewAll.value) fetchAllRequests();
+	openByQueryId();
 });
 
 watch(activeTab, tab => {

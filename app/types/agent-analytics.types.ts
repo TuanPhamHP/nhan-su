@@ -24,6 +24,12 @@ export interface AgentTopic {
 export interface AgentTopUser {
 	employeeId: number;
 	fullName: string;
+	/**
+	 * Mã nhân viên và phòng ban — chỉ có ở bản BE từ 06/10/2026 trở đi, nên để optional:
+	 * trỏ vào server cũ thì bảng vẫn chạy, chỉ thiếu dòng phụ dưới tên.
+	 */
+	employeeCode?: string | null;
+	department?: string | null;
 	requests: number;
 	totalTokens: number;
 	costUsd: number;

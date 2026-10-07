@@ -6,7 +6,17 @@
 		type AgentTopic,
 	} from '~/types/agent-analytics.types';
 
-	defineProps<{ topics: AgentTopic[] }>();
+	withDefaults(
+		defineProps<{
+			topics: AgentTopic[];
+			/** Đổi được vì bảng này dùng cả ở trang chung lẫn ở modal của một người. */
+			description?: string;
+		}>(),
+		{
+			description:
+				'Tier nào quyết định định tuyến — càng nhiều “Luật” càng rẻ và nhanh, nhiều “Không rõ” là dấu hiệu playbook chưa phủ hết câu hỏi thật.',
+		},
+	);
 
 	const label = (id: string) => PLAYBOOK_LABELS[id] ?? id;
 </script>
@@ -15,10 +25,7 @@
 	<div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
 		<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Chủ đề được hỏi</h3>
-			<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-				Tier nào quyết định định tuyến — càng nhiều “Luật” càng rẻ và nhanh, nhiều “Không rõ”
-				là dấu hiệu playbook chưa phủ hết câu hỏi thật.
-			</p>
+			<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ description }}</p>
 		</div>
 
 		<div v-if="!topics.length" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">

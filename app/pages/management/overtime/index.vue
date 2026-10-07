@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useDepartmentService } from '~/services/department.service';
+import { useOvertimeRequestService } from '~/services/overtime-request.service';
 import OvertimeStatusBadge from '~/components/modules/overtime/OvertimeStatusBadge.vue';
 import OvertimeDetailModal from '~/components/modules/overtime/OvertimeDetailModal.vue';
 import RejectOvertimeModal from '~/components/modules/overtime/RejectOvertimeModal.vue';
@@ -23,6 +24,9 @@ const {
 	approve,
 } = useOvertimeRequests();
 const departmentService = useDepartmentService();
+const overtimeRequestService = useOvertimeRequestService();
+const route = useRoute();
+const router = useRouter();
 
 const { canApprove } = usePermissions();
 
@@ -211,10 +215,30 @@ async function handleExportReport() {
 	}
 }
 
+// ─── Deep link từ email/notification ──────────────────────────────────────────
+// Link duyệt đơn trong email trỏ về `/management/overtime?open_id=:id` — mở thẳng đơn
+// cần duyệt thay vì bắt người duyệt tự dò trong danh sách.
+async function openByQueryId() {
+	const raw = route.query.open_id;
+	if (!raw) return;
+	const id = Number(raw);
+	if (!id || Number.isNaN(id)) return;
+
+	// Clear query string trước để tránh F5 mở lại
+	router.replace({ path: '/management/overtime' });
+
+	try {
+		detailTarget.value = await overtimeRequestService.findOne(id);
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Không thể mở chi tiết đơn OT');
+	}
+}
+
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(() => {
 	loadDepartments();
 	fetchRequests();
+	openByQueryId();
 });
 
 watch(activeTab, tab => {

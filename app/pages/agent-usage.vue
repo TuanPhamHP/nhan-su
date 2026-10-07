@@ -3,6 +3,9 @@
 	import AgentTopicTable from '~/components/modules/agent/AgentTopicTable.vue';
 	import AgentDailyChart from '~/components/modules/agent/AgentDailyChart.vue';
 	import AgentFeedbackPanel from '~/components/modules/agent/AgentFeedbackPanel.vue';
+	import AgentUserTable from '~/components/modules/agent/AgentUserTable.vue';
+	import AgentUserDetailModal from '~/components/modules/agent/AgentUserDetailModal.vue';
+	import type { AgentTopUser } from '~/types/agent-analytics.types';
 	import { useAuth } from '~/composables/useAuth';
 
 	definePageMeta({ title: 'Trợ lý AI — Mức dùng' });
@@ -12,11 +15,13 @@
 	const canSeeAll = computed(() => ['ADMIN', 'HR', 'DIRECTOR'].includes(user.value?.role ?? ''));
 	const scope = computed<'all' | 'me'>(() => (canSeeAll.value ? 'all' : 'me'));
 
-	const { data, feedback, loading, error, from, to, load, setRange } = useAgentAnalytics(
-		scope.value,
-	);
+	const { data, feedback, loading, error, from, to, load, loadEmployee, setRange } =
+		useAgentAnalytics(scope.value);
 
 	onMounted(load);
+
+	/** Người đang mở bảng chi tiết. `null` = chưa chọn ai. */
+	const selectedUser = ref<AgentTopUser | null>(null);
 
 	const RANGES = [
 		{ label: '7 ngày', days: 7 },
@@ -129,35 +134,22 @@
 
 			<AgentDailyChart :daily="data.daily" :from="data.summary.from" :to="data.summary.to" />
 
+			<AgentUserTable
+				v-if="canSeeAll"
+				:users="data.topUsers"
+				:total-requests="data.summary.requests"
+				:total-cost="data.summary.costUsd"
+				:total-users="data.summary.activeUsers"
+				@select="selectedUser = $event"
+			/>
+
 			<AgentTopicTable :topics="data.topics" />
 
 			<!-- Chỉ scope 'all': endpoint đánh giá chi tiết giới hạn ADMIN/HR/DIRECTOR -->
 			<AgentFeedbackPanel v-if="feedback" :data="feedback" />
 
-			<section class="grid gap-4 lg:grid-cols-2">
-				<div
-					v-if="canSeeAll"
-					class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
-				>
-					<h3 class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100">
-						Người dùng nhiều nhất
-					</h3>
-					<table class="w-full text-sm">
-						<tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-							<tr v-for="u in data.topUsers" :key="u.employeeId">
-								<td class="px-4 py-2.5 text-gray-800 dark:text-gray-100">{{ u.fullName }}</td>
-								<td class="px-3 py-2.5 text-right tabular-nums text-gray-500 dark:text-gray-400">{{ u.requests }} lượt</td>
-								<td class="px-3 py-2.5 text-right tabular-nums text-gray-500 dark:text-gray-400">{{ fmtTok(u.totalTokens) }}</td>
-								<td class="px-4 py-2.5 text-right tabular-nums text-gray-700 dark:text-gray-200">{{ fmtUsd(u.costUsd) }}</td>
-							</tr>
-							<tr v-if="!data.topUsers.length">
-								<td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">Chưa có dữ liệu.</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-
-				<div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+			<section>
+				<div class="overflow-hidden rounded-xl border border-gray-200 bg-white lg:w-1/2 dark:border-gray-700 dark:bg-gray-800">
 					<h3 class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100">
 						Phân bổ theo model &amp; mục đích
 					</h3>
@@ -177,6 +169,15 @@
 					</table>
 				</div>
 			</section>
+
+			<AgentUserDetailModal
+				v-if="selectedUser"
+				:user="selectedUser"
+				:from="data.summary.from"
+				:to="data.summary.to"
+				:fetch="loadEmployee"
+				@close="selectedUser = null"
+			/>
 		</template>
 	</div>
 </template>

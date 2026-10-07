@@ -29,7 +29,12 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		error.value = null;
 		try {
 			const params = { from: from.value, to: to.value };
-			data.value = scope === 'me' ? await service.me(params) : await service.overview(params);
+			// topLimit mặc định của BE là 10 — quá ít cho câu hỏi "có những ai đang dùng".
+			// 50 là trần BE cho phép (@Max(50)); xin hơn là 400, không phải cắt bớt im lặng.
+			data.value =
+				scope === 'me'
+					? await service.me(params)
+					: await service.overview({ ...params, topLimit: 50 });
 			// Bảng đánh giá hỏng (hoặc chưa có bảng trong DB) KHÔNG được làm trắng cả trang
 			// mức dùng — nó là phần thêm, không phải phần chính.
 			feedback.value =
@@ -46,6 +51,17 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		}
 	}
 
+	/**
+	 * Số liệu của riêng một nhân viên, trong đúng khoảng đang lọc.
+	 *
+	 * Dùng chính `/overview` kèm `employeeId` — endpoint này chỉ ADMIN/HR/DIRECTOR gọi
+	 * được, nên không cần kiểm quyền lại ở FE. Không ghi vào `data` để bảng chính
+	 * không bị thay dữ liệu dưới chân người đang xem.
+	 */
+	async function loadEmployee(employeeId: number): Promise<AgentAnalyticsOverview> {
+		return service.overview({ from: from.value, to: to.value, employeeId });
+	}
+
 	/** Đổi nhanh khoảng thời gian rồi tải lại. */
 	function setRange(days: number): void {
 		from.value = isoDaysAgo(days);
@@ -57,5 +73,16 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		Math.max(1, ...(data.value?.daily ?? []).map((d) => d.promptTokens + d.completionTokens)),
 	);
 
-	return { data, feedback, loading, error, from, to, load, setRange, maxDailyTokens };
+	return {
+		data,
+		feedback,
+		loading,
+		error,
+		from,
+		to,
+		load,
+		loadEmployee,
+		setRange,
+		maxDailyTokens,
+	};
 }
