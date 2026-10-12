@@ -35,11 +35,24 @@ export function useEmployee() {
 		return service.create(payload);
 	}
 
-	async function deactivate(id: number) {
-		await service.deactivate(id);
+	/**
+	 * `terminationDate` ("YYYY-MM-DD") là ngày nghỉ việc HR nhập; bỏ trống → BE lấy ngày
+	 * hôm nay. Sau khi vô hiệu hóa thì nạp lại chi tiết để `terminationDate` hiển thị
+	 * đúng theo BE (không tự đoán ngày ở FE, tránh lệch múi giờ).
+	 */
+	async function deactivate(id: number, terminationDate?: string) {
+		await service.deactivate(id, terminationDate);
 		items.value = items.value.filter(emp => emp.id !== id);
 		if (currentEmployee.value?.id === id) {
-			currentEmployee.value = { ...currentEmployee.value, status: 'INACTIVE' };
+			try {
+				currentEmployee.value = await service.findOne(id);
+			} catch {
+				currentEmployee.value = {
+					...currentEmployee.value,
+					status: 'INACTIVE',
+					terminationDate: terminationDate ?? currentEmployee.value.terminationDate,
+				};
+			}
 		}
 	}
 

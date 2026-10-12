@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
-	import { formatDate, formatDateTime } from '~/utils/date';
+	import { formatDate, formatDateTime, todayYmd } from '~/utils/date';
 	import type { UpdateEmployeeDto, EmployeeGender, EmployeeSummary, EmploymentType } from '~/types/employee.types';
 	import type { UserRole } from '~/types/auth.types';
 	import { usePositionService } from '~/services/position.service';
@@ -78,6 +78,12 @@
 	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 	const confirmDeactivate = ref(false);
 	const deactivating = ref(false);
+	// Ngày nghỉ việc nhập ở dialog vô hiệu hóa — default hôm nay, bỏ trống thì BE lấy ngày hiện tại.
+	// KHÔNG tự validate theo joinDate ở FE; BE là nơi trả 400 và FE chỉ hiện message đó.
+	const terminationDateInput = ref<string | undefined>(todayYmd());
+	watch(confirmDeactivate, open => {
+		if (open) terminationDateInput.value = todayYmd();
+	});
 	const confirmResetPassword = ref(false);
 	const resettingPassword = ref(false);
 
@@ -226,11 +232,12 @@
 		}
 		deactivating.value = true;
 		try {
-			await deactivate(id);
+			await deactivate(id, terminationDateInput.value);
 			toast.success('Đã vô hiệu hóa nhân viên');
 			confirmDeactivate.value = false;
-			navigateTo('/management/employees');
+			// Ở lại trang chi tiết để HR thấy ngay badge "Đã nghỉ việc dd/MM/yyyy" do BE trả về.
 		} catch (e) {
+			// Dialog CỐ Ý không đóng khi lỗi (VD ngày nghỉ < ngày vào làm) — HR sửa ngày rồi bấm lại.
 			toast.error(e instanceof Error ? e.message : 'Lỗi vô hiệu hóa nhân viên');
 		} finally {
 			deactivating.value = false;
@@ -382,7 +389,10 @@
 					<div class="flex-1 min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
 							<h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentEmployee.fullName }}</h2>
-							<EmployeeEmployeeStatusBadge :status="currentEmployee.status" />
+							<EmployeeEmployeeStatusBadge
+								:status="currentEmployee.status"
+								:termination-date="currentEmployee.terminationDate"
+							/>
 							<EmploymentTypeBadge v-if="currentEmployee.employmentType" :type="currentEmployee.employmentType" />
 						</div>
 						<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
@@ -516,6 +526,12 @@
 						<div>
 							<p :class="labelCls">Ngày vào làm</p>
 							<p :class="valueCls">{{ formatDate(currentEmployee.joinDate) }}</p>
+						</div>
+						<div v-if="currentEmployee.status === 'INACTIVE'">
+							<p :class="labelCls">Ngày nghỉ việc</p>
+							<p class="text-sm font-medium text-red-600 dark:text-red-400">
+								{{ formatDate(currentEmployee.terminationDate) }}
+							</p>
 						</div>
 						<div>
 							<p :class="labelCls">Ngày sinh</p>
@@ -761,6 +777,13 @@
 									sẽ không thể đăng nhập hệ thống. Bạn có thể kích hoạt lại bất kỳ lúc nào.
 								</p>
 							</div>
+						</div>
+						<div class="mt-5">
+							<UiDatePicker
+								v-model="terminationDateInput"
+								label="Ngày nghỉ việc"
+								hint="Bỏ trống → hệ thống lấy ngày hôm nay. Ngày này quyết định tháng cuối cùng còn xuất được bảng công."
+							/>
 						</div>
 						<div class="flex justify-end gap-3 mt-6">
 							<CommonAppButton variant="outline" @click="confirmDeactivate = false">Hủy</CommonAppButton>

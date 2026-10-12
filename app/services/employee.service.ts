@@ -6,6 +6,7 @@ import type {
 	EmployeeQueryParams,
 	CreateEmployeeDto,
 	UpdateEmployeeDto,
+	DeactivateEmployeeDto,
 } from '~/types/employee.types';
 import type { ImportEmployeesResponse } from '~/types/employee-import.types';
 
@@ -39,8 +40,14 @@ export const useEmployeeService = () => {
 			return res.data;
 		},
 
-		deactivate(id: number): Promise<void> {
-			return authFetch<void>(`/v1/employees/${id}`, { method: 'DELETE' });
+		/**
+		 * Vô hiệu hóa nhân viên. `terminationDate` ("YYYY-MM-DD") quyết định tháng cuối cùng
+		 * nhân sự còn xuất được bảng công. Bỏ trống → BE tự lấy ngày hiện tại (giờ VN),
+		 * nên khi không có ngày thì gửi body rỗng thay vì `terminationDate: ''`.
+		 */
+		deactivate(id: number, terminationDate?: string): Promise<void> {
+			const body: DeactivateEmployeeDto = terminationDate ? { terminationDate } : {};
+			return authFetch<void>(`/v1/employees/${id}`, { method: 'DELETE', body });
 		},
 
 		activate(id: number): Promise<void> {

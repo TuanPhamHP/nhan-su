@@ -1,6 +1,11 @@
 import { format, parseISO, isValid, formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
+/** Hôm nay dạng "YYYY-MM-DD" (giờ máy) — dùng cho các input ngày gửi lên BE. */
+export function todayYmd(): string {
+	return format(new Date(), 'yyyy-MM-dd');
+}
+
 export function formatDate(date: string | null | undefined, pattern = 'dd/MM/yyyy'): string {
 	if (!date) return '—';
 	const parsed = parseISO(date);
