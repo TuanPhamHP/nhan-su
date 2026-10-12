@@ -122,18 +122,18 @@
 		if (!confirmId.value) return;
 		// Defense-in-depth: modal không mở nếu thiếu quyền, nhưng vẫn re-check trước BE call.
 		if (!canDelete.value) {
-			toast.error('Bạn không có quyền vô hiệu hóa nhân viên');
+			toast.error('Bạn không có quyền khóa tài khoản nhân viên');
 			return;
 		}
 		deactivating.value = true;
 		try {
 			await deactivate(confirmId.value, terminationDate.value);
-			toast.success('Đã vô hiệu hóa nhân viên');
+			toast.success('Đã khóa tài khoản nhân viên');
 			closeConfirm();
 			await load();
 		} catch (e) {
 			// Dialog CỐ Ý không đóng khi lỗi — HR sửa lại ngày rồi bấm lại.
-			toast.error(e instanceof Error ? e.message : 'Lỗi vô hiệu hóa nhân viên');
+			toast.error(e instanceof Error ? e.message : 'Lỗi khóa tài khoản nhân viên');
 		} finally {
 			deactivating.value = false;
 		}
@@ -156,7 +156,8 @@
 				hidden: !canUpdate.value,
 			},
 			{
-				label: 'Vô hiệu hóa',
+				// Chỉ khóa tài khoản — thủ tục nghỉ việc (ngày + lý do) nằm ở màn chi tiết.
+				label: 'Khóa tài khoản',
 				icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636',
 				variant: 'danger',
 				action: () => openConfirm(emp.id),
@@ -380,9 +381,10 @@
 								</svg>
 							</div>
 							<div>
-								<h3 class="font-semibold text-gray-900 dark:text-white">Vô hiệu hóa nhân viên</h3>
+								<h3 class="font-semibold text-gray-900 dark:text-white">Khóa tài khoản nhân viên</h3>
 								<p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-									Nhân viên sẽ không thể đăng nhập hệ thống. Bạn có thể kích hoạt lại bất kỳ lúc nào.
+									Nhân viên sẽ không thể đăng nhập hệ thống. Đây KHÔNG phải thủ tục nghỉ việc — vào màn
+									chi tiết nhân sự để "Xác nhận nghỉ việc" kèm ngày và lý do.
 								</p>
 							</div>
 						</div>
@@ -396,7 +398,7 @@
 						<div class="flex justify-end gap-3 mt-6">
 							<CommonAppButton variant="outline" @click="closeConfirm">Hủy</CommonAppButton>
 							<CommonAppButton variant="danger" :loading="deactivating" @click="confirmDeactivate">
-								Xác nhận vô hiệu hóa
+								Xác nhận khóa tài khoản
 							</CommonAppButton>
 						</div>
 					</div>

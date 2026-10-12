@@ -31,6 +31,9 @@
 	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
 	const canUpdate = computed(() => hasPermission('employee:update'));
 	const canDelete = computed(() => hasPermission('employee:delete'));
+	// Thủ tục nghỉ việc tách khỏi khóa tài khoản: quyền riêng `employee:terminate`, BE KHÔNG
+	// tick sẵn cho vai trò nào (chỉ ADMIN bypass) → không có quyền thì ẩn hẳn nút.
+	const canTerminate = computed(() => hasPermission('employee:terminate'));
 	// Tab Hợp đồng lộ cả lương cơ bản → phải theo đúng quyền, không chỉ theo vai trò.
 	// BE đã chặn (contract:read), đây là để không hiện tab rồi mới báo lỗi.
 	const canReadContracts = computed(() => hasPermission('contract:read'));
@@ -38,7 +41,7 @@
 	// `social-insurance:read` (chỉ HR theo master list).
 	const canReadSocialInsurance = computed(() => hasPermission('social-insurance:read'));
 
-	const { currentEmployee, detailLoading, fetchOne, update, deactivate, resetPassword } = useEmployee();
+	const { currentEmployee, detailLoading, fetchOne, update, deactivate, terminate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
 	const positionService = usePositionService();
 	const employeeService = useEmployeeService();
@@ -78,7 +81,7 @@
 	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 	const confirmDeactivate = ref(false);
 	const deactivating = ref(false);
-	// Ngày nghỉ việc nhập ở dialog vô hiệu hóa — default hôm nay, bỏ trống thì BE lấy ngày hiện tại.
+	// Ngày nghỉ việc nhập ở dialog KHÓA TÀI KHOẢN — default hôm nay, bỏ trống thì BE lấy ngày hiện tại.
 	// KHÔNG tự validate theo joinDate ở FE; BE là nơi trả 400 và FE chỉ hiện message đó.
 	const terminationDateInput = ref<string | undefined>(todayYmd());
 	watch(confirmDeactivate, open => {
@@ -86,6 +89,43 @@
 	});
 	const confirmResetPassword = ref(false);
 	const resettingPassword = ref(false);
+
+	// ─── Form xác nhận nghỉ việc ─────────────────────────────────────────────────
+	const showTerminateModal = ref(false);
+	const terminating = ref(false);
+	const terminateForm = reactive({ date: '' as string | undefined, note: '' });
+	const TERMINATION_NOTE_MAX = 1000;
+	// Nhân sự đã nghỉ → cùng form này dùng để SỬA ngày/lý do (BE trả 200, không phải 400).
+	const isTerminated = computed(() => currentEmployee.value?.status === 'INACTIVE');
+	const terminateLabel = computed(() => (isTerminated.value ? 'Sửa thông tin nghỉ việc' : 'Xác nhận nghỉ việc'));
+	const canSubmitTerminate = computed(() => !!terminateForm.date && terminateForm.note.trim().length > 0);
+
+	function openTerminateModal() {
+		terminateForm.date = currentEmployee.value?.terminationDate ?? todayYmd();
+		terminateForm.note = currentEmployee.value?.terminationNote ?? '';
+		showTerminateModal.value = true;
+	}
+
+	async function handleTerminate() {
+		if (!canSubmitTerminate.value || !terminateForm.date) return;
+		// Chốt trước khi gọi: sau khi thành công `currentEmployee` đã là INACTIVE nên
+		// `isTerminated` luôn true, đọc sau sẽ ra nhầm thông báo.
+		const wasTerminated = isTerminated.value;
+		terminating.value = true;
+		try {
+			await terminate(id, {
+				terminationDate: terminateForm.date,
+				terminationNote: terminateForm.note.trim(),
+			});
+			toast.success(wasTerminated ? 'Đã cập nhật thông tin nghỉ việc' : 'Đã xác nhận nghỉ việc');
+			showTerminateModal.value = false;
+		} catch (e) {
+			// Lỗi BE (ngày < ngày vào làm, 403…) → toast, modal CỐ Ý không đóng để sửa lại.
+			toast.error(e instanceof Error ? e.message : 'Lỗi xác nhận nghỉ việc');
+		} finally {
+			terminating.value = false;
+		}
+	}
 
 	onMounted(async () => {
 		await Promise.all([
@@ -227,18 +267,18 @@
 
 	async function handleDeactivate() {
 		if (!canDelete.value) {
-			toast.error('Bạn không có quyền vô hiệu hóa nhân viên');
+			toast.error('Bạn không có quyền khóa tài khoản nhân viên');
 			return;
 		}
 		deactivating.value = true;
 		try {
 			await deactivate(id, terminationDateInput.value);
-			toast.success('Đã vô hiệu hóa nhân viên');
+			toast.success('Đã khóa tài khoản nhân viên');
 			confirmDeactivate.value = false;
 			// Ở lại trang chi tiết để HR thấy ngay badge "Đã nghỉ việc dd/MM/yyyy" do BE trả về.
 		} catch (e) {
 			// Dialog CỐ Ý không đóng khi lỗi (VD ngày nghỉ < ngày vào làm) — HR sửa ngày rồi bấm lại.
-			toast.error(e instanceof Error ? e.message : 'Lỗi vô hiệu hóa nhân viên');
+			toast.error(e instanceof Error ? e.message : 'Lỗi khóa tài khoản nhân viên');
 		} finally {
 			deactivating.value = false;
 		}
@@ -328,6 +368,16 @@
 					</svg>
 					Reset mật khẩu
 				</CommonAppButton>
+				<CommonAppButton v-if="canTerminate" variant="danger_outline" @click="openTerminateModal">
+					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+						/>
+					</svg>
+					{{ terminateLabel }}
+				</CommonAppButton>
 				<CommonAppButton
 					v-if="canDelete && currentEmployee.status !== 'INACTIVE'"
 					variant="danger"
@@ -340,7 +390,7 @@
 							d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
 						/>
 					</svg>
-					Vô hiệu hóa
+					Khóa tài khoản
 				</CommonAppButton>
 			</div>
 		</div>
@@ -531,6 +581,12 @@
 							<p :class="labelCls">Ngày nghỉ việc</p>
 							<p class="text-sm font-medium text-red-600 dark:text-red-400">
 								{{ formatDate(currentEmployee.terminationDate) }}
+							</p>
+						</div>
+						<div v-if="currentEmployee.status === 'INACTIVE'" class="sm:col-span-2">
+							<p :class="labelCls">Lý do nghỉ việc</p>
+							<p :class="[valueCls, 'whitespace-pre-line']">
+								{{ currentEmployee.terminationNote ?? '—' }}
 							</p>
 						</div>
 						<div>
@@ -771,10 +827,11 @@
 								</svg>
 							</div>
 							<div>
-								<h3 class="font-semibold text-gray-900 dark:text-white">Vô hiệu hóa nhân viên</h3>
+								<h3 class="font-semibold text-gray-900 dark:text-white">Khóa tài khoản nhân viên</h3>
 								<p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
 									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.fullName }}</strong>
-									sẽ không thể đăng nhập hệ thống. Bạn có thể kích hoạt lại bất kỳ lúc nào.
+									sẽ không thể đăng nhập hệ thống. Đây KHÔNG phải thủ tục nghỉ việc — nhân sự nghỉ thật thì
+									dùng "Xác nhận nghỉ việc" để ghi cả ngày và lý do.
 								</p>
 							</div>
 						</div>
@@ -789,6 +846,87 @@
 							<CommonAppButton variant="outline" @click="confirmDeactivate = false">Hủy</CommonAppButton>
 							<CommonAppButton variant="danger" :loading="deactivating" @click="handleDeactivate">
 								Xác nhận
+							</CommonAppButton>
+						</div>
+					</div>
+				</div>
+			</Transition>
+		</Teleport>
+
+		<!-- Xác nhận nghỉ việc / sửa thông tin nghỉ việc -->
+		<Teleport to="body">
+			<Transition
+				enter-active-class="transition ease-out duration-150"
+				enter-from-class="opacity-0"
+				enter-to-class="opacity-100"
+				leave-active-class="transition ease-in duration-100"
+				leave-from-class="opacity-100"
+				leave-to-class="opacity-0"
+			>
+				<div
+					v-if="showTerminateModal"
+					class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+					@click.self="showTerminateModal = false"
+				>
+					<div
+						class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-lg w-full shadow-xl border border-gray-200 dark:border-gray-700"
+					>
+						<div class="flex items-start gap-4">
+							<div
+								class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0"
+							>
+								<svg
+									class="w-5 h-5 text-amber-600 dark:text-amber-400"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+									/>
+								</svg>
+							</div>
+							<div class="min-w-0">
+								<h3 class="font-semibold text-gray-900 dark:text-white">{{ terminateLabel }}</h3>
+								<p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.fullName }}</strong>
+									— ngày nghỉ quyết định tháng cuối cùng còn xuất được bảng công.
+								</p>
+							</div>
+						</div>
+
+						<div class="mt-5 space-y-4">
+							<UiDatePicker v-model="terminateForm.date" label="Ngày nghỉ việc *" />
+							<div class="flex flex-col gap-1">
+								<label for="termination-note" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+									Lý do nghỉ việc *
+								</label>
+								<textarea
+									id="termination-note"
+									v-model="terminateForm.note"
+									rows="4"
+									:maxlength="TERMINATION_NOTE_MAX"
+									placeholder="Ví dụ: Nghỉ theo thỏa thuận hai bên, đã bàn giao xong ngày 17/09."
+									class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-800"
+								/>
+								<p class="text-xs text-gray-500 dark:text-gray-400 text-right">
+									{{ terminateForm.note.length }}/{{ TERMINATION_NOTE_MAX }}
+								</p>
+							</div>
+						</div>
+
+						<div class="flex justify-end gap-3 mt-6">
+							<CommonAppButton variant="outline" @click="showTerminateModal = false">Hủy</CommonAppButton>
+							<CommonAppButton
+								variant="danger"
+								:loading="terminating"
+								:disabled="!canSubmitTerminate"
+								@click="handleTerminate"
+							>
+								{{ isTerminated ? 'Lưu thay đổi' : 'Xác nhận nghỉ việc' }}
 							</CommonAppButton>
 						</div>
 					</div>

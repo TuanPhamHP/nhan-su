@@ -62,6 +62,8 @@ export interface Employee {
 	joinDate: string;
 	/** "YYYY-MM-DD" — chỉ khác null khi status = 'INACTIVE'. */
 	terminationDate: string | null;
+	/** Lý do nghỉ việc; chỉ có khi nghỉ qua POST /v1/employees/:id/terminate, null nếu chỉ bị khóa tài khoản. */
+	terminationNote: string | null;
 	dateOfBirth: string | null;
 	gender: EmployeeGender | null;
 	address: string | null;
@@ -104,9 +106,18 @@ export interface UpdateEmployeeDto {
 	address?: string;
 }
 
-/** Body optional của DELETE /v1/employees/:id — bỏ trống thì BE lấy ngày hiện tại (giờ VN). */
+/** Body optional của DELETE /v1/employees/:id (khóa tài khoản) — bỏ trống thì BE lấy ngày hiện tại (giờ VN). */
 export interface DeactivateEmployeeDto {
 	terminationDate?: string; // "YYYY-MM-DD"
+}
+
+/**
+ * Body của POST /v1/employees/:id/terminate (xác nhận nghỉ việc) — cả hai field BẮT BUỘC.
+ * Khác hẳn khóa tài khoản: gọi lại khi nhân sự đã INACTIVE là cách duy nhất sửa ngày/lý do.
+ */
+export interface TerminateEmployeeDto {
+	terminationDate: string; // "YYYY-MM-DD", phải >= joinDate
+	terminationNote: string; // tối đa 1000 ký tự, không nhận chuỗi rỗng
 }
 
 export interface EmployeeQueryParams {

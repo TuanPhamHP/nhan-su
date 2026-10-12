@@ -139,6 +139,7 @@ export const PLAYBOOK_LABELS: Record<string, string> = {
 	'online-work-request': 'Đăng ký làm online',
 	'violation-explain': 'Giải trình chuyên cần',
 	'business-trip-request': 'Đăng ký đi công tác',
+	'business-trip-overview': 'Xem chuyến công tác',
 	'approval-queue': 'Duyệt đơn',
 	capabilities: 'Hỏi trợ lý làm được gì',
 	unsupported: 'Ngoài phạm vi chat',

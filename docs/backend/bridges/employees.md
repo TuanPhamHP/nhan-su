@@ -15,7 +15,8 @@
 | GET | `/v1/employees/me/documents` | Mọi user đã đăng nhập | Tài liệu của bản thân |
 | GET | `/v1/employees/:id` | Bản thân, hoặc `ADMIN`/`HR`/`MANAGER`/`CHIEF` | Chi tiết một nhân viên |
 | PATCH | `/v1/employees/:id` | `ADMIN`, `HR` | Cập nhật thông tin |
-| DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | Vô hiệu hóa (soft delete) + ghi ngày nghỉ việc |
+| DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | **Khóa tài khoản** (soft delete) + ghi ngày nghỉ việc |
+| POST | `/v1/employees/:id/terminate` | quyền `employee:terminate` (không giới hạn role) | **Xác nhận nghỉ việc** — ngày + lý do bắt buộc |
 | POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Reset mật khẩu → gửi email thông báo |
 | GET | `/v1/employees/:id/documents` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Tài liệu của nhân viên |
 | POST | `/v1/employees/:id/documents` | `ADMIN`, `HR` | Upload tài liệu |
@@ -76,6 +77,7 @@ export interface EmployeeDetail {
   status: EmployeeStatus;
   joinDate: string;               // "YYYY-MM-DD"
   terminationDate: string | null; // "YYYY-MM-DD" — ngày nghỉ việc, chỉ khác null khi status = INACTIVE
+  terminationNote: string | null; // lý do nghỉ việc; chỉ có khi nghỉ qua POST /:id/terminate
   dateOfBirth: string | null;     // "YYYY-MM-DD"
   gender: Gender | null;
   address: string | null;
@@ -431,6 +433,48 @@ nghỉ thật**, vì ngày HR bấm nút thường muộn hơn ngày nghỉ th�
 > Chưa có endpoint kích hoạt lại nhân sự. `PATCH /v1/employees/:id` **không** nhận
 > `status`: body có `status` sẽ bị `ValidationPipe({ whitelist: true })` lược bỏ im lặng,
 > request trả 200 nhưng nhân sự vẫn INACTIVE. Đừng dựng nút "kích hoạt lại" dựa vào nó.
+
+---
+
+## POST /v1/employees/:id/terminate — Xác nhận nghỉ việc
+
+Thủ tục nghỉ việc thật, **khác** `DELETE /:id` (khóa tài khoản):
+
+| | `DELETE /:id` | `POST /:id/terminate` |
+|---|---|---|
+| Ý nghĩa | Khóa tài khoản / tạo nhầm | Nhân sự nghỉ việc |
+| Quyền | `employee:delete` (HR, ADMIN) | `employee:terminate` (không tick sẵn cho vai trò nào) |
+| Ngày nghỉ | optional, bỏ trống → hôm nay | **bắt buộc** |
+| Lý do | không có | **bắt buộc** |
+| Gọi lại khi đã INACTIVE | **400** | **200** — sửa lại ngày/lý do |
+
+**Body:**
+```ts
+interface TerminateEmployeeDto {
+  terminationDate: string;  // "YYYY-MM-DD", bắt buộc, phải >= joinDate
+  terminationNote: string;  // bắt buộc, server tự trim; chuỗi rỗng / toàn dấu cách → 400; tối đa 1000 ký tự
+}
+```
+
+**Response 200:** `ApiSuccess<EmployeeDetail>` — bản ghi sau khi cập nhật (`status = 'INACTIVE'`,
+`terminationDate`, `terminationNote`).
+
+| Tình huống | Kết quả |
+|---|---|
+| Nhân sự đang làm | 200 — chuyển sang `INACTIVE`, lưu ngày + lý do |
+| Nhân sự **đã** nghỉ việc | 200 — **cập nhật** ngày + lý do (đường duy nhất để sửa ngày nghỉ sai) |
+| Thiếu `terminationNote`, hoặc toàn dấu cách | 400 |
+| Thiếu `terminationDate`, hoặc sai định dạng (`"18/09/2026"`) | 400 |
+| `terminationDate` < `joinDate` | 400 — `"Ngày nghỉ việc (01/02/2026) không được trước ngày vào làm (01/03/2026)"` |
+| Chưa được tick quyền `employee:terminate` | 403 |
+| ID không tồn tại | 404 |
+
+Ghi log `employee.terminate` (lần đầu) hoặc `employee.terminate_update` (sửa lại), payload
+có cả trước và sau.
+
+> Quyền `employee:terminate` **không** được seed cho vai trò nào — kể cả Nhân sự (HR). Sau
+> khi deploy, admin phải vào màn phân quyền tick cho vai trò cần dùng, nếu không chỉ tài
+> khoản ADMIN (bypass) gọi được. UI nên ẩn nút khi `hasPermission('employee:terminate')` sai.
 
 ---
 

@@ -195,6 +195,12 @@ markdown — chép tay là sai, mà bảng sai thì người đọc vẫn tin v�
 - Ô trống được server gửi là `'—'`, không phải chuỗi rỗng hay `null`. Đừng tự thay bằng
   chữ khác — cùng một ý mà hai màn hình hiện hai kiểu là người dùng tưởng dữ liệu khác nhau.
 - Không tự sắp xếp lại, không tự cộng dòng tổng. Thứ tự dòng là thứ tự server đã chốt.
+> 🐞 **Sửa 12/10/2026 — trước ngày này event `table` CHƯA BAO GIỜ được phát.** Lớp bọc
+> dịch nhãn enum (`withEnumLabels`) chuyển tiếp `buildChart` nhưng quên `buildTable`, nên
+> `tool.buildTable` ở engine luôn `undefined`. Hệ quả im lặng: danh sách `tableTools` trong
+> system prompt luôn rỗng → model tưởng phải tự gõ bảng markdown và chép lại từng ngày
+> bằng tay. Client đã viết phần render `table` thì nay nó mới thực sự nhận được dữ liệu.
+
 - Không có `table` là bình thường: tool trả 0 dòng thì KHÔNG phát event, và model sẽ nói
   thẳng bằng lời là không có ngày nào.
 - Bảng có thể dài (~30 dòng/tháng) — cuộn ngang trên mobile, đừng cắt bớt dòng.
@@ -819,6 +825,7 @@ trên UI thay vì tô đỏ một chủ đề chỉ vì đúng một người b�
 | `violation-explain` | Phiếu giải trình chuyên cần (**có tool ghi**) | mọi role |
 | `online-work-request` | Đăng ký làm việc online (**có tool ghi**) | mọi role |
 | `business-trip-request` | Đăng ký đi công tác (**có tool ghi**) | mọi role |
+| `business-trip-overview` | XEM đơn/chuyến công tác — chỉ đọc, thêm 12/10/2026 | mọi role (phần "ai đang đi công tác" chỉ `MANAGER` trở lên) |
 | `approval-queue` | Hàng chờ duyệt đơn (**có tool ghi**, `L2_DECIDE`) | `MANAGER` `HR` `ADMIN` `DIRECTOR` `CHIEF` |
 | `hr-directory` | Danh bạ, phòng ban | mọi role |
 | `hr-org-overview` | Dashboard tổ chức | `MANAGER` `HR` `ADMIN` `DIRECTOR` |
@@ -830,6 +837,10 @@ trên UI thay vì tô đỏ một chủ đề chỉ vì đúng một người b�
 > ⚠️ `unsupported` **không còn** bao gồm việc ĐĂNG KÝ đi công tác — việc đó chuyển sang
 > `business-trip-request` ngày 29/09/2026. Client nào đang hiện chữ "vào /business-trips/create"
 > theo `playbookId=unsupported` thì bỏ đi, nếu không người dùng bị chỉ sai đường.
+>
+> ⚠️ Từ 12/10/2026, `unsupported` cũng **không còn** bao gồm việc XEM đơn công tác của
+> mình — chuyển sang `business-trip-overview`. Vẫn thuộc `unsupported`: nộp báo cáo sau
+> chuyến đi và kê chi phí công tác.
 
 Tên tool trong `toolsCalled` và `status.tool` dùng **dấu gạch dưới**: `leave_getMyBalance`,
 `attendance_getMyStats`, `report_getLeave`, `leave_createRequest`… ([`../ai-agent/tools.md`](../ai-agent/tools.md)
@@ -850,6 +861,24 @@ hiện "Đang tra dữ liệu…".
 | `approval_decide` | `L2_DECIDE` | Duyệt / từ chối một đơn đang chờ chính người hỏi — phủ đủ **6 loại đơn**, gồm cả đơn công tác |
 
 Render form **tổng quát theo `AgentForm`**, đừng hardcode riêng cho từng loại đơn.
+
+### Tool đọc thêm ngày 12/10/2026 — trả lời các câu trước đây bị từ chối
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `violation_getMyMonthlyStatus` | `makeup-request`, `violation-explain` | Số lượt giải trình đã dùng trong tháng, hạn nộp, quy định tính lượt | mọi role (chỉ của CHÍNH mình) |
+| `businessTrip_listMine` | `business-trip-overview` | Đơn công tác của chính mình | mọi role |
+| `businessTrip_listOnTrip` | `business-trip-overview` | Ai đang đi công tác vào một ngày | `MANAGER` `CHIEF` `HR` `ADMIN` `DIRECTOR` |
+| `attendance_getTodayInfo` | thêm vào `attendance-my-summary` | Ca được phân + **vị trí chấm công hợp lệ** hôm nay | mọi role |
+| `employee_searchDirectory` | thêm vào `leave-team-overview` | Tra tên → id để lọc đơn nghỉ theo một người | `MANAGER` trở lên |
+
+Ngoài ra `leave_listTeam` có thêm tham số **`employeeId`** — xem
+[`../ai-agent/tools.md`](../ai-agent/tools.md).
+
+⚠️ **Về số lượt giải trình — đừng hiển thị như hạn mức.** Ngưỡng 5 KHÔNG chặn nộp phiếu;
+nó chỉ quyết phiếu tiếp theo cần 1 hay 2 cấp duyệt. Response có `hasHardLimit: false` và
+`remainingBeforeMultiLevel` (cố ý KHÔNG tên là `remainingQuota`). Client đừng vẽ thanh
+tiến trình kiểu "đã dùng 4/5, hết lượt" — nhân viên sẽ bỏ không nộp phiếu họ có quyền nộp.
 
 ### Tool có biểu đồ — 3 cái
 

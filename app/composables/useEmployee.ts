@@ -1,5 +1,12 @@
 import { useEmployeeService } from '~/services/employee.service';
-import type { Employee, EmployeeSummary, EmployeeQueryParams, CreateEmployeeDto, UpdateEmployeeDto } from '~/types/employee.types';
+import type {
+	Employee,
+	EmployeeSummary,
+	EmployeeQueryParams,
+	CreateEmployeeDto,
+	UpdateEmployeeDto,
+	TerminateEmployeeDto,
+} from '~/types/employee.types';
 import type { PaginatedMeta } from '~/types/api.types';
 
 export function useEmployee() {
@@ -56,6 +63,24 @@ export function useEmployee() {
 		}
 	}
 
+	/**
+	 * Xác nhận nghỉ việc (hoặc sửa lại ngày/lý do của người đã nghỉ).
+	 * BE trả nguyên bản ghi sau cập nhật → lấy thẳng từ response, không đoán ở FE.
+	 */
+	async function terminate(id: number, payload: TerminateEmployeeDto): Promise<Employee> {
+		const updated = await service.terminate(id, payload);
+		if (currentEmployee.value?.id === id) currentEmployee.value = updated;
+		const idx = items.value.findIndex(e => e.id === id);
+		if (idx !== -1) {
+			items.value[idx] = {
+				...items.value[idx],
+				status: updated.status,
+				terminationDate: updated.terminationDate,
+			};
+		}
+		return updated;
+	}
+
 	async function resetPassword(id: number): Promise<string> {
 		return service.resetPassword(id);
 	}
@@ -87,6 +112,7 @@ export function useEmployee() {
 		fetchOne,
 		create,
 		deactivate,
+		terminate,
 		update,
 		resetPassword,
 	};

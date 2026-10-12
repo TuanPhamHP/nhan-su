@@ -7,6 +7,7 @@ import type {
 	CreateEmployeeDto,
 	UpdateEmployeeDto,
 	DeactivateEmployeeDto,
+	TerminateEmployeeDto,
 } from '~/types/employee.types';
 import type { ImportEmployeesResponse } from '~/types/employee-import.types';
 
@@ -48,6 +49,19 @@ export const useEmployeeService = () => {
 		deactivate(id: number, terminationDate?: string): Promise<void> {
 			const body: DeactivateEmployeeDto = terminationDate ? { terminationDate } : {};
 			return authFetch<void>(`/v1/employees/${id}`, { method: 'DELETE', body });
+		},
+
+		/**
+		 * Xác nhận nghỉ việc — KHÁC `deactivate` (khóa tài khoản): ngày + lý do bắt buộc,
+		 * và gọi lại khi nhân sự đã INACTIVE thì BE trả 200 (sửa lại ngày/lý do), không phải 400.
+		 * Cần quyền `employee:terminate`.
+		 */
+		async terminate(id: number, payload: TerminateEmployeeDto): Promise<Employee> {
+			const res = await authFetch<ApiResponse<Employee>>(`/v1/employees/${id}/terminate`, {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
 		},
 
 		activate(id: number): Promise<void> {
