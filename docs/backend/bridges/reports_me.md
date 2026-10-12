@@ -27,6 +27,11 @@ export interface EmployeeMonthlyReportResponse {
     fullName: string;
     employeeCode: string;
     joinDate: string;              // ISO date, e.g. "2023-01-15"
+    // ⚠ Endpoint NÀY trả ISO datetime đầy đủ ("2026-09-18T00:00:00.000Z"), giống `joinDate`
+    // ngay trên. Khác với `GET /v1/employees/:id` và `/v1/reports/attendance` — hai chỗ đó
+    // trả "YYYY-MM-DD". FE phải parse được cả hai dạng.
+    terminationDate: string | null; // ngày nghỉ việc, null nếu đang làm
+    status: 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
     position: string | null;
     department: string | null;
     contractType: 'PROBATION' | 'FIXED_TERM' | 'INDEFINITE' | 'SEASONAL' | null;
@@ -36,12 +41,13 @@ export interface EmployeeMonthlyReportResponse {
     workingDays: number;       // công định mức = tổng ngày có ca làm việc trong tháng
     actualWorkDays: number;    // công thực tế (PRESENT + LATE, KHÔNG gồm công tác)
     businessTripDays: number;  // ngày công tác (workType=BUSINESS_TRIP)
-    annualLeaveDays: number;   // nghỉ phép năm (P)
-    unpaidLeaveDays: number;   // nghỉ không lương (KL)
+    annualLeaveDays: number;   // phép năm hưởng lương (P) — ĐÃ GỒM cả nghỉ nửa ngày
+    unpaidLeaveDays: number;   // nghỉ không lương (KL) — gồm cả phép năm vượt số dư
     welfareLeaveDays: number;  // nghỉ chế độ (R)
+    halfDayLeaveDays: number;  // TẬP CON của annualLeaveDays — trong đó bao nhiêu là nửa ngày
     publicHolidayDays: number; // nghỉ lễ rơi vào workDay
     totalPayrollDays: number;  // tổng công tính lương
-    totalActualDays: number;   // tổng công ăn ca (= actualWorkDays)
+    totalActualDays: number;   // tổng công ăn ca (= actualWorkDays + số ngày online T7)
   };
   overtime: {
     normalHours: number;         // OT ngày thường (rate 150)
@@ -51,9 +57,9 @@ export interface EmployeeMonthlyReportResponse {
     totalHours: number;
   };
   violations: {
-    lateCount: number;         // vi phạm LATE bị REJECTED
-    earlyCount: number;        // vi phạm EARLY bị REJECTED
-    forgotCheckCount: number;  // FORGOT_CHECKIN + FORGOT_CHECKOUT bị REJECTED
+    lateCount: number;         // số ngày công còn đi muộn
+    earlyCount: number;        // số ngày công còn về sớm
+    forgotCheckCount: number;  // số ngày công thiếu lần chấm chưa được xử lý
     totalCount: number;
   };
 }
@@ -83,6 +89,8 @@ Nhân viên tự xem báo cáo công + OT + vi phạm của mình trong 1 tháng
       "fullName": "Nguyễn Văn An",
       "employeeCode": "EMP004",
       "joinDate": "2023-01-15",
+      "terminationDate": null,   // khi đã nghỉ: "2026-09-18T00:00:00.000Z"
+      "status": "ACTIVE",
       "position": "Software Engineer",
       "department": "Kỹ thuật",
       "contractType": "INDEFINITE"
@@ -95,6 +103,7 @@ Nhân viên tự xem báo cáo công + OT + vi phạm của mình trong 1 tháng
       "annualLeaveDays": 1,
       "unpaidLeaveDays": 0,
       "welfareLeaveDays": 0,
+      "halfDayLeaveDays": 0.5,
       "publicHolidayDays": 1,
       "totalPayrollDays": 22,
       "totalActualDays": 18
@@ -139,10 +148,13 @@ Response schema **giống hệt** `/my/monthly` (`EmployeeMonthlyReportResponse`
 | `workingDays` | Đếm số ngày có `EmployeeShiftSchedule` trong `[startDate, endDate]`, loại trừ `PublicHoliday`. **Bỏ qua `defaultShift`** — nhân viên không có schedule nào trong tháng → `workingDays = 0`. Không cắt theo `today`. |
 | `actualWorkDays` | Đếm `AttendanceRecord` có `status IN (PRESENT, LATE)` **loại trừ** `workType = 'BUSINESS_TRIP'` |
 | `businessTripDays` | Đếm `AttendanceRecord` có `status IN (PRESENT, LATE)` và `workType = 'BUSINESS_TRIP'` (tách riêng, không chồng lấn với `actualWorkDays`) |
-| `annualLeaveDays` / `unpaidLeaveDays` / `welfareLeaveDays` | Sum `LeaveRequest.totalDays` cho `status=APPROVED`, filter theo `leaveType.code` = `ANNUAL` / `UNPAID` / `WELFARE`. Filter `startDate` HOẶC `endDate` rơi trong tháng |
+| `annualLeaveDays` | Sum **`paidDays`** (KHÔNG phải `totalDays`) của đơn `ANNUAL` **và** `HALF_DAY` `APPROVED` — nghỉ nửa ngày trừ vào chính quỹ phép năm. Đơn vượt số dư bị `LeaveSplitService` cắt thành KL nên `paidDays = 0` → không tính công lương |
+| `halfDayLeaveDays` | Sum `paidDays` của riêng đơn `HALF_DAY` — **tập con** của `annualLeaveDays`. Nửa ngày hết quỹ có `paidDays = 0` nên không vào đây, mà rơi sang `unpaidLeaveDays` với ký hiệu `KL/X` |
+| `welfareLeaveDays` | Sum `paidDays` của đơn `WELFARE` `APPROVED` |
+| `unpaidLeaveDays` | Sum **`unpaidDays` của TẤT CẢ đơn** `APPROVED` — gồm đơn loại `UNPAID` lẫn phần vượt số dư của đơn phép năm |
 | `publicHolidayDays` | Đếm `PublicHoliday` trong tháng rơi vào ngày nhân viên có `EmployeeShiftSchedule` |
-| `totalPayrollDays` | `actualWorkDays + annualLeaveDays + welfareLeaveDays + publicHolidayDays + businessTripDays` |
-| `totalActualDays` | `= actualWorkDays` (công ăn ca) |
+| `totalPayrollDays` | `actualWorkDays + annualLeaveDays + welfareLeaveDays + publicHolidayDays + businessTripDays + onlineDays` — `halfDayLeaveDays` đã nằm trong `annualLeaveDays` nên không cộng lại |
+| `totalActualDays` | `= actualWorkDays` + số ngày online T7 (công ăn ca) |
 
 > `unpaidLeaveDays` **không** cộng vào `totalPayrollDays` — nghỉ KL không được tính công lương.
 > Công thức tính công tập trung trong `AttendanceCalculationService` (module `reports`), có thể dùng lại cho payroll/module khác.
@@ -160,13 +172,22 @@ Chỉ tính segment thuộc `OvertimeRequest` có `status=APPROVED`, `segmentDat
 
 `mode` = `finalWorkMode ?? workMode` (finalWorkMode được set sau khi cron resolve GPS validation cho đơn OFFLINE). Số giờ làm tròn 2 chữ số thập phân.
 
-### Vi phạm (bị từ chối)
+### Vi phạm chấm công
 
-Đếm `ViolationRequest` có `status = REJECTED` trong tháng `(violationMonth, violationYear)`, gom theo `type`:
+- `lateCount` — số **ngày công** còn `lateMinutes > 0` trên `AttendanceRecord`.
+- `earlyCount` — số **ngày công** còn `earlyMinutes > 0`.
+- `forgotCheckCount` — số **ngày công** còn thiếu lần chấm mà chưa được xử lý (symbol `X/2 (Q)`, hoặc ngày không chấm lần nào và không có đơn bù).
+- `totalCount` = tổng 3 bucket (1 ngày vừa muộn vừa về sớm được tính vào cả 2).
 
-- `lateCount` — `type = LATE`
-- `earlyCount` — `type = EARLY`
-- `forgotCheckCount` — `type IN (FORGOT_CHECKIN, FORGOT_CHECKOUT)`
+Vì sao lấy `AttendanceRecord` chứ không phải `ViolationRequest`: mọi cơ chế "tha lỗi" đều đã ghi ngược vào record trước đó —
+`ViolationRequest` APPROVED reset `lateMinutes`/`earlyMinutes` về 0 và điền `checkInAt`/`checkOutAt` theo ca;
+`MakeupAttendanceRequest` APPROVED được tính vào `approvedMakeupCount`; đơn xin đi muộn/về sớm APPROVED đã được trừ ngay lúc check-in.
+Phần còn sót lại trên record chính là vi phạm thật, **kể cả khi nhân viên không nộp đơn giải trình nào**.
+
+Phạm vi đếm: chỉ ngày có `EmployeeShiftSchedule`, không phải ngày lễ, và có phát sinh công offline.
+Ngày công tác (`CT`), online (`OL` / `OL/2`), nghỉ phép cả ngày (`P`) không nằm trong 3 bucket này.
+
+⚠️ KHÔNG dùng `missingType` để nhận diện quên chấm — field này không bao giờ được clear khi duyệt giải trình/bù chấm.
 
 ---
 

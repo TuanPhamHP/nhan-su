@@ -59,7 +59,7 @@ Ví dụ URL:
 - **Row 2** — sub-header English từng cột.
 - **Row 3** — nhãn tiếng Việt từng cột.
 
-### 24 cột dữ liệu
+### 27 cột dữ liệu
 
 | # | Cột (VN) | Kiểu | Nguồn từ `EmployeeMonthlyReportResponse` |
 |---|---|---|---|
@@ -72,21 +72,24 @@ Ví dụ URL:
 | G | Định mức | number | `attendance.workingDays` |
 | H | Thực tế | number (có thể `.5`) | `attendance.actualWorkDays` |
 | I | Công tác | number (có thể `.5`) | `attendance.businessTripDays` |
-| J | Phép năm | number | `attendance.annualLeaveDays` |
-| K | Không lương | number | `attendance.unpaidLeaveDays` |
-| L | Chế độ | number | `attendance.welfareLeaveDays` |
-| M | Ngày lễ | number | `attendance.publicHolidayDays` |
-| N | Tổng tính lương | number | `attendance.totalPayrollDays` |
-| O | Tổng ăn ca | number | `attendance.totalActualDays` |
-| P | OT ngày thường | number (giờ) | `overtime.normalHours` |
-| Q | OT cuối tuần | number (giờ) | `overtime.sundayHours` |
-| R | OT lễ Online | number (giờ) | `overtime.holidayOnlineHours` |
-| S | OT lễ Offline | number (giờ) | `overtime.holidayOfflineHours` |
-| T | Tổng OT | number (giờ) | `overtime.totalHours` |
-| U | Đi muộn | number | `violations.lateCount` |
-| V | Về sớm | number | `violations.earlyCount` |
-| W | Quên CC | number | `violations.forgotCheckCount` |
-| X | Tổng VP | number | `violations.totalCount` |
+| J | Online | number (có thể `.5`) | `attendance.onlineDays` |
+| K | Phép năm | number | `attendance.annualLeaveDays` — hưởng lương, đã gồm nghỉ nửa ngày |
+| L | Không lương | number | `attendance.unpaidLeaveDays` — gồm cả phép năm vượt số dư |
+| M | Chế độ | number | `attendance.welfareLeaveDays` |
+| N | Trong đó nửa ngày | number | `attendance.halfDayLeaveDays` — **tập con của cột K**, đừng cộng vào tổng |
+| O | Ngày lễ | number | `attendance.publicHolidayDays` |
+| P | Tổng tính lương | number | `attendance.totalPayrollDays` |
+| Q | Tổng ăn ca | number | `attendance.totalActualDays` |
+| R | OT ngày thường | number (giờ) | `overtime.normalHours` |
+| S | OT cuối tuần | number (giờ) | `overtime.sundayHours` |
+| T | OT lễ Online | number (giờ) | `overtime.holidayOnlineHours` |
+| U | OT lễ Offline | number (giờ) | `overtime.holidayOfflineHours` |
+| V | Tổng OT | number (giờ) | `overtime.totalHours` |
+| W | Đi muộn | number | `violations.lateCount` |
+| X | Về sớm | number | `violations.earlyCount` |
+| Y | Quên CC | number | `violations.forgotCheckCount` |
+| Z | Tổng VP | number | `violations.totalCount` |
+| AA | Ngày nghỉ việc | date / rỗng | `employee.terminationDate` — format `dd/mm/yyyy`; **rỗng** với nhân sự đang làm. Có giá trị ⇒ dòng này là nhân sự đã nghỉ việc, chỉ còn công tới ngày đó (định mức vẫn tính cả tháng — xem [reports.md](reports.md#nhân-sự-đã-nghỉ-việc-trong-báo-cáo)) |
 
 ### Tên file gợi ý
 
@@ -154,7 +157,7 @@ BE set `Content-Disposition: attachment; filename="bang-cong-thang-{month}-{year
 
 - Số ngày (`actualWorkDays`, `businessTripDays`) có thể là **số thập phân `.5`** khi có half-day leave hoặc quên chấm công nửa ngày — đây là behavior đúng (đồng bộ với symbol trong Detail export). Không phải bug.
 - OT `totalHours` là **raw hours** chưa nhân hệ số (150/200/300%). "Giờ trả lương" cần tính từ 4 bucket riêng biệt × rate ở FE nếu cần.
-- `violations` chỉ đếm đơn giải trình **bị từ chối** (nhân viên có lỗi thật). Đơn APPROVED không tính.
+- `violations` đếm trực tiếp từ `AttendanceRecord`: số ngày công còn `lateMinutes > 0` / `earlyMinutes > 0` / thiếu lần chấm chưa được xử lý. Ngày đã được duyệt giải trình hoặc bù chấm không tính (record đã được correct).
 - Tất cả tính theo giờ VN (UTC+7), không cần convert TZ.
 - Nhân viên vừa join chưa có schedule/attendance → cột số toàn 0 (không skip khỏi bảng).
 - BE query trong Excel export không phân trang — nếu công ty lên 500+ NV thì thời gian generate có thể lên 10s+, cần add spinner rõ ràng.

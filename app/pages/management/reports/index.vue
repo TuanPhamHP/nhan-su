@@ -2,6 +2,7 @@
 	import type { SelectOption } from '~/components/ui/Select.vue';
 	import type { DropdownMenuItem } from '~/components/ui/DropdownMenu.vue';
 	import type { AttendanceReportResponse, LeaveReportResponse } from '~/types/report.types';
+	import { formatDate } from '~/utils/date';
 	import EmployeeAttendanceDetailModal from '~/components/modules/attendance/EmployeeAttendanceDetailModal.vue';
 	import EmployeeLeaveReportModal from '~/components/modules/report/EmployeeLeaveReportModal.vue';
 	import EmployeeMonthlyReportModal from '~/components/modules/report/EmployeeMonthlyReportModal.vue';
@@ -706,7 +707,20 @@
 									<span class="font-mono text-xs text-gray-500 dark:text-gray-400">{{ row.employeeCode }}</span>
 								</td>
 								<td class="px-4 py-3 whitespace-nowrap">
-									<div class="font-bold text-gray-900 dark:text-white">{{ row.fullName }}</div>
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="font-bold text-gray-900 dark:text-white">{{ row.fullName }}</span>
+										<!--
+											Nhân sự INACTIVE vẫn xuất hiện ở tháng họ còn làm — ĐÚNG yêu cầu, không lọc bỏ.
+											Định mức công KHÔNG bị cắt theo ngày nghỉ nên badge này là bắt buộc:
+											không có nó, người đọc sẽ hiểu sai phần vắng/thiếu công sau ngày nghỉ.
+										-->
+										<span
+											v-if="row.employeeStatus === 'INACTIVE'"
+											class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+										>
+											{{ row.terminationDate ? `Đã nghỉ việc ${formatDate(row.terminationDate)}` : 'Đã nghỉ việc' }}
+										</span>
+									</div>
 									<div v-if="row.positionName" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
 										{{ row.positionName }}
 									</div>

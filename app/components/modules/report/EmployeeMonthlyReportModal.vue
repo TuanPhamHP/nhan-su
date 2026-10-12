@@ -265,7 +265,20 @@
 					<!-- Name + code + contract badge -->
 					<div class="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
 						<div class="min-w-0">
-							<h3 class="text-base font-semibold text-gray-900 dark:text-white truncate">{{ employeeName }}</h3>
+							<div class="flex flex-wrap items-center gap-2">
+								<h3 class="text-base font-semibold text-gray-900 dark:text-white truncate">{{ employeeName }}</h3>
+								<!-- Định mức công tháng nghỉ việc KHÔNG bị cắt theo ngày nghỉ → phải nói rõ ngày nghỉ. -->
+								<span
+									v-if="data?.employee.status === 'INACTIVE'"
+									class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 flex-shrink-0"
+								>
+									{{
+										data.employee.terminationDate
+											? `Đã nghỉ việc ${formatDate(data.employee.terminationDate)}`
+											: 'Đã nghỉ việc'
+									}}
+								</span>
+							</div>
 							<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Mã NV: {{ employeeCode }}</p>
 						</div>
 						<span
@@ -299,6 +312,14 @@
 							</dt>
 							<dd class="text-sm text-gray-800 dark:text-gray-200 mt-0.5">
 								{{ formatDate(data.employee.joinDate) }}
+							</dd>
+						</div>
+						<div v-if="data.employee.status === 'INACTIVE'">
+							<dt class="text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500 font-medium">
+								Ngày nghỉ việc
+							</dt>
+							<dd class="text-sm font-medium text-red-600 dark:text-red-400 mt-0.5">
+								{{ formatDate(data.employee.terminationDate) }}
 							</dd>
 						</div>
 					</dl>

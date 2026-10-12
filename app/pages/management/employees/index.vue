@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import type { EmployeeQueryParams, EmploymentType } from '~/types/employee.types';
+	import { todayYmd } from '~/utils/date';
 	import EmployeeEmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBadge.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 	import EmployeeImportModal from '~/components/modules/employee/EmployeeImportModal.vue';
@@ -104,9 +105,13 @@
 	// Deactivate confirm modal
 	const confirmId = ref<number | null>(null);
 	const deactivating = ref(false);
+	// Ngày nghỉ việc: default hôm nay. Bỏ trống → BE lấy ngày hiện tại (giờ VN).
+	// KHÔNG tự validate ở FE — BE mới biết joinDate, cứ để BE trả 400 rồi hiện toast.
+	const terminationDate = ref<string | undefined>(todayYmd());
 
 	function openConfirm(id: number) {
 		confirmId.value = id;
+		terminationDate.value = todayYmd();
 	}
 
 	function closeConfirm() {
@@ -122,10 +127,12 @@
 		}
 		deactivating.value = true;
 		try {
-			await deactivate(confirmId.value);
+			await deactivate(confirmId.value, terminationDate.value);
 			toast.success('Đã vô hiệu hóa nhân viên');
 			closeConfirm();
+			await load();
 		} catch (e) {
+			// Dialog CỐ Ý không đóng khi lỗi — HR sửa lại ngày rồi bấm lại.
 			toast.error(e instanceof Error ? e.message : 'Lỗi vô hiệu hóa nhân viên');
 		} finally {
 			deactivating.value = false;
@@ -317,7 +324,7 @@
 								<span v-else class="text-xs text-gray-400">—</span>
 							</td>
 							<td class="px-6 py-4 whitespace-nowrap">
-								<EmployeeEmployeeStatusBadge :status="emp.status" />
+								<EmployeeEmployeeStatusBadge :status="emp.status" :termination-date="emp.terminationDate" />
 							</td>
 							<td class="px-6 py-4 text-right">
 								<UiDropdownMenu :items="getActions(emp)" />
@@ -378,6 +385,13 @@
 									Nhân viên sẽ không thể đăng nhập hệ thống. Bạn có thể kích hoạt lại bất kỳ lúc nào.
 								</p>
 							</div>
+						</div>
+						<div class="mt-5">
+							<UiDatePicker
+								v-model="terminationDate"
+								label="Ngày nghỉ việc"
+								hint="Bỏ trống → hệ thống lấy ngày hôm nay. Ngày này quyết định tháng cuối cùng còn xuất được bảng công."
+							/>
 						</div>
 						<div class="flex justify-end gap-3 mt-6">
 							<CommonAppButton variant="outline" @click="closeConfirm">Hủy</CommonAppButton>

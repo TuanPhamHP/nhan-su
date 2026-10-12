@@ -33,6 +33,8 @@ export interface EmployeeSummary {
 	email: string;
 	department: DepartmentSummary | null;
 	status: EmployeeStatus;
+	/** "YYYY-MM-DD" — chỉ khác null khi status = 'INACTIVE' (BE bổ sung 12/10/2026). */
+	terminationDate: string | null;
 	role: UserRole;
 	employmentType: EmploymentType;
 	position: {
@@ -58,6 +60,8 @@ export interface Employee {
 	employmentType: EmploymentType;
 	status: EmployeeStatus;
 	joinDate: string;
+	/** "YYYY-MM-DD" — chỉ khác null khi status = 'INACTIVE'. */
+	terminationDate: string | null;
 	dateOfBirth: string | null;
 	gender: EmployeeGender | null;
 	address: string | null;
@@ -98,6 +102,11 @@ export interface UpdateEmployeeDto {
 	dateOfBirth?: string;
 	gender?: EmployeeGender;
 	address?: string;
+}
+
+/** Body optional của DELETE /v1/employees/:id — bỏ trống thì BE lấy ngày hiện tại (giờ VN). */
+export interface DeactivateEmployeeDto {
+	terminationDate?: string; // "YYYY-MM-DD"
 }
 
 export interface EmployeeQueryParams {

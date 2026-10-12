@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
-	import { formatDate, formatDateTime } from '~/utils/date';
+	import { formatDate, formatDateTime, todayYmd } from '~/utils/date';
 	import type { DropdownMenuItem } from '~/components/ui/DropdownMenu.vue';
 	import type { EmployeeSummary } from '~/types/employee.types';
 	import EmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBadge.vue';
@@ -162,6 +162,11 @@
 
 	const confirmToggle = ref<EmployeeSummary | null>(null);
 	const toggling = ref(false);
+	// Ngày nghỉ việc cho nhánh vô hiệu hóa — default hôm nay, bỏ trống thì BE lấy ngày hiện tại.
+	const terminationDateInput = ref<string | undefined>(todayYmd());
+	watch(confirmToggle, emp => {
+		if (emp) terminationDateInput.value = todayYmd();
+	});
 
 	async function handleToggleActive() {
 		if (!confirmToggle.value) return;
@@ -173,7 +178,7 @@
 				directoryStore.reset();
 				toast.success(`Đã kích hoạt ${emp.fullName}`);
 			} else {
-				await deactivateMember(emp.id);
+				await deactivateMember(emp.id, terminationDateInput.value);
 				directoryStore.reset();
 				toast.success(`Đã vô hiệu hóa ${emp.fullName}`);
 			}
@@ -722,7 +727,7 @@
 									<span v-else class="text-sm text-gray-400 dark:text-gray-500">—</span>
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap">
-									<EmployeeStatusBadge :status="emp.status" />
+									<EmployeeStatusBadge :status="emp.status" :termination-date="emp.terminationDate" />
 								</td>
 								<td class="px-6 py-4 text-right">
 									<UiDropdownMenu :items="getMemberActions(emp)" />
@@ -1260,6 +1265,13 @@
 									}}
 								</p>
 							</div>
+						</div>
+						<div v-if="confirmToggle.status !== 'INACTIVE'" class="mt-5">
+							<UiDatePicker
+								v-model="terminationDateInput"
+								label="Ngày nghỉ việc"
+								hint="Bỏ trống → hệ thống lấy ngày hôm nay."
+							/>
 						</div>
 						<div class="flex justify-end gap-3 mt-6">
 							<CommonAppButton variant="outline" @click="confirmToggle = null">Hủy</CommonAppButton>

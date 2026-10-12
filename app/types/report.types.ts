@@ -1,14 +1,24 @@
+import type { EmployeeStatus } from './employee.types';
+
 export interface AttendanceReportResponse {
 	employeeId: number;
 	employeeCode: string;
 	fullName: string;
 	departmentName: string | null;
 	positionName: string | null;
+	/** 'INACTIVE' = đã nghỉ việc nhưng tháng báo cáo này vẫn còn bảng công. */
+	employeeStatus: EmployeeStatus;
+	/** "YYYY-MM-DD" — null nếu nhân sự chưa nghỉ việc. */
+	terminationDate: string | null;
 	totalWorkDays: number;
 	presentDays: number;
 	lateDays: number;
 	absentDays: number;
 	onLeaveDays: number;
+	// BE vẫn trả 3 field dưới (có trong openapi.json) — khai để type khớp response thật.
+	earlyLeaveDays: number;
+	forgotCheckDays: number;
+	businessTripDays: number;
 	totalLateMinutes: number;
 	totalEarlyMinutes: number;
 	attendanceRate: number;
@@ -118,6 +128,9 @@ export interface EmployeeMonthlyReportResponse {
 		fullName: string;
 		employeeCode: string;
 		joinDate: string;
+		/** "YYYY-MM-DD" — chỉ khác null khi nhân sự đã nghỉ (status = 'INACTIVE'). */
+		terminationDate: string | null;
+		status: EmployeeStatus;
 		position: string | null;
 		department: string | null;
 		contractType: ContractType | null;

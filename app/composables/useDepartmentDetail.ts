@@ -55,16 +55,25 @@ export function useDepartmentDetail(deptId: number) {
 		}
 	}
 
-	async function deactivateMember(empId: number): Promise<void> {
-		await empService.deactivate(empId);
+	async function deactivateMember(empId: number, terminationDate?: string): Promise<void> {
+		await empService.deactivate(empId, terminationDate);
 		const idx = members.value.findIndex(m => m.id === empId);
-		if (idx !== -1) members.value[idx] = { ...members.value[idx], status: 'INACTIVE' };
+		if (idx === -1) return;
+		// Lấy ngày nghỉ việc từ BE thay vì tự đoán: bỏ trống ô ngày thì server mới biết "hôm nay".
+		let applied = terminationDate ?? null;
+		if (!applied) {
+			applied = await empService
+				.findOne(empId)
+				.then(e => e.terminationDate)
+				.catch(() => null);
+		}
+		members.value[idx] = { ...members.value[idx], status: 'INACTIVE', terminationDate: applied };
 	}
 
 	async function activateMember(empId: number): Promise<void> {
 		await empService.activate(empId);
 		const idx = members.value.findIndex(m => m.id === empId);
-		if (idx !== -1) members.value[idx] = { ...members.value[idx], status: 'ACTIVE' };
+		if (idx !== -1) members.value[idx] = { ...members.value[idx], status: 'ACTIVE', terminationDate: null };
 	}
 
 	async function changeManager(empId: number): Promise<void> {

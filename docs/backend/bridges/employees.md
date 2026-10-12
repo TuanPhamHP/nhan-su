@@ -7,7 +7,7 @@
 ## Endpoints
 
 | Method | Path | Ai được gọi | Ghi chú |
-| --- | --- | --- | --- |
+|--------|------|-------------|---------|
 | GET | `/v1/employees/directory` | Mọi user đã đăng nhập | Danh bạ công ty, nhóm theo phòng ban |
 | GET | `/v1/employees` | Mọi user đã đăng nhập | `MANAGER`/`CHIEF` tự lọc theo phòng ban, trừ khi `pagination=false` |
 | POST | `/v1/employees` | `ADMIN`, `HR` | Tạo nhân viên mới |
@@ -15,7 +15,7 @@
 | GET | `/v1/employees/me/documents` | Mọi user đã đăng nhập | Tài liệu của bản thân |
 | GET | `/v1/employees/:id` | Bản thân, hoặc `ADMIN`/`HR`/`MANAGER`/`CHIEF` | Chi tiết một nhân viên |
 | PATCH | `/v1/employees/:id` | `ADMIN`, `HR` | Cập nhật thông tin |
-| DELETE | `/v1/employees/:id` | `ADMIN` | Vô hiệu hóa (soft delete) |
+| DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | Vô hiệu hóa (soft delete) + ghi ngày nghỉ việc |
 | POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Reset mật khẩu → gửi email thông báo |
 | GET | `/v1/employees/:id/documents` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Tài liệu của nhân viên |
 | POST | `/v1/employees/:id/documents` | `ADMIN`, `HR` | Upload tài liệu |
@@ -36,103 +36,105 @@ import type { SystemRole } from './auth.types';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
 export type Gender = 'Nam' | 'Nữ' | 'Khác';
 export type EmploymentType =
-	| 'FULL_TIME' // Nhân viên chính thức
-	| 'PROBATION' // Thử việc
-	| 'APPRENTICE' // Học việc
-	| 'INTERN' // Thực tập sinh
-	| 'PART_TIME' // Bán thời gian
-	| 'CONTRACTOR'; // Cộng tác viên / khoán việc
+  | 'FULL_TIME'     // Nhân viên chính thức
+  | 'PROBATION'     // Thử việc
+  | 'APPRENTICE'    // Học việc
+  | 'INTERN'        // Thực tập sinh
+  | 'PART_TIME'     // Bán thời gian
+  | 'CONTRACTOR';   // Cộng tác viên / khoán việc
 
 export interface DepartmentSummaryDto {
-	id: number;
-	name: string;
+  id: number;
+  name: string;
 }
 
 export interface PositionSummaryDto {
-	id: number;
-	name: string;
+  id: number;
+  name: string;
 }
 
 export interface ManagerSummaryDto {
-	id: number;
-	employeeCode: string;
-	fullName: string;
+  id: number;
+  employeeCode: string;
+  fullName: string;
 }
 
 export interface WorkShiftSummaryDto {
-	id: number;
-	name: string;
+  id: number;
+  name: string;
 }
 
 // Dùng trong GET /employees/:id, GET /employees/me, POST /, PATCH /:id
 export interface EmployeeDetail {
-	id: number;
-	employeeCode: string; // "EMP001"
-	fullName: string;
-	email: string;
-	phone: string | null;
-	role: SystemRole;
-	employmentType: EmploymentType; // loại hình lao động, default FULL_TIME
-	status: EmployeeStatus;
-	joinDate: string; // "YYYY-MM-DD"
-	dateOfBirth: string | null; // "YYYY-MM-DD"
-	gender: Gender | null;
-	address: string | null;
-	avatarUrl: string | null; // presigned URL
-	department: DepartmentSummaryDto | null;
-	position: PositionSummaryDto | null;
-	manager: ManagerSummaryDto | null;
-	defaultShift: WorkShiftSummaryDto | null;
-	createdAt: string; // ISO 8601 full datetime
+  id: number;
+  employeeCode: string;           // "EMP001"
+  fullName: string;
+  email: string;
+  phone: string | null;
+  role: SystemRole;
+  employmentType: EmploymentType; // loại hình lao động, default FULL_TIME
+  status: EmployeeStatus;
+  joinDate: string;               // "YYYY-MM-DD"
+  terminationDate: string | null; // "YYYY-MM-DD" — ngày nghỉ việc, chỉ khác null khi status = INACTIVE
+  dateOfBirth: string | null;     // "YYYY-MM-DD"
+  gender: Gender | null;
+  address: string | null;
+  avatarUrl: string | null;       // presigned URL
+  department: DepartmentSummaryDto | null;
+  position: PositionSummaryDto | null;
+  manager: ManagerSummaryDto | null;
+  defaultShift: WorkShiftSummaryDto | null;
+  createdAt: string;              // ISO 8601 full datetime
 }
 
 // Dùng trong GET /employees (list)
 export interface EmployeeSummary {
-	id: number;
-	employeeCode: string;
-	fullName: string;
-	email: string;
-	department: DepartmentSummaryDto | null;
-	position: PositionSummaryDto | null;
-	status: EmployeeStatus;
-	role: SystemRole;
-	employmentType: EmploymentType;
+  id: number;
+  employeeCode: string;
+  fullName: string;
+  email: string;
+  department: DepartmentSummaryDto | null;
+  position: PositionSummaryDto | null;
+  status: EmployeeStatus;
+  terminationDate: string | null; // "YYYY-MM-DD" — để list hiện "Đã nghỉ việc dd/mm/yyyy"
+  role: SystemRole;
+  employmentType: EmploymentType;
 }
 
 // Dùng trong GET /employees/directory
 export interface DirectoryMember {
-	id: number;
-	employeeCode: string;
-	fullName: string;
-	phone: string | null;
-	avatarUrl: string | null; // raw S3 URL (chưa presign)
-	role: SystemRole;
-	position: string | null; // tên chức vụ (chuỗi, không phải object)
-	isManager: boolean; // true nếu là trưởng phòng
+  id: number;
+  employeeCode: string;
+  fullName: string;
+  phone: string | null;
+  avatarUrl: string | null;       // raw S3 URL (chưa presign)
+  role: SystemRole;
+  position: string | null;        // tên chức vụ (chuỗi, không phải object)
+  isManager: boolean;             // true nếu là trưởng phòng
 }
 
 export interface DirectoryGroup {
-	departmentId: number;
-	departmentName: string;
-	members: DirectoryMember[];
+  departmentId: number;
+  departmentName: string;
+  members: DirectoryMember[];
 }
 
 // Request DTOs
 export interface CreateEmployeeDto {
-	fullName: string; // min 2, max 100 ký tự
-	email: string; // tự động lowercase + trim
-	password: string; // min 6 ký tự, hash server-side — KHÔNG trả ra response
-	joinDate: string; // "YYYY-MM-DD"
-	role: SystemRole;
-	employmentType?: EmploymentType; // omit = FULL_TIME (default trên DB)
-	departmentId?: number;
-	positionId?: number;
-	managerId?: number;
-	defaultShiftId?: number; // ca làm việc mặc định
-	phone?: string; // định dạng số điện thoại Việt Nam
-	dateOfBirth?: string; // "YYYY-MM-DD"
-	gender?: Gender;
-	address?: string;
+  fullName: string;               // min 2, max 100 ký tự
+  email: string;                  // tự động lowercase + trim
+  password: string;               // min 6 ký tự, hash server-side — KHÔNG trả ra response
+  joinDate: string;               // "YYYY-MM-DD"
+  role: SystemRole;
+  employmentType?: EmploymentType; // omit = FULL_TIME (default trên DB)
+  departmentId?: number;
+  positionId?: number;
+  managerId?: number;
+  defaultShiftId?: number;        // ca làm việc mặc định
+  phone?: string;                 // định dạng số điện thoại Việt Nam
+  dateOfBirth?: string;           // "YYYY-MM-DD"
+  gender?: Gender;
+  address?: string;
 }
 
 // UpdateEmployeeDto — tất cả optional, trừ email và password (không thể đổi qua endpoint này).
@@ -140,14 +142,14 @@ export interface CreateEmployeeDto {
 export type UpdateEmployeeDto = Partial<Omit<CreateEmployeeDto, 'email' | 'password'>>;
 
 export interface QueryEmployeeParams {
-	departmentId?: number;
-	status?: EmployeeStatus;
-	role?: SystemRole;
-	employmentType?: EmploymentType;
-	search?: string; // tìm theo fullName, email, hoặc employeeCode
-	page?: number; // default 1
-	limit?: number; // default 20, max 100
-	pagination?: boolean; // default true — false = trả toàn bộ, bỏ `meta`
+  departmentId?: number;
+  status?: EmployeeStatus;
+  role?: SystemRole;
+  employmentType?: EmploymentType;
+  search?: string;        // tìm theo fullName, email, hoặc employeeCode
+  page?: number;          // default 1
+  limit?: number;         // default 20, max 100
+  pagination?: boolean;   // default true — false = trả toàn bộ, bỏ `meta`
 }
 ```
 
@@ -159,50 +161,50 @@ Trả danh sách nhân viên ACTIVE nhóm theo phòng ban, sắp xếp theo tên
 
 **Query params:**
 
-| Param          | Type   | Mô tả                              |
-| -------------- | ------ | ---------------------------------- |
-| `search`       | string | Tìm theo tên, mã NV, số điện thoại |
-| `departmentId` | number | Lọc chỉ hiển thị một phòng ban     |
-| `positionId`   | number | Lọc theo chức danh                 |
+| Param | Type | Mô tả |
+|-------|------|-------|
+| `search` | string | Tìm theo tên, mã NV, số điện thoại |
+| `departmentId` | number | Lọc chỉ hiển thị một phòng ban |
+| `positionId` | number | Lọc theo chức danh |
 
 **Response:** `ApiSuccess<DirectoryGroup[]>`
 
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"departmentId": 0,
-			"departmentName": "Chưa phân phòng ban",
-			"members": []
-		},
-		{
-			"departmentId": 1,
-			"departmentName": "Phòng Kỹ thuật",
-			"members": [
-				{
-					"id": 4,
-					"employeeCode": "EMP004",
-					"fullName": "Nguyễn Văn An",
-					"phone": "0901234567",
-					"avatarUrl": null,
-					"role": "EMPLOYEE",
-					"position": "Software Engineer",
-					"isManager": false
-				},
-				{
-					"id": 2,
-					"employeeCode": "EMP002",
-					"fullName": "Trần Thị Bình",
-					"phone": "0909111222",
-					"avatarUrl": "https://bucket.s3.../avatar.jpg",
-					"role": "MANAGER",
-					"position": "Engineering Manager",
-					"isManager": true
-				}
-			]
-		}
-	]
+  "success": true,
+  "data": [
+    {
+      "departmentId": 0,
+      "departmentName": "Chưa phân phòng ban",
+      "members": []
+    },
+    {
+      "departmentId": 1,
+      "departmentName": "Phòng Kỹ thuật",
+      "members": [
+        {
+          "id": 4,
+          "employeeCode": "EMP004",
+          "fullName": "Nguyễn Văn An",
+          "phone": "0901234567",
+          "avatarUrl": null,
+          "role": "EMPLOYEE",
+          "position": "Software Engineer",
+          "isManager": false
+        },
+        {
+          "id": 2,
+          "employeeCode": "EMP002",
+          "fullName": "Trần Thị Bình",
+          "phone": "0909111222",
+          "avatarUrl": "https://bucket.s3.../avatar.jpg",
+          "role": "MANAGER",
+          "position": "Engineering Manager",
+          "isManager": true
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -224,26 +226,26 @@ Trả danh sách nhân viên ACTIVE nhóm theo phòng ban, sắp xếp theo tên
 
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"id": 4,
-			"employeeCode": "EMP004",
-			"fullName": "Nguyễn Văn An",
-			"email": "nguyen.a@company.com",
-			"department": { "id": 1, "name": "Kỹ thuật" },
-			"position": { "id": 2, "name": "Software Engineer" },
-			"status": "ACTIVE",
-			"role": "EMPLOYEE",
-			"employmentType": "FULL_TIME"
-		}
-	],
-	"meta": {
-		"page": 1,
-		"limit": 20,
-		"total": 5,
-		"totalPages": 1
-	}
+  "success": true,
+  "data": [
+    {
+      "id": 4,
+      "employeeCode": "EMP004",
+      "fullName": "Nguyễn Văn An",
+      "email": "nguyen.a@company.com",
+      "department": { "id": 1, "name": "Kỹ thuật" },
+      "position": { "id": 2, "name": "Software Engineer" },
+      "status": "ACTIVE",
+      "role": "EMPLOYEE",
+      "employmentType": "FULL_TIME"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 5,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -257,27 +259,27 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 
 ```json
 {
-	"success": true,
-	"data": {
-		"id": 4,
-		"employeeCode": "EMP004",
-		"fullName": "Nguyễn Văn An",
-		"email": "nguyen.a@company.com",
-		"phone": "0901234567",
-		"role": "EMPLOYEE",
-		"employmentType": "FULL_TIME",
-		"status": "ACTIVE",
-		"joinDate": "2022-01-10",
-		"dateOfBirth": "1990-05-20",
-		"gender": "Nam",
-		"address": "123 Lê Lợi, Q1",
-		"avatarUrl": "https://bucket.s3.../presigned...",
-		"department": { "id": 1, "name": "Kỹ thuật" },
-		"position": { "id": 2, "name": "Software Engineer" },
-		"manager": { "id": 2, "employeeCode": "EMP002", "fullName": "Trần Thị Bình" },
-		"defaultShift": { "id": 1, "name": "Ca sáng" },
-		"createdAt": "2026-05-18T02:24:40.459Z"
-	}
+  "success": true,
+  "data": {
+    "id": 4,
+    "employeeCode": "EMP004",
+    "fullName": "Nguyễn Văn An",
+    "email": "nguyen.a@company.com",
+    "phone": "0901234567",
+    "role": "EMPLOYEE",
+    "employmentType": "FULL_TIME",
+    "status": "ACTIVE",
+    "joinDate": "2022-01-10",
+    "dateOfBirth": "1990-05-20",
+    "gender": "Nam",
+    "address": "123 Lê Lợi, Q1",
+    "avatarUrl": "https://bucket.s3.../presigned...",
+    "department": { "id": 1, "name": "Kỹ thuật" },
+    "position": { "id": 2, "name": "Software Engineer" },
+    "manager": { "id": 2, "employeeCode": "EMP002", "fullName": "Trần Thị Bình" },
+    "defaultShift": { "id": 1, "name": "Ca sáng" },
+    "createdAt": "2026-05-18T02:24:40.459Z"
+  }
 }
 ```
 
@@ -292,13 +294,11 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 **Response:** `ApiSuccess<EmployeeDetail>` — shape giống `/me`
 
 **403:**
-
 ```json
 { "success": false, "error": { "code": "FORBIDDEN", "message": "Không có quyền xem thông tin nhân viên này" } }
 ```
 
 **404:**
-
 ```json
 { "success": false, "error": { "code": "NOT_FOUND", "message": "Nhân viên không tồn tại" } }
 ```
@@ -308,28 +308,26 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 ## POST /v1/employees — Tạo nhân viên mới
 
 **Request body:**
-
 ```json
 {
-	"fullName": "Phạm Thị Cẩm",
-	"email": "pham.c@company.com",
-	"password": "Hr@123456",
-	"joinDate": "2026-06-01",
-	"role": "EMPLOYEE",
-	"employmentType": "PROBATION",
-	"departmentId": 1,
-	"positionId": 2,
-	"managerId": 3,
-	"defaultShiftId": 1,
-	"phone": "0933123456",
-	"dateOfBirth": "1995-04-20",
-	"gender": "Nữ",
-	"address": "TP. Hồ Chí Minh"
+  "fullName": "Phạm Thị Cẩm",
+  "email": "pham.c@company.com",
+  "password": "Hr@123456",
+  "joinDate": "2026-06-01",
+  "role": "EMPLOYEE",
+  "employmentType": "PROBATION",
+  "departmentId": 1,
+  "positionId": 2,
+  "managerId": 3,
+  "defaultShiftId": 1,
+  "phone": "0933123456",
+  "dateOfBirth": "1995-04-20",
+  "gender": "Nữ",
+  "address": "TP. Hồ Chí Minh"
 }
 ```
 
 **Các trường quan trọng:**
-
 - `employeeCode` — **không truyền** — server tự generate theo format `EMP001`, `EMP002`, ...
 - `password` — plain text, server hash bcrypt 10 rounds — **không bao giờ trả ra response**
 - `email` — tự động lowercase + trim trước khi lưu
@@ -340,32 +338,31 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 
 ```json
 {
-	"success": true,
-	"data": {
-		"id": 6,
-		"employeeCode": "EMP006",
-		"fullName": "Phạm Thị Cẩm",
-		"email": "pham.c@company.com",
-		"phone": "0933123456",
-		"role": "EMPLOYEE",
-		"employmentType": "PROBATION",
-		"status": "ACTIVE",
-		"joinDate": "2026-06-01",
-		"dateOfBirth": "1995-04-20",
-		"gender": "Nữ",
-		"address": "TP. Hồ Chí Minh",
-		"avatarUrl": null,
-		"department": { "id": 1, "name": "Kỹ thuật" },
-		"position": { "id": 2, "name": "Software Engineer" },
-		"manager": { "id": 3, "employeeCode": "EMP003", "fullName": "Nguyễn Văn Manager" },
-		"defaultShift": { "id": 1, "name": "Ca sáng" },
-		"createdAt": "2026-06-01T10:00:00.000Z"
-	}
+  "success": true,
+  "data": {
+    "id": 6,
+    "employeeCode": "EMP006",
+    "fullName": "Phạm Thị Cẩm",
+    "email": "pham.c@company.com",
+    "phone": "0933123456",
+    "role": "EMPLOYEE",
+    "employmentType": "PROBATION",
+    "status": "ACTIVE",
+    "joinDate": "2026-06-01",
+    "dateOfBirth": "1995-04-20",
+    "gender": "Nữ",
+    "address": "TP. Hồ Chí Minh",
+    "avatarUrl": null,
+    "department": { "id": 1, "name": "Kỹ thuật" },
+    "position": { "id": 2, "name": "Software Engineer" },
+    "manager": { "id": 3, "employeeCode": "EMP003", "fullName": "Nguyễn Văn Manager" },
+    "defaultShift": { "id": 1, "name": "Ca sáng" },
+    "createdAt": "2026-06-01T10:00:00.000Z"
+  }
 }
 ```
 
 **409** nếu email đã tồn tại:
-
 ```json
 { "success": false, "error": { "code": "CONFLICT", "message": "Email đã tồn tại" } }
 ```
@@ -380,16 +377,15 @@ Tất cả fields optional. **Không thể đổi `email` hay `password`** qua e
 - Để xóa liên kết (ví dụ bỏ ca làm việc): truyền `"defaultShiftId": null`
 
 **Request body mẫu:**
-
 ```json
 {
-	"fullName": "Phạm Thị Cẩm Tú",
-	"phone": "0933999888",
-	"departmentId": 2,
-	"positionId": 3,
-	"managerId": 2,
-	"defaultShiftId": 2,
-	"employmentType": "FULL_TIME"
+  "fullName": "Phạm Thị Cẩm Tú",
+  "phone": "0933999888",
+  "departmentId": 2,
+  "positionId": 3,
+  "managerId": 2,
+  "defaultShiftId": 2,
+  "employmentType": "FULL_TIME"
 }
 ```
 
@@ -401,15 +397,40 @@ Tất cả fields optional. **Không thể đổi `email` hay `password`** qua e
 
 ## DELETE /v1/employees/:id — Vô hiệu hóa nhân viên
 
-Soft delete — set `status = 'INACTIVE'`, không xóa dữ liệu.
+Soft delete — set `status = 'INACTIVE'` + ghi `terminationDate`, không xóa dữ liệu.
+
+**Body (optional):**
+```ts
+interface DeactivateEmployeeDto {
+  terminationDate?: string;  // "YYYY-MM-DD". Bỏ trống / gửi "" → server lấy ngày hiện tại (giờ VN)
+}
+```
+
+Ngày này quyết định **tháng cuối cùng nhân sự còn xuất được bảng công / báo cáo phép**:
+báo cáo tháng vẫn liệt kê nhân sự nếu `terminationDate >= ngày đầu tháng` đó (nghỉ 18/09 →
+tháng 9 và mọi tháng trước vẫn có bảng công, từ tháng 10 thì không). Xem
+[reports.md](reports.md) mục "Nhân sự đã nghỉ việc trong báo cáo".
+
+Gọi không body vẫn chạy như trước (tương thích ngược) — nhưng UI nên cho HR **nhập ngày
+nghỉ thật**, vì ngày HR bấm nút thường muộn hơn ngày nghỉ thật.
 
 **Response: 204 No Content**
 
 **400** nếu đã inactive:
-
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Nhân viên đã bị vô hiệu hóa" } }
 ```
+
+**400** nếu ngày nghỉ trước ngày vào làm:
+```json
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Ngày nghỉ việc (01/02/2026) không được trước ngày vào làm (01/03/2026)" } }
+```
+
+**400** nếu sai định dạng (ví dụ gửi `"18/09/2026"`) — chuỗi rỗng `""` thì KHÔNG lỗi.
+
+> Chưa có endpoint kích hoạt lại nhân sự. `PATCH /v1/employees/:id` **không** nhận
+> `status`: body có `status` sẽ bị `ValidationPipe({ whitelist: true })` lược bỏ im lặng,
+> request trả 200 nhưng nhân sự vẫn INACTIVE. Đừng dựng nút "kích hoạt lại" dựa vào nó.
 
 ---
 
@@ -420,7 +441,6 @@ Server tạo mật khẩu mới theo format `ho_ten@ma_nhanvien` (bỏ dấu, vi
 Ví dụ: `Nguyễn Văn An` + `EMP004` → `nguyenvanan@emp004`
 
 **Response 200:**
-
 ```json
 { "success": true, "data": { "message": "Mật khẩu đã được đặt lại và gửi qua email của nhân viên" } }
 ```
@@ -432,44 +452,51 @@ Ví dụ: `Nguyễn Văn An` + `EMP004` → `nguyenvanan@emp004`
 ```typescript
 // composables/useEmployees.ts
 import type {
-	EmployeeDetail,
-	EmployeeSummary,
-	DirectoryGroup,
-	CreateEmployeeDto,
-	UpdateEmployeeDto,
-	QueryEmployeeParams,
+  EmployeeDetail,
+  EmployeeSummary,
+  DirectoryGroup,
+  CreateEmployeeDto,
+  UpdateEmployeeDto,
+  QueryEmployeeParams,
 } from '~/types/employee.types';
 
 export function useEmployees() {
-	const { get, list, post, patch, del } = useFetch();
+  const { get, list, post, patch, del } = useFetch();
 
-	const fetchDirectory = (params?: { search?: string; departmentId?: number; positionId?: number }) =>
-		get<DirectoryGroup[]>('/v1/employees/directory', { params });
+  const fetchDirectory = (params?: { search?: string; departmentId?: number; positionId?: number }) =>
+    get<DirectoryGroup[]>('/v1/employees/directory', { params });
 
-	const fetchEmployees = (params?: QueryEmployeeParams) => list<EmployeeSummary>('/v1/employees', { params });
+  const fetchEmployees = (params?: QueryEmployeeParams) =>
+    list<EmployeeSummary>('/v1/employees', { params });
 
-	const fetchMe = () => get<EmployeeDetail>('/v1/employees/me');
+  const fetchMe = () =>
+    get<EmployeeDetail>('/v1/employees/me');
 
-	const fetchEmployee = (id: number) => get<EmployeeDetail>(`/v1/employees/${id}`);
+  const fetchEmployee = (id: number) =>
+    get<EmployeeDetail>(`/v1/employees/${id}`);
 
-	const createEmployee = (dto: CreateEmployeeDto) => post<EmployeeDetail>('/v1/employees', dto);
+  const createEmployee = (dto: CreateEmployeeDto) =>
+    post<EmployeeDetail>('/v1/employees', dto);
 
-	const updateEmployee = (id: number, dto: UpdateEmployeeDto) => patch<EmployeeDetail>(`/v1/employees/${id}`, dto);
+  const updateEmployee = (id: number, dto: UpdateEmployeeDto) =>
+    patch<EmployeeDetail>(`/v1/employees/${id}`, dto);
 
-	const deactivateEmployee = (id: number) => del(`/v1/employees/${id}`);
+  const deactivateEmployee = (id: number) =>
+    del(`/v1/employees/${id}`);
 
-	const resetPassword = (id: number) => post<{ message: string }>(`/v1/employees/${id}/reset-password`);
+  const resetPassword = (id: number) =>
+    post<{ message: string }>(`/v1/employees/${id}/reset-password`);
 
-	return {
-		fetchDirectory,
-		fetchEmployees,
-		fetchMe,
-		fetchEmployee,
-		createEmployee,
-		updateEmployee,
-		deactivateEmployee,
-		resetPassword,
-	};
+  return {
+    fetchDirectory,
+    fetchEmployees,
+    fetchMe,
+    fetchEmployee,
+    createEmployee,
+    updateEmployee,
+    deactivateEmployee,
+    resetPassword,
+  };
 }
 ```
 
@@ -477,31 +504,31 @@ export function useEmployees() {
 
 ## Sự khác biệt giữa List, Detail, và Directory
 
-| Field          | `EmployeeSummary` (list) | `EmployeeDetail` (detail/me)             | `DirectoryMember` (directory) |
-| -------------- | ------------------------ | ---------------------------------------- | ----------------------------- |
-| `department`   | `{ id, name } \| null`   | `{ id, name } \| null`                   | ❌ (nhóm ở cấp group)         |
-| `position`     | `{ id, name } \| null`   | `{ id, name } \| null`                   | `string \| null` (tên)        |
-| `manager`      | ❌                       | `{ id, employeeCode, fullName } \| null` | ❌                            |
-| `defaultShift` | ❌                       | `{ id, name } \| null`                   | ❌                            |
-| `role`         | ✓                        | ✓                                        | ✓                             |
-| `phone`        | ❌                       | `string \| null`                         | `string \| null`              |
-| `gender`       | ❌                       | `'Nam' \| 'Nữ' \| 'Khác' \| null`        | ❌                            |
-| `address`      | ❌                       | `string \| null`                         | ❌                            |
-| `dateOfBirth`  | ❌                       | `string \| null`                         | ❌                            |
-| `joinDate`     | ❌                       | `string`                                 | ❌                            |
-| `avatarUrl`    | ❌                       | `string \| null` (presigned)             | `string \| null` (raw URL)    |
-| `createdAt`    | ❌                       | `string`                                 | ❌                            |
-| `isManager`    | ❌                       | ❌                                       | `boolean`                     |
+| Field | `EmployeeSummary` (list) | `EmployeeDetail` (detail/me) | `DirectoryMember` (directory) |
+|-------|--------------------------|------------------------------|-------------------------------|
+| `department` | `{ id, name } \| null` | `{ id, name } \| null` | ❌ (nhóm ở cấp group) |
+| `position` | `{ id, name } \| null` | `{ id, name } \| null` | `string \| null` (tên) |
+| `manager` | ❌ | `{ id, employeeCode, fullName } \| null` | ❌ |
+| `defaultShift` | ❌ | `{ id, name } \| null` | ❌ |
+| `role` | ✓ | ✓ | ✓ |
+| `phone` | ❌ | `string \| null` | `string \| null` |
+| `gender` | ❌ | `'Nam' \| 'Nữ' \| 'Khác' \| null` | ❌ |
+| `address` | ❌ | `string \| null` | ❌ |
+| `dateOfBirth` | ❌ | `string \| null` | ❌ |
+| `joinDate` | ❌ | `string` | ❌ |
+| `avatarUrl` | ❌ | `string \| null` (presigned) | `string \| null` (raw URL) |
+| `createdAt` | ❌ | `string` | ❌ |
+| `isManager` | ❌ | ❌ | `boolean` |
 
 ---
 
 ## Date format
 
-| Field         | Format        | Ví dụ                        |
-| ------------- | ------------- | ---------------------------- |
-| `joinDate`    | `YYYY-MM-DD`  | `"2022-01-10"`               |
-| `dateOfBirth` | `YYYY-MM-DD`  | `"1995-04-20"`               |
-| `createdAt`   | ISO 8601 full | `"2026-05-18T02:24:40.459Z"` |
+| Field | Format | Ví dụ |
+|-------|--------|-------|
+| `joinDate` | `YYYY-MM-DD` | `"2022-01-10"` |
+| `dateOfBirth` | `YYYY-MM-DD` | `"1995-04-20"` |
+| `createdAt` | ISO 8601 full | `"2026-05-18T02:24:40.459Z"` |
 
 Khi gửi lên (`POST`/`PATCH`), `joinDate` và `dateOfBirth` phải dùng `"YYYY-MM-DD"`.
 
@@ -510,7 +537,7 @@ Khi gửi lên (`POST`/`PATCH`), `joinDate` và `dateOfBirth` phải dùng `"YYY
 ## Edge cases
 
 | Tình huống | Kết quả |
-| --- | --- |
+|-----------|---------|
 | `MANAGER`/`CHIEF` đã có phòng ban gọi `GET /employees` | 200 — tự động filter theo phòng ban |
 | `MANAGER`/`CHIEF` chưa gán phòng ban gọi `GET /employees` | 200 — trả toàn bộ danh sách |
 | Bất kỳ role nào gọi `GET /employees?pagination=false` | 200 — bỏ filter phòng ban, buộc `status=ACTIVE`, không có `meta` |
