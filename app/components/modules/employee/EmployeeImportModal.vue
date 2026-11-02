@@ -214,8 +214,8 @@
 											<strong>Phòng ban</strong> phải có sẵn trong hệ thống trước khi import.
 										</li>
 										<li>
-											Mỗi nhân viên sẽ nhận welcome email kèm password. Chọn password mạnh (≥8 ký tự, có chữ hoa, số và
-											ký tự đặc biệt).
+											Cột <strong>Mật khẩu</strong> (cột F) trong file mẫu không còn dùng, có thể để trống. Mỗi nhân viên
+											sẽ nhận email kèm link tự đặt mật khẩu, có hạn 3 giờ.
 										</li>
 									</ul>
 									<a

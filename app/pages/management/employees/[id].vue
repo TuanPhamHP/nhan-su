@@ -256,7 +256,9 @@
 		resettingPassword.value = true;
 		try {
 			const message = await resetPassword(id);
-			toast.success(message || 'Mật khẩu đã được đặt lại và gửi qua email');
+			// Hiện nguyên message của BE. Câu dự phòng không nói "mật khẩu đã gửi qua email":
+			// BE không gửi mật khẩu nữa, chỉ gửi link tự đặt mật khẩu hạn 3 giờ.
+			toast.success(message || 'Đã gửi link đặt mật khẩu mới tới email của nhân viên.');
 			confirmResetPassword.value = false;
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi đặt lại mật khẩu');
@@ -771,11 +773,15 @@
 							<div>
 								<h3 class="font-semibold text-gray-900 dark:text-white">Reset mật khẩu</h3>
 								<p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-									Mật khẩu của
+									Mật khẩu hiện tại của
 									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.fullName }}</strong>
-									sẽ được đặt lại theo mặc định và gửi về email
-									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.email }}</strong
-									>.
+									sẽ <strong class="text-gray-700 dark:text-gray-300">hết hiệu lực ngay</strong> và nhân viên bị đăng
+									xuất khỏi mọi thiết bị.
+								</p>
+								<p class="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
+									Nhân viên sẽ nhận email tại
+									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.email }}</strong>
+									kèm link tự đặt mật khẩu mới, có hạn 3 giờ. Link gửi trước đó (nếu có) cũng hết hiệu lực.
 								</p>
 							</div>
 						</div>

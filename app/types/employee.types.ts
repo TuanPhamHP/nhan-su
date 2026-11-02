@@ -75,10 +75,13 @@ export interface Employee {
 	createdAt: string;
 }
 
+/**
+ * Body POST /v1/employees. Không có `password`: nhân viên mới nhận email có link
+ * tự đặt mật khẩu, hạn 3 giờ (xem docs/backend/bridges/employees.md).
+ */
 export interface CreateEmployeeDto {
 	fullName: string;
 	email: string;
-	password: string;
 	joinDate: string;
 	role: UserRole;
 	employmentType?: EmploymentType;
