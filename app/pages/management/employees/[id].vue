@@ -773,15 +773,13 @@
 							<div>
 								<h3 class="font-semibold text-gray-900 dark:text-white">Reset mật khẩu</h3>
 								<p class="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-									Mật khẩu hiện tại của
 									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.fullName }}</strong>
-									sẽ <strong class="text-gray-700 dark:text-gray-300">hết hiệu lực ngay</strong> và nhân viên bị đăng
-									xuất khỏi mọi thiết bị.
+									sẽ nhận email kèm link tự đặt mật khẩu mới, có hạn 3 giờ. Email gửi tới địa chỉ đăng nhập của tài
+									khoản, có thể khác email công việc trong hồ sơ. Link gửi trước đó (nếu có) cũng hết hiệu lực.
 								</p>
 								<p class="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
-									Nhân viên sẽ nhận email tại
-									<strong class="text-gray-700 dark:text-gray-300">{{ currentEmployee?.email }}</strong>
-									kèm link tự đặt mật khẩu mới, có hạn 3 giờ. Link gửi trước đó (nếu có) cũng hết hiệu lực.
+									Nếu tài khoản chỉ dùng ở công ty này thì mật khẩu hiện tại hết hiệu lực ngay và nhân viên bị đăng xuất
+									khỏi mọi thiết bị.
 								</p>
 							</div>
 						</div>

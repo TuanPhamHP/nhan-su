@@ -77,7 +77,8 @@ export interface Employee {
 
 /**
  * Body POST /v1/employees. Không có `password`: nhân viên mới nhận email có link
- * tự đặt mật khẩu, hạn 3 giờ (xem docs/backend/bridges/employees.md).
+ * tự đặt mật khẩu hạn 3 giờ, hoặc link nhận lời mời hạn 7 ngày nếu email đã có tài khoản
+ * ở công ty khác. Response giống hệt nhau ở hai ca (xem docs/backend/bridges/employees.md).
  */
 export interface CreateEmployeeDto {
 	fullName: string;

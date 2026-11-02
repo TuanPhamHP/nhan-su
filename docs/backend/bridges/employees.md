@@ -17,7 +17,7 @@
 | PATCH | `/v1/employees/:id` | `ADMIN`, `HR` | Cập nhật thông tin |
 | DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | **Khóa tài khoản** (soft delete) + ghi ngày nghỉ việc |
 | POST | `/v1/employees/:id/terminate` | quyền `employee:terminate` (không giới hạn role) | **Xác nhận nghỉ việc** — ngày + lý do bắt buộc |
-| POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Vô hiệu mật khẩu, gửi link đặt mật khẩu mới (hạn 3 giờ). Cũng là cách gửi lại link kích hoạt |
+| POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Gửi link đặt mật khẩu mới (hạn 3 giờ) tới email đăng nhập; vô hiệu mật khẩu cũ nếu tài khoản chỉ thuộc công ty này. Cũng là cách gửi lại link kích hoạt / lời mời |
 | GET | `/v1/employees/:id/documents` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Tài liệu của nhân viên |
 | POST | `/v1/employees/:id/documents` | `ADMIN`, `HR` | Upload tài liệu |
 | DELETE | `/v1/employees/:employeeId/documents/:documentId` | `ADMIN`, `HR` | Xóa tài liệu |
@@ -331,9 +331,15 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 
 **Các trường quan trọng:**
 - `employeeCode` — **không truyền** — server tự generate theo format `EMP001`, `EMP002`, ...
-- **Không có `password`.** Tài khoản mới nhận một mật khẩu ngẫu nhiên không ai biết, và nhân
-  viên nhận email chào mừng có link tự đặt mật khẩu, **hạn 3 giờ**. HR không bao giờ biết mật
-  khẩu của nhân viên. Link hết hạn thì HR gọi `POST /v1/employees/:id/reset-password` để gửi lại.
+- **Không có `password`.** HR không bao giờ biết mật khẩu của nhân viên. Từ G1 (11/2026),
+  đăng nhập dùng **tài khoản** chung cho mọi công ty, nên server xử lý theo email:
+  - Email **chưa có tài khoản**: tạo tài khoản, gửi email chào mừng có link kích hoạt (tự đặt
+    mật khẩu), **hạn 3 giờ**.
+  - Email **đã có tài khoản** (người này đang làm ở công ty khác): **không tự nối**, gửi email
+    lời mời có link `/accept-invite`, **hạn 7 ngày**. Họ đăng nhập bằng mật khẩu đang dùng.
+  - Hai ca trả về **giống hệt nhau**, để HR không biết người đó có thuộc công ty khác hay không.
+    UI chỉ nên nói "Đã gửi email cho nhân viên".
+  - Link hết hạn thì HR gọi `POST /v1/employees/:id/reset-password` để gửi lại.
 - `email` — tự động lowercase + trim trước khi lưu
 - `joinDate` — format `"YYYY-MM-DD"` (không phải datetime)
 - `defaultShiftId`, `positionId`, `departmentId`, `managerId` — tất cả **optional**
@@ -369,6 +375,12 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 **409** nếu email đã tồn tại:
 ```json
 { "success": false, "error": { "code": "CONFLICT", "message": "Email đã tồn tại" } }
+```
+
+**409** nếu tài khoản của email này đã gắn với một hồ sơ **khác trong cùng công ty** (HR đã đổi
+email của hồ sơ cũ rồi tạo hồ sơ mới cùng người):
+```json
+{ "success": false, "error": { "code": "EMPLOYEE_ACCOUNT_IN_COMPANY", "message": "Email này đã gắn với một hồ sơ nhân sự khác trong công ty" } }
 ```
 
 ---
@@ -432,6 +444,10 @@ nghỉ thật**, vì ngày HR bấm nút thường muộn hơn ngày nghỉ th�
 
 **400** nếu sai định dạng (ví dụ gửi `"18/09/2026"`) — chuỗi rỗng `""` thì KHÔNG lỗi.
 
+> **Từ G1:** khoá ở công ty này hủy mọi phiên của nhân viên **ở công ty này** và kết thúc
+> quyền vào công ty này. Nếu người đó còn làm ở công ty khác thì tài khoản vẫn đăng nhập vào
+> công ty kia bình thường. `POST /:id/terminate` cũng vậy.
+
 > Chưa có endpoint kích hoạt lại nhân sự. `PATCH /v1/employees/:id` **không** nhận
 > `status`: body có `status` sẽ bị `ValidationPipe({ whitelist: true })` lược bỏ im lặng,
 > request trả 200 nhưng nhân sự vẫn INACTIVE. Đừng dựng nút "kích hoạt lại" dựa vào nó.
@@ -482,15 +498,30 @@ có cả trước và sau.
 
 ## POST /v1/employees/:id/reset-password — Đặt lại mật khẩu
 
-HR không đặt mật khẩu hộ nhân viên. Gọi endpoint này thì:
+HR không đặt mật khẩu hộ nhân viên. Từ G1 mật khẩu thuộc **tài khoản** (dùng chung mọi công
+ty), nên endpoint này hành xử theo tài khoản đó:
 
-1. Mật khẩu hiện tại **hết hiệu lực ngay**, mọi phiên đăng nhập bị thu hồi (refresh token
-   cũ trả `401`).
-2. Nhân viên nhận email có link `/reset-password?token=...` để tự đặt mật khẩu mới, **hạn 3
-   giờ**. Link phát trước đó (nếu còn) hết hiệu lực.
+| Tài khoản | Mật khẩu cũ | Phiên đăng nhập | Email |
+|---|---|---|---|
+| Chỉ thuộc công ty này | **Hết hiệu lực ngay** | Bị thu hồi (refresh token cũ trả `401`) | Link đặt mật khẩu mới, hạn 3 giờ |
+| Còn thuộc (hoặc đang được mời vào) công ty khác | **Vẫn dùng được** | Giữ nguyên | Link đặt mật khẩu mới, hạn 3 giờ |
+| Hồ sơ đang chờ nhận lời mời | — | — | Gửi lại lời mời, hạn 7 ngày |
+| Hồ sơ chưa nối tài khoản | — | — | Gửi lại link kích hoạt hoặc lời mời |
+
+**400 `EMPLOYEE_INACTIVE`** khi hồ sơ đã nghỉ việc hoặc bị khoá: tài khoản đó có thể đang chỉ dùng
+ở công ty khác, HR công ty này không được động vào mật khẩu của nó. UI nên ẩn nút với nhân viên
+đã nghỉ.
+
+- Link **luôn** gửi tới **email đăng nhập của tài khoản**, không bao giờ tới email công việc
+  trong hồ sơ. Lý do: HR sửa được email trong hồ sơ; nếu link đi theo email hồ sơ thì HR chỉ cần
+  đổi email thành của mình rồi bấm nút này là chiếm được tài khoản.
+- HR công ty B không được làm mất quyền vào công ty A của người đó, nên ca "còn thuộc công ty
+  khác" không vô hiệu mật khẩu.
+- Ba ca trả **cùng một câu**, để HR không biết người đó có thuộc công ty khác hay không.
+- Link phát trước đó cho cùng mục đích (nếu còn) hết hiệu lực.
 
 Cũng dùng endpoint này để **gửi lại link kích hoạt** khi nhân viên mới chưa kịp đặt mật khẩu
-mà link 3 giờ đã hết hạn.
+mà link 3 giờ đã hết hạn, và để **gửi lời mời** cho hồ sơ chưa nối tài khoản.
 
 > Trước 11/2026 endpoint này đặt mật khẩu thành `ho_ten@ma_nhanvien` và gửi nguyên văn qua
 > email. Mẫu đó đoán được nên đã bỏ.
@@ -500,7 +531,8 @@ mà link 3 giờ đã hết hạn.
 { "success": true, "data": { "message": "Đã gửi link đặt mật khẩu mới tới email của nhân viên. Link có hạn 3 giờ." } }
 ```
 
-FE hiện nguyên `message` trong toast. Hộp xác nhận nên nói rõ mật khẩu cũ sẽ bị vô hiệu ngay.
+FE hiện nguyên `message` trong toast. Hộp xác nhận nói nhân viên sẽ nhận link qua email đăng
+nhập; **không** khẳng định mật khẩu cũ chắc chắn bị vô hiệu (ca tài khoản dùng chung thì không).
 
 ---
 
@@ -508,8 +540,9 @@ FE hiện nguyên `message` trong toast. Hộp xác nhận nên nói rõ mật k
 
 Template Excel vẫn có cột F "Mật khẩu" để file cũ import được, nhưng **server bỏ qua cột này**:
 để trống hay điền gì cũng không bị báo lỗi, và không dùng làm mật khẩu. Mỗi nhân viên được
-import nhận email chào mừng với link tự đặt mật khẩu riêng, hạn 3 giờ. Lỗi theo dòng sẽ không
-còn `field: "password"`.
+import nhận email kích hoạt (hạn 3 giờ) hoặc lời mời (hạn 7 ngày) như khi tạo từng người. Lỗi
+theo dòng sẽ không còn `field: "password"`; có thể có lỗi `field: "email"` với message "Email
+này đã gắn với một hồ sơ nhân sự khác trong công ty".
 
 ---
 

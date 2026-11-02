@@ -1,17 +1,20 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
 	import { safeRedirectPath } from '~/utils/redirect';
+	import type { CompanyOption } from '~/types/auth.types';
 
 	definePageMeta({ layout: 'auth' });
 
-	const { login } = useAuth();
+	const { login, selectCompany } = useAuth();
+	const authStore = useAuthStore();
+	const { logoutNotice } = storeToRefs(authStore);
 	const toast = useToast();
 	const route = useRoute();
 	const { isDark, toggle: toggleDark } = useColorMode();
 
-	const { handleSubmit, defineField, errors, isSubmitting } = useForm({
+	const { handleSubmit, defineField, errors, isSubmitting, setFieldError, setFieldValue } = useForm({
 		validationSchema: {
-			email: (v: string) => (v?.trim() ? true : 'Vui lòng nhập email hoặc mã nhân viên'),
+			email: (v: string) => (v?.trim() ? true : 'Vui lòng nhập email'),
 			password: (v: string) => {
 				if (!v) return 'Vui lòng nhập mật khẩu';
 				if (v.length < 6) return 'Mật khẩu tối thiểu 6 ký tự';
@@ -38,16 +41,83 @@
 		password.value = account.password;
 	}
 
+	/** Lỗi hiện thành khung đỏ trên form (khác toast: không tự biến mất). */
+	const errorMessage = ref('');
+
+	// Bước chọn công ty: chỉ có khi tài khoản thuộc nhiều công ty. `selectionToken` hạn 5 phút,
+	// chỉ giữ trong bộ nhớ của trang, không đưa lên URL hay cookie.
+	const step = ref<'credentials' | 'company'>('credentials');
+	const selectionToken = ref<string | null>(null);
+	const companyOptions = ref<CompanyOption[]>([]);
+	const selectingCode = ref<string | null>(null);
+
+	function errorCode(err: unknown): string | undefined {
+		return (err as { data?: { error?: { code?: string } } } | null)?.data?.error?.code;
+	}
+
+	function companyInitial(name: string): string {
+		return (name.trim().split(/\s+/).pop() ?? '').charAt(0).toUpperCase() || '?';
+	}
+
+	async function finishLogin() {
+		toast.success('Đăng nhập thành công! Chào mừng trở lại.');
+		const redirect = safeRedirectPath(route.query.redirect);
+		await navigateTo(redirect ?? '/');
+	}
+
+	function backToCredentials(message = '') {
+		step.value = 'credentials';
+		selectionToken.value = null;
+		companyOptions.value = [];
+		setFieldValue('password', '');
+		errorMessage.value = message;
+	}
+
 	const onSubmit = handleSubmit(async values => {
+		errorMessage.value = '';
+		logoutNotice.value = null;
 		try {
-			await login({ email: values.email, password: values.password });
-			toast.success('Đăng nhập thành công! Chào mừng trở lại.');
-			const redirect = safeRedirectPath(route.query.redirect);
-			await navigateTo(redirect ?? '/');
+			const res = await login({ identifier: values.email.trim(), password: values.password });
+			if (res.requiresCompanySelection) {
+				selectionToken.value = res.selectionToken;
+				companyOptions.value = res.companies;
+				step.value = 'company';
+				return;
+			}
+			await finishLogin();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Tài khoản hoặc mật khẩu không đúng');
+			const message = err instanceof Error ? err.message : '';
+			const code = errorCode(err);
+			if (code === 'AUTH_EMAIL_REQUIRED') {
+				setFieldError('email', message || 'Vui lòng đăng nhập bằng email.');
+			} else if (code === 'AUTH_NO_ACTIVE_COMPANY' || code === 'AUTH_ACCOUNT_LOCKED') {
+				errorMessage.value = message;
+			} else {
+				toast.error(message || 'Email hoặc mật khẩu không đúng');
+			}
 		}
 	});
+
+	async function chooseCompany(option: CompanyOption) {
+		if (!selectionToken.value || selectingCode.value) return;
+		errorMessage.value = '';
+		selectingCode.value = option.code;
+		try {
+			await selectCompany(selectionToken.value, option.code);
+			await finishLogin();
+		} catch (err) {
+			const message = err instanceof Error ? err.message : '';
+			if (errorCode(err) === 'AUTH_SELECTION_EXPIRED') {
+				backToCredentials(
+					'Phiên chọn công ty đã hết hạn vì quá 5 phút. Vui lòng nhập lại mật khẩu để đăng nhập.',
+				);
+			} else {
+				errorMessage.value = message || 'Không vào được công ty này. Vui lòng thử lại.';
+			}
+		} finally {
+			selectingCode.value = null;
+		}
+	}
 
 	const quotes = [
 		{ text: 'Mỗi ngày là một cơ hội mới để trở nên tốt hơn.', author: 'Khuyết danh' },
@@ -156,24 +226,112 @@
 				</div>
 
 				<!-- Heading -->
-				<div class="mb-8">
+				<div v-if="step === 'credentials'" class="mb-8">
 					<h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Chào mừng trở lại</h1>
 					<p class="text-sm text-gray-500 dark:text-gray-400">Đăng nhập để tiếp tục quản lý hệ thống</p>
 				</div>
+				<div v-else class="mb-6">
+					<h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Chọn công ty</h1>
+					<p class="text-sm text-gray-500 dark:text-gray-400">
+						Tài khoản <span class="font-medium text-gray-700 dark:text-gray-300">{{ email }}</span> thuộc nhiều
+						công ty. Hãy chọn công ty bạn muốn làm việc trong phiên này, sau đó bạn vẫn đổi được ở thanh trên cùng.
+					</p>
+				</div>
+
+				<!-- Error / notice banner -->
+				<div
+					v-if="errorMessage || logoutNotice"
+					data-testid="login-banner"
+					class="mb-5 flex items-start gap-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3"
+				>
+					<svg
+						class="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+						/>
+					</svg>
+					<p class="text-sm text-red-700 dark:text-red-300">{{ errorMessage || logoutNotice }}</p>
+				</div>
+
+				<!-- Company selection step -->
+				<div v-if="step === 'company'" data-testid="company-select">
+					<ul class="space-y-3">
+						<li v-for="option in companyOptions" :key="option.code">
+							<button
+								type="button"
+								:disabled="!!selectingCode"
+								:data-company-code="option.code"
+								class="w-full flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-left transition-colors hover:border-brand-500 hover:bg-brand-50/50 dark:hover:border-brand-400 dark:hover:bg-gray-700/60 disabled:cursor-not-allowed disabled:opacity-60"
+								@click="chooseCompany(option)"
+							>
+								<span
+									class="w-10 h-10 flex-shrink-0 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 flex items-center justify-center text-base font-semibold"
+								>
+									{{ companyInitial(option.name) }}
+								</span>
+								<span class="flex-1 min-w-0">
+									<span class="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+										{{ option.name }}
+									</span>
+									<span class="block text-xs text-gray-500 dark:text-gray-400 truncate">
+										Mã công ty: {{ option.code }}
+									</span>
+								</span>
+								<svg
+									v-if="selectingCode === option.code"
+									class="w-4 h-4 animate-spin text-brand-600 dark:text-brand-400"
+									fill="none"
+									viewBox="0 0 24 24"
+								>
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+								</svg>
+								<svg
+									v-else
+									class="w-4 h-4 text-gray-400"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+								</svg>
+							</button>
+						</li>
+					</ul>
+					<div class="mt-6 text-center">
+						<button
+							type="button"
+							class="text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+							:disabled="!!selectingCode"
+							@click="backToCredentials()"
+						>
+							← Đăng nhập bằng tài khoản khác
+						</button>
+					</div>
+				</div>
 
 				<!-- Form -->
-				<form class="space-y-5" @submit.prevent="onSubmit">
+				<form v-else class="space-y-5" @submit.prevent="onSubmit">
 					<!-- Email -->
 					<div class="flex flex-col gap-1">
 						<label for="email" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-							Email hoặc mã nhân viên <span class="text-red-500">*</span>
+							Email <span class="text-red-500">*</span>
 						</label>
 						<input
 							id="email"
 							v-model="email"
 							v-bind="emailAttrs"
 							type="text"
-							placeholder="admin@company.com hoặc EMP001"
+							inputmode="email"
+							placeholder="ten@congty.com"
 							autocomplete="username"
 							:class="[
 								'block w-full rounded-lg border px-3 py-2.5 text-sm transition-colors',

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 	import NotificationPanel from '~/components/notifications/NotificationPanel.vue';
 	import { isManagementRole } from '~/utils/role';
+	import type { CompanyOption } from '~/types/auth.types';
 
 	const { toggle } = useSidebar();
-	const { user, logout } = useAuth();
+	const { user, logout, company, companies, switchCompany } = useAuth();
 	const toast = useToast();
 	const router = useRouter();
 	const route = useRoute();
@@ -13,6 +14,32 @@
 
 	const showUserMenu = ref(false);
 	const showNotifPanel = ref(false);
+	const showCompanyMenu = ref(false);
+
+	// Chỉ cho đổi công ty khi tài khoản thuộc từ hai công ty trở lên.
+	const canSwitchCompany = computed(() => companies.value.length > 1);
+	const switchingTo = ref<CompanyOption | null>(null);
+
+	function toggleCompanyMenu() {
+		showCompanyMenu.value = !showCompanyMenu.value;
+		if (showCompanyMenu.value) {
+			showUserMenu.value = false;
+			showNotifPanel.value = false;
+		}
+	}
+
+	async function handleSwitchCompany(option: CompanyOption) {
+		showCompanyMenu.value = false;
+		if (option.code === company.value?.code || switchingTo.value) return;
+		switchingTo.value = option;
+		try {
+			// Thành công thì store tải lại toàn trang về `/`, lớp phủ bên dưới che lúc chờ.
+			await switchCompany(option.code);
+		} catch (err) {
+			switchingTo.value = null;
+			toast.error(err instanceof Error ? err.message : 'Không chuyển được công ty. Vui lòng thử lại.');
+		}
+	}
 
 	const isManagementUser = computed(() => !!user.value && isManagementRole(user.value.role));
 	const isPreviewingAsEmployee = computed(() => previewRole.value === 'EMPLOYEE');
@@ -37,6 +64,12 @@
 	function toggleNotificationPanel() {
 		showNotifPanel.value = !showNotifPanel.value;
 		if (showUserMenu.value) showUserMenu.value = false;
+		showCompanyMenu.value = false;
+	}
+
+	function toggleUserMenu() {
+		showUserMenu.value = !showUserMenu.value;
+		showCompanyMenu.value = false;
 	}
 
 	async function handleLogout() {
@@ -52,6 +85,7 @@
 		const target = e.target as HTMLElement;
 		if (!target.closest('[data-user-menu]')) showUserMenu.value = false;
 		if (!target.closest('[data-notif-panel]')) showNotifPanel.value = false;
+		if (!target.closest('[data-company-menu]')) showCompanyMenu.value = false;
 	}
 
 	onMounted(() => {
@@ -70,15 +104,115 @@
 			borderColor: 'var(--color-border-theme)',
 		}"
 	>
-		<!-- Left: hamburger -->
-		<button
-			class="p-2 rounded-lg opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-			@click="toggle"
-		>
-			<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-				<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-			</svg>
-		</button>
+		<!-- Left: hamburger + công ty đang làm việc -->
+		<div class="flex items-center gap-1 sm:gap-2 min-w-0">
+			<button
+				class="p-2 rounded-lg opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex-shrink-0"
+				@click="toggle"
+			>
+				<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+				</svg>
+			</button>
+
+			<div v-if="company" class="relative min-w-0" data-company-menu>
+				<button
+					v-if="canSwitchCompany"
+					data-testid="company-switcher"
+					class="flex items-center gap-2 max-w-[11rem] sm:max-w-[16rem] px-2.5 py-1.5 rounded-lg border hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+					:style="{ borderColor: 'var(--color-border-theme)' }"
+					:title="`Đang làm việc ở ${company.name}. Bấm để chuyển công ty.`"
+					@click.stop="toggleCompanyMenu"
+				>
+					<svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+						/>
+					</svg>
+					<span class="text-sm font-medium truncate">{{ company.name }}</span>
+					<svg class="w-4 h-4 flex-shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+					</svg>
+				</button>
+				<div
+					v-else
+					data-testid="company-name"
+					class="flex items-center gap-2 max-w-[11rem] sm:max-w-[16rem] px-2.5 py-1.5"
+					:title="`Đang làm việc ở ${company.name}`"
+				>
+					<svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+						/>
+					</svg>
+					<span class="text-sm font-medium truncate">{{ company.name }}</span>
+				</div>
+
+				<Transition
+					enter-active-class="transition-all duration-150 ease-out"
+					enter-from-class="opacity-0 scale-95 -translate-y-1"
+					enter-to-class="opacity-100 scale-100 translate-y-0"
+					leave-active-class="transition-all duration-100 ease-in"
+					leave-from-class="opacity-100 scale-100 translate-y-0"
+					leave-to-class="opacity-0 scale-95 -translate-y-1"
+				>
+					<div
+						v-if="showCompanyMenu && canSwitchCompany"
+						data-testid="company-menu"
+						class="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+					>
+						<p class="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+							Chuyển sang công ty khác
+						</p>
+						<button
+							v-for="option in companies"
+							:key="option.code"
+							:data-company-code="option.code"
+							class="flex items-center gap-2 w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+							@click="handleSwitchCompany(option)"
+						>
+							<span class="flex-1 min-w-0">
+								<span class="block truncate" :class="option.code === company.code ? 'font-semibold' : ''">
+									{{ option.name }}
+								</span>
+								<span v-if="option.code === company.code" class="block text-xs text-gray-500 dark:text-gray-400">
+									Đang làm việc
+								</span>
+							</span>
+							<svg
+								v-if="option.code === company.code"
+								class="w-4 h-4 flex-shrink-0 text-brand-600 dark:text-brand-400"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+							</svg>
+						</button>
+					</div>
+				</Transition>
+			</div>
+		</div>
+
+		<!-- Lớp phủ trong lúc đổi công ty: trang sẽ tải lại, che dữ liệu của công ty cũ -->
+		<Teleport to="body">
+			<div
+				v-if="switchingTo"
+				data-testid="company-switching"
+				class="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-white/85 dark:bg-gray-950/85"
+			>
+				<svg class="w-8 h-8 animate-spin text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+				</svg>
+				<p class="text-sm font-medium text-gray-700 dark:text-gray-200">Đang chuyển sang {{ switchingTo.name }}…</p>
+			</div>
+		</Teleport>
 
 		<!-- Right: actions -->
 		<div class="flex items-center gap-2">
@@ -111,7 +245,7 @@
 			<div class="relative" data-user-menu>
 				<button
 					class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-					@click.stop="showUserMenu = !showUserMenu"
+					@click.stop="toggleUserMenu"
 				>
 					<CommonAppAvatar :src="user?.avatarUrl" :name="user?.fullName" size="sm" />
 					<div class="hidden sm:block text-left">
