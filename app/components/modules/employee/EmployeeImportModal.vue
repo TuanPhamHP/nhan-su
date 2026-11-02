@@ -215,7 +215,8 @@
 										</li>
 										<li>
 											Cột <strong>Mật khẩu</strong> (cột F) trong file mẫu không còn dùng, có thể để trống. Mỗi nhân viên
-											sẽ nhận email kèm link tự đặt mật khẩu, có hạn 3 giờ.
+											sẽ nhận email kèm link tự đặt mật khẩu hạn 3 giờ, hoặc link nhận lời mời hạn 7 ngày nếu người đó đã
+											có tài khoản trên hệ thống.
 										</li>
 									</ul>
 									<a

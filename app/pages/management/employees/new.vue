@@ -264,8 +264,9 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 								<path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 							</svg>
 							<p>
-								Không cần đặt mật khẩu cho nhân viên. Nhân viên sẽ nhận email tại địa chỉ trên, kèm link tự đặt mật khẩu có hạn 3 giờ.
-								Nếu link hết hạn, hãy bấm "Reset mật khẩu" ở trang chi tiết nhân viên để gửi link mới.
+								Không cần đặt mật khẩu cho nhân viên. Hệ thống sẽ gửi tới địa chỉ trên một email có link tự đặt mật khẩu hạn 3 giờ,
+								hoặc link nhận lời mời hạn 7 ngày nếu người này đã có tài khoản trên hệ thống. Nếu link hết hạn, hãy bấm "Reset mật
+								khẩu" ở trang chi tiết nhân viên để gửi link mới.
 							</p>
 						</div>
 					</div>

@@ -6,6 +6,9 @@ export default defineNuxtRouteMiddleware(to => {
 
 	if (!authStore.isAuthenticated || !authStore.user) return;
 
+	// Trang nhận lời mời mở được cả khi đang đăng nhập (xem auth.global.ts), giữ layout `auth`.
+	if (to.path === '/accept-invite') return;
+
 	const role = authStore.user.role;
 	const isManagementPath = to.path === '/management' || to.path.startsWith('/management/');
 
