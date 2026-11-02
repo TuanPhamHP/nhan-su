@@ -363,9 +363,15 @@ const changePassword = async (dto: ChangePasswordDto) => {
 
 **Response: 204 No Content** — luôn trả về 204 dù email có tồn tại hay không (bảo mật).
 
-> **Lưu ý hiện tại:** Email reset link đang được log ra console thay vì gửi thực tế. Tính năng gửi email qua Resend sẽ được tích hợp sau. Frontend có thể implement flow này nhưng user sẽ cần liên hệ admin để lấy link.
+> Email chỉ được gửi thật khi `NODE_ENV=production`. Ở môi trường khác, job email được ghi
+> log rồi bỏ qua.
 
-**Reset link format:** `{FRONTEND_URL}/reset-password?token=<64-hex-chars>`
+**Reset link format:** `{FRONTEND_PUBLIC_URL}/reset-password?token=<64-hex-chars>`. Thiếu
+`FRONTEND_PUBLIC_URL` thì server lấy origin **đầu tiên** của `FRONTEND_URL`, vì `FRONTEND_URL`
+là danh sách origin cho CORS, phân tách bằng dấu phẩy.
+
+Link này hết hạn sau **1 giờ**. Cùng trang `/reset-password` còn nhận link do HR phát (đặt
+lại mật khẩu, tài khoản mới), loại đó hạn **3 giờ**. Xem `employees.md`.
 
 **Pattern UI:**
 ```typescript
@@ -396,8 +402,12 @@ Dùng token nhận được từ link email (query param `?token=...`).
 
 | HTTP | Code | Nguyên nhân |
 |------|------|------------|
-| 400 | `AUTH_INVALID_RESET_TOKEN` | Token không tồn tại trong DB |
-| 400 | `AUTH_RESET_TOKEN_EXPIRED` | Token hết hạn (TTL: **1 giờ**) |
+| 400 | `AUTH_INVALID_RESET_TOKEN` | Token sai, đã dùng, hoặc đã bị thay bằng link mới hơn |
+| 400 | `AUTH_RESET_TOKEN_EXPIRED` | Token hết hạn: **1 giờ** với link tự yêu cầu, **3 giờ** với link do HR phát |
+
+> DB chỉ lưu SHA-256 của token. Link phát ra trước bản cập nhật 11/2026 (lưu nguyên văn) không
+> còn dùng được sau khi deploy, và người dùng chỉ cần yêu cầu link mới. Mỗi tài khoản chỉ có
+> một link còn hiệu lực: phát link mới thì link cũ trả `AUTH_INVALID_RESET_TOKEN`.
 
 **Flow hoàn chỉnh reset password:**
 ```
@@ -416,7 +426,8 @@ Frontend đọc token từ URL, hiển thị form mật khẩu mới
 POST /reset-password { token, newPassword } → 204
     │
     ├─ 400 AUTH_INVALID_RESET_TOKEN → hiển thị "Link không hợp lệ"
-    ├─ 400 AUTH_RESET_TOKEN_EXPIRED → hiển thị "Link đã hết hạn (1 giờ), yêu cầu link mới"
+    ├─ 400 AUTH_RESET_TOKEN_EXPIRED → hiển thị "Link đã hết hạn, yêu cầu link mới hoặc liên hệ HR"
+    │     (không ghi số giờ: link có thể là 1 giờ hoặc 3 giờ tuỳ nguồn)
     └─ 204 → redirect sang /login với thông báo "Đặt lại thành công"
 ```
 
@@ -428,12 +439,13 @@ POST /reset-password { token, newPassword } → 204
 |-------|-------|-----|-----------|
 | `accessToken` (JWT) | Memory / localStorage | 15 phút (env `JWT_EXPIRES_IN`) | Mỗi lần `/refresh` |
 | `refreshToken` (UUID) | localStorage + DB | 7 ngày (env `REFRESH_TOKEN_EXPIRES_IN`) | Mỗi lần `/refresh` |
-| Reset token (hex) | DB | 1 giờ (cố định) | Dùng một lần rồi xóa |
+| Reset token (hex) | DB lưu SHA-256, link mang bản gốc | 1 giờ (tự yêu cầu) · 3 giờ (HR phát) | Dùng một lần rồi xóa, phát link mới thì link cũ hết hiệu lực |
 
 **Khi nào session bị hủy (refreshToken = null trong DB):**
 - `POST /logout`
 - `PATCH /change-password` thành công
 - `POST /reset-password` thành công
+- HR gọi `POST /v1/employees/:id/reset-password` (mật khẩu cũ cũng hết hiệu lực ngay)
 
 ---
 
@@ -507,7 +519,9 @@ export function useAuth() {
 | `POST /forgot-password` với email không tồn tại | 204 — không tiết lộ email có trong DB hay không |
 | `POST /forgot-password` với tài khoản INACTIVE | 204 — silent, không gửi email |
 | `POST /reset-password` dùng token lần 2 | 400 `AUTH_INVALID_RESET_TOKEN` — đã xóa sau lần dùng đầu |
-| `POST /reset-password` sau 1 giờ | 400 `AUTH_RESET_TOKEN_EXPIRED` |
+| `POST /reset-password` quá hạn link (1 giờ nếu tự yêu cầu, 3 giờ nếu HR phát) | 400 `AUTH_RESET_TOKEN_EXPIRED` |
+| `POST /reset-password` bằng link cũ sau khi đã phát link mới | 400 `AUTH_INVALID_RESET_TOKEN` — mỗi tài khoản chỉ có một link còn hiệu lực |
+| `POST /reset-password` bằng link phát trước bản cập nhật 11/2026 | 400 `AUTH_INVALID_RESET_TOKEN` — DB giờ chỉ lưu hash, yêu cầu link mới |
 | Upload avatar không phải JPG/PNG | 400 |
 | Upload avatar > 2MB | 400 |
 | `PATCH /profile` không truyền field nào | 200 — không thay đổi gì, trả về profile hiện tại |

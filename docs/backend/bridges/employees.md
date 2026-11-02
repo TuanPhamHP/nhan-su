@@ -17,7 +17,7 @@
 | PATCH | `/v1/employees/:id` | `ADMIN`, `HR` | Cập nhật thông tin |
 | DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | **Khóa tài khoản** (soft delete) + ghi ngày nghỉ việc |
 | POST | `/v1/employees/:id/terminate` | quyền `employee:terminate` (không giới hạn role) | **Xác nhận nghỉ việc** — ngày + lý do bắt buộc |
-| POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Reset mật khẩu → gửi email thông báo |
+| POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Vô hiệu mật khẩu, gửi link đặt mật khẩu mới (hạn 3 giờ). Cũng là cách gửi lại link kích hoạt |
 | GET | `/v1/employees/:id/documents` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Tài liệu của nhân viên |
 | POST | `/v1/employees/:id/documents` | `ADMIN`, `HR` | Upload tài liệu |
 | DELETE | `/v1/employees/:employeeId/documents/:documentId` | `ADMIN`, `HR` | Xóa tài liệu |
@@ -125,7 +125,8 @@ export interface DirectoryGroup {
 export interface CreateEmployeeDto {
   fullName: string;               // min 2, max 100 ký tự
   email: string;                  // tự động lowercase + trim
-  password: string;               // min 6 ký tự, hash server-side — KHÔNG trả ra response
+  // KHÔNG có password: nhân viên tự đặt qua link trong email chào mừng (từ 11/2026).
+  // FE cũ còn gửi `password` thì server bỏ qua (whitelist), không báo lỗi.
   joinDate: string;               // "YYYY-MM-DD"
   role: SystemRole;
   employmentType?: EmploymentType; // omit = FULL_TIME (default trên DB)
@@ -139,9 +140,9 @@ export interface CreateEmployeeDto {
   address?: string;
 }
 
-// UpdateEmployeeDto — tất cả optional, trừ email và password (không thể đổi qua endpoint này).
+// UpdateEmployeeDto — tất cả optional, trừ email (không thể đổi qua endpoint này).
 // `employmentType` được inherit → gửi để chuyển ví dụ PROBATION → FULL_TIME khi hết thử việc.
-export type UpdateEmployeeDto = Partial<Omit<CreateEmployeeDto, 'email' | 'password'>>;
+export type UpdateEmployeeDto = Partial<Omit<CreateEmployeeDto, 'email'>>;
 
 export interface QueryEmployeeParams {
   departmentId?: number;
@@ -314,7 +315,6 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 {
   "fullName": "Phạm Thị Cẩm",
   "email": "pham.c@company.com",
-  "password": "Hr@123456",
   "joinDate": "2026-06-01",
   "role": "EMPLOYEE",
   "employmentType": "PROBATION",
@@ -331,7 +331,9 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 
 **Các trường quan trọng:**
 - `employeeCode` — **không truyền** — server tự generate theo format `EMP001`, `EMP002`, ...
-- `password` — plain text, server hash bcrypt 10 rounds — **không bao giờ trả ra response**
+- **Không có `password`.** Tài khoản mới nhận một mật khẩu ngẫu nhiên không ai biết, và nhân
+  viên nhận email chào mừng có link tự đặt mật khẩu, **hạn 3 giờ**. HR không bao giờ biết mật
+  khẩu của nhân viên. Link hết hạn thì HR gọi `POST /v1/employees/:id/reset-password` để gửi lại.
 - `email` — tự động lowercase + trim trước khi lưu
 - `joinDate` — format `"YYYY-MM-DD"` (không phải datetime)
 - `defaultShiftId`, `positionId`, `departmentId`, `managerId` — tất cả **optional**
@@ -478,16 +480,36 @@ có cả trước và sau.
 
 ---
 
-## POST /v1/employees/:id/reset-password — Reset mật khẩu
+## POST /v1/employees/:id/reset-password — Đặt lại mật khẩu
 
-Server tạo mật khẩu mới theo format `ho_ten@ma_nhanvien` (bỏ dấu, viết thường), hash lại và gửi email thông báo cho nhân viên.
+HR không đặt mật khẩu hộ nhân viên. Gọi endpoint này thì:
 
-Ví dụ: `Nguyễn Văn An` + `EMP004` → `nguyenvanan@emp004`
+1. Mật khẩu hiện tại **hết hiệu lực ngay**, mọi phiên đăng nhập bị thu hồi (refresh token
+   cũ trả `401`).
+2. Nhân viên nhận email có link `/reset-password?token=...` để tự đặt mật khẩu mới, **hạn 3
+   giờ**. Link phát trước đó (nếu còn) hết hiệu lực.
+
+Cũng dùng endpoint này để **gửi lại link kích hoạt** khi nhân viên mới chưa kịp đặt mật khẩu
+mà link 3 giờ đã hết hạn.
+
+> Trước 11/2026 endpoint này đặt mật khẩu thành `ho_ten@ma_nhanvien` và gửi nguyên văn qua
+> email. Mẫu đó đoán được nên đã bỏ.
 
 **Response 200:**
 ```json
-{ "success": true, "data": { "message": "Mật khẩu đã được đặt lại và gửi qua email của nhân viên" } }
+{ "success": true, "data": { "message": "Đã gửi link đặt mật khẩu mới tới email của nhân viên. Link có hạn 3 giờ." } }
 ```
+
+FE hiện nguyên `message` trong toast. Hộp xác nhận nên nói rõ mật khẩu cũ sẽ bị vô hiệu ngay.
+
+---
+
+## POST /v1/employees/import — cột mật khẩu không còn dùng
+
+Template Excel vẫn có cột F "Mật khẩu" để file cũ import được, nhưng **server bỏ qua cột này**:
+để trống hay điền gì cũng không bị báo lỗi, và không dùng làm mật khẩu. Mỗi nhân viên được
+import nhận email chào mừng với link tự đặt mật khẩu riêng, hạn 3 giờ. Lỗi theo dòng sẽ không
+còn `field: "password"`.
 
 ---
 

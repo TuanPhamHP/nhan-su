@@ -60,8 +60,6 @@ onMounted(() => {
 const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	fullName: string;
 	email: string;
-	password: string;
-	confirmPassword: string;
 	phone: string;
 	joinDate: string;
 	role: UserRole;
@@ -78,8 +76,6 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	} as Partial<{
 		fullName: string;
 		email: string;
-		password: string;
-		confirmPassword: string;
 		phone: string;
 		joinDate: string;
 		role: UserRole;
@@ -94,9 +90,6 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	validationSchema: {
 		fullName: (v: string) => (v && v.trim().length >= 2 ? true : 'Tối thiểu 2 ký tự'),
 		email: (v: string) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : 'Email không hợp lệ'),
-		password: (v: string) => (v && v.length >= 6 ? true : 'Mật khẩu tối thiểu 6 ký tự'),
-		confirmPassword: (v: string, ctx: { form: { password: string } }) =>
-			v === ctx.form.password ? true : 'Mật khẩu xác nhận không khớp',
 		phone: (v: string) => (!v || /^[0-9]{9,11}$/.test(v) ? true : 'Số điện thoại không hợp lệ (9-11 chữ số)'),
 		joinDate: (v: string) => (v ? true : 'Vui lòng chọn ngày vào làm'),
 		role: (v: string) => (v ? true : 'Vui lòng chọn vai trò'),
@@ -105,8 +98,6 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 
 const [fullName, fullNameAttrs] = defineField('fullName');
 const [email, emailAttrs] = defineField('email');
-const [password, passwordAttrs] = defineField('password');
-const [confirmPassword, confirmPasswordAttrs] = defineField('confirmPassword');
 const [phone, phoneAttrs] = defineField('phone');
 const [joinDate] = defineField('joinDate');
 const [role] = defineField('role');
@@ -132,7 +123,6 @@ const onSubmit = handleSubmit(async values => {
 	const payload: CreateEmployeeDto = {
 		fullName: values.fullName,
 		email: values.email,
-		password: values.password,
 		joinDate: values.joinDate,
 		role: values.role,
 		employmentType: values.employmentType,
@@ -266,28 +256,17 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 							<p v-if="errors.phone" class="mt-1 text-xs text-red-500">{{ errors.phone }}</p>
 						</div>
 
-						<div>
-							<label :class="labelCls">Mật khẩu <span class="text-red-500">*</span></label>
-							<input
-								v-model="password"
-								v-bind="passwordAttrs"
-								type="password"
-								:class="[inputCls, errors.password ? 'border-red-400 focus:ring-red-300' : '']"
-								placeholder="Tối thiểu 6 ký tự"
-							/>
-							<p v-if="errors.password" class="mt-1 text-xs text-red-500">{{ errors.password }}</p>
-						</div>
-
-						<div>
-							<label :class="labelCls">Xác nhận mật khẩu <span class="text-red-500">*</span></label>
-							<input
-								v-model="confirmPassword"
-								v-bind="confirmPasswordAttrs"
-								type="password"
-								:class="[inputCls, errors.confirmPassword ? 'border-red-400 focus:ring-red-300' : '']"
-								placeholder="Nhập lại mật khẩu"
-							/>
-							<p v-if="errors.confirmPassword" class="mt-1 text-xs text-red-500">{{ errors.confirmPassword }}</p>
+						<div
+							data-testid="password-link-note"
+							class="sm:col-span-2 flex items-start gap-2 px-3 py-2.5 rounded-lg border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-900/20 text-xs text-gray-600 dark:text-gray-300"
+						>
+							<svg class="w-4 h-4 mt-px shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							<p>
+								Không cần đặt mật khẩu cho nhân viên. Nhân viên sẽ nhận email tại địa chỉ trên, kèm link tự đặt mật khẩu có hạn 3 giờ.
+								Nếu link hết hạn, hãy bấm "Reset mật khẩu" ở trang chi tiết nhân viên để gửi link mới.
+							</p>
 						</div>
 					</div>
 				</div>
