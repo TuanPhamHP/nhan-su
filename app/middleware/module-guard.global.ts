@@ -1,6 +1,7 @@
 // Chặn vào thẳng màn hình của module đã tắt. Chạy sau `auth.global.ts` (alphabet order); quyền đã
 // được nạp trong auth plugin (await fetchMe). Chưa nạp được thì danh sách rỗng, `canUse` trả true nên
 // không chặn: BE vẫn là nơi chặn thật. Chỉ chế độ xem (`READ_ONLY`) thì vẫn vào được.
+import { moduleLapsedMessage } from '~/utils/module-expiry';
 import { isManagementRole } from '~/utils/role';
 
 export default defineNuxtRouteMiddleware(to => {
@@ -11,7 +12,9 @@ export default defineNuxtRouteMiddleware(to => {
 	const code = moduleOfPath(to.path);
 	if (!code || canUse(code)) return;
 
-	useToast().warning(`${moduleEntitlement(code)?.label ?? 'Tính năng này'} chưa được mở cho công ty này`);
+	const entitlement = moduleEntitlement(code);
+	const label = entitlement?.label ?? 'Tính năng này';
+	useToast().warning(entitlement?.reason === 'LAPSED' ? moduleLapsedMessage(label) : `${label} chưa được mở cho công ty này`);
 
 	const effectiveRole = useUiStore().previewRole ?? authStore.user.role;
 	return navigateTo(isManagementRole(effectiveRole) ? '/management' : '/', { replace: true });

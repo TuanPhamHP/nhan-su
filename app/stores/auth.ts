@@ -4,6 +4,7 @@ import type { ModuleEntitlement } from '~/types/entitlement.types';
 import { useAuthService } from '~/services';
 import { setOnForceLogout, setOnModuleDenied } from '~/services/http/auth.fetch';
 import { getCookie, setCookie, deleteCookie } from '~/utils/cookie';
+import { clearExpiryBannerDismissals } from '~/utils/module-expiry';
 import { useNotificationStore } from '~/stores/notification';
 
 const ACCESS_TOKEN_KEY = 'access_token';
@@ -114,6 +115,7 @@ export const useAuthStore = defineStore('auth', () => {
 	async function startSession(res: AuthResponse) {
 		// Dọn dữ liệu còn sót của phiên trước trong cùng tab trước khi nạp phiên mới.
 		resetCompanyScopedStores();
+		clearExpiryBannerDismissals();
 		logoutNotice.value = null;
 
 		storeTokens(res);

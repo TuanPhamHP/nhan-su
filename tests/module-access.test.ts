@@ -82,11 +82,12 @@ describe('notifyIfModuleDenied', () => {
 		notifyIfModuleDenied('MODULE_NOT_SUBSCRIBED');
 		notifyIfModuleDenied('MODULE_READ_ONLY');
 		notifyIfModuleDenied('MODULE_EXPIRED');
-		expect(onDenied).toHaveBeenCalledTimes(4);
+		notifyIfModuleDenied('MODULE_LAPSED');
+		expect(onDenied).toHaveBeenCalledTimes(5);
 
 		notifyIfModuleDenied('AUTH_TOKEN_EXPIRED');
 		notifyIfModuleDenied('TENANT_SUSPENDED');
 		notifyIfModuleDenied(undefined);
-		expect(onDenied).toHaveBeenCalledTimes(4);
+		expect(onDenied).toHaveBeenCalledTimes(5);
 	});
 });

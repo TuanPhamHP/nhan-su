@@ -344,8 +344,9 @@
       "screen": "BusinessTripDetail",
       "params": { "tripId": "{refId}" },
       "webUrl": "/business-trips?id={id}",
-      "trigger": "Approver duyệt",
-      "recipients": ["owner"],
+      "trigger": "Approver duyệt (hoặc HR nộp hộ không chọn người duyệt → auto-approve)",
+      "recipients": ["owner", "hr"],
+      "note": "HR/ADMIN đang làm việc nhận bản riêng tiêu đề '📌 Đơn công tác cần xử lý' để kịp đặt xe/vé — in-app + FCM, KHÔNG có email. Chủ đơn nếu chính là HR thì chỉ nhận bản owner.",
       "frequency": "real-time"
     },
 
@@ -372,6 +373,18 @@
       "recipients": ["owner", "hr"],
       "frequency": "daily cron",
       "note": "id ở đây là employeeId, không phải contractId"
+    },
+
+    "MODULE_EXPIRY_WARNING": {
+      "category": "EVENT",
+      "refType": "module",
+      "hasEntityId": false,
+      "screen": null,
+      "params": {},
+      "trigger": "Cron 08:00 — module còn 30/14/7/1 ngày đến hạn, ngày đầu chỉ xem, hôm trước ngày chỉ xem cuối",
+      "recipients": ["admin"],
+      "frequency": "daily cron",
+      "note": "Không có màn hình gia hạn trong app nên chỉ hiện thông báo, không điều hướng"
     },
 
     "TEST": {

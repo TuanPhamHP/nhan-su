@@ -6,6 +6,10 @@ Mỗi công ty được người vận hành bật, tắt hoặc đặt hạn d�
 FE ẩn menu chỉ để người dùng không bấm vào chỗ không dùng được, và ADMIN của công ty cũng không đi
 vòng được. Thiết kế: `docs/control-plane.md`, mục "Quyền dùng module".
 
+**Từ 06/11/2026 chỉ `AI_AGENT` là quản lý được.** Mọi mã khác luôn trả `ENABLED`, `reason: null`,
+`expiresAt: null`, nên route của chúng không còn trả `MODULE_*`. FE giữ nguyên cách xử lý theo `state`,
+không viết riêng cho từng mã: danh mục sẽ có thêm module bán riêng.
+
 ---
 
 ## Endpoints
@@ -36,7 +40,8 @@ export type ModuleStateReason =
   | 'NOT_SUBSCRIBED'  // công ty chưa đăng ký module bán thêm
   | 'SUSPENDED'       // người vận hành tắt
   | 'READ_ONLY'       // người vận hành đặt chỉ xem
-  | 'EXPIRED'         // quá hạn dùng, tự về chỉ xem
+  | 'EXPIRED'         // quá hạn dùng, đang trong 14 ngày chỉ xem
+  | 'LAPSED'          // quá hạn dùng trên 14 ngày, module tắt hẳn cho đến khi được gia hạn
   | null;             // dùng đầy đủ
 
 export interface ModuleEntitlement {
@@ -45,6 +50,7 @@ export interface ModuleEntitlement {
   state: ModuleState;
   reason: ModuleStateReason;
   expiresAt: string | null;   // ISO 8601. Có thể có cả khi đang ENABLED: dùng để báo sắp hết hạn
+  graceEndsAt: string | null; // ISO 8601. Qua thời điểm này thì module quá hạn tắt hẳn. null khi không có hạn
 }
 
 export interface EntitlementsResponse {
@@ -63,9 +69,9 @@ export interface EntitlementsResponse {
   "success": true,
   "data": {
     "modules": [
-      { "code": "CORE", "label": "Lõi nhân sự", "state": "ENABLED", "reason": null, "expiresAt": null },
-      { "code": "OVERTIME", "label": "Làm thêm giờ", "state": "READ_ONLY", "reason": "EXPIRED", "expiresAt": "2026-10-31T16:59:59.999Z" },
-      { "code": "REPORTS", "label": "Báo cáo", "state": "DISABLED", "reason": "SUSPENDED", "expiresAt": null }
+      { "code": "CORE", "label": "Lõi nhân sự", "state": "ENABLED", "reason": null, "expiresAt": null, "graceEndsAt": null },
+      { "code": "OVERTIME", "label": "Làm thêm giờ", "state": "READ_ONLY", "reason": "EXPIRED", "expiresAt": "2026-10-31T16:59:59.999Z", "graceEndsAt": "2026-11-14T16:59:59.999Z" },
+      { "code": "REPORTS", "label": "Báo cáo", "state": "DISABLED", "reason": "SUSPENDED", "expiresAt": null, "graceEndsAt": null }
     ]
   }
 }
@@ -88,9 +94,20 @@ Gọi lại endpoint này sau khi đăng nhập, chọn hoặc chuyển công ty
 |---|---|---|---|
 | `ENABLED` | `null` | Bình thường | Bình thường |
 | `READ_ONLY` | `READ_ONLY` | GET được, ghi trả 403 `MODULE_READ_ONLY` | Vẫn hiện menu, ẩn nút tạo, sửa, duyệt |
-| `READ_ONLY` | `EXPIRED` | GET được, ghi trả 403 `MODULE_EXPIRED` | Như trên, kèm dòng báo đã hết hạn |
+| `READ_ONLY` | `EXPIRED` | GET được, ghi trả 403 `MODULE_EXPIRED` | Như trên, kèm dòng báo đã hết hạn và ngày cuối xem được (`graceEndsAt`) |
+| `DISABLED` | `LAPSED` | Mọi route trả 403 `MODULE_LAPSED` | Ẩn menu, chặn màn hình, báo đã hết hạn nên tạm tắt |
 | `DISABLED` | `SUSPENDED` | Mọi route trả 403 `MODULE_SUSPENDED` | Ẩn menu, chặn màn hình |
 | `DISABLED` | `NOT_SUBSCRIBED` | Mọi route trả 403 `MODULE_NOT_SUBSCRIBED` | Ẩn menu, chặn màn hình |
+
+Hạn dùng tính hết ngày giờ Việt Nam. Quá hạn thì chỉ xem thêm 14 ngày, từ ngày thứ 15 thì tắt. Đặt hạn mới
+là dùng lại ngay, dữ liệu không mất ở giai đoạn nào. Đừng tự cộng 14 ngày ở FE, đọc `graceEndsAt`.
+
+**Dòng báo cho admin:** chỉ vai trò hiệu lực `ADMIN` (`previewRole ?? user.role`) mới thấy, vì admin là người
+liên hệ gia hạn. Hiện khi có module còn tối đa 14 ngày đến hạn, đang `EXPIRED` hoặc `LAPSED`. `message` của các
+mã `MODULE_*` không bảo người đọc đi gia hạn vì nhân viên thường cũng đọc câu đó, lời nhắc gia hạn nằm ở dòng
+báo và thông báo cho admin. Admin cũng nhận thông báo `MODULE_EXPIRY_WARNING`
+(`targetUrl` rỗng, `NAVIGATE_ONLY`, không có màn hình gia hạn trong app) và email ở các mốc 30, 14, 7, 1 ngày,
+ngày đầu chỉ xem và hôm trước ngày chỉ xem cuối.
 
 **Gọi endpoint này lỗi thì đừng khoá người dùng:** coi mọi module đang dùng được, API vẫn chặn ở phía
 sau. Đây cũng là cách chạy với BE bản cũ chưa có endpoint (404).
@@ -109,6 +126,7 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 |---|---|---|
 | 403 | `MODULE_NOT_SUBSCRIBED` | Hiện `message`, tải lại entitlements. **Không** đăng xuất |
 | 403 | `MODULE_SUSPENDED` | Như trên |
+| 403 | `MODULE_LAPSED` | Như trên |
 | 403 | `MODULE_READ_ONLY` | Hiện `message`, giữ nguyên dữ liệu người dùng đang nhập |
 | 403 | `MODULE_EXPIRED` | Như trên |
 
@@ -116,7 +134,11 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 
 ## Route theo module
 
-| Mã | Route bị chặn |
+Hiện chỉ dòng `AI_AGENT` có tác dụng. Khi chỉ xem, các `GET` vẫn đọc được hội thoại cũ; chat, xác nhận hay
+huỷ hành động, phản hồi, đổi tên và xoá hội thoại trả 403 `MODULE_EXPIRED`. Các dòng còn lại và hai mục
+dưới bảng chỉ áp dụng nếu module đó được chuyển sang bán riêng.
+
+| Mã | Route gắn cổng |
 |---|---|
 | `AI_AGENT` | `/v1/agent/*` |
 | `REPORTS` | `/v1/reports/*` |
@@ -161,9 +183,13 @@ Các route này thuộc lõi nên vẫn trả 200, chỉ bỏ phần của modul
 |---|---|
 | Không có token | 401, không lộ trạng thái module |
 | Công ty khác cùng hệ thống bị tắt module | Không ảnh hưởng |
-| Mã `CORE` | Luôn `ENABLED`, không tắt được |
+| Mã luôn bật (mọi mã trừ `AI_AGENT`) | Luôn `ENABLED`, không tắt được |
 | Có `expiresAt` trong tương lai | `ENABLED`, `reason: null`. FE có thể báo sắp hết hạn |
-| Đã tắt và có `expiresAt` | `DISABLED`: tắt thắng hạn dùng |
+| Quá hạn đúng 14 ngày | Vẫn `READ_ONLY`, `EXPIRED` đến hết ngày đó |
+| Quá hạn từ ngày thứ 15 | `DISABLED`, `LAPSED` |
+| Chỉ xem do người vận hành đặt rồi quá hạn | Theo hạn dùng như trên |
+| Đã tắt và có `expiresAt` | `DISABLED`, `SUSPENDED`: tắt tay thắng hạn dùng, kể cả đã quá hạn |
+| Đặt hạn mới sau khi `LAPSED` | Trong vòng 30 giây về `ENABLED`, dữ liệu còn nguyên |
 | Bật lại sau khi tắt | Dùng lại bình thường, dữ liệu còn nguyên |
 | Người dùng đang mở màn hình lúc bị tắt | Request kế tiếp trả `MODULE_SUSPENDED` |
 | Socket `/announcements` đang mở khi `ANNOUNCEMENT` bị tắt | Bị ngắt trong tối đa một phút sau khi API nhận trạng thái mới. Mở lại nhận sự kiện `error` mã `MODULE_SUSPENDED` |

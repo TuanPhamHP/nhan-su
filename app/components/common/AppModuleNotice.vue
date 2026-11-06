@@ -1,5 +1,6 @@
 <script setup lang="ts">
-	import { formatDate } from '~/utils/date';
+	import { formatVnDate } from '~/utils/date';
+	import { moduleLapsedMessage } from '~/utils/module-expiry';
 	import type { ModuleCode } from '~/types/entitlement.types';
 
 	const props = defineProps<{ module: ModuleCode }>();
@@ -10,12 +11,14 @@
 	const message = computed(() => {
 		const entitlement = moduleEntitlement(props.module);
 		if (!entitlement || entitlement.state === 'ENABLED') return '';
-		const { label, state, reason, expiresAt } = entitlement;
+		const { label, state, reason, expiresAt, graceEndsAt } = entitlement;
 
+		if (reason === 'LAPSED') return moduleLapsedMessage(label);
 		if (state === 'DISABLED') return `${label} chưa được mở cho công ty này.`;
 		if (reason === 'EXPIRED') {
-			const since = expiresAt ? ` từ ngày ${formatDate(expiresAt)}` : '';
-			return `${label} đã hết hạn dùng${since}, nên hiện chỉ xem được dữ liệu, không tạo, sửa hay duyệt được.`;
+			const since = expiresAt ? ` ngày ${formatVnDate(expiresAt)}` : '';
+			const until = graceEndsAt ? ` đến hết ngày ${formatVnDate(graceEndsAt)}` : '';
+			return `${label} đã hết hạn dùng${since} nên chỉ còn xem được${until}, không tạo, sửa hay duyệt được.`;
 		}
 		return `${label} đang ở chế độ chỉ xem, không tạo, sửa hay duyệt được.`;
 	});
