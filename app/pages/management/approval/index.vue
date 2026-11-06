@@ -29,6 +29,7 @@
 	import { VIOLATION_STATUS_OPTIONS } from '~/utils/violation.utils';
 	import { MAKEUP_STATUS_OPTIONS } from '~/utils/makeup-attendance.utils';
 	import type { ApprovalModuleKey, ApprovalFilterField, ApprovalFilterState } from '~/types/approval.types';
+	import type { ModuleCode } from '~/types/entitlement.types';
 	import type { LeaveRequest, LeaveStatus, QueryLeaveRequestParams } from '~/types/leave.types';
 	import type {
 		MakeupRequestResponse,
@@ -76,22 +77,34 @@
 		key: Tab;
 		label: string;
 		route: string;
+		/** Tab thuộc module bật tắt được: module không `ENABLED` thì không còn đơn để duyệt. */
+		module?: ModuleCode;
 	}
 
 	const tabs: TabConfig[] = [
 		{ key: 'leaveRequests', label: 'Nghỉ phép', route: '/management/leave' },
-		{ key: 'overtimeRequests', label: 'Làm thêm giờ', route: '/management/overtime' },
-		{ key: 'onlineWorkRequests', label: 'Làm online', route: '/management/online-work' },
+		{ key: 'overtimeRequests', label: 'Làm thêm giờ', route: '/management/overtime', module: 'OVERTIME' },
+		{ key: 'onlineWorkRequests', label: 'Làm online', route: '/management/online-work', module: 'ONLINE_WORK' },
 		{ key: 'violationRequests', label: 'Vi phạm chuyên cần', route: '/management/violations' },
 		{ key: 'makeupAttendance', label: 'Bù công', route: '/management/makeup-attendance' },
-		{ key: 'businessTrips', label: 'Công tác', route: '/management/business-trips' },
+		{ key: 'businessTrips', label: 'Công tác', route: '/management/business-trips', module: 'BUSINESS_TRIP' },
 	];
 
-	const activeTab = ref<Tab>((route.query.tab as Tab) || 'leaveRequests');
+	const { canWrite } = useModuleAccess();
+	const visibleTabs = computed(() => tabs.filter(tab => !tab.module || canWrite(tab.module)));
+
+	// Chặn cả deep-link `?tab=overtimeRequests` khi module đó đang tắt: không gọi API của tab bị ẩn.
+	const requestedTab = route.query.tab as Tab | undefined;
+	const activeTab = ref<Tab>(visibleTabs.value.some(tab => tab.key === requestedTab) ? requestedTab! : 'leaveRequests');
 
 	watch(activeTab, tab => {
 		router.replace({ query: { ...route.query, tab } });
 		loadCurrentTab();
+	});
+
+	// Module bị tắt ngay lúc đang mở tab của nó (biết được khi API trả `MODULE_*`).
+	watch(visibleTabs, list => {
+		if (!list.some(tab => tab.key === activeTab.value)) activeTab.value = 'leaveRequests';
 	});
 
 	// ─── Filters ──────────────────────────────────────────────────────────────────
@@ -644,7 +657,7 @@
 		<!-- Tabs -->
 		<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit overflow-x-auto max-w-full">
 			<button
-				v-for="tab in tabs"
+				v-for="tab in visibleTabs"
 				:key="tab.key"
 				class="flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap"
 				:class="

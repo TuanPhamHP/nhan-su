@@ -14,6 +14,8 @@ const emit = defineEmits<{
 	view: [];
 }>();
 
+const { canWrite } = useModuleAccess();
+
 function formatDate(d: string) {
 	return format(new Date(d), 'dd/MM/yyyy');
 }
@@ -104,7 +106,7 @@ const isOvernight = computed(() => formatDate(props.request.startTime) !== forma
 		<!-- Actions -->
 		<div class="flex items-center justify-end gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
 			<CommonAppButton
-				v-if="request.canBeCancelled"
+				v-if="request.canBeCancelled && canWrite('OVERTIME')"
 				size="sm"
 				variant="outline"
 				:loading="cancelling"

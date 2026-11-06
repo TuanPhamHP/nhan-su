@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import type { AuthResponse, AuthUser, CompanyOption, LoginDto, LoginResponse } from '~/types/auth.types';
+import type { ModuleEntitlement } from '~/types/entitlement.types';
 import { useAuthService } from '~/services';
-import { setOnForceLogout } from '~/services/http/auth.fetch';
+import { setOnForceLogout, setOnModuleDenied } from '~/services/http/auth.fetch';
 import { getCookie, setCookie, deleteCookie } from '~/utils/cookie';
 import { useNotificationStore } from '~/stores/notification';
 
@@ -16,6 +17,11 @@ export const useAuthStore = defineStore('auth', () => {
 	const company = ref<CompanyOption | null>(null);
 	/** Mọi công ty tài khoản vào được, dùng cho bộ chọn ở header và link `?t=`. */
 	const companies = ref<CompanyOption[]>([]);
+	/**
+	 * Quyền dùng module của công ty hiện tại. Rỗng nghĩa là chưa nạp được (BE cũ, lỗi mạng): khi đó
+	 * coi mọi module dùng được, API vẫn chặn ở phía sau. Đọc qua `useModuleAccess`.
+	 */
+	const modules = ref<ModuleEntitlement[]>([]);
 	/** Lý do bị đăng xuất ngoài ý muốn (VD công ty ngừng dịch vụ), trang đăng nhập hiện câu này. */
 	const logoutNotice = ref<string | null>(null);
 
@@ -37,6 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
 		permissions.value = [];
 		company.value = null;
 		companies.value = [];
+		modules.value = [];
 		resetCompanyScopedStores();
 	}
 
@@ -45,6 +52,11 @@ export const useAuthStore = defineStore('auth', () => {
 	setOnForceLogout(notice => {
 		clearSession();
 		logoutNotice.value = notice ?? null;
+	});
+
+	// API trả `MODULE_*` nghĩa là quyền đang giữ đã cũ: tải lại ở nền để menu tự cập nhật.
+	setOnModuleDenied(() => {
+		void loadEntitlements();
 	});
 
 	const isAuthenticated = computed(() => !!token.value);
@@ -67,6 +79,32 @@ export const useAuthStore = defineStore('auth', () => {
 		}
 	}
 
+	// Nhiều request cùng trả `MODULE_*` một lúc thì chỉ tải lại một lần.
+	let entitlementsRequest: Promise<void> | null = null;
+
+	/** Không bao giờ ném lỗi: lỗi hay 404 (BE cũ) thì để rỗng, không được khoá người dùng. */
+	function loadEntitlements(): Promise<void> {
+		if (!token.value) return Promise.resolve();
+		if (entitlementsRequest) return entitlementsRequest;
+
+		const requestedFor = token.value;
+		entitlementsRequest = (async () => {
+			let next: ModuleEntitlement[] = [];
+			try {
+				const { getEntitlements } = useAuthService();
+				const res = await getEntitlements();
+				next = res.modules ?? [];
+			} catch {
+				// Xem ghi chú ở `modules`.
+			}
+			// Trong lúc chờ đã đăng xuất hoặc đổi phiên thì kết quả này không còn là của phiên hiện tại.
+			if (token.value === requestedFor) modules.value = next;
+		})().finally(() => {
+			entitlementsRequest = null;
+		});
+		return entitlementsRequest;
+	}
+
 	function storeTokens(res: AuthResponse) {
 		setCookie(ACCESS_TOKEN_KEY, res.accessToken, 60 * 60 * 24);
 		setCookie(REFRESH_TOKEN_KEY, res.refreshToken, 60 * 60 * 24 * 7);
@@ -83,8 +121,10 @@ export const useAuthStore = defineStore('auth', () => {
 		user.value = { ...res.user, department: null };
 		company.value = res.company;
 		companies.value = res.companies;
+		modules.value = [];
+		entitlementsRequest = null;
 
-		await loadPermissions();
+		await Promise.all([loadPermissions(), loadEntitlements()]);
 		const { load: loadDirectory } = useDirectoryStore();
 		loadDirectory();
 		const { load: loadMetadata } = useMetaDataStore();
@@ -129,6 +169,8 @@ export const useAuthStore = defineStore('auth', () => {
 		company.value = res.company;
 		companies.value = res.companies;
 		permissions.value = [];
+		// Tải lại toàn trang ngay dưới đây: plugin auth gọi `fetchMe` và nạp quyền của công ty mới.
+		modules.value = [];
 
 		if (import.meta.client) window.location.assign(redirectTo);
 	}
@@ -147,7 +189,7 @@ export const useAuthStore = defineStore('auth', () => {
 				avatarUrl: emp.avatarUrl,
 				department: emp.department ?? null,
 			};
-			await loadPermissions();
+			await Promise.all([loadPermissions(), loadEntitlements()]);
 			const { load: loadDirectory } = useDirectoryStore();
 			loadDirectory();
 			const { load: loadMetadata } = useMetaDataStore();
@@ -180,6 +222,7 @@ export const useAuthStore = defineStore('auth', () => {
 		permissions,
 		company,
 		companies,
+		modules,
 		logoutNotice,
 		isAuthenticated,
 		login,
@@ -187,6 +230,7 @@ export const useAuthStore = defineStore('auth', () => {
 		switchCompany,
 		fetchMe,
 		loadPermissions,
+		loadEntitlements,
 		logout,
 		initFromCookie,
 	};

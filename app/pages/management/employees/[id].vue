@@ -22,6 +22,7 @@
 	const authStore = useAuthStore();
 	const imageViewer = useImageViewerStore();
 	const { hasPermission } = usePermissions();
+	const { canUse } = useModuleAccess();
 
 	function openAvatar(url: string) {
 		imageViewer.open([url], 0);
@@ -36,10 +37,13 @@
 	const canTerminate = computed(() => hasPermission('employee:terminate'));
 	// Tab Hợp đồng lộ cả lương cơ bản → phải theo đúng quyền, không chỉ theo vai trò.
 	// BE đã chặn (contract:read), đây là để không hiện tab rồi mới báo lỗi.
-	const canReadContracts = computed(() => hasPermission('contract:read'));
+	// Hai tab này thuộc module CONTRACT_INSURANCE: công ty chưa mở thì ẩn, kể cả với ADMIN.
+	const canReadContracts = computed(() => canUse('CONTRACT_INSURANCE') && hasPermission('contract:read'));
 	// Tab BHXH lộ mức lương tham gia bảo hiểm + mã số thuế. BE chặn bằng
 	// `social-insurance:read` (chỉ HR theo master list).
-	const canReadSocialInsurance = computed(() => hasPermission('social-insurance:read'));
+	const canReadSocialInsurance = computed(
+		() => canUse('CONTRACT_INSURANCE') && hasPermission('social-insurance:read'),
+	);
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, terminate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -77,6 +81,12 @@
 		return requested;
 	}
 	const activeTab = ref<TabId>(initialTab());
+	// Module bị tắt ngay lúc đang mở tab của nó (biết được khi API trả `MODULE_*`): về tab Thông tin.
+	watch([canReadContracts, canReadSocialInsurance], ([contracts, socialInsurance]) => {
+		if ((activeTab.value === 'contracts' && !contracts) || (activeTab.value === 'social-insurance' && !socialInsurance)) {
+			activeTab.value = 'info';
+		}
+	});
 	// Không auto-enter edit mode khi user không có employee:update.
 	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 	const confirmDeactivate = ref(false);

@@ -17,6 +17,7 @@
 	const { updateProfile, uploadAvatar, uploadingAvatar } = useProfile();
 	const authStore = useAuthStore();
 	const metaDataStore = useMetaDataStore();
+	const { canUse } = useModuleAccess();
 
 	const router = useRouter();
 	// ─── Load profile ─────────────────────────────────────────────────────────────
@@ -527,7 +528,7 @@
 			</div>
 
 			<!-- Chỉ đọc, có cửa mật khẩu. Không nhận employeeId: server lấy từ JWT. -->
-			<ProfileSocialInsurance />
+			<ProfileSocialInsurance v-if="canUse('CONTRACT_INSURANCE')" />
 
 			<!-- Cùng mô hình: chỉ đọc, cửa mật khẩu riêng, server lấy employeeId từ JWT. -->
 			<ProfileIdentity />

@@ -29,9 +29,14 @@ const route = useRoute();
 const router = useRouter();
 
 const { canApprove } = usePermissions();
+const { canWrite } = useModuleAccess();
 
 function canApproveOvertime(req: OvertimeRequestResponse): boolean {
-	return req.status === 'PENDING' && canApprove(req.assignedApprover?.id ?? null, APPROVE_PERMISSIONS.overtime);
+	return (
+		canWrite('OVERTIME') &&
+		req.status === 'PENDING' &&
+		canApprove(req.assignedApprover?.id ?? null, APPROVE_PERMISSIONS.overtime)
+	);
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
@@ -83,7 +88,12 @@ async function fetchRequests() {
 		page: requestFilter.page,
 		limit: 20,
 	};
-	await fetchAll(params);
+	try {
+		await fetchAll(params);
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách đơn OT');
+		return;
+	}
 	// Recompute summary from full result (approximate based on visible page)
 	summaryPending.value = requests.value.filter(r => r.status === 'PENDING').length;
 	summaryApproved.value = requests.value.filter(r => r.status === 'APPROVED').length;
@@ -253,6 +263,8 @@ watch(activeTab, tab => {
 			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý OT</h1>
 			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Duyệt đơn làm thêm giờ và xem báo cáo OT</p>
 		</div>
+
+		<CommonAppModuleNotice module="OVERTIME" />
 
 		<!-- Tabs -->
 		<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">

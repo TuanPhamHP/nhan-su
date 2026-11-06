@@ -202,6 +202,7 @@ gọi `/select-company`.
 | 401 | `AUTH_INVALID_CREDENTIALS` | Sai email hoặc mật khẩu (còn N lần thử), hoặc tài khoản chưa kích hoạt |
 | 403 | `AUTH_ACCOUNT_LOCKED` | Sai quá 5 lần — khóa 30 phút (khoá cả tài khoản, mọi công ty) |
 | 403 | `AUTH_NO_ACTIVE_COMPANY` | Đúng mật khẩu nhưng không còn công ty nào vào được (nghỉ việc, bị khoá ở mọi nơi) |
+| 403 | `AUTH_ACCOUNT_DISABLED` | Đúng mật khẩu nhưng tài khoản bị người vận hành vô hiệu. Sai mật khẩu vẫn nhận 401 |
 | 503 | `PLATFORM_NOT_CONFIGURED` | Server chưa cấu hình database platform (chỉ gặp ở máy dev) |
 
 > **Brute-force protection:** Sau 5 lần sai liên tiếp, tài khoản bị khóa **30 phút**. Bộ đếm
@@ -222,6 +223,7 @@ gọi `/select-company`.
 |------|------|------------|
 | 401 | `AUTH_SELECTION_EXPIRED` | `selectionToken` sai hoặc quá 5 phút → quay lại màn đăng nhập |
 | 403 | `TENANT_ACCESS_DENIED` | `companyCode` không nằm trong danh sách được chọn |
+| 403 | `AUTH_ACCOUNT_DISABLED` | Tài khoản bị vô hiệu sau khi nhận `selectionToken` |
 
 > `selectionToken` **không** phải access token: dùng nó gọi API khác sẽ nhận 401.
 
@@ -247,6 +249,7 @@ thuộc công ty cũ — phải xoá hết rồi nạp lại, cách an toàn nh�
 | 400 | `TENANT_ALREADY_CURRENT` | Đang ở chính công ty đó |
 | 401 | — | Chưa xác thực |
 | 403 | `TENANT_ACCESS_DENIED` | Không thuộc công ty đó, hoặc hồ sơ ở đó không còn hoạt động |
+| 403 | `AUTH_ACCOUNT_DISABLED` | Tài khoản bị vô hiệu. Thực tế hiếm gặp: vô hiệu đã huỷ phiên nên request thường nhận 401 trước |
 
 ---
 
@@ -311,7 +314,7 @@ Gọi khi `accessToken` hết hạn (nhận 401). Không cần header Authorizat
 
 | HTTP | Code | Nguyên nhân |
 |------|------|------------|
-| 401 | `AUTH_TOKEN_EXPIRED` | Token sai, đã dùng, hết hạn (7 ngày), phiên bị hủy, hoặc không còn thuộc công ty đó |
+| 401 | `AUTH_TOKEN_EXPIRED` | Token sai, đã dùng, hết hạn (7 ngày), phiên bị hủy, không còn thuộc công ty đó, hoặc tài khoản đã bị vô hiệu |
 | 403 | `TENANT_SUSPENDED` | Công ty đã ngừng dịch vụ |
 | 503 | `TENANT_MAINTENANCE` | Công ty đang bảo trì — thử lại sau, KHÔNG đăng xuất người dùng |
 
@@ -509,6 +512,11 @@ export function useAuth() {
 | Nghỉ việc ở mọi công ty | 403 `AUTH_NO_ACTIVE_COMPANY` |
 | Nghỉ việc ở A, vẫn làm ở B | Login vào thẳng B |
 | Login khi đang bị lock (< 30 phút) | 403 `AUTH_ACCOUNT_LOCKED` |
+| Tài khoản bị vô hiệu, login đúng mật khẩu | 403 `AUTH_ACCOUNT_DISABLED` — hiện `message`, không cho thử lại liên tục |
+| Tài khoản bị vô hiệu, login sai mật khẩu | 401 `AUTH_INVALID_CREDENTIALS` — không lộ trạng thái |
+| Tài khoản bị vô hiệu giữa phiên | Access token và refresh token đều 401 — đăng xuất như phiên hết hạn |
+| `POST /forgot-password` với tài khoản bị vô hiệu | 204, không gửi email — không tiết lộ |
+| `POST /reset-password` hoặc `/accept-invite` bằng link cấp trước khi tài khoản bị vô hiệu | 400 `AUTH_INVALID_RESET_TOKEN` hoặc `AUTH_INVALID_INVITE_TOKEN`. Bật lại thì link còn hạn dùng tiếp |
 | `POST /refresh` với token đã dùng (cũ) | 401 — token đã rotate |
 | `POST /refresh` sau khi đổi mật khẩu ở thiết bị khác | 401 — mọi phiên đã bị hủy |
 | `POST /switch` rồi dùng access token cũ | 401 — phiên cũ đã bị hủy |

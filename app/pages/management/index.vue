@@ -4,6 +4,7 @@
 	import { useDashboard, isCompanyDashboard, isDepartmentDashboard } from '~/composables/useDashboard';
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import type { ActivityItem, ActivityType, HRAnalyticsData, CompanyStats } from '~/types/dashboard.types';
+	import type { ModuleCode } from '~/types/entitlement.types';
 	import DashboardDeptChart from '~/components/modules/dashboard/DashboardDeptChart.vue';
 	import DashboardAgeChart from '~/components/modules/dashboard/DashboardAgeChart.vue';
 	import DashboardContractChart from '~/components/modules/dashboard/DashboardContractChart.vue';
@@ -20,6 +21,7 @@
 	const router = useRouter();
 	const { dashboard, loading, fetchDashboard } = useDashboard();
 	const leaveService = useLeaveRequestService();
+	const { canUse, canWrite } = useModuleAccess();
 
 	// ─── Derived state ────────────────────────────────────────────────────────────
 
@@ -39,9 +41,19 @@
 
 	const recentActivity = computed(() => dashboard.value?.recentActivity ?? []);
 
+	// Khung "Đơn cần duyệt" chỉ nói về đơn còn xử lý được. Đây là lọc của riêng khung này, số liệu vẫn đọc từ BE.
+	const ACTIVITY_MODULE: Partial<Record<ActivityType, ModuleCode>> = {
+		overtime: 'OVERTIME',
+		online_work: 'ONLINE_WORK',
+	};
+
 	const pendingItems = computed(() =>
 		recentActivity.value
 			.filter(a => ['PENDING', 'PENDING_L1', 'PENDING_L2', 'PENDING_L3'].includes(a.status))
+			.filter(a => {
+				const code = ACTIVITY_MODULE[a.type];
+				return !code || canWrite(code);
+			})
 			.slice(0, 5),
 	);
 
@@ -178,11 +190,17 @@
 		</div>
 
 		<!-- ─── ROW 1: STAT CARDS ─────────────────────────────────────────────────── -->
-		<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+		<div
+			data-testid="dashboard-stat-grid"
+			:class="[
+				'grid grid-cols-1 sm:grid-cols-2 gap-4',
+				canUse('CONTRACT_INSURANCE') ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+			]"
+		>
 			<!-- Skeleton -->
 			<template v-if="loading">
 				<div
-					v-for="n in 5"
+					v-for="n in canUse('CONTRACT_INSURANCE') ? 5 : 4"
 					:key="n"
 					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 animate-pulse"
 				>
@@ -289,8 +307,8 @@
 							</p>
 							<div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
 								<span>📅 {{ stats.pendingLeave }}</span>
-								<span>⏱ {{ stats.pendingOT }}</span>
-								<span>🏠 {{ stats.pendingOnlineWork }}</span>
+								<span v-if="canUse('OVERTIME')">⏱ {{ stats.pendingOT }}</span>
+								<span v-if="canUse('ONLINE_WORK')">🏠 {{ stats.pendingOnlineWork }}</span>
 								<span>⚠ {{ stats.pendingViolation }}</span>
 							</div>
 						</div>
@@ -338,6 +356,7 @@
 
 				<!-- Card 5: Hợp đồng sắp hết hạn -->
 				<NuxtLink
+					v-if="canUse('CONTRACT_INSURANCE')"
 					to="/management/contracts?filter=expiring"
 					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-all"
 					:class="
@@ -383,7 +402,13 @@
 		</div>
 
 		<!-- ─── ROW 2: CHARTS ─────────────────────────────────────────────────────── -->
-		<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+		<div
+			data-testid="dashboard-chart-grid"
+			:class="[
+				'grid grid-cols-1 md:grid-cols-2 gap-4',
+				canUse('CONTRACT_INSURANCE') ? 'xl:grid-cols-4' : 'xl:grid-cols-3',
+			]"
+		>
 			<!-- Dept chart: 50% on xl -->
 			<div
 				class="xl:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm"
@@ -434,7 +459,10 @@
 			</div>
 
 			<!-- Contract donut: 25% on xl -->
-			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+			<div
+				v-if="canUse('CONTRACT_INSURANCE')"
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm"
+			>
 				<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
 					Loại hợp đồng
 				</p>

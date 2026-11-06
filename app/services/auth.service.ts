@@ -15,6 +15,7 @@ import type {
 	UpdateProfilePayload,
 } from '~/types/auth.types';
 import type { Employee } from '~/types/employee.types';
+import type { EntitlementsResponse } from '~/types/entitlement.types';
 import type { ApiResponse } from '~/types/api.types';
 import { useAuthFetch } from './http/auth.fetch';
 import { usePublicFetch } from './http/public.fetch';
@@ -85,6 +86,12 @@ export const useAuthService = () => {
 		/** Quyền ở công ty hiện tại, kèm công ty hiện tại và danh sách công ty của tài khoản. */
 		async authMe(): Promise<MeResponse> {
 			const res = await authFetch<ApiResponse<MeResponse>>('/v1/auth/me');
+			return res.data;
+		},
+
+		/** Trạng thái mọi module của công ty trong phiên hiện tại. */
+		async getEntitlements(): Promise<EntitlementsResponse> {
+			const res = await authFetch<ApiResponse<EntitlementsResponse>>('/v1/me/entitlements');
 			return res.data;
 		},
 

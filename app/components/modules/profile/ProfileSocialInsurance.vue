@@ -95,6 +95,9 @@
 	<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
 		<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-5">BHXH &amp; Thuế TNCN</h3>
 
+		<!-- Chỉ xem hay hết hạn vẫn mở được bằng mật khẩu (BE cho phép), dòng này chỉ báo không sửa được. -->
+		<CommonAppModuleNotice module="CONTRACT_INSURANCE" class="mb-4" />
+
 		<!-- ── Chưa mở khoá ── -->
 		<template v-if="!unlocked">
 			<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
