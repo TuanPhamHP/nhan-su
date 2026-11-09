@@ -128,6 +128,7 @@ Shape đồng nhất cho mọi lỗi:
 | 404  | `NOT_FOUND` |
 | 409  | `CONFLICT` |
 | 500  | `INTERNAL_SERVER_ERROR` |
+| 503  | `SERVER_BUSY` (hệ thống đang quá tải, giữ nguyên phiên và cho thử lại), `TENANT_MAINTENANCE` |
 
 ### 4. No Content (204)
 

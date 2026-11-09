@@ -37,6 +37,8 @@
 | POST | `/v1/agent/messages/:id/feedback` | Chủ hội thoại | Chấm điểm một câu trả lời (gọi lại = sửa điểm cũ) |
 | GET | `/v1/agent/analytics/overview` | `ADMIN`, `HR`, `DIRECTOR` | Token/chi phí/chủ đề toàn hệ thống |
 | GET | `/v1/agent/analytics/feedback` | `ADMIN`, `HR`, `DIRECTOR` | Bảng đánh giá: điểm theo chủ đề, theo tier, góp ý chữ |
+| GET | `/v1/agent/analytics/conversations` | **chỉ `ADMIN`** | Danh sách hội thoại của nhân viên để xem lại |
+| GET | `/v1/agent/analytics/conversations/:id/messages` | **chỉ `ADMIN`** | Toàn bộ một hội thoại. Mỗi lần gọi ghi một dòng nhật ký hệ thống |
 | GET | `/v1/agent/analytics/me` | Mọi user | Token/chi phí của chính mình |
 
 Trợ lý chỉ đọc được dữ liệu mà **chính người gọi** có quyền xem: mọi truy vấn bị giới hạn bởi
@@ -788,6 +790,7 @@ Cùng query params như trên; `topLimit` ở đây là **số góp ý chữ** t
         "comment": "Số ngày phép không khớp bảng của kế toán",
         "playbookId": "leave-balance", "routerTier": "RULE",
         "employeeId": 14, "fullName": "Lê Thị Thùy Linh",
+        "conversationId": 31, "messageId": 88,
         "createdAt": "2026-09-28T10:02:00.000Z" }
     ]
   }
@@ -798,13 +801,100 @@ Cùng query params như trên; `topLimit` ở đây là **số góp ý chữ** t
 `KHÔNG_RÕ` — giữ lại để tổng các nhóm khớp tổng chung, đừng lọc bỏ.
 
 > **Ranh giới quyền riêng tư — đọc kỹ trước khi dựng UI:** endpoint này **KHÔNG** trả nội dung câu
-> hỏi / câu trả lời của lượt bị chấm, và sẽ không bao giờ trả. Hội thoại của một người chỉ chính họ
-> đọc được (`/conversations/:id/messages` lọc theo chủ sở hữu) — mở đường cho HR đọc nội dung chat
-> qua cửa báo cáo là phá đúng ranh giới đó. Thứ duy nhất đọc được là `comment` do người dùng **tự
-> gõ và tự gửi**. Đừng dựng UI kiểu "xem lại đoạn chat bị chấm tệ" rồi chờ BE bổ sung field.
+> hỏi / câu trả lời của lượt bị chấm, vì `HR` và `DIRECTOR` cũng gọi được nó. Với hai role đó, thứ
+> duy nhất đọc được vẫn là `comment` do người dùng **tự gõ và tự gửi**. Nội dung chat chỉ `ADMIN`
+> đọc được, qua hai endpoint ở mục ngay dưới, và mỗi lần mở đều có log. Chủ dự án chốt việc đổi
+> ranh giới này ngày 09/11/2026 để tìm xem người dùng đang phàn nàn gì.
+
+`conversationId` và `messageId` là `null` khi người dùng đã xoá hội thoại đó. Khi đó không hiện
+nút mở hội thoại. Hai field này chỉ là mã số, `HR` và `DIRECTOR` có nhận được cũng không đọc thêm
+được gì.
 
 Nhóm có ít lượt chấm (dưới ~5) thì `satisfactionRate` gần như vô nghĩa — nên đánh dấu "ít mẫu"
 trên UI thay vì tô đỏ một chủ đề chỉ vì đúng một người bấm "Tệ".
+
+### Xem lại hội thoại của nhân viên — chỉ ADMIN
+
+Dùng để biết người dùng đang hỏi gì và phàn nàn gì, từ đó cải thiện trợ lý. Hội thoại người dùng đã
+xoá không hiện ở đây.
+
+**`GET /v1/agent/analytics/conversations`**
+
+| Query | Kiểu | Ghi chú |
+|---|---|---|
+| `from`, `to` | ISO 8601 | Mặc định 30 ngày gần nhất, tối đa 366 ngày. Hội thoại có **tin nhắn** trong khoảng thì hiện |
+| `employeeId` | số | Bỏ trống là toàn bộ nhân viên |
+| `onlyIssues` | `true`/`false` | Chỉ hội thoại có lượt bị chấm Tệ hoặc Trung bình, rơi về fallback, hoặc lỗi |
+| `page`, `limit` | số | Mặc định 1 và 20, `limit` tối đa 50 |
+
+```jsonc
+{
+  "success": true,
+  "data": [
+    {
+      "id": 31,
+      "title": "Hỏi số ngày phép còn lại",
+      "employeeId": 14,
+      "fullName": "Lê Thị Thùy Linh",
+      "employeeCode": "EMP014",
+      "department": "Phòng Nhân sự",
+      "lastMessageAt": "2026-09-24T09:16:00.000Z",
+      "createdAt": "2026-09-24T09:10:00.000Z",
+      "messageCount": 6,
+      "badRatings": 1,      // số câu trả lời bị chấm Tệ
+      "averageRatings": 0,  // số câu trả lời bị chấm Trung bình
+      "comments": 1,        // số lượt chấm có kèm góp ý chữ
+      "fallbacks": 0,       // số lượt trợ lý không hiểu câu hỏi
+      "errors": 0           // số lượt lỗi tool hoặc lỗi model
+    }
+  ],
+  "meta": { "page": 1, "limit": 20, "total": 27, "totalPages": 2 }
+}
+```
+
+**`GET /v1/agent/analytics/conversations/:id/messages`**
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "conversation": { /* đúng hình dạng một dòng ở danh sách trên */ },
+    "messages": [
+      { "id": 87, "role": "user", "text": "Tôi còn mấy ngày phép?", "feedback": null,
+        "createdAt": "2026-09-24T09:10:00.000Z" },
+      { "id": 88, "role": "assistant", "text": "Bạn còn **5** ngày phép.",
+        "charts": [ /* AgentChart, vắng mặt khi lượt đó không vẽ */ ],
+        "tables": [ /* AgentTable, vắng mặt khi lượt đó không có bảng */ ],
+        "feedback": {
+          "messageId": 88, "rating": "BAD", "ratingLabel": "Tệ",
+          "comment": "Số ngày phép không khớp bảng của kế toán",
+          "playbookId": "leave-balance",
+          "createdAt": "2026-09-24T09:12:00.000Z",
+          "updatedAt": "2026-09-24T09:12:00.000Z"
+        },
+        "createdAt": "2026-09-24T09:10:04.000Z" }
+    ]
+  }
+}
+```
+
+`role` là `user`, `assistant` hoặc `system`. `feedback` là điểm của **chủ hội thoại**, `null` khi
+chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được chấm.
+
+| Lỗi | Khi nào |
+|---|---|
+| 400 | Khoảng ngày sai hoặc quá 366 ngày, `id` không phải số, `limit` quá 50, `onlyIssues` sai |
+| 401 | Không có token hoặc phiên hết hạn |
+| 403 | Không phải `ADMIN`, kể cả chính chủ hội thoại. Hoặc công ty đã tắt module (`MODULE_*`) |
+| 404 | Hội thoại không tồn tại hoặc người dùng đã xoá |
+
+**Ba điều client phải giữ:**
+
+- Ẩn toàn bộ phần này khi `role !== 'ADMIN'`. `HR` và `DIRECTOR` vào được trang mức dùng nhưng gọi
+  hai endpoint này sẽ nhận 403.
+- Chỉ gọi `/messages` khi ADMIN **bấm mở** một hội thoại. Mỗi lần gọi là một dòng nhật ký
+  `agent.conversation_view` ghi tên người xem, nên tải trước hay tự tải lại sẽ làm sai dấu vết.
+- Đây là màn chỉ đọc: không có nút chấm điểm, không có form xác nhận, không gọi API ghi nào.
 
 ---
 
@@ -874,6 +964,18 @@ Render form **tổng quát theo `AgentForm`**, đừng hardcode riêng cho từn
 
 Ngoài ra `leave_listTeam` có thêm tham số **`employeeId`** — xem
 [`../ai-agent/tools.md`](../ai-agent/tools.md).
+
+### Tool đọc thêm ngày 09/11/2026 — tra lịch sử đơn từ
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `request_listMine` | `request-history` | Đơn từ của chính mình, đủ 7 loại đơn | mọi role |
+| `request_listByEmployee` | `request-history` | Đơn từ của một nhân viên khác | `ADMIN` `HR` |
+
+Client **không phải sửa gì**: không có endpoint hay loại sự kiện SSE mới, bảng kết quả đi qua sự kiện
+`table` như các tool khác. Từ ngày này `leave_listTeam` chỉ nhận `employeeId` của người khác từ `ADMIN`
+và `HR`. Vai trò khác hỏi về đơn của một người cụ thể sẽ nhận câu trả lời từ chối dạng văn bản bình
+thường, không phải mã lỗi HTTP.
 
 ⚠️ **Về số lượt giải trình — đừng hiển thị như hạn mức.** Ngưỡng 5 KHÔNG chặn nộp phiếu;
 nó chỉ quyết phiếu tiếp theo cần 1 hay 2 cấp duyệt. Response có `hasHardLimit: false` và
@@ -1494,7 +1596,8 @@ riêng theo nghiệp vụ, nên client nhận được: `BAD_REQUEST` (400) · `
 | Resume stream (`Last-Event-ID`) | **Chưa có** | Mất kết nối = hỏi lại từ đầu |
 | Endpoint gợi ý câu hỏi (suggested prompts) | **Chưa có** | Client tự hardcode danh sách gợi ý theo role |
 | Endpoint đọc quota còn lại | **Chưa có** | Chỉ biết đã hết khi bị từ chối. Cần hiện trước thì phải yêu cầu BE thêm |
-| Xem lại đoạn chat của lượt bị chấm tệ | **Không có, và là CHỦ Ý** | Hội thoại chỉ chủ hội thoại đọc được. Báo cáo chỉ có `comment` người dùng tự gõ — đừng dựng UI chờ field này |
+| Xem lại đoạn chat của lượt bị chấm tệ | **Đã có từ 09/11/2026, chỉ `ADMIN`** | Xem mục "Xem lại hội thoại của nhân viên". `HR` và `DIRECTOR` vẫn chỉ có `comment` người dùng tự gõ |
+| Báo nhân viên rằng ADMIN có thể xem lại hội thoại | **Chưa làm, chủ dự án quyết sau khi test local** | Khung chat chưa có dòng thông báo nào. Phải chốt trước khi đưa lên production |
 | Xoá / rút lại đánh giá đã gửi | **Chưa có** | Đổi sang mức khác thì được (gọi lại endpoint); không có đường về trạng thái "chưa chấm" |
 | Câu trả lời rỗng ở lượt không gọi tool | **Đã vá 30/09/2026** | Model thỉnh thoảng trả về text rỗng. Server nay **tự gọi lại một lần** (client không thấy gì khác ngoài việc `done` tới chậm hơn ~1 lượt model). Vẫn rỗng sau lần hai thì trả câu *"Mình chưa trả lời được câu này…"* và ghi `MODEL_ERROR`. Client **đừng** coi câu đó là lỗi mạng và **đừng tự retry** — server đã thử rồi |
 | Tag `AI Agent` chưa `addTag` trong `main.ts` | Nhỏ | Nhóm endpoint trong Swagger UI thiếu mô tả; shape không ảnh hưởng |
