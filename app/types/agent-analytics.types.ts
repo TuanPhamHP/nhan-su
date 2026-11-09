@@ -1,3 +1,5 @@
+import type { AgentChart, AgentTable } from '~/types/agent.types';
+
 export interface AgentUsagePoint {
 	/** Ngày (YYYY-MM-DD), hoặc tên model / mục đích tuỳ endpoint */
 	bucket: string;
@@ -80,8 +82,8 @@ export interface AgentFeedbackGroup {
 }
 
 /**
- * Một góp ý chữ. KHÔNG có nội dung câu hỏi / câu trả lời của lượt đó — backend cố ý
- * không trả, vì hội thoại chỉ chủ hội thoại được đọc.
+ * Một góp ý chữ. KHÔNG có nội dung câu hỏi / câu trả lời của lượt đó — HR và DIRECTOR cũng
+ * nhận response này, còn nội dung chat chỉ ADMIN đọc được qua `/analytics/conversations`.
  */
 export interface AgentFeedbackComment {
 	id: number;
@@ -92,6 +94,9 @@ export interface AgentFeedbackComment {
 	routerTier: string | null;
 	employeeId: number;
 	fullName: string;
+	/** `null` khi người dùng đã xoá hội thoại đó — khi đó không có gì để mở. */
+	conversationId: number | null;
+	messageId: number | null;
 	createdAt: string;
 }
 
@@ -121,6 +126,60 @@ export interface AgentAnalyticsQuery {
 	to?: string;
 	employeeId?: number;
 	topLimit?: number;
+}
+
+/** Một hội thoại ở màn xem lại của ADMIN, kèm số lượt có vấn đề. */
+export interface AgentReviewConversation {
+	id: number;
+	title: string | null;
+	employeeId: number;
+	fullName: string;
+	employeeCode: string | null;
+	department: string | null;
+	lastMessageAt: string | null;
+	createdAt: string;
+	messageCount: number;
+	badRatings: number;
+	averageRatings: number;
+	comments: number;
+	fallbacks: number;
+	errors: number;
+}
+
+export interface AgentReviewFeedback {
+	messageId: number;
+	rating: string;
+	ratingLabel: string;
+	comment: string | null;
+	playbookId: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface AgentReviewMessage {
+	id: number;
+	role: 'user' | 'assistant' | 'system';
+	text: string;
+	charts?: AgentChart[];
+	tables?: AgentTable[];
+	/** Điểm của chủ hội thoại. `null` = chưa chấm. */
+	feedback: AgentReviewFeedback | null;
+	createdAt: string;
+}
+
+export interface AgentConversationTranscript {
+	conversation: AgentReviewConversation;
+	messages: AgentReviewMessage[];
+}
+
+export interface AgentReviewConversationsQuery {
+	from?: string;
+	to?: string;
+	employeeId?: number;
+	onlyIssues?: boolean;
+	page?: number;
+	/** BE cho tối đa 50. */
+	limit?: number;
 }
 
 /** Nhãn tiếng Việt cho từng playbook. Thiếu thì hiện nguyên id. */
