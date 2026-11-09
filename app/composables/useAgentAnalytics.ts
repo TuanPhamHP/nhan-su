@@ -1,7 +1,11 @@
 import { useAgentAnalyticsService } from '~/services/agent-analytics.service';
+import type { PaginatedResponse } from '~/types/api.types';
 import type {
 	AgentAnalyticsOverview,
+	AgentConversationTranscript,
 	AgentFeedbackAnalytics,
+	AgentReviewConversation,
+	AgentReviewConversationsQuery,
 } from '~/types/agent-analytics.types';
 
 function isoDaysAgo(days: number): string {
@@ -62,6 +66,18 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		return service.overview({ from: from.value, to: to.value, employeeId });
 	}
 
+	/** Danh sách hội thoại để xem lại — chỉ ADMIN, nơi gọi phải tự chặn role khác. */
+	function loadReviewConversations(
+		query: AgentReviewConversationsQuery,
+	): Promise<PaginatedResponse<AgentReviewConversation>> {
+		return service.reviewConversations(query);
+	}
+
+	/** Mỗi lần gọi BE ghi một dòng nhật ký, nên chỉ gọi khi ADMIN bấm mở hội thoại. */
+	function loadConversationTranscript(conversationId: number): Promise<AgentConversationTranscript> {
+		return service.reviewConversationMessages(conversationId);
+	}
+
 	/** Đổi nhanh khoảng thời gian rồi tải lại. */
 	function setRange(days: number): void {
 		from.value = isoDaysAgo(days);
@@ -82,6 +98,8 @@ export function useAgentAnalytics(scope: 'all' | 'me' = 'all') {
 		to,
 		load,
 		loadEmployee,
+		loadReviewConversations,
+		loadConversationTranscript,
 		setRange,
 		maxDailyTokens,
 	};

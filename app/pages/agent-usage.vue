@@ -5,6 +5,7 @@
 	import AgentFeedbackPanel from '~/components/modules/agent/AgentFeedbackPanel.vue';
 	import AgentUserTable from '~/components/modules/agent/AgentUserTable.vue';
 	import AgentUserDetailModal from '~/components/modules/agent/AgentUserDetailModal.vue';
+	import AgentConversationTranscript from '~/components/modules/agent/AgentConversationTranscript.vue';
 	import type { AgentTopUser } from '~/types/agent-analytics.types';
 	import { useAuth } from '~/composables/useAuth';
 
@@ -14,14 +15,35 @@
 	// ADMIN/HR/DIRECTOR xem toàn hệ thống; còn lại chỉ xem được của chính mình
 	const canSeeAll = computed(() => ['ADMIN', 'HR', 'DIRECTOR'].includes(user.value?.role ?? ''));
 	const scope = computed<'all' | 'me'>(() => (canSeeAll.value ? 'all' : 'me'));
+	// Đọc nội dung hội thoại chỉ dành cho ADMIN, HẸP hơn canSeeAll: HR và DIRECTOR vào được
+	// trang này nhưng gọi hai endpoint xem lại sẽ nhận 403.
+	const canReview = computed(() => user.value?.role === 'ADMIN');
 
-	const { data, feedback, loading, error, from, to, load, loadEmployee, setRange } =
-		useAgentAnalytics(scope.value);
+	const {
+		data,
+		feedback,
+		loading,
+		error,
+		from,
+		to,
+		load,
+		loadEmployee,
+		loadReviewConversations,
+		loadConversationTranscript,
+		setRange,
+	} = useAgentAnalytics(scope.value);
 
 	onMounted(load);
 
 	/** Người đang mở bảng chi tiết. `null` = chưa chọn ai. */
 	const selectedUser = ref<AgentTopUser | null>(null);
+
+	/** Hội thoại đang mở trong khung đọc. `null` = chưa mở; `messageId` là câu cần cuộn tới. */
+	const reviewing = ref<{ conversationId: number; messageId: number | null } | null>(null);
+
+	function openConversation(conversationId: number, messageId: number | null = null): void {
+		reviewing.value = { conversationId, messageId };
+	}
 
 	const RANGES = [
 		{ label: '7 ngày', days: 7 },
@@ -146,7 +168,12 @@
 			<AgentTopicTable :topics="data.topics" />
 
 			<!-- Chỉ scope 'all': endpoint đánh giá chi tiết giới hạn ADMIN/HR/DIRECTOR -->
-			<AgentFeedbackPanel v-if="feedback" :data="feedback" />
+			<AgentFeedbackPanel
+				v-if="feedback"
+				:data="feedback"
+				:can-review="canReview"
+				@open-conversation="openConversation"
+			/>
 
 			<section>
 				<div class="overflow-hidden rounded-xl border border-gray-200 bg-white lg:w-1/2 dark:border-gray-700 dark:bg-gray-800">
@@ -176,7 +203,19 @@
 				:from="data.summary.from"
 				:to="data.summary.to"
 				:fetch="loadEmployee"
+				:can-review="canReview"
+				:rating-labels="feedback?.ratingLabels"
+				:fetch-conversations="loadReviewConversations"
+				@open-conversation="openConversation"
 				@close="selectedUser = null"
+			/>
+
+			<AgentConversationTranscript
+				v-if="canReview && reviewing"
+				:conversation-id="reviewing.conversationId"
+				:focus-message-id="reviewing.messageId"
+				:fetch="loadConversationTranscript"
+				@close="reviewing = null"
 			/>
 		</template>
 	</div>

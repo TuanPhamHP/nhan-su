@@ -8,7 +8,13 @@
 	} from '~/types/agent-analytics.types';
 	import { formatDateTime } from '~/utils/date';
 
-	const props = defineProps<{ data: AgentFeedbackAnalytics }>();
+	const props = defineProps<{
+		data: AgentFeedbackAnalytics;
+		/** Chỉ ADMIN — HR và DIRECTOR dùng chung panel này nhưng không đọc được hội thoại. */
+		canReview?: boolean;
+	}>();
+
+	const emit = defineEmits<{ 'open-conversation': [conversationId: number, messageId: number | null] }>();
 
 	/** Thứ tự cố định tệ → tốt, để dải phân bố không nhảy chỗ giữa các lần tải. */
 	const RATING_ORDER = ['BAD', 'AVERAGE', 'USEFUL', 'GREAT'] as const;
@@ -136,8 +142,9 @@
 			</table>
 
 			<!--
-				Góp ý chữ. Backend KHÔNG trả câu hỏi/câu trả lời của lượt đó — hội thoại chỉ
-				chủ hội thoại đọc được, nên đừng chờ có nội dung chat ở đây.
+				Góp ý chữ. Endpoint này KHÔNG trả câu hỏi/câu trả lời của lượt đó vì HR và
+				DIRECTOR cũng gọi được nó, nên đừng chờ có nội dung chat ở đây. ADMIN đọc nội
+				dung qua nút "Xem hội thoại", nút này chỉ phát sự kiện để trang mở khung đọc.
 			-->
 			<div v-if="data.comments.length" class="border-t border-gray-200 dark:border-gray-700">
 				<h4 class="px-4 pt-3 text-xs font-semibold text-gray-600 dark:text-gray-300">
@@ -160,6 +167,15 @@
 								</template>
 								· {{ formatDateTime(c.createdAt) }}
 							</span>
+							<button
+								v-if="canReview && c.conversationId != null"
+								type="button"
+								data-testid="agent-feedback-open-conversation"
+								class="ml-auto font-medium text-brand-600 transition hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+								@click="emit('open-conversation', c.conversationId!, c.messageId)"
+							>
+								Xem hội thoại
+							</button>
 						</div>
 						<p class="mt-1 text-sm text-gray-700 dark:text-gray-200">{{ c.comment }}</p>
 					</li>
