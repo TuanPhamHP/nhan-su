@@ -1,7 +1,10 @@
 ﻿<script setup lang="ts">
+import type { ModuleCode } from '~/types/entitlement.types';
+
 const { isOpen, close } = useSidebar();
 const { user } = useAuth();
 const { hasPermission } = usePermissions();
+const { canUse } = useModuleAccess();
 const route = useRoute();
 const uiStore = useUiStore();
 const { activeTheme } = storeToRefs(uiStore);
@@ -24,7 +27,7 @@ async function loadUnreadAnnouncementCount() {
 }
 
 onMounted(() => {
-	if (user.value) loadUnreadAnnouncementCount();
+	if (user.value && canUse('ANNOUNCEMENT')) loadUnreadAnnouncementCount();
 });
 
 watch(
@@ -42,6 +45,8 @@ interface EmployeeNavItem {
 	badge?: () => number;
 	/** Yêu cầu quyền `<module>:<action>`. Chuỗi = phải có đúng quyền đó; mảng = có ít nhất 1. */
 	permission?: string | string[];
+	/** Thuộc module nào: công ty chưa mở module thì ẩn mục này. */
+	module?: ModuleCode;
 }
 interface EmployeeNavSection {
 	label: string;
@@ -61,6 +66,7 @@ const navSections: EmployeeNavSection[] = [
 				label: 'Trợ lý AI',
 				route: '/assistant',
 				icon: 'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z',
+				module: 'AI_AGENT',
 			},
 			// Tạm ẩn khỏi sidebar (trang /agent-usage vẫn truy cập được bằng URL)
 			// {
@@ -94,6 +100,7 @@ const navSections: EmployeeNavSection[] = [
 				icon: 'M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46',
 				dataTour: 'nav-announcements',
 				badge: () => unreadAnnouncementCount.value,
+				module: 'ANNOUNCEMENT',
 			},
 		],
 	},
@@ -109,11 +116,13 @@ const navSections: EmployeeNavSection[] = [
 				label: 'Đơn OT của tôi',
 				route: '/overtime/my',
 				icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+				module: 'OVERTIME',
 			},
 			{
 				label: 'Đơn Online của tôi',
 				route: '/online-work/my',
 				icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
+				module: 'ONLINE_WORK',
 			},
 			{
 				label: 'Vi phạm chuyên cần',
@@ -130,6 +139,7 @@ const navSections: EmployeeNavSection[] = [
 				route: '/business-trips',
 				icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
 				dataTour: 'nav-my-business-trips',
+				module: 'BUSINESS_TRIP',
 			},
 		],
 	},
@@ -140,7 +150,10 @@ const visibleSections = computed(() => {
 	return navSections
 		.map(section => ({
 			...section,
-			items: section.items.filter(item => !item.permission || hasPermission(item.permission)),
+			items: section.items.filter(
+				item =>
+					(!item.permission || hasPermission(item.permission)) && (!item.module || canUse(item.module)),
+			),
 		}))
 		.filter(section => section.items.length > 0);
 });

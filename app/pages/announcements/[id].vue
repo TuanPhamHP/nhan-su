@@ -14,6 +14,7 @@
 
 	const route = useRoute();
 	const { fetchMyAnnouncementDetail, markAsRead } = useCompanyAnnouncements();
+	const { canUse } = useModuleAccess();
 
 	const id = computed(() => Number(route.params.id));
 	const announcement = ref<MyAnnouncementDetail | null>(null);
@@ -29,8 +30,8 @@
 		try {
 			announcement.value = await fetchMyAnnouncementDetail(id.value);
 			// BE guarantees mark-as-read is idempotent — swallow errors silently
-			// (bài có thể vừa bị recall giữa hai request).
-			markAsRead(id.value).catch(() => {});
+			// (bài có thể vừa bị recall giữa hai request). Module chỉ xem vẫn gọi được, chỉ bỏ qua khi đã tắt.
+			if (canUse('ANNOUNCEMENT')) markAsRead(id.value).catch(() => {});
 		} catch {
 			// BE trả 404 chung cho: không tồn tại / không phải recipient / đã bị thu hồi.
 			// Không cần phân biệt case, hiển thị 1 màn thông báo chung.
@@ -73,6 +74,8 @@
 			</svg>
 			Quay lại danh sách
 		</NuxtLink>
+
+		<CommonAppModuleNotice module="ANNOUNCEMENT" />
 
 		<!-- Loading -->
 		<div

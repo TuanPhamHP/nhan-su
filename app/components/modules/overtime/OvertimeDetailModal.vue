@@ -11,6 +11,7 @@ const emit = defineEmits<{ close: []; refresh: [] }>();
 
 const toast = useToast();
 const service = useOvertimeRequestService();
+const { canWrite } = useModuleAccess();
 
 // Reactive "now" — cập nhật mỗi phút để check window
 const now = ref(new Date());
@@ -330,7 +331,7 @@ const timelineSteps = computed(() => {
 							</template>
 							<template v-else>
 								<button
-									v-if="isInStartWindow && !request.locationStatus.isResolved"
+									v-if="isInStartWindow && !request.locationStatus.isResolved && canWrite('OVERTIME')"
 									:disabled="isCheckingLocation"
 									class="mt-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg disabled:opacity-50 transition-colors"
 									@click="handleCheckLocation('START')"
@@ -369,7 +370,7 @@ const timelineSteps = computed(() => {
 							</template>
 							<template v-else>
 								<button
-									v-if="isInEndWindow && !request.locationStatus.isResolved"
+									v-if="isInEndWindow && !request.locationStatus.isResolved && canWrite('OVERTIME')"
 									:disabled="isCheckingLocation"
 									class="mt-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg disabled:opacity-50 transition-colors"
 									@click="handleCheckLocation('END')"

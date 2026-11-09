@@ -13,6 +13,7 @@ definePageMeta({ title: 'Tạo đơn làm thêm giờ' });
 const router = useRouter();
 const toast = useToast();
 const service = useOvertimeRequestService();
+const { canWrite } = useModuleAccess();
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 // startTime/endTime: giá trị từ DateTimePickerV2 — dạng "YYYY-MM-DDTHH:mm" (không có timezone)
@@ -232,6 +233,8 @@ function fmtSegmentDate(dateYmd: string): string {
 			</div>
 		</div>
 
+		<CommonAppModuleNotice module="OVERTIME" />
+
 		<div class="flex flex-col lg:flex-row gap-6 lg:items-start">
 			<!-- ── Left: Form ──────────────────────────────────────────────────── -->
 			<div class="flex-1 min-w-0">
@@ -370,7 +373,7 @@ function fmtSegmentDate(dateYmd: string): string {
 							type="submit"
 							class="w-full justify-center"
 							:loading="isSubmitting"
-							:disabled="!canSubmit"
+							:disabled="!canSubmit || !canWrite('OVERTIME')"
 						>
 							<svg v-if="!isSubmitting" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />

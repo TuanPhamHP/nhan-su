@@ -8,7 +8,7 @@ import type {
 	AgentFeedbackRating,
 	AgentPendingActionRow,
 } from '~/types/agent.types';
-import { useAuthFetch } from './http/auth.fetch';
+import { notifyIfModuleDenied, useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse, PaginatedResponse } from '~/types/api.types';
 
 const ACCESS_TOKEN_KEY = 'access_token';
@@ -116,8 +116,9 @@ export const useAgentService = () => {
 			if (!res.ok || !res.body) {
 				let detail = '';
 				try {
-					const body = (await res.json()) as { error?: { message?: string } };
+					const body = (await res.json()) as { error?: { message?: string; code?: string } };
 					detail = body?.error?.message ?? '';
+					notifyIfModuleDenied(body?.error?.code);
 				} catch {
 					/* body không phải JSON */
 				}

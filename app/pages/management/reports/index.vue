@@ -391,6 +391,8 @@
 			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và xuất báo cáo chấm công, nghỉ phép</p>
 		</div>
 
+		<CommonAppModuleNotice module="REPORTS" />
+
 		<!-- Tabs -->
 		<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
 			<button

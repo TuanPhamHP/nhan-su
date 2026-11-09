@@ -126,6 +126,9 @@ Ví dụ:
 
 > `total` do server tính, không cộng lại phía client — nếu tương lai thêm module mới thì `total` tự cập nhật.
 
+> `overtimeRequests`, `businessTrips`, `onlineWorkRequests` trả 0 khi module tương ứng của công ty
+> đang chỉ xem, hết hạn hoặc đã tắt, vì không còn đơn để duyệt. Xem [entitlements.md](./entitlements.md).
+
 ### Ghi chú
 
 - Chỉ đếm status `PENDING` (hoặc `PENDING_L1/L2/L3` với online-work).

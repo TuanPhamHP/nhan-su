@@ -28,6 +28,7 @@ onMounted(() => {
 			<LayoutAppHeader />
 
 			<main class="flex-1 overflow-y-auto p-4 lg:p-6">
+				<CommonAppModuleExpiryBanner />
 				<slot />
 			</main>
 		</div>

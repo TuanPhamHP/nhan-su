@@ -15,9 +15,10 @@
 	const route = useRoute();
 	const { user } = useAuth();
 	const { fetchAll, recall } = useCompanyAnnouncements();
+	const { canWrite } = useModuleAccess();
 
 	const canSend = computed(() =>
-		user.value ? user.value.role === 'ADMIN' || user.value.role === 'HR' : false,
+		canWrite('ANNOUNCEMENT') && user.value ? user.value.role === 'ADMIN' || user.value.role === 'HR' : false,
 	);
 
 	// ─── Filter (khởi tạo từ URL query để refresh giữ nguyên state) ───────────────
@@ -164,7 +165,7 @@
 				label: 'Thu hồi',
 				icon: 'M9 12h6m2.25 6.75L4.5 5.25M12 21a9 9 0 100-18 9 9 0 000 18z',
 				variant: 'danger',
-				hidden: item.status === 'RECALLED',
+				hidden: item.status === 'RECALLED' || !canWrite('ANNOUNCEMENT'),
 				action: () => handleRecall(item),
 			},
 		];
@@ -210,6 +211,8 @@
 				Tạo thông báo
 			</NuxtLink>
 		</div>
+
+		<CommonAppModuleNotice module="ANNOUNCEMENT" />
 
 		<!-- Filter bar -->
 		<div class="flex flex-col sm:flex-row flex-wrap gap-3 items-end">

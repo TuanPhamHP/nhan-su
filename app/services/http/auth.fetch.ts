@@ -20,6 +20,21 @@ export function setOnForceLogout(cb: (notice?: string) => void): void {
 	_onForceLogout = cb;
 }
 
+// Callback do auth store đăng ký để tải lại quyền dùng module.
+let _onModuleDenied: (() => void) | null = null;
+export function setOnModuleDenied(cb: () => void): void {
+	_onModuleDenied = cb;
+}
+
+/**
+ * API báo module không dùng được (`MODULE_*`) nghĩa là quyền FE đang giữ đã cũ. Đây là lỗi nghiệp
+ * vụ, KHÔNG đăng xuất: chỉ tải lại quyền ở nền, lỗi vẫn ném lên cho trang hiện `message` của BE.
+ * Export cho `chatStream`, chỗ dùng `fetch` gốc nên không đi qua `useAuthFetch`.
+ */
+export function notifyIfModuleDenied(code?: string): void {
+	if (code?.startsWith('MODULE_')) _onModuleDenied?.();
+}
+
 // Captured from first useAuthFetch() call (composable context)
 let _baseApiUrl = '';
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': '1' };
@@ -122,6 +137,8 @@ export const useAuthFetch = () => {
 		} catch (err: unknown) {
 			const { status, code, message } = _errorInfo(err);
 
+			notifyIfModuleDenied(code);
+
 			// Công ty ngừng dịch vụ: phiên này không dùng tiếp được nữa.
 			if (code === 'TENANT_SUSPENDED') {
 				await _forceLogout(message || TENANT_SUSPENDED_MESSAGE);
@@ -154,7 +171,8 @@ export const useAuthFetch = () => {
 					await _forceLogout(
 						refresh.code === 'TENANT_SUSPENDED' ? refresh.message || TENANT_SUSPENDED_MESSAGE : undefined,
 					);
-					throw err;
+					// Không ném nguyên lỗi $fetch: `message` của nó chứa cả URL, trang sẽ toast ra cho người dùng.
+					throw _wrap(err);
 				}
 
 				try {
@@ -170,6 +188,7 @@ export const useAuthFetch = () => {
 					// Đã có token mới mà vẫn 401 thì phiên thật sự không còn. Lỗi khác (400, 404…)
 					// là lỗi nghiệp vụ của chính request, trả về cho trang xử lý như thường.
 					const retry = _errorInfo(retryErr);
+					notifyIfModuleDenied(retry.code);
 					if (retry.code === 'TENANT_SUSPENDED') {
 						await _forceLogout(retry.message || TENANT_SUSPENDED_MESSAGE);
 					} else if (retry.status === 401 && retry.code !== 'AUTH_INVALID_CREDENTIALS') {

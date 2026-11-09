@@ -26,6 +26,9 @@
 	} = useAgentChat();
 
 	const toast = useToast();
+	const { canWrite } = useModuleAccess();
+	/** Module chỉ xem: đọc lại được hội thoại cũ, không hỏi thêm được. */
+	const readOnly = computed(() => !canWrite('AI_AGENT'));
 
 	const scroller = ref<HTMLElement | null>(null);
 	const showList = ref(true);
@@ -217,6 +220,7 @@
 				:conversations="conversations"
 				:active-id="conversationId"
 				:disabled="sending"
+				:read-only="readOnly"
 				@select="pickConversation"
 				@create="newConversation"
 				@archive="onArchive"
@@ -230,6 +234,7 @@
 					:conversations="conversations"
 					:active-id="conversationId"
 					:disabled="sending"
+					:read-only="readOnly"
 					@select="pickConversation"
 					@create="newConversation"
 					@archive="onArchive"
@@ -285,7 +290,7 @@
 
 					<div class="flex shrink-0 items-center gap-1">
 						<button
-							v-if="messages.length"
+							v-if="messages.length && !readOnly"
 							type="button"
 							class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
 							@click="newConversation"
@@ -335,7 +340,7 @@
 
 						<AgentEmptyState
 							v-else-if="!messages.length"
-							:suggestions="SUGGESTIONS"
+							:suggestions="readOnly ? [] : SUGGESTIONS"
 							@pick="ask($event)"
 						/>
 
@@ -344,6 +349,7 @@
 								v-for="m in messages"
 								:key="m.id"
 								:message="m"
+								:read-only="readOnly"
 								@confirm="onConfirm"
 								@cancel="cancelPending"
 								@rate="onRate"
@@ -370,7 +376,9 @@
 					</Transition>
 				</div>
 
+				<CommonAppModuleNotice v-if="readOnly" module="AI_AGENT" class="m-3" />
 				<AgentComposer
+					v-else
 					v-model="input"
 					:sending="sending"
 					:can-send="canSend"

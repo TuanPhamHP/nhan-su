@@ -83,8 +83,12 @@ const isTerminal = computed(() =>
 	props.request.status === 'CANCELLED',
 );
 
+const { canWrite } = useModuleAccess();
 const canReview = computed(
-	() => !isTerminal.value && canApprove(props.request.canBeApprovedBy ?? null, APPROVE_PERMISSIONS.onlineWork),
+	() =>
+		canWrite('ONLINE_WORK') &&
+		!isTerminal.value &&
+		canApprove(props.request.canBeApprovedBy ?? null, APPROVE_PERMISSIONS.onlineWork),
 );
 </script>
 

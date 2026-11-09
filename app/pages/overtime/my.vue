@@ -13,6 +13,7 @@ definePageMeta({ title: 'Đơn OT của tôi' });
 
 const service = useOvertimeRequestService();
 const toast = useToast();
+const { canWrite } = useModuleAccess();
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const requests = ref<OvertimeRequestResponse[]>([]);
@@ -159,7 +160,7 @@ onMounted(fetchRequests);
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn OT của tôi</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và quản lý các đơn làm thêm giờ của bạn</p>
 			</div>
-			<div class="hidden sm:block">
+			<div v-if="canWrite('OVERTIME')" class="hidden sm:block">
 				<NuxtLink to="/overtime/create">
 					<CommonAppButton>
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -170,6 +171,8 @@ onMounted(fetchRequests);
 				</NuxtLink>
 			</div>
 		</div>
+
+		<CommonAppModuleNotice module="OVERTIME" />
 
 		<!-- Summary cards -->
 		<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -212,7 +215,7 @@ onMounted(fetchRequests);
 
 		<!-- Pending location check banner -->
 		<div
-			v-if="pendingLocationCheck.length"
+			v-if="pendingLocationCheck.length && canWrite('OVERTIME')"
 			class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-3"
 		>
 			<span class="text-xl">📍</span>
@@ -341,7 +344,7 @@ onMounted(fetchRequests);
 										<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
 									</svg>
 									<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có đơn OT nào trong tháng này</p>
-									<NuxtLink to="/overtime/create">
+									<NuxtLink v-if="canWrite('OVERTIME')" to="/overtime/create">
 										<CommonAppButton size="sm">Tạo đơn OT đầu tiên</CommonAppButton>
 									</NuxtLink>
 								</div>
@@ -429,7 +432,7 @@ onMounted(fetchRequests);
 								<div class="flex items-center justify-end gap-1.5">
 									<!-- Thu hồi — chỉ khi PENDING -->
 									<CommonAppButton
-										v-if="req.canBeCancelled"
+										v-if="req.canBeCancelled && canWrite('OVERTIME')"
 										size="sm"
 										variant="outline"
 										:loading="cancellingId === req.id"
@@ -481,6 +484,7 @@ onMounted(fetchRequests);
 
 		<!-- FAB mobile -->
 		<NuxtLink
+			v-if="canWrite('OVERTIME')"
 			to="/overtime/create"
 			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
 			aria-label="Tạo đơn OT"

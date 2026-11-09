@@ -11,7 +11,10 @@
 	const authStore = useAuthStore();
 	const { record, loadError, loading, saving, fetchByEmployee, save } = useSocialInsurance();
 
-	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
+	const { canWrite } = useModuleAccess();
+	const canEdit = computed(
+		() => canWrite('CONTRACT_INSURANCE') && (authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN'),
+	);
 
 	onMounted(() => fetchByEmployee(props.employeeId));
 
@@ -192,6 +195,8 @@
 
 <template>
 	<div>
+		<CommonAppModuleNotice module="CONTRACT_INSURANCE" class="mb-4" />
+
 		<!-- Loading -->
 		<div v-if="loading" class="space-y-4">
 			<div v-for="i in 3" :key="i" class="h-32 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />

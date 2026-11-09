@@ -8,7 +8,10 @@
 
 	const toast = useToast();
 	const authStore = useAuthStore();
-	const canImport = computed(() => authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HR');
+	const { canWrite } = useModuleAccess();
+	const canImport = computed(
+		() => canWrite('CONTRACT_INSURANCE') && (authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HR'),
+	);
 	const showImportModal = ref(false);
 	const { departments, fetchAll: fetchDepts } = useDepartment();
 
@@ -25,14 +28,18 @@
 	const { contracts, meta, loading, fetchAll } = useContracts();
 
 	async function loadTable() {
-		await fetchAll({
-			search: search.value || undefined,
-			status: filterStatus.value || undefined,
-			contractType: filterType.value || undefined,
-			departmentId: filterDept.value,
-			page: page.value,
-			limit,
-		});
+		try {
+			await fetchAll({
+				search: search.value || undefined,
+				status: filterStatus.value || undefined,
+				contractType: filterType.value || undefined,
+				departmentId: filterDept.value,
+				page: page.value,
+				limit,
+			});
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách hợp đồng');
+		}
 	}
 
 	// ─── Summary counts ───────────────────────────────────────────────────────────
@@ -152,6 +159,8 @@
 				Import Excel
 			</CommonAppButton>
 		</div>
+
+		<CommonAppModuleNotice module="CONTRACT_INSURANCE" />
 
 		<!-- Summary cards -->
 		<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">

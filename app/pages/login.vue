@@ -90,7 +90,7 @@
 			const code = errorCode(err);
 			if (code === 'AUTH_EMAIL_REQUIRED') {
 				setFieldError('email', message || 'Vui lòng đăng nhập bằng email.');
-			} else if (code === 'AUTH_NO_ACTIVE_COMPANY' || code === 'AUTH_ACCOUNT_LOCKED') {
+			} else if (code === 'AUTH_NO_ACTIVE_COMPANY' || code === 'AUTH_ACCOUNT_LOCKED' || code === 'AUTH_ACCOUNT_DISABLED') {
 				errorMessage.value = message;
 			} else {
 				toast.error(message || 'Email hoặc mật khẩu không đúng');
@@ -111,6 +111,9 @@
 				backToCredentials(
 					'Phiên chọn công ty đã hết hạn vì quá 5 phút. Vui lòng nhập lại mật khẩu để đăng nhập.',
 				);
+			} else if (errorCode(err) === 'AUTH_ACCOUNT_DISABLED') {
+				// Chọn công ty khác cũng vậy, nên về lại form đăng nhập thay vì để chọn tiếp.
+				backToCredentials(message);
 			} else {
 				errorMessage.value = message || 'Không vào được công ty này. Vui lòng thử lại.';
 			}

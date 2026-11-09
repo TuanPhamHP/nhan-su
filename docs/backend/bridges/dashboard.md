@@ -13,6 +13,7 @@
 
 > `GET /v1/dashboard` — một endpoint duy nhất, server đọc role từ JWT và trả về 3 kiểu response khác nhau.  
 > **Không truyền query params.** Toàn bộ số liệu được tính theo `ngày hôm nay` (server time) và identity người gọi.
+> Số liệu của module công ty không được dùng sẽ về 0 hoặc bị bỏ, xem [entitlements.md](./entitlements.md), mục "Số liệu ở route không bị chặn".
 
 ---
 
