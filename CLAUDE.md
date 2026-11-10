@@ -255,6 +255,35 @@ import EmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBad
 - Mọi API call đi qua `app/services/` — xem `example.service.ts` để hiểu pattern
 - Service mới phải được re-export trong `services/index.ts`
 
+### Input ngày giờ và chọn file — KHÔNG dùng element native
+
+Các loại input dưới đây **luôn** dùng component dùng chung, **không bao giờ** viết
+`<input type="date">`, `<input type="datetime-local">` hay `<input type="file">` trần:
+
+| Cần gì | Dùng | Giá trị `v-model` |
+|---|---|---|
+| Một ngày | `<UiDatePicker>` | `YYYY-MM-DD` (hoặc `undefined` khi trống) |
+| Khoảng ngày | `<UiDateRangePicker>` | `fromDate` / `toDate`, cùng dạng |
+| Ngày + giờ | `<UiDateTimePickerV2>` | ISO 8601 |
+| Chọn / kéo thả file | `<UiFileDropzone>` | `File`, hoặc `File[]` khi `multiple` |
+
+```vue
+<!-- ✅ Đúng -->
+<UiDatePicker v-model="purchaseDate" label="Ngày mua" :error="errors.purchaseDate" />
+<UiFileDropzone v-model="file" accept=".xlsx" :max-size-mb="10" />
+```
+
+```vue
+<!-- ❌ Sai -->
+<input v-model="purchaseDate" type="date" class="..." />
+<input type="file" accept=".xlsx" @change="onFileChange" />
+```
+
+**Vì sao:** input native hiển thị mỗi trình duyệt một kiểu (Chrome ép `mm/dd/yyyy` kể cả
+khi máy đặt tiếng Việt), không theo được theme sáng/tối, không có chỗ gắn nhãn và lỗi, và
+với file thì không kéo thả được, không xem được tên và dung lượng đã chọn. Các component
+dùng chung đã lo sẵn những thứ đó, kể cả kiểm định dạng và dung lượng file.
+
 ### Styling
 
 - **Tailwind CSS là mặc định** — dùng utility classes cho mọi styling
@@ -307,6 +336,7 @@ await directoryStore.load();
 - [ ] Types trong `types/` khớp với response shape từ API
 - [ ] Form validation dùng vee-validate + zod
 - [ ] Date/time hiển thị qua `utils/date.ts` (date-fns + locale vi)
+- [ ] Ô nhập ngày dùng `UiDatePicker` / `UiDateRangePicker` / `UiDateTimePickerV2`, ô chọn file dùng `UiFileDropzone` — không có `<input type="date">` hay `<input type="file">` trần
 - [ ] Currency/số hiển thị qua `utils/format.ts`
 - [ ] Không hardcode API URL — dùng `runtimeConfig`
 - [ ] Route có role restriction → có middleware check
@@ -332,6 +362,7 @@ await directoryStore.load();
 - Bỏ qua form validation trước khi submit
 - Tự format date bằng string manipulation — dùng date-fns
 - Tự format tiền bằng string concatenation — dùng `Intl.NumberFormat`
+- Dùng `<input type="date">`, `<input type="datetime-local">` hay `<input type="file">` trần — xem mục "Input ngày giờ và chọn file"
 - Dùng auto-import name (`ModulesXxxYyy`) cho components trong `components/modules/` — phải explicit import
 
 ## Documentation

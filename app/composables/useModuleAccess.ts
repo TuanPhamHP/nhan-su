@@ -14,6 +14,7 @@ export const MODULE_ROUTES: Record<Exclude<ModuleCode, 'CORE'>, string[]> = {
 	BUSINESS_TRIP: ['/management/business-trips', '/business-trips'],
 	CONTRACT_INSURANCE: ['/management/contracts'],
 	ANNOUNCEMENT: ['/management/announcements', '/announcements'],
+	ASSET: ['/management/assets', '/assets'],
 };
 
 /** Route này thuộc module nào, `null` nếu không thuộc module nào bật tắt được. */

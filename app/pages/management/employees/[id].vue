@@ -12,6 +12,9 @@
 	import EmployeeCitizenId from '~/components/modules/employee/EmployeeCitizenId.vue';
 	import EmployeePassport from '~/components/modules/employee/EmployeePassport.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
+	import EmployeeAssets from '~/components/modules/asset/EmployeeAssets.vue';
+	import { useAssetService } from '~/services/asset.service';
+	import type { AssetAssignment } from '~/types/asset.types';
 
 	definePageMeta({ title: 'Chi tiết nhân viên' });
 
@@ -22,7 +25,7 @@
 	const authStore = useAuthStore();
 	const imageViewer = useImageViewerStore();
 	const { hasPermission } = usePermissions();
-	const { canUse } = useModuleAccess();
+	const { canUse, canWrite } = useModuleAccess();
 
 	function openAvatar(url: string) {
 		imageViewer.open([url], 0);
@@ -44,6 +47,9 @@
 	const canReadSocialInsurance = computed(
 		() => canUse('CONTRACT_INSURANCE') && hasPermission('social-insurance:read'),
 	);
+	// Tab Tài sản thuộc module ASSET: công ty chưa mở thì ẩn, kể cả với ADMIN.
+	const canReadAssets = computed(() => canUse('ASSET') && hasPermission('asset:read'));
+	const canManageAssets = computed(() => canWrite('ASSET') && hasPermission('asset:manage'));
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, terminate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -70,7 +76,7 @@
 		}
 	}
 
-	const validTabs = ['info', 'contracts', 'social-insurance', 'identity'] as const;
+	const validTabs = ['info', 'contracts', 'social-insurance', 'identity', 'assets'] as const;
 	type TabId = (typeof validTabs)[number];
 	function initialTab(): TabId {
 		const requested = route.query.tab as TabId;
@@ -78,12 +84,17 @@
 		// Chặn cả deep-link `?tab=contracts` của người không có quyền.
 		if (requested === 'contracts' && !canReadContracts.value) return 'info';
 		if (requested === 'social-insurance' && !canReadSocialInsurance.value) return 'info';
+		if (requested === 'assets' && !canReadAssets.value) return 'info';
 		return requested;
 	}
 	const activeTab = ref<TabId>(initialTab());
 	// Module bị tắt ngay lúc đang mở tab của nó (biết được khi API trả `MODULE_*`): về tab Thông tin.
-	watch([canReadContracts, canReadSocialInsurance], ([contracts, socialInsurance]) => {
-		if ((activeTab.value === 'contracts' && !contracts) || (activeTab.value === 'social-insurance' && !socialInsurance)) {
+	watch([canReadContracts, canReadSocialInsurance, canReadAssets], ([contracts, socialInsurance, assets]) => {
+		if (
+			(activeTab.value === 'contracts' && !contracts) ||
+			(activeTab.value === 'social-insurance' && !socialInsurance) ||
+			(activeTab.value === 'assets' && !assets)
+		) {
 			activeTab.value = 'info';
 		}
 	});
@@ -110,10 +121,50 @@
 	const terminateLabel = computed(() => (isTerminated.value ? 'Sửa thông tin nghỉ việc' : 'Xác nhận nghỉ việc'));
 	const canSubmitTerminate = computed(() => !!terminateForm.date && terminateForm.note.trim().length > 0);
 
+	// ─── Cảnh báo tài sản khi cho nghỉ việc ───────────────────────────────────────
+	//
+	// Chỉ cảnh báo, KHÔNG chặn cho nghỉ: BE vẫn cho nghỉ và tự gửi thông báo N-09 cho
+	// người quản lý tài sản. Module tắt hay không có `asset:read` thì bỏ qua hẳn bước này,
+	// đừng hiện lỗi — đó là tính năng phụ của một hộp thoại đang làm việc khác.
+	const assetService = useAssetService();
+	const openAssets = ref<AssetAssignment[]>([]);
+	const loadingOpenAssets = ref(false);
+	const returningOpenAssets = ref(false);
+
+	async function loadOpenAssets() {
+		if (!canReadAssets.value) {
+			openAssets.value = [];
+			return;
+		}
+		loadingOpenAssets.value = true;
+		try {
+			openAssets.value = await assetService.findEmployeeAssets(id, true);
+		} catch {
+			openAssets.value = [];
+		} finally {
+			loadingOpenAssets.value = false;
+		}
+	}
+
+	async function returnAllOpenAssets() {
+		if (returningOpenAssets.value) return;
+		returningOpenAssets.value = true;
+		try {
+			const count = await assetService.returnAllEmployeeAssets(id);
+			toast.success(`Đã thu hồi ${count} tài sản`);
+			await loadOpenAssets();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Thu hồi tất cả thất bại');
+		} finally {
+			returningOpenAssets.value = false;
+		}
+	}
+
 	function openTerminateModal() {
 		terminateForm.date = currentEmployee.value?.terminationDate ?? todayYmd();
 		terminateForm.note = currentEmployee.value?.terminationNote ?? '';
 		showTerminateModal.value = true;
+		loadOpenAssets();
 	}
 
 	async function handleTerminate() {
@@ -528,6 +579,22 @@
 					>
 						Định danh
 					</button>
+					<button
+						v-if="canReadAssets"
+						type="button"
+						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+						:class="
+							activeTab === 'assets'
+								? 'border-brand-500 text-brand-600 dark:text-brand-400'
+								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+						"
+						@click="
+							activeTab = 'assets';
+							isEditing = false;
+						"
+					>
+						Tài sản
+					</button>
 				</nav>
 			</div>
 
@@ -742,6 +809,13 @@
 				<EmployeeCitizenId :employee-id="id" />
 				<EmployeePassport :employee-id="id" />
 			</div>
+
+			<!-- Tab: Tài sản -->
+			<EmployeeAssets
+				v-else-if="activeTab === 'assets' && canReadAssets"
+				:employee-id="id"
+				:can-manage="canManageAssets"
+			/>
 		</template>
 
 		<!-- Confirm reset password modal -->
@@ -910,6 +984,39 @@
 									— ngày nghỉ quyết định tháng cuối cùng còn xuất được bảng công.
 								</p>
 							</div>
+						</div>
+
+						<p v-if="loadingOpenAssets" class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+							Đang kiểm tra tài sản nhân viên còn giữ…
+						</p>
+
+						<div
+							v-else-if="openAssets.length"
+							class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20"
+						>
+							<p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+								Nhân viên còn giữ {{ openAssets.length }} tài sản
+							</p>
+							<ul class="mt-1.5 space-y-0.5">
+								<li v-for="a in openAssets" :key="a.id" class="text-xs text-amber-700 dark:text-amber-300">
+									<NuxtLink :to="`/management/assets/${a.asset.id}`" class="hover:underline">
+										{{ a.asset.code }} · {{ a.asset.name }}
+									</NuxtLink>
+								</li>
+							</ul>
+							<p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+								Vẫn cho nghỉ được. Chưa thu hồi thì hệ thống gửi thông báo nhắc người quản lý tài sản.
+							</p>
+							<CommonAppButton
+								v-if="canManageAssets"
+								class="mt-2"
+								size="sm"
+								variant="outline"
+								:loading="returningOpenAssets"
+								@click="returnAllOpenAssets"
+							>
+								Thu hồi tất cả
+							</CommonAppButton>
 						</div>
 
 						<div class="mt-5 space-y-4">

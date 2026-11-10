@@ -12,6 +12,14 @@
 	const uiStore = useUiStore();
 	const { previewRole } = storeToRefs(uiStore);
 
+	const { visibleApps, currentApp } = useAppModules();
+
+	/**
+	 * Nút lưới phân hệ chỉ hiện với người dùng có từ hai phân hệ trở lên. Nhân viên thường
+	 * không có phân hệ quản trị nào, bày nút mở ra một lưới rỗng là vô nghĩa.
+	 */
+	const showLauncherButton = computed(() => visibleApps.value.length > 1);
+
 	const showUserMenu = ref(false);
 	const showNotifPanel = ref(false);
 	const showCompanyMenu = ref(false);
@@ -114,6 +122,33 @@
 					<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
 				</svg>
 			</button>
+
+			<!-- Lưới chọn phân hệ — chỉ có nghĩa ở khu quản trị, nhân viên không có phân hệ nào -->
+			<button
+				v-if="showLauncherButton"
+				data-testid="app-launcher-button"
+				class="p-2 rounded-lg opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex-shrink-0"
+				title="Chuyển phân hệ"
+				aria-label="Chuyển phân hệ"
+				@click="uiStore.toggleLauncher()"
+			>
+				<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3.75 6.75h3v-3h-3v3zm6.75 0h3v-3h-3v3zm6.75 0h3v-3h-3v3zM3.75 13.5h3v-3h-3v3zm6.75 0h3v-3h-3v3zm6.75 0h3v-3h-3v3zM3.75 20.25h3v-3h-3v3zm6.75 0h3v-3h-3v3zm6.75 0h3v-3h-3v3z"
+					/>
+				</svg>
+			</button>
+
+			<!-- Tên phân hệ đang mở: biết mình đang ở đâu mà không cần nhìn sidebar -->
+			<span
+				v-if="currentApp"
+				class="hidden md:flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap flex-shrink-0"
+			>
+				<span class="opacity-40">/</span>
+				{{ currentApp.label }}
+			</span>
 
 			<div v-if="company" class="relative min-w-0" data-company-menu>
 				<button

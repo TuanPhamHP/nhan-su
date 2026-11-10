@@ -21,6 +21,9 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; permission: string | string[] }
 	{ prefix: '/management/makeup-attendance', permission: 'makeup:read' },
 	{ prefix: '/management/business-trips', permission: 'business-trip:read' },
 	{ prefix: '/management/reports', permission: 'report:read' },
+	// Cài đặt tài sản sửa danh mục dùng chung nên cần quyền ghi, không chỉ quyền đọc.
+	{ prefix: '/management/assets/settings', permission: 'asset:manage' },
+	{ prefix: '/management/assets', permission: 'asset:read' },
 ];
 
 export default defineNuxtRouteMiddleware(to => {

@@ -107,17 +107,9 @@
 				>
 					{{ r.label }}
 				</button>
-				<input
-					v-model="from"
-					type="date"
-					class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-				/>
+				<UiDatePicker v-model="from" class="w-36" />
 				<span class="text-xs text-gray-400">→</span>
-				<input
-					v-model="to"
-					type="date"
-					class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-				/>
+				<UiDatePicker v-model="to" class="w-36" />
 				<CommonAppButton size="sm" :loading="loading" @click="load">Áp dụng</CommonAppButton>
 			</div>
 		</header>
