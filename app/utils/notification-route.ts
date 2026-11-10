@@ -21,6 +21,12 @@ import { isManagementRole } from '~/utils/role';
  * | makeup_attendance_request | /management/makeup-attendance?open_id=:id | /makeup-attendance/my?open_id=:id |
  * | business_trip        | /business-trips/:id (trang chi tiết dùng chung) | /business-trips/:id        |
  * | company_announcement | /management/announcements/:id (HR/ADMIN) | /announcements/:id (các role còn lại) |
+ *
+ * Module tài sản không rẽ theo vai trò — BE chọn sẵn refType cho từng người nhận:
+ * | asset_holding   | /assets/my                            |
+ * | asset_service   | /assets/my?tab=services&open_id=:id   |
+ * | asset           | /management/assets/:id                |
+ * | employee_assets | /management/employees/:id?tab=assets  |
  */
 export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
 	if (!refType) return null;
@@ -62,6 +68,22 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 
 		case 'general_request':
 			return id ? `/general-requests/${id}` : '/general-requests';
+
+		// Bốn refType của module tài sản. BE đã chọn sẵn refType theo từng người nhận
+		// (`docs/backend/bridges/assets.md` mục 9) nên ở đây KHÔNG rẽ theo vai trò: người
+		// phụ trách dịch vụ thường là EMPLOYEE, vào trang quản lý không được, và đó đúng
+		// là lý do `asset_service` tồn tại.
+		case 'asset_holding':
+			return '/assets/my';
+
+		case 'asset_service':
+			return id ? `/assets/my?tab=services&open_id=${id}` : '/assets/my?tab=services';
+
+		case 'asset':
+			return id ? `/management/assets/${id}` : '/management/assets';
+
+		case 'employee_assets':
+			return id ? `/management/employees/${id}?tab=assets` : '/management/employees';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

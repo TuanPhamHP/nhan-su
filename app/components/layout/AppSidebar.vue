@@ -1,35 +1,23 @@
 ﻿<script setup lang="ts">
-	import type { UserRole } from '~/types/auth.types';
-	import type { ModuleCode } from '~/types/entitlement.types';
+	import type { NavItem } from '~/types/navigation.types';
 	import { isManagementRole } from '~/utils/role';
+	// `app/services/` KHÔNG được Nuxt auto-import (chỉ composables/ và utils/), thiếu dòng
+	// này là sidebar crash 500 ngay khi dựng.
+	import { useAssetService } from '~/services/asset.service';
 
-	interface NavItem {
-		label: string;
-		route: string;
-		icon: string;
-		/** Explicit role allowlist. Bỏ qua nếu dùng `management: true`. */
-		roles?: UserRole[];
-		/** Hiện cho tất cả role !== 'EMPLOYEE'. */
-		management?: boolean;
-		/** Yêu cầu quyền `<module>:<action>`. Chuỗi = phải có đúng quyền đó; mảng = có ít nhất 1. */
-		permission?: string | string[];
-		/** Thuộc module nào: công ty chưa mở module thì ẩn mục này. */
-		module?: ModuleCode;
-		dataTour?: string;
-		matchQuery?: Record<string, string>;
-		/** Reactive badge count — nếu > 0 thì hiển thị bên cạnh label. */
-		badge?: () => number;
-	}
-
-	interface NavSection {
-		label: string;
-		items: NavItem[];
-	}
-
+	/**
+	 * Sidebar của khu quản trị.
+	 *
+	 * Trước đây đổ TẤT CẢ mục của mọi phân hệ vào một danh sách, hệ thống thêm phân hệ là
+	 * sidebar dài thêm — tới 26 mục thì phải cuộn mới thấy hết. Giờ nó chỉ hiện mục của
+	 * phân hệ đang đứng (bản đồ ở `app/config/app-modules.ts`), còn chuyển phân hệ thì qua
+	 * lưới chọn phân hệ mở từ header.
+	 */
 	const { isOpen, close } = useSidebar();
 	const { user } = useAuth();
 	const { hasPermission } = usePermissions();
 	const { modules, canUse } = useModuleAccess();
+	const { visibleApps, currentApp } = useAppModules();
 	const route = useRoute();
 	const metaDataStore = useMetaDataStore();
 	const approvalStore = useApprovalStore();
@@ -55,234 +43,48 @@
 			if (import.meta.client && window.innerWidth < 1024) close();
 		},
 	);
+
 	const uiStore = useUiStore();
 	const { activeTheme } = storeToRefs(uiStore);
 	const logoSrc = computed(() =>
 		activeTheme.value.logo === 'dark' ? '/app-logo-dark-mode.svg' : '/app-logo-light-mode.svg',
 	);
 
-	const navSections: NavSection[] = [
+	/** Mục ghim trên cùng, không thuộc phân hệ nào. */
+	const PINNED: NavItem[] = [
 		{
 			label: 'Tổng quan',
-			items: [
-				{
-					label: 'Dashboard',
-					route: '/management',
-					icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-					management: true,
-				},
-				{
-					label: 'Dashboard',
-					route: '/',
-					icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-					roles: ['EMPLOYEE'],
-				},
-				{
-					label: 'Trợ lý AI',
-					route: '/assistant',
-					icon: 'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z',
-					module: 'AI_AGENT',
-				},
-				// {
-				// 	label: 'Mức dùng AI',
-				// 	route: '/agent-usage',
-				// 	icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z',
-				// },
-				{
-					label: 'Duyệt đơn',
-					route: '/management/approval',
-					icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-					management: true,
-					permission: ALL_APPROVE_PERMISSIONS,
-					badge: () => approvalCounts.value.total,
-				},
-			],
+			route: '/management',
+			icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+			management: true,
 		},
 		{
-			label: 'Nhân sự',
-			items: [
-				{
-					label: 'Nhân viên',
-					route: '/management/employees',
-					icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
-					management: true,
-					permission: 'employee:read',
-				},
-				{
-					label: 'Phòng ban',
-					route: '/management/departments',
-					icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
-					management: true,
-					permission: 'department:read',
-				},
-				{
-					label: 'Chức vụ',
-					route: '/management/positions',
-					icon: 'M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3zM6 6h.008v.008H6V6z',
-					roles: ['ADMIN', 'HR'],
-				},
-				{
-					label: 'Hợp đồng',
-					route: '/management/contracts',
-					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					roles: ['ADMIN', 'HR', 'DIRECTOR'],
-					management: true,
-					module: 'CONTRACT_INSURANCE',
-				},
-			],
-		},
-		{
-			label: 'Chấm công',
-			items: [
-				{
-					label: 'Chấm công',
-					route: '/management/attendance',
-					icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
-					management: true,
-					permission: 'attendance:read',
-				},
-			],
-		},
-		{
-			label: 'Đơn từ',
-			items: [
-				{
-					label: 'Nghỉ phép',
-					route: '/management/leave',
-					icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-					management: true,
-					permission: 'leave:read',
-				},
-				{
-					label: 'Làm thêm giờ',
-					route: '/management/overtime',
-					icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
-					management: true,
-					permission: 'overtime:read',
-					module: 'OVERTIME',
-				},
-				{
-					label: 'Làm online',
-					route: '/management/online-work',
-					icon: 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25',
-					management: true,
-					permission: 'online-work:read',
-					module: 'ONLINE_WORK',
-				},
-				{
-					label: 'Vi phạm chuyên cần',
-					route: '/management/violations',
-					icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
-					management: true,
-					permission: 'violation:read',
-				},
-				{
-					label: 'Bù công',
-					route: '/management/makeup-attendance',
-					icon: 'M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z',
-					management: true,
-					permission: 'makeup:read',
-				},
-				{
-					label: 'Công tác',
-					route: '/management/business-trips',
-					icon: 'M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5',
-					management: true,
-					permission: 'business-trip:read',
-					module: 'BUSINESS_TRIP',
-					dataTour: 'nav-business-trips',
-				},
-			],
-		},
-		{
-			label: 'Thông báo công ty',
-			items: [
-				{
-					label: 'Thông báo công ty',
-					route: '/management/announcements',
-					icon: 'M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46',
-					management: true,
-					permission: 'announcement:read-admin',
-					module: 'ANNOUNCEMENT',
-					dataTour: 'nav-announcements',
-					roles: ['ADMIN', 'HR', 'CHIEF', 'DIRECTOR', 'MANAGER'],
-				},
-			],
-		},
-		{
-			label: 'Phân tích',
-			items: [
-				{
-					label: 'Báo cáo',
-					route: '/management/reports',
-					icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-					management: true,
-					permission: 'report:read',
-					module: 'REPORTS',
-				},
-				{
-					label: 'Bảng lương',
-					route: '/management/payroll',
-					icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-					roles: ['ADMIN', 'HR'],
-				},
-			],
-		},
-		{
-			label: 'Hệ thống',
-			items: [
-				{
-					label: 'Phân quyền',
-					route: '/management/roles',
-					icon: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',
-					roles: ['ADMIN'],
-				},
-				{
-					label: 'Cài đặt',
-					route: '/management/settings',
-					icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-					roles: ['ADMIN', 'HR'],
-				},
-				{
-					label: 'Tools',
-					route: '/management/tools',
-					icon: 'M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z',
-					roles: ['ADMIN'],
-				},
-				{
-					label: 'Logs',
-					route: '/management/system-logs',
-					icon: 'M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776',
-					roles: ['ADMIN'],
-				},
-				{
-					label: 'Test Notification',
-					route: '/management/notifications/test',
-					icon: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0M10.5 8.25h3l-3 4.5h3',
-					roles: ['ADMIN'],
-				},
-			],
+			label: 'Tổng quan',
+			route: '/',
+			icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+			roles: ['EMPLOYEE'],
 		},
 	];
 
-	const visibleSections = computed(() => {
-		if (!user.value) return [];
-		return navSections
-			.map(section => ({
-				...section,
-				items: section.items.filter(item => {
-					// Role guard trước
-					if (item.roles && !item.roles.includes(user.value!.role)) return false;
-					if (item.management && !item.roles && !isManagementRole(user.value!.role)) return false;
-					// Permission guard sau (item khai báo permission thì phải có)
-					if (item.permission && !hasPermission(item.permission)) return false;
-					// Công ty chưa mở module thì ẩn, kể cả với ADMIN
-					if (item.module && !canUse(item.module)) return false;
-					return true;
-				}),
-			}))
-			.filter(section => section.items.length > 0);
-	});
+	const pinnedItems = computed(() =>
+		PINNED.filter(item => {
+			const u = user.value;
+			if (!u) return false;
+			if (item.roles && !item.roles.includes(u.role)) return false;
+			if (item.management && !item.roles && !isManagementRole(u.role)) return false;
+			if (item.permission && !hasPermission(item.permission)) return false;
+			if (item.module && !canUse(item.module)) return false;
+			return true;
+		}),
+	);
+
+	const appItems = computed(() => currentApp.value?.items ?? []);
+
+	/** Dùng cho `isActive` xử lý route lồng nhau — phải gồm MỌI mục, không riêng phân hệ hiện tại. */
+	const allPaths = computed(() => [
+		...PINNED.map(i => itemPath(i.route)),
+		...visibleApps.value.flatMap(a => a.items.map(i => itemPath(i.route))),
+	]);
 
 	function itemPath(itemRoute: string) {
 		const idx = itemRoute.indexOf('?');
@@ -292,15 +94,13 @@
 	function isActive(item: NavItem) {
 		const path = itemPath(item.route);
 		if (path === '/') return route.path === '/';
+		// Tổng quan chỉ sáng ở đúng nó, nếu không thì mọi trang /management/* đều làm nó sáng.
+		if (path === '/management') return route.path === '/management';
 		if (route.path === path) {
-			// If item is scoped to a query filter, require the query to match
 			if (item.matchQuery) {
 				return Object.entries(item.matchQuery).every(([k, v]) => route.query[k] === v);
 			}
-			// If another sibling requires a query and this one doesn't, this one is active only when no scoped query matches
-			const siblings = navSections
-				.flatMap(s => s.items)
-				.filter(i => i !== item && itemPath(i.route) === path && i.matchQuery);
+			const siblings = appItems.value.filter(i => i !== item && itemPath(i.route) === path && i.matchQuery);
 			if (siblings.length > 0) {
 				const anyScopedActive = siblings.some(s =>
 					Object.entries(s.matchQuery!).every(([k, v]) => route.query[k] === v),
@@ -310,11 +110,58 @@
 			return true;
 		}
 		if (!route.path.startsWith(path + '/')) return false;
-		const allPaths = navSections.flatMap(s => s.items.map(i => itemPath(i.route)));
-		return !allPaths.some(
+		// Mục cha chỉ sáng khi không có mục con khớp sâu hơn (/management/assets vs
+		// /management/assets/vendors).
+		return !allPaths.value.some(
 			p => p !== path && p.startsWith(path + '/') && (route.path === p || route.path.startsWith(p + '/')),
 		);
 	}
+
+	// ─── Badge cho các mục cá nhân ───────────────────────────────────────────────
+	const unreadAnnouncementCount = ref(0);
+	const pendingAssetCount = ref(0);
+	const { fetchMyAnnouncements } = useCompanyAnnouncements();
+	const assetService = useAssetService();
+
+	async function loadUnreadAnnouncementCount() {
+		try {
+			const res = await fetchMyAnnouncements({ page: 1, limit: 1, isRead: false });
+			unreadAnnouncementCount.value = res.meta.total;
+		} catch {
+			// non-critical: thiếu badge thì vẫn vào trang được
+		}
+	}
+
+	/** Badge "Tài sản của tôi": số lần bàn giao chờ chính người này xác nhận. */
+	async function loadPendingAssetCount() {
+		try {
+			const res = await assetService.myAssets();
+			pendingAssetCount.value = res.pendingConfirmationCount;
+		} catch {
+			// non-critical
+		}
+	}
+
+	onMounted(() => {
+		if (!user.value) return;
+		if (canUse('ANNOUNCEMENT')) loadUnreadAnnouncementCount();
+		if (canUse('ASSET')) loadPendingAssetCount();
+	});
+
+	/** Dịch `badgeKey` trong cấu hình sang số thật. */
+	function badgeValue(item: NavItem): number {
+		if (item.badgeKey === 'approval') return approvalCounts.value.total;
+		if (item.badgeKey === 'unreadAnnouncement') return unreadAnnouncementCount.value;
+		if (item.badgeKey === 'pendingAsset') return pendingAssetCount.value;
+		return 0;
+	}
+
+	/**
+	 * Tách mục quản lý và mục cá nhân trong cùng phân hệ. Quản lý mở `TAL` sẽ thấy cả bảng
+	 * công toàn công ty lẫn bảng công của chính mình, nên cần một đường kẻ phân biệt.
+	 */
+	const managedItems = computed(() => appItems.value.filter(i => i.scope !== 'personal'));
+	const personalItems = computed(() => appItems.value.filter(i => i.scope === 'personal'));
 
 	const tooltip = reactive({ visible: false, text: '', x: 0, y: 0 });
 
@@ -365,38 +212,68 @@
 			</div>
 		</div>
 
-		<!-- Nav -->
 		<nav class="flex-1 px-2 py-3 overflow-y-auto space-y-4">
-			<div v-for="section in visibleSections" :key="section.label">
-				<!-- Section label — only when expanded -->
-				<Transition
-					enter-active-class="transition-opacity duration-150"
-					enter-from-class="opacity-0"
-					enter-to-class="opacity-100"
-					leave-active-class="transition-opacity duration-100"
-					leave-from-class="opacity-100"
-					leave-to-class="opacity-0"
+			<!-- Ghim trên cùng -->
+			<div class="space-y-0.5">
+				<NuxtLink
+					v-for="item in pinnedItems"
+					:key="item.route"
+					:to="item.route"
+					:class="[
+						'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+						!isOpen && 'justify-center px-2',
+						isActive(item) && 'is-active',
+					]"
+					@mouseenter="!isOpen && showTooltip($event, item.label)"
+					@mouseleave="hideTooltip"
 				>
-					<p
-						v-if="isOpen"
-						class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 whitespace-nowrap"
+					<svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" :d="item.icon" />
+					</svg>
+					<Transition
+						enter-active-class="transition-opacity duration-200"
+						enter-from-class="opacity-0"
+						enter-to-class="opacity-100"
 					>
-						{{ section.label }}
-					</p>
-				</Transition>
+						<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ item.label }}</span>
+					</Transition>
+				</NuxtLink>
+			</div>
 
-				<!-- Divider when collapsed -->
-				<div v-if="!isOpen" class="mx-2 h-px mb-1" :style="{ backgroundColor: 'var(--color-border-theme)' }" />
+			<!-- Phân hệ đang mở -->
+			<div v-if="currentApp">
+				<button
+					v-if="isOpen"
+					type="button"
+					class="w-full flex items-center gap-2 px-2 mb-1 py-1 rounded-lg text-left hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+					title="Đổi phân hệ"
+					@click="uiStore.toggleLauncher()"
+				>
+					<span
+						:class="['flex h-5 w-5 items-center justify-center rounded text-white flex-shrink-0', currentApp.tone]"
+					>
+						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" :d="currentApp.icon" />
+						</svg>
+					</span>
+					<span class="text-[10px] font-semibold uppercase tracking-widest opacity-70 whitespace-nowrap flex-1">
+						{{ currentApp.label }}
+					</span>
+					<svg class="w-3 h-3 opacity-50 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+					</svg>
+				</button>
 
-				<!-- Items -->
+				<div v-else class="mx-2 h-px mb-1" :style="{ backgroundColor: 'var(--color-border-theme)' }" />
+
 				<div class="space-y-0.5">
 					<NuxtLink
-						v-for="item in section.items"
+						v-for="item in managedItems"
 						:key="item.route"
 						:to="item.route"
 						:data-tour="item.dataTour"
 						:class="[
-							'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+							'nav-item group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
 							!isOpen && 'justify-center px-2',
 							isActive(item) && 'is-active',
 						]"
@@ -410,22 +287,110 @@
 							enter-active-class="transition-opacity duration-200"
 							enter-from-class="opacity-0"
 							enter-to-class="opacity-100"
-							leave-active-class="transition-opacity duration-100"
-							leave-from-class="opacity-100"
-							leave-to-class="opacity-0"
 						>
 							<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ item.label }}</span>
 						</Transition>
 						<span
-							v-if="item.badge && item.badge() > 0"
+							v-if="badgeValue(item) > 0"
 							:class="[
 								'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold flex-shrink-0',
 								'bg-red-500 text-white',
 								!isOpen && 'absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[10px]',
 							]"
 						>
-							{{ item.badge() > 99 ? '99+' : item.badge() }}
+							{{ badgeValue(item) > 99 ? '99+' : badgeValue(item) }}
 						</span>
+					</NuxtLink>
+				</div>
+
+				<!--
+					Mục dữ liệu của chính người đang đăng nhập. Chỉ cần tiêu đề "Của tôi" khi
+					phân hệ có CẢ hai loại — nhân viên thường chỉ thấy phần này nên thêm tiêu đề
+					là thừa.
+				-->
+				<div v-if="personalItems.length" :class="managedItems.length ? 'mt-3' : ''">
+					<p
+						v-if="isOpen && managedItems.length"
+						class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 whitespace-nowrap"
+					>
+						Của tôi
+					</p>
+					<div
+						v-else-if="!isOpen && managedItems.length"
+						class="mx-2 h-px mb-1"
+						:style="{ backgroundColor: 'var(--color-border-theme)' }"
+					/>
+
+					<div class="space-y-0.5">
+						<NuxtLink
+							v-for="item in personalItems"
+							:key="item.route"
+							:to="item.route"
+							:data-tour="item.dataTour"
+							:class="[
+								'nav-item group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+								!isOpen && 'justify-center px-2',
+								isActive(item) && 'is-active',
+							]"
+							@mouseenter="!isOpen && showTooltip($event, item.label)"
+							@mouseleave="hideTooltip"
+						>
+							<svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+								<path stroke-linecap="round" stroke-linejoin="round" :d="item.icon" />
+							</svg>
+							<Transition
+								enter-active-class="transition-opacity duration-200"
+								enter-from-class="opacity-0"
+								enter-to-class="opacity-100"
+							>
+								<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ item.label }}</span>
+							</Transition>
+							<span
+								v-if="badgeValue(item) > 0"
+								:class="[
+									'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold flex-shrink-0',
+									'bg-red-500 text-white',
+									!isOpen && 'absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[10px]',
+								]"
+							>
+								{{ badgeValue(item) > 99 ? '99+' : badgeValue(item) }}
+							</span>
+						</NuxtLink>
+					</div>
+				</div>
+			</div>
+
+			<!-- Đang ở trang chủ: liệt kê phân hệ ngay tại sidebar, khỏi phải mở lưới -->
+			<div v-else-if="visibleApps.length">
+				<p
+					v-if="isOpen"
+					class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 whitespace-nowrap"
+				>
+					Phân hệ
+				</p>
+				<div v-else class="mx-2 h-px mb-1" :style="{ backgroundColor: 'var(--color-border-theme)' }" />
+				<div class="space-y-0.5">
+					<NuxtLink
+						v-for="app in visibleApps"
+						:key="app.code"
+						:to="app.home"
+						:class="[
+							'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+							!isOpen && 'justify-center px-2',
+						]"
+						@mouseenter="!isOpen && showTooltip($event, app.label)"
+						@mouseleave="hideTooltip"
+					>
+						<svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" :d="app.icon" />
+						</svg>
+						<Transition
+							enter-active-class="transition-opacity duration-200"
+							enter-from-class="opacity-0"
+							enter-to-class="opacity-100"
+						>
+							<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ app.label }}</span>
+						</Transition>
 					</NuxtLink>
 				</div>
 			</div>

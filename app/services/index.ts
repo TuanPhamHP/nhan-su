@@ -36,3 +36,4 @@ export * from './approval.service';
 export * from './announcement.service';
 export * from './agent.service';
 export * from './agent-analytics.service';
+export * from './asset.service';

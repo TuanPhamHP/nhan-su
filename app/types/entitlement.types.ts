@@ -10,7 +10,8 @@ export type ModuleCode =
 	| 'ONLINE_WORK'
 	| 'BUSINESS_TRIP'
 	| 'CONTRACT_INSURANCE'
-	| 'ANNOUNCEMENT';
+	| 'ANNOUNCEMENT'
+	| 'ASSET';
 
 export type ModuleState = 'ENABLED' | 'READ_ONLY' | 'DISABLED';
 

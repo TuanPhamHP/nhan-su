@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { load: loadDirectory } = useDirectoryStore();
 const { isOpen, close, open } = useSidebar();
+const uiStore = useUiStore();
 
 onMounted(() => {
 	loadDirectory();
@@ -34,6 +35,10 @@ onMounted(() => {
 		</div>
 
 		<LayoutAppAgentFab />
+
+		<ClientOnly>
+			<LayoutAppLauncher v-if="uiStore.launcherOpen" @close="uiStore.closeLauncher()" />
+		</ClientOnly>
 
 		<ClientOnly><CommonAppToastContainer /></ClientOnly>
 		<ClientOnly><CommonAppImageViewer /></ClientOnly>
