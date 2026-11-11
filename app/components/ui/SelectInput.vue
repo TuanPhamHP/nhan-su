@@ -116,10 +116,40 @@
 		return props.options.filter(o => o.label.toLowerCase().includes(q));
 	});
 
+	const HTML_ESCAPES: Record<string, string> = {
+		'&': '&amp;',
+		'<': '&lt;',
+		'>': '&gt;',
+		'"': '&quot;',
+		"'": '&#39;',
+	};
+
+	function escapeHtml(text: string): string {
+		return text.replace(/[&<>"']/g, c => HTML_ESCAPES[c] ?? c);
+	}
+
+	/**
+	 * Nhãn kèm `<mark>` quanh đoạn khớp từ khoá, dùng cho `v-html`.
+	 *
+	 * Nhãn ở đây là dữ liệu người dùng nhập: tên phòng ban, tên vị trí, tên nhân viên. Trả về
+	 * nhãn thô thì một cái tên như `<img src=x onerror=...>` sẽ CHẠY trong trình duyệt của người
+	 * khác, nên phải escape. Và escape phải làm trên TỪNG ĐOẠN đã cắt theo vị trí khớp của
+	 * chuỗi gốc, chứ không escape cả nhãn rồi mới dò từ khoá: làm cách sau thì gõ "&" sẽ khớp
+	 * vào giữa `&amp;` và `<mark>` chèn vào giữa một thực thể HTML.
+	 */
 	function highlightMatch(label: string): string {
-		if (!searchQuery.value.trim()) return label;
-		const q = searchQuery.value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		return label.replace(new RegExp(`(${q})`, 'gi'), '<mark>$1</mark>');
+		const q = searchQuery.value.trim();
+		if (!q) return escapeHtml(label);
+
+		const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+		let out = '';
+		let last = 0;
+		for (const m of label.matchAll(pattern)) {
+			const at = m.index ?? 0;
+			out += escapeHtml(label.slice(last, at)) + `<mark>${escapeHtml(m[0])}</mark>`;
+			last = at + m[0].length;
+		}
+		return out + escapeHtml(label.slice(last));
 	}
 
 	function openDropdown() {

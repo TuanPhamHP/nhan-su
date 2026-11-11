@@ -99,9 +99,11 @@
 		router.replace({ path: '/management/recruitment/headcount', query: { year: String(y) } });
 	});
 
+	// `UiSelectInput` không nhận `undefined` làm giá trị, nên 0 là "tất cả", giống các màn lọc
+	// khác của dự án (xem `management/violations/index.vue`).
 	const deptOptions = computed(() => [
-		{ value: undefined as number | undefined, label: 'Tất cả phòng ban' },
-		...departments.value.map(d => ({ value: d.id as number | undefined, label: d.name })),
+		{ value: 0, label: 'Tất cả phòng ban' },
+		...departments.value.map(d => ({ value: d.id, label: d.name })),
 	]);
 
 	const usedPositionIds = computed(() => rows.value.map(r => r.position.id));
@@ -329,7 +331,13 @@
 		<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<UiSelect v-model="year" :options="yearOptions" />
-				<UiSelect v-model="filterDept" :options="deptOptions" />
+				<UiSelectInput
+					:model-value="filterDept ?? 0"
+					:options="deptOptions"
+					placeholder="Tất cả phòng ban"
+					search-placeholder="Gõ tên phòng ban để tìm..."
+					@update:model-value="filterDept = $event === 0 ? undefined : ($event as number)"
+				/>
 			</div>
 		</div>
 

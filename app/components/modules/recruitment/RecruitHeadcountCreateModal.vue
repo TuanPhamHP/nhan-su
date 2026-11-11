@@ -1,9 +1,18 @@
 <script setup lang="ts">
 	import { useRecruitmentService } from '~/services/recruitment.service';
+	import { usePositionService } from '~/services/position.service';
 	import { recruitErrorMessage } from '~/utils/recruitment.utils';
+	import type { PositionSummary } from '~/types/position.types';
 
 	/**
-	 * Thêm một dòng định biên cho (năm, vị trí). Phòng ban lấy theo vị trí, không chọn riêng.
+	 * Thêm một dòng định biên cho (năm, vị trí).
+	 *
+	 * Chọn phòng ban trước rồi mới chọn vị trí. Một danh sách vị trí phẳng của cả công ty thì
+	 * vừa dài vừa lẫn những vị trí trùng tên ở hai phòng khác nhau, nên tách làm hai bước và cả
+	 * hai ô đều tìm được bằng cách gõ. Danh sách vị trí tải riêng theo phòng đang chọn
+	 * (`GET /v1/positions?departmentId=`) thay vì lọc trong `directoryStore`, vì store nạp
+	 * `positions` theo cả công ty và `PositionSummary.department` chỉ là TÊN phòng, không phải
+	 * id, nên lọc theo đó là so chuỗi.
 	 *
 	 * Người có quyền chốt (Giám đốc, Trưởng ban, Admin) tạo thì BE CHỐT LUÔN; người chỉ phụ
 	 * trách tuyển dụng tạo thì thành đề xuất Nháp chờ gửi. Hộp thoại nói trước điều đó để
@@ -20,29 +29,81 @@
 	const emit = defineEmits<{ created: []; close: [] }>();
 
 	const service = useRecruitmentService();
+	const positionService = usePositionService();
 	const directoryStore = useDirectoryStore();
-	const { positions } = storeToRefs(directoryStore);
+	const { departments } = storeToRefs(directoryStore);
 
-	const positionId = ref<number | undefined>(undefined);
+	const departmentId = ref<number | null>(null);
+	const positionId = ref<number | null>(null);
 	const quantity = ref<number>(1);
 	const note = ref('');
 	const submitting = ref(false);
 	const error = ref<string | null>(null);
 
+	const positions = ref<PositionSummary[]>([]);
+	const loadingPositions = ref(false);
+	const positionError = ref<string | null>(null);
+
 	onMounted(() => {
 		directoryStore.load().catch(() => {
-			error.value = 'Không tải được danh sách vị trí';
+			error.value = 'Không tải được danh sách phòng ban';
 		});
 	});
 
-	const positionOptions = computed(() => [
-		{ value: undefined as number | undefined, label: 'Chọn vị trí...' },
-		...positions.value
+	const departmentOptions = computed(() =>
+		departments.value.filter(d => d.isActive).map(d => ({ value: d.id, label: d.name })),
+	);
+
+	/** Vị trí của phòng đang chọn, trừ những vị trí đã có dòng định biên trong năm. */
+	const positionOptions = computed(() =>
+		positions.value
 			.filter(p => p.isActive && !props.usedPositionIds.includes(p.id))
-			.map(p => ({ value: p.id as number | undefined, label: `${p.name} — ${p.department}` })),
-	]);
+			.map(p => ({ value: p.id, label: p.name })),
+	);
+
+	/** Phòng có vị trí, nhưng vị trí nào cũng đã có dòng định biên của năm này. */
+	const allPositionsUsed = computed(
+		() =>
+			!!departmentId.value &&
+			!loadingPositions.value &&
+			!positionError.value &&
+			positions.value.length > 0 &&
+			positionOptions.value.length === 0,
+	);
+
+	/** Phòng chưa khai vị trí nào. */
+	const departmentHasNoPosition = computed(
+		() =>
+			!!departmentId.value &&
+			!loadingPositions.value &&
+			!positionError.value &&
+			positions.value.length === 0,
+	);
+
+	// Đổi phòng thì vị trí đang chọn không còn thuộc phòng mới, nên xoá hẳn chứ không giữ lại.
+	watch(departmentId, async id => {
+		positionId.value = null;
+		positions.value = [];
+		positionError.value = null;
+		if (!id) return;
+		loadingPositions.value = true;
+		// Đổi phòng lúc đang tải thì bỏ kết quả của phòng cũ, kẻo vị trí phòng A hiện dưới phòng B.
+		try {
+			const list = await positionService.findActive(id);
+			if (departmentId.value === id) positions.value = list;
+		} catch (e) {
+			if (departmentId.value === id)
+				positionError.value = recruitErrorMessage(e, 'Không tải được danh sách vị trí của phòng này');
+		} finally {
+			if (departmentId.value === id) loadingPositions.value = false;
+		}
+	});
 
 	async function save() {
+		if (departmentId.value == null) {
+			error.value = 'Chọn phòng ban trước';
+			return;
+		}
 		if (positionId.value == null) {
 			error.value = 'Chọn vị trí cần thêm định biên';
 			return;
@@ -104,12 +165,49 @@
 
 					<div class="space-y-1">
 						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Phòng ban <span class="text-red-500">*</span>
+						</label>
+						<UiSelectInput
+							v-model="departmentId"
+							:options="departmentOptions"
+							placeholder="Chọn phòng ban..."
+							search-placeholder="Gõ tên phòng ban để tìm..."
+						/>
+					</div>
+
+					<div class="space-y-1">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
 							Vị trí <span class="text-red-500">*</span>
 						</label>
-						<UiSelect v-model="positionId" :options="positionOptions" />
-						<p class="text-xs text-gray-500 dark:text-gray-400">
-							Phòng ban được lấy theo vị trí. Vị trí đã có dòng trong năm này không hiện ở đây, hãy
-							sửa dòng đang có.
+						<UiSelectInput
+							v-model="positionId"
+							:options="positionOptions"
+							:disabled="!departmentId || loadingPositions || !positionOptions.length"
+							:placeholder="
+								!departmentId
+									? 'Chọn phòng ban trước'
+									: loadingPositions
+										? 'Đang tải danh sách vị trí...'
+										: 'Chọn vị trí...'
+							"
+							search-placeholder="Gõ tên vị trí để tìm..."
+						/>
+
+						<p v-if="positionError" class="text-xs text-rose-600 dark:text-rose-400">
+							{{ positionError }}
+						</p>
+						<p v-else-if="!departmentId" class="text-xs text-gray-500 dark:text-gray-400">
+							Chọn phòng ban trước, danh sách vị trí lấy theo phòng đó.
+						</p>
+						<p v-else-if="departmentHasNoPosition" class="text-xs text-amber-700 dark:text-amber-400">
+							Phòng này chưa khai vị trí nào đang dùng. Hãy thêm vị trí ở phần Cài đặt vị trí trước.
+						</p>
+						<p v-else-if="allPositionsUsed" class="text-xs text-amber-700 dark:text-amber-400">
+							Mọi vị trí của phòng này đã có dòng định biên năm {{ year }}. Hãy sửa dòng đang có, hoặc
+							chọn phòng khác.
+						</p>
+						<p v-else class="text-xs text-gray-500 dark:text-gray-400">
+							Vị trí đã có dòng trong năm này không hiện ở đây, hãy sửa dòng đang có.
 						</p>
 					</div>
 
