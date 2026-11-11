@@ -577,6 +577,7 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 | 400 | `RECRUIT_SEND_AT_PAST` | Giờ hẹn gửi email đã qua |
 | 400 | `RECRUIT_SMTP_PASSWORD_REQUIRED` | Lần đầu cấu hình SMTP, hoặc đổi host, cổng, kiểu bảo mật, tài khoản SMTP, thì phải nhập mật khẩu |
 | 400 | `RECRUIT_SMTP_HOST_NOT_ALLOWED` | Máy chủ SMTP trỏ vào mạng nội bộ |
+| 400 | `RECRUIT_PHONE_INVALID` | Trang công khai: số điện thoại dài quá 20 ký tự sau khi chuẩn hoá |
 | 400 | `RECRUIT_SOURCE_INVALID` | Nguồn ứng viên không hợp lệ |
 | 400 | `RECRUIT_STAGE_HIRED_RESERVED` | Vào vòng Đã tuyển chỉ bằng nút Tạo hồ sơ nhân viên |
 | 400 | `RECRUIT_STAGE_NOT_IN_JOB` | Vòng không thuộc tin của hồ sơ |
@@ -2048,6 +2049,7 @@ Lỗi:
 |---|---|---|
 | 400 | `RECRUIT_CONSENT_REQUIRED` | Chưa tích đồng ý xử lý dữ liệu. Chặn ngay trên form trước khi gửi |
 | 400 | `BAD_REQUEST` | Thiếu trường bắt buộc, email sai. Chặn ngay trên form trước khi gửi |
+| 400 | `RECRUIT_PHONE_INVALID` | Số điện thoại sau khi bỏ khoảng trắng, dấu chấm, gạch ngang, ngoặc vẫn dài quá 20 ký tự. Hiện `message` cạnh ô SĐT |
 | 400 | `RECRUIT_FILE_REQUIRED`, `RECRUIT_FILE_TOO_LARGE`, `RECRUIT_FILE_TYPE_INVALID` | Báo chọn lại CV |
 | 404 | `RECRUIT_CAREERS_CLOSED`, `RECRUIT_JOB_NOT_OPEN` | Báo tin không còn nhận hồ sơ, dẫn về trang tuyển dụng |
 | 409 | `RECRUIT_TERMS_CHANGED` | Điều khoản vừa đổi: tải lại chi tiết tin, giữ dữ liệu đã nhập, yêu cầu tích đồng ý lại |
