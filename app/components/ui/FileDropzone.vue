@@ -236,18 +236,23 @@
 				</template>
 			</p>
 			<p v-if="autoHint" class="text-xs text-gray-400 dark:text-gray-500">{{ autoHint }}</p>
-
-			<input
-				ref="inputRef"
-				type="file"
-				class="sr-only"
-				:accept="accept || undefined"
-				:multiple="multiple"
-				:disabled="disabled"
-				tabindex="-1"
-				@change="onInputChange"
-			/>
 		</div>
+
+		<!--
+			Input nằm NGOÀI vùng thả, cố ý: ở chế độ một file, vùng thả bị `v-if` ẩn đi sau khi
+			chọn file. Để input bên trong thì `inputRef` thành null và nút "Chọn file khác" bấm
+			không ra gì, người dùng buộc phải xoá file rồi chọn lại.
+		-->
+		<input
+			ref="inputRef"
+			type="file"
+			class="sr-only"
+			:accept="accept || undefined"
+			:multiple="multiple"
+			:disabled="disabled"
+			tabindex="-1"
+			@change="onInputChange"
+		/>
 
 		<!-- File đã chọn -->
 		<ul v-if="files.length" class="space-y-2">

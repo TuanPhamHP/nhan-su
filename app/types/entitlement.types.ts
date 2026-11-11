@@ -11,7 +11,8 @@ export type ModuleCode =
 	| 'BUSINESS_TRIP'
 	| 'CONTRACT_INSURANCE'
 	| 'ANNOUNCEMENT'
-	| 'ASSET';
+	| 'ASSET'
+	| 'RECRUIT';
 
 export type ModuleState = 'ENABLED' | 'READ_ONLY' | 'DISABLED';
 

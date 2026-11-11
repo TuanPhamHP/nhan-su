@@ -15,6 +15,10 @@ export const MODULE_ROUTES: Record<Exclude<ModuleCode, 'CORE'>, string[]> = {
 	CONTRACT_INSURANCE: ['/management/contracts'],
 	ANNOUNCEMENT: ['/management/announcements', '/announcements'],
 	ASSET: ['/management/assets', '/assets'],
+	// `/recruitment` là nhóm trang tự phục vụ của người ngồi hội đồng (mọi vai trò, kể cả
+	// EMPLOYEE). Trang tuyển dụng công khai `/careers/...` và `/offer-response` KHÔNG nằm
+	// ở đây: chúng mở được khi chưa đăng nhập nên không có entitlement để tra.
+	RECRUIT: ['/management/recruitment', '/recruitment'],
 };
 
 /** Route này thuộc module nào, `null` nếu không thuộc module nào bật tắt được. */

@@ -27,6 +27,18 @@ import { isManagementRole } from '~/utils/role';
  * | asset_service   | /assets/my?tab=services&open_id=:id   |
  * | asset           | /management/assets/:id                |
  * | employee_assets | /management/employees/:id?tab=assets  |
+ *
+ * Module tuyển dụng cũng không rẽ theo vai trò — BE chọn sẵn refType `recruitment_my_*` cho
+ * người nhận là thành viên hội đồng (xem `docs/backend/bridges/recruitment.md` mục Thông báo):
+ * | recruitment_requisition   | /management/recruitment/requisitions/:id |
+ * | recruitment_offer         | /management/recruitment/offers/:id       |
+ * | recruitment_job           | /management/recruitment/jobs/:id         |
+ * | recruitment_candidate     | /management/recruitment/candidates/:id   |
+ * | recruitment_headcount     | /management/recruitment/headcount?year=:refId |
+ * | recruitment_my_job        | /recruitment/jobs/:id                    |
+ * | recruitment_my_application| /recruitment/applications/:id            |
+ * | recruitment_my_interviews | /recruitment/my-interviews               |
+ * | employee                  | /management/employees/:id                |
  */
 export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
 	if (!refType) return null;
@@ -84,6 +96,39 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 
 		case 'employee_assets':
 			return id ? `/management/employees/${id}?tab=assets` : '/management/employees';
+
+		// Tám refType của module tuyển dụng. Giống module tài sản, BE đã chọn refType theo
+		// từng người nhận nên ở đây KHÔNG rẽ theo vai trò: thành viên hội đồng thường là
+		// EMPLOYEE, không vào được `/management/**`, và đó đúng là lý do nhóm `recruitment_my_*`
+		// tồn tại.
+		case 'recruitment_requisition':
+			return id ? `/management/recruitment/requisitions/${id}` : '/management/recruitment/requisitions';
+
+		case 'recruitment_offer':
+			return id ? `/management/recruitment/offers/${id}` : '/management/recruitment/offers';
+
+		case 'recruitment_job':
+			return id ? `/management/recruitment/jobs/${id}` : '/management/recruitment/jobs';
+
+		case 'recruitment_candidate':
+			return id ? `/management/recruitment/candidates/${id}` : '/management/recruitment/candidates';
+
+		// `refId` của loại này là NĂM, không phải id bản ghi (bridge doc mục Thông báo).
+		case 'recruitment_headcount':
+			return id ? `/management/recruitment/headcount?year=${id}` : '/management/recruitment/headcount';
+
+		case 'recruitment_my_job':
+			return id ? `/recruitment/jobs/${id}` : '/recruitment/my-interviews';
+
+		case 'recruitment_my_application':
+			return id ? `/recruitment/applications/${id}` : '/recruitment/my-interviews';
+
+		case 'recruitment_my_interviews':
+			return '/recruitment/my-interviews';
+
+		// N-08 "có nhân viên mới" gửi cho trưởng phòng và HR, nên luôn là trang quản lý.
+		case 'employee':
+			return id ? `/management/employees/${id}` : '/management/employees';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

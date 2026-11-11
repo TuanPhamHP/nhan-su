@@ -6,9 +6,9 @@ Mỗi công ty được người vận hành bật, tắt hoặc đặt hạn d�
 FE ẩn menu chỉ để người dùng không bấm vào chỗ không dùng được, và ADMIN của công ty cũng không đi
 vòng được. Thiết kế: `docs/control-plane.md`, mục "Quyền dùng module".
 
-**Hai mã quản lý được: `AI_AGENT` (từ 06/11/2026) và `ASSET` (từ 10/11/2026).** Mọi mã khác luôn trả
-`ENABLED`, `reason: null`, `expiresAt: null`, nên route của chúng không còn trả `MODULE_*`. `ASSET` là
-module bán riêng: công ty chưa được cấp thì nhận `DISABLED`, `NOT_SUBSCRIBED`. FE giữ nguyên cách xử lý
+**Ba mã quản lý được: `AI_AGENT` (từ 06/11/2026), `ASSET` và `RECRUIT` (từ 10/11/2026).** Mọi mã khác
+luôn trả `ENABLED`, `reason: null`, `expiresAt: null`, nên route của chúng không còn trả `MODULE_*`. `ASSET`
+và `RECRUIT` là module bán riêng: công ty chưa được cấp thì nhận `DISABLED`, `NOT_SUBSCRIBED`. FE giữ nguyên cách xử lý
 theo `state`, không viết riêng cho từng mã.
 
 ---
@@ -33,7 +33,8 @@ export type ModuleCode =
   | 'BUSINESS_TRIP'
   | 'CONTRACT_INSURANCE'
   | 'ANNOUNCEMENT'
-  | 'ASSET';
+  | 'ASSET'
+  | 'RECRUIT';
 // Danh mục sẽ có thêm module. Gặp mã lạ thì bỏ qua, không lỗi.
 
 export type ModuleState = 'ENABLED' | 'READ_ONLY' | 'DISABLED';
@@ -136,9 +137,10 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 
 ## Route theo module
 
-Hiện chỉ dòng `AI_AGENT` và `ASSET` có tác dụng. Với `AI_AGENT`, khi chỉ xem các `GET` vẫn đọc được hội
+Hiện chỉ dòng `AI_AGENT`, `ASSET` và `RECRUIT` có tác dụng. Với `AI_AGENT`, khi chỉ xem các `GET` vẫn đọc được hội
 thoại cũ; chat, xác nhận hay huỷ hành động, phản hồi, đổi tên và xoá hội thoại trả 403 `MODULE_EXPIRED`.
-Với `ASSET`, xem [assets.md](./assets.md) mục 2. Các dòng còn lại, cùng bảng ba route và mục "Số liệu ở
+Với `ASSET`, xem [assets.md](./assets.md) mục 2. Với `RECRUIT`, xem [recruitment.md](./recruitment.md) mục
+"Trạng thái module": trang công khai không đi qua JWT nên có luật riêng. Các dòng còn lại, cùng bảng ba route và mục "Số liệu ở
 route không bị chặn" bên dưới, chỉ áp dụng nếu module đó được chuyển sang bán riêng.
 
 | Mã | Route gắn cổng |
@@ -151,6 +153,7 @@ route không bị chặn" bên dưới, chỉ áp dụng nếu module đó đư�
 | `CONTRACT_INSURANCE` | `/v1/contracts/*`, `/v1/social-insurance/*` |
 | `ANNOUNCEMENT` | `/v1/company-announcements/*` |
 | `ASSET` | `/v1/assets/*`, `/v1/asset-categories/*`, `/v1/asset-vendors/*`, `/v1/asset-assignments/*`, `/v1/asset-maintenances/*`, `/v1/asset-documents/*`, `/v1/asset-reports/*`, `/v1/asset-imports/*`, `/v1/employees/:id/assets/*`, `/v1/me/assets/*`, `/v1/me/asset-services/*` |
+| `RECRUIT` | `/v1/recruitment/*`, `/v1/me/recruitment/*`; trang công khai `/v1/public/careers/*`, `/v1/public/offer-responses/*` tự kiểm trạng thái của công ty trong đường dẫn hoặc token |
 
 Ba route sau không sửa dữ liệu nghiệp vụ nên vẫn gọi được khi chỉ xem hoặc hết hạn, và chỉ bị chặn
 khi module đã tắt:
@@ -187,8 +190,9 @@ Các route này thuộc lõi nên vẫn trả 200, chỉ bỏ phần của modul
 |---|---|
 | Không có token | 401, không lộ trạng thái module |
 | Công ty khác cùng hệ thống bị tắt module | Không ảnh hưởng |
-| Mã luôn bật (mọi mã trừ `AI_AGENT`, `ASSET`) | Luôn `ENABLED`, không tắt được |
+| Mã luôn bật (mọi mã trừ `AI_AGENT`, `ASSET`, `RECRUIT`) | Luôn `ENABLED`, không tắt được |
 | Công ty chưa được cấp `ASSET` | `DISABLED`, `NOT_SUBSCRIBED`; mọi route tài sản 403 `MODULE_NOT_SUBSCRIBED` |
+| Công ty chưa được cấp `RECRUIT` | `DISABLED`, `NOT_SUBSCRIBED`; mọi route tuyển dụng 403 `MODULE_NOT_SUBSCRIBED`, trang tuyển dụng công khai 404 `RECRUIT_CAREERS_CLOSED` |
 | Có `expiresAt` trong tương lai | `ENABLED`, `reason: null`. FE có thể báo sắp hết hạn |
 | Quá hạn đúng 14 ngày | Vẫn `READ_ONLY`, `EXPIRED` đến hết ngày đó |
 | Quá hạn từ ngày thứ 15 | `DISABLED`, `LAPSED` |
