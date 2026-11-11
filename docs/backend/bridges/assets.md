@@ -28,7 +28,7 @@ module"). Route trang quản lý chỉ nhận vai trò `ADMIN`, `HR`, `DIRECTOR`
 | POST | `/v1/asset-categories` | `asset:manage` | | Tạo loại |
 | PATCH | `/v1/asset-categories/:id` | `asset:manage` | | Sửa loại, ngừng dùng bằng `isActive: false` |
 | GET | `/v1/asset-vendors` | `asset:read` | ✓ | Nhà cung cấp |
-| GET | `/v1/asset-vendors/:id` | `asset:read` | ✓ | Kèm tài sản đã mua và phiếu sửa |
+| GET | `/v1/asset-vendors/:id` | `asset:read` + phạm vi | ✓ | Kèm tài sản đã mua và phiếu sửa trong phạm vi người xem |
 | POST | `/v1/asset-vendors` | `asset:manage` | | Tạo nhà cung cấp |
 | PATCH | `/v1/asset-vendors/:id` | `asset:manage` | | Sửa nhà cung cấp |
 | GET | `/v1/assets` | `asset:read` + phạm vi | ✓ | Danh sách có phân trang |
@@ -147,6 +147,8 @@ Chỉ lưu license key, đã mã hoá. **Không có chỗ nào lưu mật khẩu
   (qua `/v1/me/asset-services/:id/license-key/reveal`). `HR` có `asset:manage` đặt hay thay được key nhưng **không
   xem được**. Mỗi lần xem ghi nhật ký `asset.license_key_view`.
 - Nên **ẩn nút Xem key** với người không phải ADMIN hay người phụ trách; API vẫn chặn 403 nếu bị gọi thẳng.
+- Người không phải ADMIN không tự nhận mình là người phụ trách được (403 `ASSET_OWNER_SELF_ASSIGN`), nên HR không
+  đi vòng qua việc đổi người phụ trách để đọc key.
 - Response xem key có `Cache-Control: no-store`. FE giữ key trong một biến cục bộ, tự che lại sau vài giây,
   **không** đưa vào store, localStorage hay log.
 - Server chưa cấu hình khoá mã hoá thì đặt hoặc xem key trả 503 `ASSET_SECRET_KEY_NOT_CONFIGURED`, phần còn lại
@@ -708,6 +710,9 @@ export interface RenewalBody {
 **Body:** `UpdateAssetBody`, gửi trường cần đổi. Response `ApiSuccess<Asset>`. Đổi nguyên giá hay thời gian khấu hao
 sinh sự kiện `VALUE_CHANGED`; đổi số ghế sinh `SEATS_CHANGED`. Xem hạn chế xoá trường ở mục "Quy ước chung".
 
+Người không phải ADMIN **không tự đặt mình làm người phụ trách** dịch vụ được (`service.ownerId` bằng chính mình) →
+**403 `ASSET_OWNER_SELF_ASSIGN`**, vì người phụ trách xem được license key. Đổi sang người khác vẫn được.
+
 ## DELETE /v1/assets/:id — Xoá bản nhập nhầm
 
 **Response: 204 No Content.** Chỉ cho tài sản chưa có lịch sử nào ngoài lúc tạo; đã cấp phát, sửa, gia hạn thì
@@ -1099,7 +1104,7 @@ cho chính mình.
 | `POST /v1/asset-categories` | `{ name, groupName, kind, defaultDepreciationMonths?, requireSerial?, isActive? }` | 201 `AssetCategory`. Trùng tên → 409 `ASSET_CATEGORY_NAME_EXISTS` |
 | `PATCH /v1/asset-categories/:id` | như trên, mọi trường tuỳ chọn | `AssetCategory`. Đổi `kind` khi đã có tài sản → 409 `ASSET_CATEGORY_KIND_LOCKED` |
 | `GET /v1/asset-vendors` | `?search=&isActive=` | `ApiSuccess<AssetVendor[]>` |
-| `GET /v1/asset-vendors/:id` | | `ApiSuccess<AssetVendorDetail>` |
+| `GET /v1/asset-vendors/:id` | | `ApiSuccess<AssetVendorDetail>`. `assets` và `maintenances` chỉ gồm tài sản trong phạm vi người xem (MANAGER: phòng mình); MANAGER không thuộc phòng ban nào → 403 `ASSET_SCOPE_FORBIDDEN` |
 | `POST /v1/asset-vendors` | `{ name, types?, taxCode?, address?, website?, contactName?, phone?, email?, note?, isActive? }` | 201 `AssetVendor` |
 | `PATCH /v1/asset-vendors/:id` | như trên | `AssetVendor` |
 
@@ -1365,6 +1370,7 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 | 403 | `ASSET_NOT_OWNER` | Không phụ trách dịch vụ này |
 | 403 | `ASSET_ASSIGNMENT_NOT_YOURS` | Xác nhận hộ người khác |
 | 403 | `ASSET_LICENSE_KEY_FORBIDDEN` | Không phải ADMIN hay người phụ trách mà đòi xem key |
+| 403 | `ASSET_OWNER_SELF_ASSIGN` | Người không phải ADMIN tự đặt mình làm người phụ trách dịch vụ |
 | 403 | `MODULE_*` | Xem [entitlements.md](./entitlements.md) |
 | 404 | `ASSET_NOT_FOUND` · `ASSET_ASSIGNMENT_NOT_FOUND` · `ASSET_MAINTENANCE_NOT_FOUND` · `ASSET_DOCUMENT_NOT_FOUND` · `ASSET_VENDOR_NOT_FOUND` (route nhà cung cấp) · `ASSET_CATEGORY_NOT_FOUND` (route loại) · `ASSET_LICENSE_KEY_NOT_SET` · `EMPLOYEE_NOT_FOUND` | Không tìm thấy |
 | 409 | `ASSET_CODE_EXISTS` · `ASSET_SERIAL_EXISTS` | Trùng mã, trùng serial |
@@ -1457,6 +1463,8 @@ Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 | `MANAGER` mở tài sản phòng khác | 403 | `ASSET_SCOPE_FORBIDDEN` |
 | Người thiếu `asset:value:read` | 200 | Mọi trường tiền `null`, `canViewValue: false`, Excel không có cột tiền |
 | `HR` bấm xem license key | 403 | `ASSET_LICENSE_KEY_FORBIDDEN`: chỉ ADMIN và người phụ trách |
+| `HR` tự đổi người phụ trách dịch vụ thành chính mình | 403 | `ASSET_OWNER_SELF_ASSIGN` |
+| `MANAGER` mở chi tiết nhà cung cấp | 200 | Chỉ thấy tài sản, phiếu sửa của phòng mình |
 | Hai người cấp cùng một máy cùng lúc | 201 / 409 | Một người thành công, một người `ASSET_ALREADY_ASSIGNED` |
 | Cấp ghế thứ 6 cho dịch vụ 5 ghế | 201 | Kèm `warnings: ['SEATS_EXCEEDED']` |
 | Cấp ghế cho người đã có ghế | 409 | `ASSET_SEAT_ALREADY_HELD` |

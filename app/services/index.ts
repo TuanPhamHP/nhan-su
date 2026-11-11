@@ -37,3 +37,6 @@ export * from './announcement.service';
 export * from './agent.service';
 export * from './agent-analytics.service';
 export * from './asset.service';
+export * from './recruitment.service';
+export * from './recruitment-public.service';
+export * from './recruitment-me.service';
