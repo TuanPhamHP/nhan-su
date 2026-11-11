@@ -4,9 +4,11 @@ import {
 	canEditHeadcountProposal,
 	canWithdrawHeadcountProposal,
 	headcountUsageText,
+	isAllowedSmtpPort,
 	isHeadcountRowInUse,
 	overCommittedExplanation,
 	recruitErrorMessage,
+	smtpTargetChanged,
 	type HeadcountRights,
 	type HeadcountRowActionInput,
 } from '~/utils/recruitment.utils';
@@ -173,6 +175,58 @@ describe('headcountUsageText', () => {
 
 	it('không vế nào thì nói thẳng là chưa có gì', () => {
 		expect(headcountUsageText(row({ confirmedQuantity: 2 }))).toBe('chưa có ai và chưa có yêu cầu tuyển nào');
+	});
+});
+
+/**
+ * Form SMTP công ty. Hai luật này do backend đặt vì lý do bảo mật, và frontend kiểm lại sớm
+ * hơn một nhịp. Sai một trong hai thì người dùng mất mật khẩu đang lưu hoặc đi một vòng tới
+ * backend mới biết mình gõ sai, nên khoá bằng test.
+ */
+describe('isAllowedSmtpPort', () => {
+	it('nhận đúng bốn cổng backend cho phép', () => {
+		for (const p of [25, 465, 587, 2525]) expect(isAllowedSmtpPort(p)).toBe(true);
+	});
+
+	it('cổng khác đều không, kể cả cổng thư nội bộ hay trống', () => {
+		for (const p of [1025, 8025, 22, 80, 0, -1, 65536]) expect(isAllowedSmtpPort(p)).toBe(false);
+		expect(isAllowedSmtpPort(null)).toBe(false);
+		expect(isAllowedSmtpPort(undefined)).toBe(false);
+	});
+});
+
+describe('smtpTargetChanged', () => {
+	const saved = {
+		host: 'smtp.gmail.com',
+		port: 587,
+		security: 'STARTTLS' as string | null,
+		username: 'hr@congty.vn',
+	};
+	const draft = { host: 'smtp.gmail.com', port: 587, security: 'STARTTLS', username: 'hr@congty.vn' };
+
+	it('chưa có cấu hình thì luôn coi là đổi, nên mật khẩu bắt buộc', () => {
+		expect(smtpTargetChanged(null, draft)).toBe(true);
+	});
+
+	it('không đổi gì trong bốn trường thì không bắt nhập lại', () => {
+		expect(smtpTargetChanged(saved, draft)).toBe(false);
+	});
+
+	it('đổi bất kỳ trường nào trong bốn trường đều tính là đổi', () => {
+		expect(smtpTargetChanged(saved, { ...draft, host: 'smtp.office365.com' })).toBe(true);
+		expect(smtpTargetChanged(saved, { ...draft, port: 465 })).toBe(true);
+		expect(smtpTargetChanged(saved, { ...draft, security: 'TLS' })).toBe(true);
+		expect(smtpTargetChanged(saved, { ...draft, username: 'tuyendung@congty.vn' })).toBe(true);
+	});
+
+	it('khoảng trắng hai đầu không tính là đổi, vì lúc gửi đi cũng bị cắt', () => {
+		expect(smtpTargetChanged(saved, { ...draft, host: '  smtp.gmail.com  ' })).toBe(false);
+		expect(smtpTargetChanged(saved, { ...draft, username: ' hr@congty.vn ' })).toBe(false);
+	});
+
+	it('cấu hình cũ thiếu trường thì coi là đổi, không so null với chuỗi rỗng rồi bỏ qua', () => {
+		expect(smtpTargetChanged({ ...saved, username: null }, draft)).toBe(true);
+		expect(smtpTargetChanged({ ...saved, port: null }, draft)).toBe(true);
 	});
 });
 

@@ -1,7 +1,12 @@
 <script setup lang="ts">
 	import { useRecruitmentService } from '~/services/recruitment.service';
 	import RecruitChip from '~/components/modules/recruitment/RecruitChip.vue';
-	import { recruitErrorMessage } from '~/utils/recruitment.utils';
+	import {
+		isAllowedSmtpPort,
+		recruitErrorMessage,
+		smtpTargetChanged,
+		SMTP_ALLOWED_PORTS,
+	} from '~/utils/recruitment.utils';
 	import { formatDateTime } from '~/utils/date';
 	import {
 		SMTP_SECURITY_LABELS,
@@ -20,6 +25,10 @@
 	 * - **Lưu cấu hình đưa trạng thái về chưa thử**, và email chỉ đi qua máy chủ của công ty
 	 *   sau khi gửi thử thành công. Gửi thử thất bại KHÔNG phải lỗi HTTP: kết quả nằm trong
 	 *   `testStatus`, nên phải đọc cờ đó chứ không bắt lỗi.
+	 *
+	 * Máy chủ thư chạy chung tiến trình với mọi công ty, nên backend chỉ cho nối tới Internet
+	 * qua bốn cổng quen thuộc, và bắt nhập lại mật khẩu mỗi khi đổi chỗ sẽ gửi tới. Form chặn
+	 * trước hai điều đó để người dùng không phải đi một vòng tới backend mới biết mình sai.
 	 */
 	const props = defineProps<{ canManage: boolean }>();
 
@@ -76,6 +85,36 @@
 		label,
 	}));
 
+	/**
+	 * Cấu hình cũ có thể đang giữ một cổng giờ không còn được phép. Ẩn nó khỏi danh sách thì ô
+	 * chọn hiện trống và người dùng tưởng cấu hình bị mất, nên vẫn cho hiện kèm chữ giải thích
+	 * và chặn ở bước lưu.
+	 */
+	const portOptions = computed(() => {
+		const allowed = SMTP_ALLOWED_PORTS.map(p => ({ value: p as number, label: String(p) }));
+		const saved = smtp.value?.port;
+		if (saved && !isAllowedSmtpPort(saved)) {
+			return [{ value: saved, label: `${saved} — không còn được phép, hãy chọn lại` }, ...allowed];
+		}
+		return allowed;
+	});
+
+	const portNotAllowed = computed(() => !isAllowedSmtpPort(Number(port.value)));
+
+	/**
+	 * Mật khẩu bắt buộc khi chưa lưu mật khẩu nào, hoặc khi người dùng vừa đổi chỗ sẽ gửi tới.
+	 * Cùng một luật với backend, chỉ kiểm sớm hơn một nhịp.
+	 */
+	const passwordRequired = computed(() => {
+		if (!smtp.value?.hasPassword) return true;
+		return smtpTargetChanged(smtp.value, {
+			host: host.value,
+			port: Number(port.value),
+			security: security.value,
+			username: username.value,
+		});
+	});
+
 	const keyMissing = computed(() => !!smtp.value && !smtp.value.secretKeyConfigured);
 
 	const testTone = computed(() => {
@@ -94,8 +133,14 @@
 			error.value = 'Nhập đủ máy chủ, tài khoản, tên người gửi và email người gửi';
 			return;
 		}
-		if (!smtp.value?.hasPassword && !password.value) {
-			error.value = 'Lần đầu cấu hình phải nhập mật khẩu';
+		if (portNotAllowed.value) {
+			error.value = `Cổng chỉ nhận ${SMTP_ALLOWED_PORTS.join(', ')}. Hãy chọn lại một trong các cổng đó.`;
+			return;
+		}
+		if (passwordRequired.value && !password.value) {
+			error.value = smtp.value?.hasPassword
+				? 'Bạn vừa đổi máy chủ, cổng, kiểu bảo mật hoặc tài khoản, nên phải nhập lại mật khẩu.'
+				: 'Lần đầu cấu hình phải nhập mật khẩu';
 			return;
 		}
 		saving.value = true;
@@ -218,19 +263,20 @@
 						placeholder="smtp.gmail.com"
 						class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 					/>
+					<p class="text-xs text-gray-500 dark:text-gray-400">
+						Máy chủ SMTP trên Internet, ví dụ smtp.gmail.com
+					</p>
 				</div>
 
 				<div class="space-y-1">
 					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
 						Cổng <span class="text-red-500">*</span>
 					</label>
-					<input
-						v-model.number="port"
-						type="number"
-						min="1"
-						max="65535"
+					<UiSelect
+						v-model="port"
+						:options="portOptions"
 						:disabled="!canManage || keyMissing"
-						class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+						:error="portNotAllowed ? 'Hãy chọn một cổng được phép' : undefined"
 					/>
 				</div>
 
@@ -254,17 +300,24 @@
 				<div class="space-y-1">
 					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
 						Mật khẩu
-						<span v-if="!smtp.hasPassword" class="text-red-500">*</span>
+						<span v-if="passwordRequired" class="text-red-500">*</span>
 					</label>
 					<input
 						v-model="password"
 						type="password"
 						autocomplete="new-password"
 						:disabled="!canManage || keyMissing"
-						:placeholder="smtp.hasPassword ? 'Để trống nếu giữ mật khẩu cũ' : ''"
+						:placeholder="passwordRequired ? '' : 'Để trống nếu giữ mật khẩu cũ'"
 						class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 					/>
-					<p class="text-xs text-gray-500 dark:text-gray-400">
+					<p
+						v-if="smtp.hasPassword && passwordRequired"
+						class="text-xs text-amber-700 dark:text-amber-400"
+					>
+						Bạn vừa đổi máy chủ, cổng, kiểu bảo mật hoặc tài khoản, nên phải nhập lại mật khẩu để mật
+						khẩu cũ không bị gửi sang một máy chủ khác.
+					</p>
+					<p v-else class="text-xs text-gray-500 dark:text-gray-400">
 						Hệ thống không bao giờ hiện lại mật khẩu đã lưu.
 					</p>
 				</div>

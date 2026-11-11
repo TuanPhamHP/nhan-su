@@ -251,6 +251,36 @@ export function minProbationSalary(baseSalary: number | null | undefined): numbe
 	return Math.ceil((baseSalary * 0.85) / 1000) * 1000;
 }
 
+// ─── SMTP công ty ─────────────────────────────────────────────────────────────
+
+/**
+ * Bốn cổng backend nhận. Máy chủ thư chạy chung tiến trình với mọi công ty, nên cổng nào
+ * cũng cho gõ thì form thành một công cụ dò cổng mạng nội bộ; cổng khác bị trả 400.
+ */
+export const SMTP_ALLOWED_PORTS = [25, 465, 587, 2525] as const;
+
+export function isAllowedSmtpPort(port: number | null | undefined): boolean {
+	return !!port && (SMTP_ALLOWED_PORTS as readonly number[]).includes(port);
+}
+
+/**
+ * Bốn trường dính tới việc mật khẩu đã lưu sẽ được gửi đi đâu. Đổi bất kỳ trường nào trong
+ * số này thì backend bắt nhập lại mật khẩu, để mật khẩu của máy chủ cũ không bị gửi sang một
+ * máy chủ khác do người dùng vừa gõ vào.
+ */
+export function smtpTargetChanged(
+	saved: { host: string | null; port: number | null; security: string | null; username: string | null } | null,
+	draft: { host: string; port: number; security: string; username: string },
+): boolean {
+	if (!saved) return true;
+	return (
+		(saved.host ?? '') !== draft.host.trim() ||
+		(saved.port ?? 0) !== draft.port ||
+		(saved.security ?? '') !== draft.security ||
+		(saved.username ?? '') !== draft.username.trim()
+	);
+}
+
 /** Danh sách năm cho ô chọn năm định biên: năm nay ± 2. */
 export function headcountYearOptions(): { value: number; label: string }[] {
 	const now = new Date().getFullYear();

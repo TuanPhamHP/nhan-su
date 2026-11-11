@@ -462,8 +462,9 @@ Khi `DISABLED` ẩn menu Tuyển dụng ở cả trang quản lý lẫn trang "P
   - Ô ẩn `website` (ẩn bằng CSS, không dùng `type="hidden"`) phải để trống.
   - `formStartedAt` là `Date.now()` lúc mở form, tính bằng mili giây. Gửi sau chưa đủ 3 giây bị coi là tự động.
   - Hai trường hợp trên **vẫn trả 201 "Đã nhận hồ sơ" nhưng không lưu gì**, để bot không dò được.
-  - Cùng email nộp lại cùng tin trong 10 phút cũng trả 201 mà không tạo thêm hồ sơ.
-  - Mỗi công ty nhận tối đa 60 hồ sơ tự nộp mỗi giờ, quá thì 429 `RECRUIT_RATE_LIMITED`.
+  - Cùng email nộp lại cùng tin trong 10 phút tính từ **lần nộp gần nhất** cũng trả 201 mà không tạo thêm gì.
+  - Mỗi công ty nhận tối đa 60 **lần nộp** mỗi giờ, quá thì 429 `RECRUIT_RATE_LIMITED`. Nộp lại vào hồ sơ đang có
+    (thay CV) cũng tính là một lần.
 
 ---
 
@@ -574,7 +575,8 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 | 400 | `RECRUIT_SCORE_INVALID` | Điểm ngoài khoảng cho phép (1–5, hoặc vượt điểm tối đa của môn) |
 | 400 | `RECRUIT_SCORE_MISSING` | Nộp phiếu còn tiêu chí chưa chấm |
 | 400 | `RECRUIT_SEND_AT_PAST` | Giờ hẹn gửi email đã qua |
-| 400 | `RECRUIT_SMTP_PASSWORD_REQUIRED` | Lần đầu cấu hình SMTP phải nhập mật khẩu |
+| 400 | `RECRUIT_SMTP_PASSWORD_REQUIRED` | Lần đầu cấu hình SMTP, hoặc đổi host, cổng, kiểu bảo mật, tài khoản SMTP, thì phải nhập mật khẩu |
+| 400 | `RECRUIT_SMTP_HOST_NOT_ALLOWED` | Máy chủ SMTP trỏ vào mạng nội bộ |
 | 400 | `RECRUIT_SOURCE_INVALID` | Nguồn ứng viên không hợp lệ |
 | 400 | `RECRUIT_STAGE_HIRED_RESERVED` | Vào vòng Đã tuyển chỉ bằng nút Tạo hồ sơ nhân viên |
 | 400 | `RECRUIT_STAGE_NOT_IN_JOB` | Vòng không thuộc tin của hồ sơ |
@@ -657,7 +659,7 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 | 409 | `RECRUIT_STAGE_NOT_OFFER` | Chỉ tạo offer cho hồ sơ ở vòng Offer |
 | 409 | `RECRUIT_TALENT_POOL_NO_CONSENT` | Ứng viên chưa đồng ý lưu vào kho tiềm năng |
 | 409 | `RECRUIT_TERMS_CHANGED` | Trang công khai: điều khoản vừa đổi, ứng viên phải tải lại trang |
-| 429 | `RECRUIT_RATE_LIMITED` | Trang công khai: công ty nhận quá 60 hồ sơ trong giờ qua |
+| 429 | `RECRUIT_RATE_LIMITED` | Trang công khai: công ty nhận quá 60 lần nộp trong giờ qua |
 | 503 | `RECRUIT_SECRET_KEY_NOT_CONFIGURED` | Máy chủ chưa có khoá mã hoá nên chưa lưu hay dùng được SMTP riêng |
 
 Mã chung có thể gặp ở module này:
@@ -1200,6 +1202,15 @@ kể cả bản đã mã hoá; chỉ có cờ `hasPassword`.
 Email ứng viên chỉ đi qua SMTP công ty khi `testStatus` là `SUCCESS`. Lưu cấu hình (kể cả chỉ đổi một trường)
 đưa trạng thái về `UNTESTED`, và từ lúc đó email đi bằng kênh hệ thống cho tới khi gửi thử thành công lại.
 
+Máy chủ SMTP chạy chung tiến trình với mọi công ty, nên BE giới hạn chỗ được nối tới:
+
+- Cổng chỉ nhận 25, 465, 587 hoặc 2525. FE nên cho chọn từ danh sách thay vì gõ tự do.
+- Host phải là tên miền hoặc IP trên Internet. IP nội bộ (127.x, 10.x, 172.16–31.x, 192.168.x, 169.254.x…), tên
+  một nhãn như `redis` hay `localhost`, và tên miền phân giải ra địa chỉ nội bộ đều bị từ chối. BE kiểm lúc lưu,
+  lúc gửi thử và lúc gửi thật; lúc gửi thật mà host đã trỏ vào mạng nội bộ thì email đi kênh hệ thống.
+- **Đổi `host`, `port`, `security` hoặc `username` thì phải nhập lại mật khẩu**, để mật khẩu đã lưu không bị
+  chuyển sang một máy chủ khác. Chỉ đổi tên hiển thị, email người gửi hay Reply-To thì vẫn để trống mật khẩu được.
+
 ```typescript
 export interface RecruitmentSmtp {
   configured: boolean;            // false: chưa cấu hình, mọi trường dưới là null
@@ -1211,15 +1222,15 @@ export interface RecruitmentSmtp {
   fromName: string | null; fromEmail: string | null; replyTo: string | null;
   testStatus: RecruitmentSmtpTestStatus | null; testStatusLabel: string | null;
   testedAt: string | null;
-  testError: string | null;       // lỗi của lần gửi thử gần nhất
+  testError: string | null;       // nhóm lỗi của lần gửi thử gần nhất, không phải thông điệp gốc của máy chủ thư
   updatedById: number | null; updatedAt: string | null;
 }
 export interface SaveSmtpBody {
-  host: string;                   // 3–200 ký tự
-  port: number;                   // 1–65535
+  host: string;                   // 3–200 ký tự; tên miền hoặc IP trên Internet, không trỏ vào mạng nội bộ
+  port: number;                   // 25 | 465 | 587 | 2525
   security: RecruitmentSmtpSecurity;
   username: string;               // 1–200 ký tự
-  password?: string;              // 1–500 ký tự; bỏ trống khi sửa thì giữ mật khẩu cũ
+  password?: string;              // 1–500 ký tự; bỏ trống khi sửa thì giữ mật khẩu cũ, trừ khi đổi host, port, security, username
   fromName: string;               // 1–150 ký tự
   fromEmail: string;              // email
   replyTo?: string;               // email; bỏ trống thì xoá
@@ -1250,15 +1261,37 @@ email ứng viên vẫn đi bằng kênh hệ thống.
 #### PUT `/v1/recruitment/smtp`
 
 Lưu cấu hình, thay toàn bộ. Body là `SaveSmtpBody`. Ô mật khẩu trên form để trống và chỉ gửi khi người dùng gõ
-mật khẩu mới. Lỗi: 400 `RECRUIT_SMTP_PASSWORD_REQUIRED` khi lần đầu cấu hình mà không có mật khẩu; 503
-`RECRUIT_SECRET_KEY_NOT_CONFIGURED` khi máy chủ thiếu khoá mà có gửi mật khẩu.
+mật khẩu mới; khi người dùng sửa `host`, `port`, `security` hoặc `username` so với cấu hình đang lưu thì FE đánh
+dấu ô mật khẩu là bắt buộc.
+
+Lỗi:
+
+| HTTP | Mã | Khi nào |
+|---|---|---|
+| 400 | `RECRUIT_SMTP_PASSWORD_REQUIRED` | Lần đầu cấu hình mà không có mật khẩu, hoặc đổi `host`, `port`, `security`, `username` mà không nhập lại mật khẩu |
+| 400 | `RECRUIT_SMTP_HOST_NOT_ALLOWED` | Host trỏ vào mạng nội bộ (IP nội bộ, tên một nhãn, tên miền phân giải ra địa chỉ nội bộ) |
+| 400 | `BAD_REQUEST` | Cổng ngoài 25, 465, 587, 2525, hoặc trường khác sai dạng |
+| 503 | `RECRUIT_SECRET_KEY_NOT_CONFIGURED` | Máy chủ thiếu khoá mà có gửi mật khẩu |
+
+Tên miền chưa phân giải được (gõ sai, DNS tạm lỗi) vẫn lưu được; gửi thử sẽ báo lỗi kết nối.
 
 #### POST `/v1/recruitment/smtp/test`
 
 Gửi thử **đồng bộ** tới `{ to: string }` (email). Response 201 là cấu hình mới. **Gửi thử thất bại không phải
-lỗi HTTP**: BE vẫn trả 201 với `testStatus: 'FAILED'` và `testError` là thông báo lỗi của máy chủ thư, nên FE đọc
-`testStatus` để báo kết quả. Lỗi HTTP: 404 `RECRUIT_SMTP_NOT_CONFIGURED`, 503 `RECRUIT_SECRET_KEY_NOT_CONFIGURED`.
-Request có thể mất vài giây vì chờ máy chủ thư trả lời.
+lỗi HTTP**: BE vẫn trả 201 với `testStatus: 'FAILED'`, nên FE đọc `testStatus` để báo kết quả. Lỗi HTTP: 404
+`RECRUIT_SMTP_NOT_CONFIGURED`, 503 `RECRUIT_SECRET_KEY_NOT_CONFIGURED`. Request có thể mất vài giây vì chờ máy chủ
+thư trả lời.
+
+`testError` chỉ là một trong các câu sau, không chép thông điệp gốc của máy chủ thư (thông điệp đó có thể lộ địa
+chỉ IP và dòng chào của dịch vụ ở đầu bên kia). FE hiện nguyên câu:
+
+| Nhóm | `testError` |
+|---|---|
+| Sai tài khoản | Máy chủ SMTP từ chối tài khoản hoặc mật khẩu |
+| Lỗi TLS | Không thiết lập được kết nối bảo mật với máy chủ SMTP, kiểm tra cổng và kiểu bảo mật |
+| Máy chủ từ chối thư | Máy chủ SMTP từ chối email gửi thử, kiểm tra email người gửi |
+| Host trỏ vào mạng nội bộ | Máy chủ SMTP trỏ vào mạng nội bộ, không được phép |
+| Còn lại (không phân giải, không nối được, hết giờ) | Không kết nối được máy chủ SMTP, kiểm tra tên máy chủ, cổng và kiểu bảo mật |
 
 #### DELETE `/v1/recruitment/smtp`
 
@@ -1584,7 +1617,8 @@ Gửi duyệt, không có body. Cần `recruitment:requisition:create`, và là 
 kiểm định biên (BR-01), dựng bước duyệt theo mục "Luồng duyệt", tăng `round`, chuyển `PENDING` và gửi N-01 cho
 người duyệt bước 1. Response 201 là `Requisition`.
 
-Lỗi: 409 `RECRUIT_REQUISITION_LOCKED` (không ở `DRAFT`, `REJECTED`, hoặc vừa có người gửi);
+Lỗi: 409 `RECRUIT_REQUISITION_LOCKED` (không ở `DRAFT`, `REJECTED`, vừa có người gửi, hoặc yêu cầu vừa bị sửa
+trong lúc gửi: FE tải lại rồi cho bấm lại);
 `RECRUIT_HEADCOUNT_NOT_CONFIRMED` (vị trí chưa có định biên Đã chốt của năm); `RECRUIT_HEADCOUNT_EXCEEDED`
 (`quantity` lớn hơn số còn trống, số còn trống chỉ có trong `message`).
 
@@ -2841,9 +2875,14 @@ export interface RecruitmentEmailLog {
 
 #### GET /v1/recruitment/candidates/:id/emails — Lịch sử email
 
-Mọi email đã gửi, đang chờ hoặc đã huỷ của ứng viên, mới nhất trước. Cần `recruitment:read` và xem được ứng viên.
+Email đã gửi, đang chờ hoặc đã huỷ của ứng viên, mới nhất trước. Cần `recruitment:read` và xem được ứng viên.
 **Response:** `ApiSuccess<RecruitmentEmailLog[]>`. Email có `status: "PENDING"` và `scheduledAt` là email đang hẹn
 giờ: hiện nút "Huỷ gửi" cho người có `recruitment:manage`.
+
+- Lọc theo phạm vi như bình luận và lịch sử: người xem toàn công ty thấy mọi email; MANAGER chỉ thấy email chung
+  (`applicationId: null`) và email gắn với hồ sơ trong phạm vi của mình.
+- Email offer: link phản hồi trong `body` đã bị che phần bí mật của token (`…/offer-response?token=<mã công
+  ty>.[đã ẩn]`). Token chỉ đi tới hộp thư ứng viên; HR ghi nhận phản hồi thay ứng viên bằng `record-response`.
 
 #### POST /v1/recruitment/candidates/:id/emails — Gửi email tay
 
@@ -4050,7 +4089,9 @@ và **không** có `errors[]`.
 ### PATCH /v1/recruitment/offers/:id — Sửa nháp
 
 **Body:** các trường như khi tạo, trường nào cũng tuỳ chọn. Cần `recruitment:manage`. Chỉ offer `DRAFT` sửa được; offer
-ở trạng thái khác trả 409 `RECRUIT_OFFER_LOCKED`, muốn đổi điều khoản thì dùng `revise`. BE kiểm lại toàn bộ điều khoản
+ở trạng thái khác trả 409 `RECRUIT_OFFER_LOCKED`, muốn đổi điều khoản thì dùng `revise`. Offer vừa được gửi duyệt
+trong lúc đang sửa cũng nhận 409 này (lương đã sửa không được nhận). Ngược lại, gửi duyệt đúng lúc offer vừa bị sửa
+thì `submit` trả 409 `RECRUIT_OFFER_LOCKED` "Offer vừa được sửa hoặc gửi duyệt": FE tải lại offer rồi cho bấm lại. BE kiểm lại toàn bộ điều khoản
 sau khi trộn với giá trị cũ, trả lỗi theo đúng dạng `errors[]` như khi tạo. **Response 200:**
 `ApiSuccess<RecruitmentOffer>`.
 
@@ -4120,7 +4161,8 @@ lúc 23:59:59 giờ Việt Nam của ngày hạn (BR-11).
 BE làm theo thứ tự: sinh link phản hồi một lần dùng (BR-15), sinh và lưu bản PDF thư mời, đặt offer `SENT`, sinh sự kiện
 `OFFER_SENT`, rồi xếp email mục đích `OFFER` gửi ngay cho ứng viên. Email theo mẫu `templateId` hoặc mẫu mặc định "Gửi
 offer", kèm file `thu-moi-nhan-viec.pdf`; nút "Xem và phản hồi offer" trong email trỏ tới
-`<FRONTEND_URL>/offer-response?token=…`. Token chỉ nằm trong email, không bao giờ trả ra API hay ghi log.
+`<FRONTEND_URL>/offer-response?token=…`. Token chỉ nằm trong email, không bao giờ trả ra API hay ghi log: lịch sử
+email (`GET /candidates/:id/emails`) trả nội dung email offer với phần bí mật của token đã che.
 
 **Response 201:** `ApiSuccess<RecruitmentOffer>` với `status: "SENT"`, `responseState: "ACTIVE"`, `hasSentPdf: true`.
 
