@@ -18,10 +18,10 @@
 | DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | **Khóa tài khoản** (soft delete) + ghi ngày nghỉ việc |
 | POST | `/v1/employees/:id/terminate` | quyền `employee:terminate` (không giới hạn role) | **Xác nhận nghỉ việc** — ngày + lý do bắt buộc |
 | POST | `/v1/employees/:id/reset-password` | `ADMIN`, `HR` | Gửi link đặt mật khẩu mới (hạn 3 giờ) tới email đăng nhập; vô hiệu mật khẩu cũ nếu tài khoản chỉ thuộc công ty này. Cũng là cách gửi lại link kích hoạt / lời mời |
-| GET | `/v1/employees/:id/documents` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Tài liệu của nhân viên |
+| GET | `/v1/employees/:id/documents` | `ADMIN`, `HR`, `DIRECTOR`, `MANAGER`, `CHIEF` kèm quyền `employee:read` (ADMIN không cần quyền) | Tài liệu của nhân viên |
 | POST | `/v1/employees/:id/documents` | `ADMIN`, `HR` | Upload tài liệu |
 | DELETE | `/v1/employees/:employeeId/documents/:documentId` | `ADMIN`, `HR` | Xóa tài liệu |
-| GET | `/v1/employees/:employeeId/documents/:documentId/url` | Mọi user đã đăng nhập | Presigned URL xem/download (hiệu lực 1 giờ) |
+| GET | `/v1/employees/:employeeId/documents/:documentId/url` | Bản thân, hoặc người được gọi `GET /v1/employees/:id/documents` | Presigned URL xem/download (hiệu lực 1 giờ). Người khác nhận 403; tài liệu không thuộc `employeeId` nhận 404. Chi tiết ở [employee-documents.md](./employee-documents.md) |
 
 > **Lưu ý thứ tự route:** `/employees/me` được khai báo **trước** `/employees/:id` trong controller.  
 > Nếu gọi `/employees/me` mà server trả 404 "employee not found", kiểm tra lại thứ tự route của router phía client.
