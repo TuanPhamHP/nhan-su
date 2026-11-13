@@ -6,6 +6,7 @@ import { useGeneralRequestStore } from '~/stores/generalRequest';
 import RequestStatusBadge from '~/components/modules/general-request/RequestStatusBadge.vue';
 import ApproverChain from '~/components/modules/general-request/ApproverChain.vue';
 import type { GeneralRequestResponse, DocumentTemplateDetail } from '~/types/general-request.types';
+import { buildPrintHtml } from '~/utils/print-template';
 
 definePageMeta({ title: 'Chi tiết văn bản' });
 
@@ -42,11 +43,7 @@ const canCancelNow = computed(() =>
 const renderedHtml = computed(() => {
 	const tmpl = templateDetail.value?.printTemplate ?? request.value?.printTemplate;
 	if (!tmpl || !request.value) return '';
-	let html = tmpl;
-	for (const [key, value] of Object.entries(request.value.fieldValues)) {
-		html = html.replaceAll(`{{${key}}}`, String(value ?? ''));
-	}
-	return html;
+	return buildPrintHtml(tmpl, request.value.fieldValues);
 });
 
 const iframeSrcdoc = computed(() => {
@@ -214,10 +211,13 @@ watch(() => generalRequestStore.refreshSignal, () => {
 								</button>
 							</div>
 						</div>
+						<!-- srcdoc chạy cùng origin với app. sandbox không có allow-scripts nên mọi script trong
+						     nội dung đều không chạy; allow-same-origin để onIframeLoad đọc được chiều cao. -->
 						<iframe
 							v-if="iframeSrcdoc"
 							ref="iframeRef"
 							:srcdoc="iframeSrcdoc"
+							sandbox="allow-same-origin"
 							class="w-full border-0 block"
 							style="min-height: 400px;"
 							@load="onIframeLoad"
