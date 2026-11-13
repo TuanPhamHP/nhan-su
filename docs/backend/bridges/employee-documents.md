@@ -9,10 +9,10 @@
 | Method | Path | Ai được gọi | Ghi chú |
 |--------|------|-------------|---------|
 | GET | `/v1/employees/me/documents` | Mọi user đã đăng nhập | Tài liệu của chính mình |
-| GET | `/v1/employees/:id/documents` | `HR`, `ADMIN`, `MANAGER` | Tài liệu của một nhân viên |
+| GET | `/v1/employees/:id/documents` | `HR`, `ADMIN`, `DIRECTOR`, `MANAGER`, `CHIEF` kèm quyền `employee:read` (ADMIN không cần quyền) | Tài liệu của một nhân viên |
 | POST | `/v1/employees/:id/documents` | `HR`, `ADMIN` | Upload tài liệu (`multipart/form-data`) |
 | DELETE | `/v1/employees/:employeeId/documents/:documentId` | `HR`, `ADMIN` | Xóa tài liệu |
-| GET | `/v1/employees/:employeeId/documents/:documentId/url` | Mọi user đã đăng nhập | Lấy presigned URL để xem/download |
+| GET | `/v1/employees/:employeeId/documents/:documentId/url` | Chính chủ (`employeeId` là mình), hoặc người được gọi `GET /v1/employees/:id/documents` | Lấy presigned URL để xem/download |
 
 > **Lưu ý thứ tự route:** `/employees/me/documents` được khai báo **trước** `/employees/:id/documents` trong controller.  
 > Nếu gọi `/employees/me/documents` mà server trả lỗi parse int cho `"me"`, kiểm tra lại thứ tự route của router phía client.
@@ -90,7 +90,8 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 
 ## GET /v1/employees/:id/documents — Tài liệu của một nhân viên
 
-Chỉ `HR`, `ADMIN`, `MANAGER` mới gọi được. Shape response giống `/me/documents`.
+Chỉ `HR`, `ADMIN`, `DIRECTOR`, `MANAGER`, `CHIEF` có quyền `employee:read` mới gọi được (ADMIN
+không cần quyền). Shape response giống `/me/documents`.
 
 **Response:** `ApiSuccess<EmployeeDocumentResponse[]>`
 
@@ -164,6 +165,15 @@ await $fetch(`/v1/employees/${employeeId}/documents`, {
 
 URL có hiệu lực **1 giờ** từ thời điểm gọi. Gọi lại để gia hạn.
 
+**Ai được gọi.** Chính chủ luôn lấy được URL tài liệu của mình (`employeeId` trùng người đăng nhập),
+không cần quyền nào. Người khác phải qua đúng luật của `GET /v1/employees/:id/documents`, tức role
+`HR`, `ADMIN`, `DIRECTOR`, `MANAGER` hoặc `CHIEF` kèm quyền `employee:read`; ADMIN không cần quyền.
+Một `EMPLOYEE` có quyền `employee:read` vẫn không xem được tài liệu của người khác.
+
+Server kiểm quyền theo `employeeId` **trước** khi tìm tài liệu, nên người không được xem luôn nhận
+403, dù `documentId` có tồn tại hay không. Tài liệu không thuộc `employeeId` trên đường dẫn trả 404
+như tài liệu không tồn tại, nên FE phải truyền đúng `employeeId` của chủ tài liệu.
+
 **Response:** `ApiSuccess<{ presignedUrl: string }>`
 
 ```json
@@ -184,6 +194,16 @@ window.open(data.presignedUrl, '_blank');
 
 // ❌ Sai — fileUrl trong EmployeeDocumentResponse là S3 URL gốc, không có auth
 // window.open(doc.fileUrl, '_blank'); // sẽ bị 403 từ S3
+```
+
+**403** nếu không phải chính chủ và không đủ quyền xem tài liệu nhân viên khác:
+```json
+{ "success": false, "error": { "code": "FORBIDDEN", "message": "Không đủ quyền xem tài liệu của nhân viên này" } }
+```
+
+**404** nếu tài liệu không tồn tại hoặc không thuộc `employeeId`:
+```json
+{ "success": false, "error": { "code": "NOT_FOUND", "message": "Tài liệu không tồn tại" } }
 ```
 
 > **PDF mở inline trong browser** — server upload với `Content-Disposition: inline` cho file PDF, `attachment` cho DOCX/JPG/PNG.
@@ -250,4 +270,7 @@ export function useEmployeeDocuments() {
 | `EMPLOYEE` gọi `POST /:id/documents` | 403 | Chỉ HR/ADMIN upload được |
 | `employeeId` không tồn tại | 404 | `"Nhân viên không tồn tại"` |
 | `documentId` không tồn tại | 404 | `"Tài liệu không tồn tại"` |
+| Gọi `/url` với `documentId` của người khác nhưng `employeeId` là mình | 404 | Tài liệu phải thuộc `employeeId` trên đường dẫn |
+| `EMPLOYEE` (kể cả có `employee:read`) gọi `/url` tài liệu người khác | 403 | `"Không đủ quyền xem tài liệu của nhân viên này"` |
+| `HR`/`MANAGER`/`DIRECTOR`/`CHIEF` thiếu `employee:read` gọi `/url` tài liệu người khác | 403 | Như trên |
 | Gọi presigned URL sau 1 giờ | 403 từ S3 | Gọi lại endpoint `/url` để lấy URL mới |
