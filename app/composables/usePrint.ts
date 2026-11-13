@@ -1,13 +1,6 @@
 import type { GeneralRequestResponse } from '~/types/general-request.types';
 import { useGeneralRequestService } from '~/services/general-request.service';
-
-function buildHtml(template: string, fieldValues: Record<string, unknown>): string {
-	let html = template;
-	for (const [key, value] of Object.entries(fieldValues)) {
-		html = html.replaceAll(`{{${key}}}`, String(value ?? ''));
-	}
-	return html;
-}
+import { buildPrintHtml } from '~/utils/print-template';
 
 function openPrintWindow(html: string): void {
 	const printWindow = window.open('', '_blank');
@@ -41,13 +34,13 @@ export function usePrint() {
 		const response = await service.print(requestId);
 		const { printTemplate, fieldValues } = response;
 		if (!printTemplate) return;
-		openPrintWindow(buildHtml(printTemplate, fieldValues));
+		openPrintWindow(buildPrintHtml(printTemplate, fieldValues));
 	}
 
 	function previewRequest(req: GeneralRequestResponse, templateHtml?: string | null): void {
 		const html = templateHtml ?? req.printTemplate;
 		if (!html) return;
-		openPrintWindow(buildHtml(html, req.fieldValues));
+		openPrintWindow(buildPrintHtml(html, req.fieldValues));
 	}
 
 	return { printRequest, previewRequest };
