@@ -130,8 +130,17 @@
 	const openAssets = ref<AssetAssignment[]>([]);
 	const loadingOpenAssets = ref(false);
 	const returningOpenAssets = ref(false);
+	/**
+	 * Kiểm tài sản lỗi (mất mạng, máy chủ lỗi) thì KHÔNG được lặng lẽ ẩn khối cảnh báo: HR sẽ cho
+	 * nghỉ mà không biết nhân viên còn giữ tài sản. Lỗi do không có quyền thì đã bị chặn từ
+	 * `canReadAssets` ở trên nên không rơi vào đây.
+	 */
+	const openAssetsError = ref(false);
+	/** Thu hồi tất cả từ hộp nghỉ việc cũng phải hỏi lại, giống nút cùng tên ở tab Tài sản. */
+	const confirmReturnAllOpen = ref(false);
 
 	async function loadOpenAssets() {
+		openAssetsError.value = false;
 		if (!canReadAssets.value) {
 			openAssets.value = [];
 			return;
@@ -141,6 +150,7 @@
 			openAssets.value = await assetService.findEmployeeAssets(id, true);
 		} catch {
 			openAssets.value = [];
+			openAssetsError.value = true;
 		} finally {
 			loadingOpenAssets.value = false;
 		}
@@ -151,10 +161,12 @@
 		returningOpenAssets.value = true;
 		try {
 			const count = await assetService.returnAllEmployeeAssets(id);
-			toast.success(`Đã thu hồi ${count} tài sản`);
+			const name = currentEmployee.value?.fullName ?? 'nhân viên này';
+			toast.success(`Đã thu hồi ${count} tài sản của ${name}.`);
+			confirmReturnAllOpen.value = false;
 			await loadOpenAssets();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Thu hồi tất cả thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa thu hồi được. Bạn thử lại sau ít phút.');
 		} finally {
 			returningOpenAssets.value = false;
 		}
@@ -991,11 +1003,22 @@
 						</p>
 
 						<div
+							v-else-if="openAssetsError"
+							class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-800 dark:bg-rose-900/20"
+						>
+							<p class="text-sm text-rose-800 dark:text-rose-200">
+								Chưa kiểm tra được tài sản nhân viên đang giữ. Bạn xem tab Tài sản của nhân viên trước khi chốt
+								ngày nghỉ.
+							</p>
+							<CommonAppButton size="sm" variant="outline" @click="loadOpenAssets">Thử lại</CommonAppButton>
+						</div>
+
+						<div
 							v-else-if="openAssets.length"
 							class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20"
 						>
 							<p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-								Nhân viên còn giữ {{ openAssets.length }} tài sản
+								{{ currentEmployee?.fullName ?? 'Nhân viên' }} còn giữ {{ openAssets.length }} tài sản chưa thu hồi.
 							</p>
 							<ul class="mt-1.5 space-y-0.5">
 								<li v-for="a in openAssets" :key="a.id" class="text-xs text-amber-700 dark:text-amber-300">
@@ -1005,18 +1028,34 @@
 								</li>
 							</ul>
 							<p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
-								Vẫn cho nghỉ được. Chưa thu hồi thì hệ thống gửi thông báo nhắc người quản lý tài sản.
+								Bạn nên thu hồi trước khi chốt ngày nghỉ; nếu vẫn cho nghỉ, hệ thống sẽ nhắc người quản lý tài sản
+								thu hồi sau.
 							</p>
-							<CommonAppButton
-								v-if="canManageAssets"
-								class="mt-2"
-								size="sm"
-								variant="outline"
-								:loading="returningOpenAssets"
-								@click="returnAllOpenAssets"
-							>
-								Thu hồi tất cả
-							</CommonAppButton>
+							<template v-if="canManageAssets">
+								<CommonAppButton
+									v-if="!confirmReturnAllOpen"
+									class="mt-2"
+									size="sm"
+									variant="outline"
+									@click="confirmReturnAllOpen = true"
+								>
+									Thu hồi tất cả
+								</CommonAppButton>
+								<div v-else class="mt-2 space-y-2 rounded-lg bg-white/70 p-2 dark:bg-gray-900/40">
+									<p class="text-xs text-amber-800 dark:text-amber-200">
+										Thu hồi {{ openAssets.length }} tài sản trong một lần, ngày thu hồi là hôm nay và tình trạng để
+										trống. Tài sản cấp phát cho phòng ban mà nhân viên này chịu trách nhiệm sẽ không được thu hồi.
+									</p>
+									<div class="flex gap-2">
+										<CommonAppButton size="sm" variant="secondary" @click="confirmReturnAllOpen = false">
+											Giữ lại
+										</CommonAppButton>
+										<CommonAppButton size="sm" variant="primary" :loading="returningOpenAssets" @click="returnAllOpenAssets">
+											Thu hồi tất cả
+										</CommonAppButton>
+									</div>
+								</div>
+							</template>
 						</div>
 
 						<div class="mt-5 space-y-4">

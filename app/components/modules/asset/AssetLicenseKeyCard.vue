@@ -48,7 +48,7 @@
 			if (hideTimer) clearTimeout(hideTimer);
 			hideTimer = setTimeout(hideNow, props.hideAfterMs);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không xem được license key');
+			toast.error(e instanceof Error ? e.message : 'Chưa xem được license key. Bạn thử lại sau ít phút.');
 		} finally {
 			revealing.value = false;
 		}
@@ -58,23 +58,28 @@
 		if (!plainKey.value) return;
 		try {
 			await navigator.clipboard.writeText(plainKey.value);
-			toast.success('Đã sao chép license key');
+			toast.success('Đã sao chép license key.');
 		} catch {
-			toast.error('Trình duyệt không cho sao chép tự động');
+			toast.error(
+				'Trình duyệt chưa cho phép sao chép tự động. Bạn bôi đen license key rồi nhấn Ctrl+C, hoặc nhấn giữ để sao chép trên điện thoại.',
+			);
 		}
 	}
+
+	/** Xoá key không khôi phục được, nên hỏi lại trước khi gọi API. */
+	const confirmingClear = ref(false);
 
 	async function onSave() {
 		if (!draft.value.trim() || saving.value) return;
 		saving.value = true;
 		try {
 			await props.save(draft.value.trim());
-			toast.success('Đã lưu license key');
+			toast.success('Đã lưu license key.');
 			draft.value = '';
 			editing.value = false;
 			emit('changed');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Lưu license key thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa lưu được license key. Bạn thử lại sau ít phút.');
 		} finally {
 			saving.value = false;
 		}
@@ -86,10 +91,12 @@
 		try {
 			await props.clear();
 			hideNow();
-			toast.success('Đã xoá license key');
+			toast.success('Đã xoá license key.');
+			confirmingClear.value = false;
+			editing.value = false;
 			emit('changed');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Xoá license key thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa xoá được license key. Bạn thử lại sau ít phút.');
 		} finally {
 			saving.value = false;
 		}
@@ -105,11 +112,11 @@
 			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">License key</h3>
 			<div class="flex items-center gap-2">
 				<CommonAppButton v-if="hasKey && canReveal && !plainKey" size="sm" variant="outline" :loading="revealing" @click="onReveal">
-					Xem key
+					Xem license key
 				</CommonAppButton>
 				<CommonAppButton v-if="plainKey" size="sm" variant="outline" @click="hideNow">Ẩn</CommonAppButton>
 				<CommonAppButton v-if="canEdit && !editing" size="sm" variant="outline" @click="editing = true">
-					{{ hasKey ? 'Thay key' : 'Đặt key' }}
+					{{ hasKey ? 'Thay license key' : 'Đặt license key' }}
 				</CommonAppButton>
 			</div>
 		</div>
@@ -146,20 +153,38 @@
 				class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 			/>
 			<div class="flex flex-wrap justify-end gap-2">
-				<CommonAppButton
-					v-if="hasKey"
-					size="sm"
-					variant="danger"
-					:loading="saving"
-					@click="onClear"
-				>
-					Xoá key
+				<CommonAppButton v-if="hasKey" size="sm" variant="danger" :disabled="saving" @click="confirmingClear = true">
+					Xoá license key
 				</CommonAppButton>
-				<CommonAppButton size="sm" variant="secondary" @click="editing = false; draft = ''">Huỷ</CommonAppButton>
+				<CommonAppButton size="sm" variant="secondary" @click="editing = false; draft = ''">Đóng</CommonAppButton>
 				<CommonAppButton size="sm" variant="primary" :disabled="!draft.trim()" :loading="saving" @click="onSave">
 					Lưu
 				</CommonAppButton>
 			</div>
+			<p v-if="!draft.trim()" class="text-right text-xs text-gray-500 dark:text-gray-400">
+				Bạn dán license key mới vào ô trên để lưu.
+			</p>
 		</div>
+
+		<Teleport to="body">
+			<div
+				v-if="confirmingClear"
+				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+				role="alertdialog"
+				aria-modal="true"
+				aria-label="Xoá license key"
+			>
+				<div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Xoá license key</h2>
+					<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+						License key đã lưu sẽ mất hẳn và không khôi phục được, bạn cần key gốc để đặt lại.
+					</p>
+					<div class="mt-5 flex justify-end gap-3">
+						<CommonAppButton variant="secondary" :disabled="saving" @click="confirmingClear = false">Giữ lại</CommonAppButton>
+						<CommonAppButton variant="danger" :loading="saving" @click="onClear">Xoá license key</CommonAppButton>
+					</div>
+				</div>
+			</div>
+		</Teleport>
 	</div>
 </template>

@@ -6,6 +6,7 @@ import type {
 	AssetAssignResult,
 	AssetAssignment,
 	AssetCategory,
+	AssetDateRangeQuery,
 	AssetDepreciation,
 	AssetDepreciationReport,
 	AssetDepreciationReportQuery,
@@ -14,26 +15,39 @@ import type {
 	AssetEvent,
 	AssetExpiringQuery,
 	AssetExpiringRow,
+	AssetHandoverPdf,
 	AssetImportResult,
+	AssetIncident,
+	AssetIncidentQueryParams,
 	AssetKind,
 	AssetMaintenance,
+	AssetMaintenanceCostQuery,
+	AssetMaintenanceCostReport,
 	AssetMaintenanceQueryParams,
+	AssetOverview,
 	AssetQueryParams,
 	AssetRenewal,
 	AssetRenewalBody,
 	AssetReturnBody,
 	AssetSeatBody,
+	AssetServiceCostQuery,
+	AssetServiceCostReport,
 	AssetStatusBody,
 	AssetTransferBody,
 	AssetVendor,
 	AssetVendorDetail,
 	CloseAssetMaintenanceBody,
+	ConfirmAssetLossBody,
 	ConfirmAssignmentBody,
 	CreateAssetBody,
 	CreateAssetCategoryBody,
 	CreateAssetMaintenanceBody,
 	CreateAssetVendorBody,
+	HandleAssetIncidentBody,
 	MyAssets,
+	RepairFromAssetIncidentBody,
+	ReportAssetIncidentBody,
+	RespondDisputeBody,
 	UpdateAssetBody,
 	UpdateAssetCategoryBody,
 	UpdateAssetMaintenanceBody,
@@ -57,6 +71,21 @@ function documentFormData(body: AssetDocumentUploadBody): FormData {
 	if (body.assignmentId != null) form.append('assignmentId', String(body.assignmentId));
 	if (body.renewalId != null) form.append('renewalId', String(body.renewalId));
 	if (body.maintenanceId != null) form.append('maintenanceId', String(body.maintenanceId));
+	return form;
+}
+
+/**
+ * Form báo hỏng, báo mất.
+ *
+ * Mỗi ảnh `append` một lần vào cùng tên `photos` — BE đọc chúng thành mảng. Không đặt
+ * `Content-Type` ở nơi gọi để trình duyệt tự điền boundary.
+ */
+function incidentFormData(body: ReportAssetIncidentBody): FormData {
+	const form = new FormData();
+	form.append('type', body.type);
+	form.append('description', body.description);
+	if (body.occurredOn) form.append('occurredOn', body.occurredOn);
+	for (const photo of body.photos ?? []) form.append('photos', photo);
 	return form;
 }
 
@@ -230,6 +259,19 @@ export const useAssetService = () => {
 			return res.data;
 		},
 
+		/**
+		 * Trả lời người nhận đã báo cấp phát chưa đúng. Cấp phát về "Chờ người nhận xác nhận"
+		 * và người nhận được báo để kiểm lại rồi bấm Đã nhận.
+		 */
+		async respondToDispute(assignmentId: number, response: string): Promise<AssetAssignment> {
+			const body: RespondDisputeBody = { response };
+			const res = await authFetch<ApiResponse<AssetAssignment>>(
+				`/v1/asset-assignments/${assignmentId}/dispute-response`,
+				{ method: 'POST', body },
+			);
+			return res.data;
+		},
+
 		// ─── Gia hạn dịch vụ ──────────────────────────────────────────────────────
 
 		async findRenewals(id: number): Promise<AssetRenewal[]> {
@@ -356,6 +398,113 @@ export const useAssetService = () => {
 			return res.data;
 		},
 
+		// ─── Đợt 2: tổng quan và báo cáo tiền ─────────────────────────────────────
+
+		async overview(): Promise<AssetOverview> {
+			const res = await authFetch<ApiResponse<AssetOverview>>('/v1/asset-reports/overview');
+			return res.data;
+		},
+
+		async serviceCosts(params: AssetServiceCostQuery): Promise<AssetServiceCostReport> {
+			const res = await authFetch<ApiResponse<AssetServiceCostReport>>(
+				'/v1/asset-reports/service-costs',
+				{ params },
+			);
+			return res.data;
+		},
+
+		async exportServiceCosts(params: AssetServiceCostQuery): Promise<Blob> {
+			return authFetch<Blob>('/v1/asset-reports/service-costs/export', {
+				params,
+				responseType: 'blob',
+			});
+		},
+
+		async maintenanceCosts(params: AssetMaintenanceCostQuery): Promise<AssetMaintenanceCostReport> {
+			const res = await authFetch<ApiResponse<AssetMaintenanceCostReport>>(
+				'/v1/asset-reports/maintenance-costs',
+				{ params },
+			);
+			return res.data;
+		},
+
+		async exportMaintenanceCosts(params: AssetMaintenanceCostQuery): Promise<Blob> {
+			return authFetch<Blob>('/v1/asset-reports/maintenance-costs/export', {
+				params,
+				responseType: 'blob',
+			});
+		},
+
+		/** Excel ba sheet cho kế toán; kỳ tối đa 12 tháng. */
+		async exportAccounting(params: AssetDateRangeQuery): Promise<Blob> {
+			return authFetch<Blob>('/v1/asset-reports/accounting-export', {
+				params,
+				responseType: 'blob',
+			});
+		},
+
+		// ─── Đợt 2: biên bản PDF ──────────────────────────────────────────────────
+
+		/**
+		 * Biên bản bàn giao (`assign`) hoặc thu hồi (`return`).
+		 *
+		 * Khác các file Excel: route trả JSON `{ document, url }`, `url` là presigned sống
+		 * một giờ nên mở ngay, đừng lưu lại. Lần sau gọi lại ra cùng giấy tờ, URL mới.
+		 */
+		async handoverPdf(assignmentId: number, kind: 'assign' | 'return'): Promise<AssetHandoverPdf> {
+			const res = await authFetch<ApiResponse<AssetHandoverPdf>>(
+				`/v1/asset-assignments/${assignmentId}/handover-pdf`,
+				{ params: { kind } },
+			);
+			return res.data;
+		},
+
+		// ─── Đợt 2: báo hỏng, báo mất (trang quản lý) ─────────────────────────────
+
+		async findIncidents(
+			params?: AssetIncidentQueryParams,
+		): Promise<{ data: AssetIncident[]; meta: PaginatedMeta }> {
+			const res = await authFetch<PaginatedResponse<AssetIncident>>('/v1/asset-incidents', {
+				params,
+			});
+			return { data: res.data, meta: res.meta };
+		},
+
+		async findIncident(id: number): Promise<AssetIncident> {
+			const res = await authFetch<ApiResponse<AssetIncident>>(`/v1/asset-incidents/${id}`);
+			return res.data;
+		},
+
+		/** Chỉ báo hỏng: mở phiếu sửa mang sẵn mô tả và ảnh của báo cáo. */
+		async repairFromIncident(
+			id: number,
+			body: RepairFromAssetIncidentBody,
+		): Promise<AssetIncident> {
+			const res = await authFetch<ApiResponse<AssetIncident>>(
+				`/v1/asset-incidents/${id}/repair`,
+				{ method: 'POST', body },
+			);
+			return res.data;
+		},
+
+		/** Chỉ báo mất: tài sản sang Mất, đóng cấp phát, thôi khấu hao từ `lostOn`. */
+		async confirmIncidentLoss(id: number, body: ConfirmAssetLossBody): Promise<AssetIncident> {
+			const res = await authFetch<ApiResponse<AssetIncident>>(
+				`/v1/asset-incidents/${id}/confirm-loss`,
+				{ method: 'POST', body },
+			);
+			return res.data;
+		},
+
+		/** Báo hỏng: đóng không cần sửa. Báo mất: đã tìm thấy, tài sản về trạng thái cũ. */
+		async closeIncident(id: number, body: HandleAssetIncidentBody): Promise<AssetIncident> {
+			const res = await authFetch<ApiResponse<AssetIncident>>(`/v1/asset-incidents/${id}/close`, {
+				method: 'POST',
+				body,
+			});
+			return res.data;
+		},
+
 		async downloadImportTemplate(): Promise<Blob> {
 			return authFetch<Blob>('/v1/asset-imports/template', { responseType: 'blob' });
 		},
@@ -412,6 +561,38 @@ export const useAssetService = () => {
 				`/v1/me/assets/documents/${documentId}/url`,
 			);
 			return res.data.url;
+		},
+
+		// ─── Đợt 2, tự phục vụ: báo hỏng, báo mất và biên bản của tôi ─────────────
+
+		/** Chỉ thiết bị mình đang giữ hoặc chịu trách nhiệm (403 `ASSET_NOT_HELD`). */
+		async reportIncident(assetId: number, body: ReportAssetIncidentBody): Promise<AssetIncident> {
+			const res = await authFetch<ApiResponse<AssetIncident>>(
+				`/v1/me/assets/${assetId}/incidents`,
+				{ method: 'POST', body: incidentFormData(body) },
+			);
+			return res.data;
+		},
+
+		async myIncidents(
+			params?: AssetIncidentQueryParams,
+		): Promise<{ data: AssetIncident[]; meta: PaginatedMeta }> {
+			const res = await authFetch<PaginatedResponse<AssetIncident>>('/v1/me/assets/incidents', {
+				params,
+			});
+			return { data: res.data, meta: res.meta };
+		},
+
+		/** Biên bản của lần bàn giao cho chính mình (403 `ASSET_ASSIGNMENT_NOT_YOURS`). */
+		async myHandoverPdf(
+			assignmentId: number,
+			kind: 'assign' | 'return',
+		): Promise<AssetHandoverPdf> {
+			const res = await authFetch<ApiResponse<AssetHandoverPdf>>(
+				`/v1/me/assets/assignments/${assignmentId}/handover-pdf`,
+				{ params: { kind } },
+			);
+			return res.data;
 		},
 
 		// ─── Tự phục vụ: dịch vụ tôi phụ trách ────────────────────────────────────

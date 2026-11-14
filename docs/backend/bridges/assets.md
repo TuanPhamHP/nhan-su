@@ -2,8 +2,9 @@
 
 > Đọc [api-response-envelope.md](./api-response-envelope.md) trước nếu chưa rõ cách response được bọc trong
 > `{ success, data }`, và [entitlements.md](./entitlements.md) cho cách xử lý trạng thái module.
-> Thiết kế đầy đủ: `docs/modules/15-assets.md` (repo BE). Cập nhật 10/11/2026. Ví dụ JSON trong file lấy từ
-> response thật của API.
+> Thiết kế đầy đủ: `docs/modules/15-assets.md` (repo BE). Cập nhật 10/11/2026, **bổ sung đợt 2 lô 2a ngày
+> 13/11/2026** (mục "Đợt 2" cuối file). Ví dụ JSON của đợt 1 lấy từ response thật của API; ví dụ của đợt 2 dựng
+> theo transformer và đã đối chiếu bằng bài smoke 68/68, nhưng không chụp nguyên văn.
 
 Module **bán riêng**: công ty chưa được cấp thì mọi route trả 403 `MODULE_NOT_SUBSCRIBED`. Có hai họ tài sản
 dùng chung một bảng và một bộ route:
@@ -49,8 +50,8 @@ module"). Route trang quản lý chỉ nhận vai trò `ADMIN`, `HR`, `DIRECTOR`
 | PUT | `/v1/assets/:id/license-key` | `asset:manage` | | Đặt hoặc thay license key |
 | DELETE | `/v1/assets/:id/license-key` | `asset:manage` | | Xoá license key |
 | POST | `/v1/assets/:id/license-key/reveal` | `asset:read`, và phải là `ADMIN` hoặc người phụ trách | ✓ | Xem key đầy đủ |
-| POST | `/v1/assets/:id/maintenances` | `asset:manage` | | Mở phiếu sửa |
-| GET | `/v1/asset-maintenances` | `asset:read` + phạm vi | ✓ | Danh sách phiếu sửa có phân trang |
+| POST | `/v1/assets/:id/maintenances` | `asset:manage` | | Mở phiếu sửa, hoặc phiếu bảo dưỡng với `type: 'MAINTENANCE'` (đợt 2) |
+| GET | `/v1/asset-maintenances` | `asset:read` + phạm vi | ✓ | Danh sách phiếu sửa, bảo dưỡng có phân trang; lọc `type` (đợt 2) |
 | PATCH | `/v1/asset-maintenances/:id` | `asset:manage` | | Sửa phiếu đang mở |
 | POST | `/v1/asset-maintenances/:id/close` | `asset:manage` | | Đóng phiếu |
 | POST | `/v1/asset-documents` | `asset:manage` | | Tải giấy tờ lên (`multipart/form-data`) |
@@ -62,6 +63,16 @@ module"). Route trang quản lý chỉ nhận vai trò `ADMIN`, `HR`, `DIRECTOR`
 | GET | `/v1/asset-reports/depreciation` | `asset:value:read` | ✓ | Bảng khấu hao tại một ngày |
 | GET | `/v1/asset-reports/depreciation/export` | `asset:value:read` | ✓ | Bảng khấu hao dạng Excel |
 | GET | `/v1/asset-reports/expiring` | `asset:read` | ✓ | Sắp đến hạn gia hạn, sắp hết bảo hành |
+| GET | `/v1/asset-reports/overview` | `asset:read` + phạm vi | ✓ | **Đợt 2.** Tổng quan module (F-22) |
+| GET | `/v1/asset-reports/service-costs` · `/export` | `asset:value:read` | ✓ | **Đợt 2.** Chi phí dịch vụ theo tháng (RP-02) |
+| GET | `/v1/asset-reports/maintenance-costs` · `/export` | `asset:value:read` | ✓ | **Đợt 2.** Chi phí sửa chữa, bảo dưỡng (RP-05) |
+| GET | `/v1/asset-reports/accounting-export` | `asset:value:read` | ✓ | **Đợt 2.** Excel cho kế toán theo kỳ (F-29) |
+| GET | `/v1/asset-assignments/:id/handover-pdf` | `asset:manage` | ✓ | **Đợt 2.** Biên bản bàn giao, thu hồi PDF (F-20) |
+| GET | `/v1/asset-incidents` | `asset:read` + phạm vi | ✓ | **Đợt 2.** Báo hỏng, báo mất (F-12), lọc `status`, `type`, `assetId` |
+| GET | `/v1/asset-incidents/:id` | `asset:read` + phạm vi | ✓ | **Đợt 2.** Chi tiết một báo cáo |
+| POST | `/v1/asset-incidents/:id/repair` | `asset:manage` | | **Đợt 2.** Tạo phiếu sửa từ báo hỏng |
+| POST | `/v1/asset-incidents/:id/confirm-loss` | `asset:manage` | | **Đợt 2.** Xác nhận báo mất |
+| POST | `/v1/asset-incidents/:id/close` | `asset:manage` | | **Đợt 2.** Đóng: không cần sửa, hoặc đã tìm thấy |
 | GET | `/v1/asset-imports/template` | `asset:manage` | ✓ | File mẫu nhập Excel |
 | POST | `/v1/asset-imports` | `asset:manage` | | Nhập Excel (`multipart/form-data`) |
 | GET | `/v1/employees/:employeeId/assets` | `asset:read` + phạm vi | ✓ | Tab Tài sản trong hồ sơ nhân viên |
@@ -73,7 +84,10 @@ module"). Route trang quản lý chỉ nhận vai trò `ADMIN`, `HR`, `DIRECTOR`
 |--------|------|---------------|----|---------|
 | GET | `/v1/me/assets` | Mọi user | ✓ | Tài sản và ghế mình đang giữ, đã giữ |
 | POST | `/v1/me/assets/assignments/:id/confirm` | Người nhận hoặc người chịu trách nhiệm | ✓ | Xác nhận đã nhận, hoặc báo không đúng |
-| GET | `/v1/me/assets/documents/:id/url` | Người nhận của lần bàn giao | ✓ | Mở biên bản, ảnh tình trạng |
+| GET | `/v1/me/assets/documents/:id/url` | Người nhận của lần bàn giao, hoặc người gửi báo hỏng | ✓ | Mở biên bản, ảnh tình trạng, ảnh báo hỏng của mình |
+| GET | `/v1/me/assets/assignments/:id/handover-pdf` | Người nhận hoặc người chịu trách nhiệm | ✓ | **Đợt 2.** Biên bản PDF của lần bàn giao cho mình |
+| POST | `/v1/me/assets/:assetId/incidents` | Người đang giữ hoặc chịu trách nhiệm | | **Đợt 2.** Báo hỏng, báo mất (`multipart/form-data`) |
+| GET | `/v1/me/assets/incidents` | Mọi user | ✓ | **Đợt 2.** Báo cáo mình đã gửi, lọc như route quản lý |
 | GET | `/v1/me/asset-services` | Mọi user | ✓ | Dịch vụ mình phụ trách (mảng rỗng nếu không có) |
 | GET | `/v1/me/asset-services/:id/renewals` | Người phụ trách | ✓ | |
 | POST | `/v1/me/asset-services/:id/renewals` | Người phụ trách | | Ghi nhận gia hạn |
@@ -197,7 +211,11 @@ Các route ghi vẫn chạy khi chỉ xem là thu hồi, thu hồi tất cả, x
 export type AssetKind = 'PHYSICAL' | 'SERVICE';
 export type AssetStatus =
   | 'AVAILABLE' | 'IN_USE' | 'IN_REPAIR' | 'BROKEN' | 'LOST' | 'DISPOSED' // thiết bị
+  | 'LOSS_REPORTED' | 'IN_MAINTENANCE'                                    // thiết bị, đợt 2
   | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';                                   // dịch vụ
+export type AssetMaintenanceType = 'REPAIR' | 'MAINTENANCE';               // đợt 2 thêm MAINTENANCE
+export type AssetIncidentType = 'DAMAGE' | 'LOSS';                         // đợt 2
+export type AssetIncidentStatus = 'OPEN' | 'REPAIR_OPENED' | 'LOSS_CONFIRMED' | 'CLOSED'; // đợt 2
 export type AssetCondition = 'NEW' | 'GOOD' | 'SCRATCHED' | 'FAULTY' | 'BROKEN';
 export type AssetAccountingClass = 'FIXED_ASSET' | 'TOOL';
 export type AssetBillingCycle = 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'ONE_TIME';
@@ -211,7 +229,8 @@ export type AssetDocumentType =
 export type AssetEventType =
   | 'CREATED' | 'UPDATED' | 'STATUS_CHANGED' | 'ASSIGNED' | 'RETURNED' | 'ASSIGNMENT_CONFIRMED'
   | 'ASSIGNMENT_DISPUTED' | 'REPAIR_OPENED' | 'REPAIR_CLOSED' | 'RENEWED' | 'SEATS_CHANGED'
-  | 'VALUE_CHANGED' | 'DOCUMENT_ADDED' | 'DOCUMENT_REMOVED' | 'LICENSE_KEY_CHANGED';
+  | 'VALUE_CHANGED' | 'DOCUMENT_ADDED' | 'DOCUMENT_REMOVED' | 'LICENSE_KEY_CHANGED'
+  | 'INCIDENT_REPORTED' | 'INCIDENT_HANDLED' | 'MAINTENANCE_SCHEDULED';  // đợt 2
 
 // ── Thành phần dùng lại ──
 export interface PersonSummary { id: number; fullName: string; employeeCode: string }
@@ -224,6 +243,7 @@ export interface AssetCategory {
   groupName: string;             // Nhóm, VD "Máy tính". Màn cài đặt hiển thị Nhóm → Loại
   kind: AssetKind; kindLabel: string;
   defaultDepreciationMonths: number | null; // null = loại này không khấu hao
+  defaultMaintenanceMonths: number | null;  // đợt 2. Chu kỳ bảo dưỡng mặc định; null = không có lịch
   requireSerial: boolean;
   isActive: boolean;
 }
@@ -263,6 +283,8 @@ export interface AssetPhysical {
   salvageValue: number | null;         // tiền
   depreciationStopDate: string | null; // ngày mất, thôi trích khấu hao từ ngày này
   accountingClass: AssetAccountingClass | null; accountingClassLabel: string | null;
+  maintenanceIntervalMonths: number | null; // đợt 2. Chu kỳ bảo dưỡng (tháng); null = không có lịch
+  nextMaintenanceDate: string | null;       // đợt 2. Hạn bảo dưỡng kế tiếp, YYYY-MM-DD
 }
 export interface AssetService {
   plan: string | null;
@@ -297,8 +319,14 @@ export interface Asset {
   holders: AssetHolder[];
   physical: AssetPhysical | null;      // có khi kind = PHYSICAL
   service: AssetService | null;        // có khi kind = SERVICE
+  openIncidents: AssetOpenIncident[];  // đợt 2. Báo hỏng, báo mất đang chờ xử lý; rỗng = không có
   canViewValue: boolean;
   createdAt: string; updatedAt: string;
+}
+export interface AssetOpenIncident {   // đợt 2
+  id: number;
+  type: AssetIncidentType; typeLabel: string;
+  createdAt: string;
 }
 
 export interface AssetEvent {
@@ -344,13 +372,14 @@ export interface AssetRenewal {
 export interface AssetMaintenance {
   id: number;
   asset: { id: number; code: string; name: string };
-  type: 'REPAIR'; typeLabel: string;   // bản đầu chỉ có sửa chữa
+  type: AssetMaintenanceType; typeLabel: string; // "Sửa chữa" | "Bảo dưỡng"
   status: AssetMaintenanceStatus; statusLabel: string;
   description: string; workDone: string | null;
   vendor: IdName | null; underWarranty: boolean;
   cost: number | null;                 // tiền
   sentAt: string | null; expectedDoneAt: string | null; doneAt: string | null;
-  createdBy: IdName; createdAt: string;
+  createdBy: IdName | null;            // đợt 2: null = phiếu bảo dưỡng hệ thống tự mở (J-03), hiện "Hệ thống"
+  createdAt: string;
 }
 export interface AssetDocument {
   id: number;
@@ -360,7 +389,8 @@ export interface AssetDocument {
   fileName: string; mimeType: string; sizeBytes: number;
   uploadedBy: IdName; uploadedAt: string;
   links: { id: number; assetId: number | null; assetCode: string | null;
-           assignmentId: number | null; renewalId: number | null; maintenanceId: number | null }[];
+           assignmentId: number | null; renewalId: number | null; maintenanceId: number | null;
+           incidentId: number | null }[]; // đợt 2: ảnh của báo hỏng, báo mất
   // KHÔNG có URL file: lấy qua GET .../documents/:id/url khi bấm
 }
 
@@ -420,6 +450,8 @@ export interface CreateAssetBody {
     depreciationMonths?: number;       // mặc định theo loại
     salvageValue?: number;
     accountingClass?: AssetAccountingClass; // bỏ trống = BE gợi ý
+    maintenanceIntervalMonths?: number;  // đợt 2. 0–120; khi tạo bỏ trống = theo loại; khi sửa 0 = bỏ lịch
+    nextMaintenanceDate?: string;        // đợt 2. Bỏ trống = hôm nay + chu kỳ
   };
   service?: {                          // bắt buộc khi kind = SERVICE
     billingCycle: AssetBillingCycle;
@@ -477,6 +509,11 @@ export interface RenewalBody {
 | `IN_REPAIR` | Đóng Xong hoặc Huỷ | Có người giữ: `IN_USE`, không: `AVAILABLE` |
 | `IN_REPAIR` | Đóng Không sửa được | `BROKEN` |
 | `AVAILABLE`, `IN_USE`, `BROKEN` | Đánh dấu Mất | `LOST` |
+| `AVAILABLE`, `IN_USE` | **Đợt 2.** Mở phiếu bảo dưỡng (tay hoặc việc định kỳ J-03) | `IN_MAINTENANCE` |
+| `IN_MAINTENANCE` | **Đợt 2.** Đóng Xong hoặc Huỷ | Có người giữ: `IN_USE`, không: `AVAILABLE` |
+| `AVAILABLE`, `IN_USE`, `BROKEN` | **Đợt 2.** Nhân viên báo mất | `LOSS_REPORTED` |
+| `LOSS_REPORTED` | **Đợt 2.** HR xác nhận mất | `LOST` |
+| `LOSS_REPORTED` | **Đợt 2.** HR bấm "Đã tìm thấy" | Trạng thái trước khi báo, điều chỉnh theo người đang giữ |
 
 **Dịch vụ**
 
@@ -486,8 +523,9 @@ export interface RenewalBody {
 | `ACTIVE`, `EXPIRED` | Ghi nhận gia hạn | `ACTIVE` |
 | `ACTIVE`, `EXPIRED` không còn ghế | Huỷ | `CANCELLED` |
 
-`DISPOSED` (thanh lý) đã có trong enum nhưng chưa có thao tác ở bản này. Dùng bảng trên để bật tắt nút: thiết bị
-`IN_USE` thì hiện Điều chuyển và Thu hồi, ẩn Cấp phát.
+`DISPOSED` (thanh lý) đã có trong enum nhưng chưa có thao tác, sẽ làm ở lô 2b. Dùng bảng trên để bật tắt nút:
+thiết bị `IN_USE` thì hiện Điều chuyển và Thu hồi, ẩn Cấp phát. Bảng nút đầy đủ cho đợt 2 ở mục "Đợt 2 — lô 2a",
+phần "Bật tắt nút theo trạng thái".
 
 ---
 
@@ -517,6 +555,12 @@ export interface RenewalBody {
 | `employeeId` | number | Người đang giữ hoặc đang chịu trách nhiệm |
 | `departmentId` | number | `MANAGER` lọc phòng khác → 403 |
 | `search` | string | Tìm trong mã, tên, serial, model |
+| `maintenanceDueWithinDays` | number 1–365 | Đợt 2. Thiết bị đang Sẵn sàng hoặc Đang sử dụng, có lịch bảo dưỡng, hạn kế tiếp ≤ hôm nay + N ngày (gồm cả quá hạn). Tài sản đang sửa, đang bảo dưỡng, mất hay đã thanh lý không có trong danh sách. Ngoài khoảng 1–365 → 400 |
+| `pendingConfirmation` | `true` \| `false` | Đợt 2. `true`: tài sản có cấp phát đang chờ người nhận xác nhận. `false` hoặc bỏ trống: không lọc. Giá trị khác → 400 |
+
+Hai thẻ "Sắp bảo dưỡng 30 ngày" và "Chờ người nhận xác nhận" của `GET /v1/asset-reports/overview` đếm bằng đúng hai bộ
+lọc này (`maintenanceDueWithinDays=30`, `pendingConfirmation=true`) trong phạm vi người xem, nên số trên thẻ luôn bằng
+`meta.total` khi bấm vào. Xuất Excel (`/v1/assets/export`) nhận cả hai.
 
 **Response:** `ApiPaginated<Asset>`
 
@@ -1321,6 +1365,9 @@ trang; BE chọn sẵn theo từng người nhận nên FE **không** rẽ theo 
 | `asset_service` | ID dịch vụ | `/assets/my?tab=services&open_id=:id` | N-03, N-04 gửi **người phụ trách** |
 | `asset` | ID tài sản | `/management/assets/:id` | N-05, N-12, và N-03, N-04 gửi người quản lý tài sản |
 | `employee_assets` | ID nhân viên | `/management/employees/:id?tab=assets` | N-09 |
+| `asset_incident` | ID báo cáo (incident) | `/management/assets/incidents?open_id=:id` | **Đợt 2.** N-06 |
+
+N-08 (đợt 2) dùng `refType` `asset` sẵn có, nên không phải thêm `case` cho nó.
 
 `targetUrl` của từng thông báo và link trong email trỏ đúng trang ở cột "Trang mở" (email kèm `t=<mã công ty>`).
 Người phụ trách dịch vụ thường có vai trò EMPLOYEE, không vào được trang quản lý: đó là lý do có `asset_service`.
@@ -1332,7 +1379,9 @@ Người phụ trách dịch vụ thường có vai trò EMPLOYEE, không vào �
 | N-03 | `ASSET_RENEWAL_DUE` | Người phụ trách và người quản lý tài sản, mốc 30, 7, 1 ngày trước hạn | ✓ | ✓ |
 | N-04 | `ASSET_RENEWAL_OVERDUE` / `ASSET_SERVICE_EXPIRED` | Như N-03, ngày quá hạn đầu tiên / khi chuyển Hết hạn | ✓ | ✓ |
 | N-05 | `ASSET_WARRANTY_EXPIRING` | Người quản lý tài sản, 30 ngày trước hạn bảo hành | – | – |
-| N-07 | `ASSET_REPAIR_DONE` | Người đang giữ | – | ✓ |
+| N-06 | `ASSET_INCIDENT_REPORTED` | **Đợt 2.** Người quản lý tài sản và quản lý trực tiếp của người báo | – | ✓ |
+| N-07 | `ASSET_REPAIR_DONE` | Người đang giữ (chỉ phiếu sửa, phiếu bảo dưỡng không gửi) | – | ✓ |
+| N-08 | `ASSET_MAINTENANCE_DUE` | **Đợt 2.** Người quản lý tài sản, khi J-03 tự mở phiếu bảo dưỡng | – | – |
 | N-09 | `ASSET_OFFBOARDING_OPEN` | Người quản lý tài sản, HR, quản lý trực tiếp | ✓ | – |
 | N-11 | `ASSET_CONFIRMATION_REMINDER` | Người chưa xác nhận sau 2 ngày | – | ✓ |
 | N-12 | `ASSET_ASSIGNMENT_DISPUTED` | Người đã giao | – | ✓ |
@@ -1382,6 +1431,25 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 | 409 | `ASSET_HAS_HISTORY` | Xoá tài sản đã có lịch sử |
 | 409 | `ASSET_STATUS_CHANGED` | Người khác vừa đổi tài sản: tải lại rồi thử lại |
 | 503 | `ASSET_SECRET_KEY_NOT_CONFIGURED` | Server chưa có khoá mã hoá license key |
+
+**Đợt 2 — lô 2a** thêm các mã sau. Chi tiết từng route ở mục "Đợt 2 — lô 2a".
+
+| HTTP | Mã | Khi nào |
+|---|---|---|
+| 400 | `ASSET_MAINTENANCE_INTERVAL_REQUIRED` | Gửi hạn bảo dưỡng khi tài sản chưa có chu kỳ |
+| 400 | `ASSET_MAINTENANCE_OUTCOME_INVALID` | Đóng phiếu bảo dưỡng với kết quả "Không sửa được" |
+| 400 | `ASSET_INCIDENT_TOO_MANY_PHOTOS` · `ASSET_INCIDENT_PHOTO_TYPE` · `ASSET_FILE_TOO_LARGE` | Ảnh báo hỏng: quá 10 ảnh, không phải JPG/PNG/HEIC, quá 5 MB |
+| 400 | `ASSET_INCIDENT_DATE_IN_FUTURE` | Ngày phát hiện sau hôm nay |
+| 400 | `ASSET_INCIDENT_TYPE_MISMATCH` | Tạo phiếu sửa từ báo mất, hoặc xác nhận mất trên báo hỏng |
+| 400 | `ASSET_REPORT_RANGE_INVALID` · `ASSET_REPORT_RANGE_TOO_LONG` | Kỳ báo cáo: ngày đến trước ngày từ; quá 24 tháng (RP-05) hoặc 12 tháng (Excel kế toán) |
+| 400 | `BAD_REQUEST` | Sai định dạng query, ví dụ `month` không phải `YYYY-MM`; `message` nói rõ trường nào |
+| 403 | `ASSET_NOT_HELD` | Báo hỏng thiết bị mình không giữ, không chịu trách nhiệm |
+| 404 | `ASSET_INCIDENT_NOT_FOUND` | Không có báo cáo |
+| 409 | `ASSET_INCIDENT_OPEN` | Đã có báo cáo cùng loại đang chờ cho tài sản này |
+| 409 | `ASSET_INCIDENT_NOT_ALLOWED` | Tài sản đang sửa, đang bảo dưỡng, hoặc đã báo mất |
+| 409 | `ASSET_INCIDENT_HANDLED` | Báo cáo đã có người xử lý |
+| 409 | `ASSET_LOSS_REPORTED` | Thu hồi, điều chuyển tài sản đang chờ xác minh mất |
+| 409 | `ASSET_ASSIGNMENT_NOT_RETURNED` | Xin biên bản thu hồi khi chưa thu hồi |
 
 ---
 
@@ -1448,8 +1516,9 @@ export const useAssetService = () => {
 | `permission-guard.global.ts` | `ROUTE_PERMISSIONS`: `/management/assets` → `asset:read`, `/management/assets/settings` → `asset:manage` |
 | Sidebar quản lý | Nhóm "Tài sản" (`module: 'ASSET'`) |
 | Sidebar nhân viên | Mục "Tài sản của tôi" (`module: 'ASSET'`), badge `pendingConfirmationCount` |
-| `utils/notification-route.ts` | Bốn `case` ở mục "Thông báo" |
+| `utils/notification-route.ts` | Bốn `case` ở mục "Thông báo"; **đợt 2** thêm `asset_incident` |
 | Trang quản lý | `<CommonAppModuleNotice module="ASSET" />` |
+| Menu (`config/app-modules.ts`) | **Đợt 2.** Thêm mục "Báo hỏng, báo mất" → `/management/assets/incidents` (`asset:read`, `module: 'ASSET'`); đổi "Sửa chữa" thành "Sửa chữa, bảo dưỡng" |
 
 Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 
@@ -1480,3 +1549,615 @@ Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 | Nhập Excel có chú thích ô do openpyxl ghi | 201 | Chú thích bị bỏ qua, dữ liệu nhập bình thường |
 | Nhập Excel, "Người sử dụng" không khớp nhân viên của công ty | 201 | Dòng đó vào `errors`, các dòng khác vẫn nhập |
 | Mở presigned URL sau khi hết hạn | 403 từ S3 | Gọi lại `.../documents/:id/url` |
+
+---
+
+## Đợt 2 — lô 2a (13/11/2026)
+
+Thiết kế: `docs/modules/15-assets.md` mục 16. Phần này bổ sung, không đổi hành vi nào của đợt 1 ngoài các điểm
+ghi rõ dưới đây. Các kiểu ở mục "TypeScript Types" phía trên **đã cập nhật** cho đợt 2 (dòng có chú thích
+`// đợt 2`); bảng dưới là tóm tắt phần thay đổi. Lô 2b (thanh lý, tem QR, kiểm kê) chưa có route nào, đừng dựng
+màn hình cho nó.
+
+### Thay đổi kiểu dữ liệu
+
+| Chỗ | Thay đổi |
+|---|---|
+| `AssetStatus` | Thêm `LOSS_REPORTED` "Mất (chờ xác minh)" và `IN_MAINTENANCE` "Đang bảo dưỡng". Mọi bộ lọc trạng thái phải có hai giá trị này |
+| `AssetCategory` | Thêm `defaultMaintenanceMonths: number \| null`. Gửi `0` khi sửa để bỏ |
+| `Asset.physical` | Thêm `maintenanceIntervalMonths: number \| null`, `nextMaintenanceDate: string \| null` (`YYYY-MM-DD`) |
+| `Asset` | Thêm `openIncidents: { id, type, typeLabel, createdAt }[]`: báo hỏng, báo mất đang chờ xử lý. Danh sách hiện cờ khi mảng không rỗng |
+| `AssetMaintenance.type` | Thêm `MAINTENANCE` "Bảo dưỡng" bên cạnh `REPAIR` "Sửa chữa". Danh sách phiếu cần cột Loại |
+| `AssetMaintenance.createdBy` | Giờ có thể `null`: phiếu bảo dưỡng do hệ thống tự sinh theo lịch. Hiện "Hệ thống" |
+| `AssetDocument.links[]` | Thêm `incidentId: number \| null`: ảnh của báo hỏng, báo mất |
+| `AssetEvent.type` | Thêm `INCIDENT_REPORTED`, `INCIDENT_HANDLED`, `MAINTENANCE_SCHEDULED`. Nhãn `REPAIR_OPENED`, `REPAIR_CLOSED` đổi thành "Mở/Đóng phiếu sửa chữa hoặc bảo dưỡng"; payload có `maintenanceType` |
+
+```ts
+type AssetStatus =
+  | 'AVAILABLE' | 'IN_USE' | 'IN_REPAIR' | 'BROKEN' | 'LOST'
+  | 'LOSS_REPORTED' | 'IN_MAINTENANCE' // đợt 2
+  | 'DISPOSED' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
+
+interface AssetIncident {
+  id: number;
+  asset: { id: number; code: string; name: string; status: AssetStatus; statusLabel: string };
+  type: 'DAMAGE' | 'LOSS';
+  typeLabel: string;            // "Báo hỏng" | "Báo mất"
+  status: 'OPEN' | 'REPAIR_OPENED' | 'LOSS_CONFIRMED' | 'CLOSED';
+  statusLabel: string;          // "Chờ xử lý" | "Đã tạo phiếu sửa" | "Đã xác nhận mất" | "Đã đóng"
+  description: string;
+  occurredOn: string | null;    // YYYY-MM-DD, ngày phát hiện do nhân viên khai
+  reportedBy: { id: number; name: string };
+  handledBy: { id: number; name: string } | null;
+  handledAt: string | null;     // ISO
+  handlingNote: string | null;
+  maintenanceId: number | null; // phiếu sửa tạo từ báo hỏng
+  photoDocumentIds: number[];   // mở ảnh qua GET /v1/asset-documents/:id/url hoặc /v1/me/assets/documents/:id/url
+  createdAt: string;
+}
+
+interface IncidentQuery { page?: number; limit?: number; status?: AssetIncident['status']; type?: AssetIncident['type']; assetId?: number }
+interface HandleIncidentBody { note?: string }                                   // close
+interface ConfirmLossBody extends HandleIncidentBody { lostOn?: string }         // YYYY-MM-DD, mặc định occurredOn
+interface RepairFromIncidentBody extends HandleIncidentBody { vendorId?: number; underWarranty?: boolean }
+
+interface HandoverPdf { document: AssetDocument; url: string } // url là presigned, hết hạn sau 1 giờ
+
+interface AssetOverview {
+  asOf: string;                 // YYYY-MM-DD
+  canViewValue: boolean;
+  total: number;                // mọi tài sản và dịch vụ trong phạm vi người xem
+  byStatus: { status: AssetStatus; statusLabel: string; count: number }[]; // chỉ trạng thái có ít nhất 1 tài sản
+  byDepartment: { departmentName: string; count: number; costVnd: number | null; bookValue: number | null }[];
+  totals: { costVnd: number; bookValue: number } | null; // null khi canViewValue = false
+  serviceCostThisMonth: number | null;                   // null khi canViewValue = false
+  expiringIn30Days: number;     // dịch vụ sắp gia hạn + thiết bị sắp hết bảo hành, 30 ngày tới
+  maintenanceDueIn30Days: number; // = meta.total của GET /assets?maintenanceDueWithinDays=30
+  pendingConfirmations: number; // số TÀI SẢN có cấp phát chờ xác nhận = meta.total của GET /assets?pendingConfirmation=true
+  openIncidents: number;        // báo hỏng, báo mất đang chờ
+}
+interface ServiceCostReport {
+  month: string;                // YYYY-MM
+  rows: { renewalId: number; assetId: number; code: string; name: string; categoryName: string;
+          vendorName: string | null; ownerName: string | null; periodStart: string; periodEnd: string;
+          amountVnd: number;    // cả kỳ gia hạn
+          shareVnd: number }[]; // phần phân bổ vào tháng đang xem. Cột chính của báo cáo
+  totalVnd: number;             // tổng shareVnd
+}
+interface MaintenanceCostReport {
+  from: string; to: string;
+  rows: { maintenanceId: number; assetId: number; code: string; name: string;
+          type: AssetMaintenanceType; typeLabel: string; vendorName: string | null;
+          underWarranty: boolean; doneAt: string; cost: number }[];
+  totalVnd: number;
+}
+interface ServiceCostQuery { month: string; vendorId?: number; categoryId?: number; ownerId?: number } // month bắt buộc
+interface MaintenanceCostQuery { from: string; to: string; assetId?: number; vendorId?: number; type?: AssetMaintenanceType }
+interface DateRangeQuery { from: string; to: string } // accounting-export
+```
+
+### Vòng đời mới
+
+```
+AVAILABLE, IN_USE  ──mở phiếu bảo dưỡng (tay hoặc J-03)──▶ IN_MAINTENANCE ──đóng DONE/CANCELLED──▶ trạng thái cũ
+IN_USE, AVAILABLE, BROKEN ──nhân viên báo mất──▶ LOSS_REPORTED ──HR xác nhận──▶ LOST
+                                                       └──HR "Đã tìm thấy"──▶ trạng thái cũ
+```
+
+- `IN_MAINTENANCE`: người giữ giữ nguyên, khấu hao vẫn chạy, không cấp phát được (409 `ASSET_NOT_ASSIGNABLE`),
+  điều chuyển vẫn được như khi đang sửa. Không đánh dấu Mất được khi còn phiếu mở (409 `ASSET_REPAIR_OPEN`).
+- `LOSS_REPORTED`: cấp phát vẫn mở, khấu hao vẫn chạy cho tới khi xác nhận. Thu hồi, điều chuyển → 409
+  `ASSET_LOSS_REPORTED`; mở phiếu sửa, bảo dưỡng → 409 `ASSET_NOT_REPAIRABLE`. "Thu hồi tất cả" khi nghỉ việc
+  vẫn chạy (đóng cấp phát, trạng thái giữ `LOSS_REPORTED`).
+- HR đánh dấu Mất thẳng bằng `POST /v1/assets/:id/status` thì báo mất đang chờ của tài sản đó tự sang
+  `LOSS_CONFIRMED`.
+
+### Bật tắt nút theo trạng thái
+
+API vẫn chặn mọi trường hợp sai, nhưng ẩn hoặc khoá nút theo bảng này để người dùng không bấm vào lỗi 409. Mọi nút
+ghi ở trang quản lý cần `asset:manage`; người chỉ có `asset:read` (MANAGER, DIRECTOR mặc định) chỉ xem.
+
+**Trang chi tiết thiết bị (`kind = PHYSICAL`)**
+
+| Nút | Hiện khi | Lỗi nếu bấm sai |
+|---|---|---|
+| Cấp phát | `AVAILABLE` | 409 `ASSET_ALREADY_ASSIGNED` (đang `IN_USE`), `ASSET_NOT_ASSIGNABLE` (trạng thái khác) |
+| Điều chuyển, Thu hồi | Có người giữ (`holders` không rỗng) và trạng thái khác `LOSS_REPORTED` | 409 `ASSET_LOSS_REPORTED` |
+| Mở phiếu sửa | `AVAILABLE`, `IN_USE`, `BROKEN` | 409 `ASSET_REPAIR_OPEN`, `ASSET_NOT_REPAIRABLE` |
+| Mở phiếu bảo dưỡng | `AVAILABLE`, `IN_USE` | 409 `ASSET_REPAIR_OPEN`, `ASSET_NOT_REPAIRABLE` |
+| Đánh dấu Mất | `AVAILABLE`, `IN_USE`, `BROKEN`, `LOSS_REPORTED` | 409 `ASSET_REPAIR_OPEN` khi đang sửa, bảo dưỡng |
+| Biên bản bàn giao | Mỗi dòng cấp phát của thiết bị | – |
+| Biên bản thu hồi | Dòng cấp phát đã có `returnedAt` | 409 `ASSET_ASSIGNMENT_NOT_RETURNED` |
+| Cảnh báo báo hỏng, báo mất | `openIncidents` không rỗng: dải cảnh báo kèm link sang tab Báo hỏng | – |
+
+**Trang Báo hỏng, báo mất (`/management/assets/incidents`)**, chỉ báo cáo `status = OPEN` mới có nút:
+
+| Loại | Nút | Route |
+|---|---|---|
+| `DAMAGE` | **Tạo phiếu sửa** (hỏi ghi chú, nhà sửa, bảo hành) | `POST /v1/asset-incidents/:id/repair` |
+| `DAMAGE` | **Đóng, không cần sửa** (hỏi ghi chú) | `POST /v1/asset-incidents/:id/close` |
+| `LOSS` | **Xác nhận mất** (hỏi ghi chú, ngày mất, mặc định `occurredOn`) | `POST /v1/asset-incidents/:id/confirm-loss` |
+| `LOSS` | **Đã tìm thấy** (hỏi ghi chú) | `POST /v1/asset-incidents/:id/close` |
+
+Báo cáo đã xử lý hiện `handledBy`, `handledAt`, `handlingNote`; báo cáo `REPAIR_OPENED` có link sang phiếu sửa
+`maintenanceId` (tab Sửa chữa của tài sản). Hai người cùng xử lý một báo cáo: người sau nhận 409
+`ASSET_INCIDENT_HANDLED`, tải lại danh sách.
+
+**Tài sản của tôi (`/assets/my`)**, trên từng thiết bị đang giữ (`holding`, `asset.kind = 'PHYSICAL'`):
+
+| Nút | Hiện khi |
+|---|---|
+| Báo hỏng | `asset.status` là `IN_USE`, `AVAILABLE` hoặc `BROKEN`, và mình chưa có báo hỏng `OPEN` cho tài sản đó |
+| Báo mất | Như trên, với báo mất |
+| Biên bản bàn giao | Mọi thiết bị trong `holding` và `history` |
+| Biên bản thu hồi | Thiết bị trong `history` (đã trả) |
+
+Lấy danh sách báo cáo đang mở của mình bằng `GET /v1/me/assets/incidents?status=OPEN` để biết nút nào phải ẩn.
+Tài sản `IN_REPAIR`, `IN_MAINTENANCE`, `LOSS_REPORTED` thì ẩn cả hai nút báo, hiện nhãn trạng thái.
+
+### Bảo dưỡng định kỳ (F-11)
+
+**Đặt lịch:** `POST /v1/assets` hoặc `PATCH /v1/assets/:id` với khối `physical`:
+
+```json
+{ "physical": { "maintenanceIntervalMonths": 6, "nextMaintenanceDate": "2027-05-15" } }
+```
+
+- Khi tạo, bỏ trống chu kỳ thì lấy `defaultMaintenanceMonths` của loại. Có chu kỳ mà không có hạn thì hạn đầu
+  tiên là hôm nay cộng chu kỳ.
+- Khi sửa, `maintenanceIntervalMonths: 0` là bỏ lịch (hạn về `null`). Gửi hạn khi chưa có chu kỳ → 400
+  `ASSET_MAINTENANCE_INTERVAL_REQUIRED`. Đổi lịch sinh sự kiện `MAINTENANCE_SCHEDULED`.
+
+**Mở phiếu tay:** `POST /v1/assets/:id/maintenances` với `"type": "MAINTENANCE"` (mặc định `REPAIR`). Chỉ khi tài
+sản `AVAILABLE` hoặc `IN_USE` (409 `ASSET_NOT_REPAIRABLE`). Mỗi tài sản một phiếu mở bất kể loại (409
+`ASSET_REPAIR_OPEN`).
+
+**Việc định kỳ J-03** (07:00 hằng ngày): thiết bị có lịch, đến hạn, đang `AVAILABLE`/`IN_USE`, chưa có phiếu mở
+→ tự mở phiếu `MAINTENANCE` (`createdBy: null`), tài sản sang `IN_MAINTENANCE`, gửi N-08 cho người quản lý tài sản.
+
+**Đóng:** `POST /v1/asset-maintenances/:id/close`. Phiếu bảo dưỡng chỉ nhận `DONE` hoặc `CANCELLED` (400
+`ASSET_MAINTENANCE_OUTCOME_INVALID` với `UNREPAIRABLE`). Cả hai đều đưa tài sản về trạng thái cũ và đặt hạn kế
+tiếp = ngày đóng (`doneAt`) + chu kỳ. Phiếu bảo dưỡng không gửi N-07.
+
+**Lọc:** `GET /v1/asset-maintenances?type=MAINTENANCE`. `OPEN` hiện "Mới" (chờ thực hiện), `IN_PROGRESS` hiện
+"Đang xử lý"; đổi bằng `PATCH /v1/asset-maintenances/:id` `{ "status": "IN_PROGRESS" }`.
+
+### Báo hỏng, báo mất (F-12)
+
+#### POST /v1/me/assets/:assetId/incidents — Nhân viên báo
+
+**Content-Type:** `multipart/form-data`
+
+| Field | Bắt buộc | Ghi chú |
+|---|---|---|
+| `type` | ✓ | `DAMAGE` hoặc `LOSS` |
+| `description` | ✓ | 1–4000 ký tự |
+| `occurredOn` | | `YYYY-MM-DD`, mặc định hôm nay, không được sau hôm nay. Báo mất được xác nhận thì là ngày thôi khấu hao |
+| `photos` | | Lặp lại field, tối đa 10 ảnh, mỗi ảnh ≤ 5 MB, JPG/PNG/HEIC. Kiểm tra ở FE trước khi gửi; BE vẫn chặn với mã riêng |
+
+**Response 201:** `ApiSuccess<AssetIncident>`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 2, "asset": { "id": 6, "code": "CTA000006", "name": "Laptop Dell 2", "status": "LOSS_REPORTED", "statusLabel": "Mất (chờ xác minh)" },
+    "type": "LOSS", "typeLabel": "Báo mất", "status": "OPEN", "statusLabel": "Chờ xử lý",
+    "description": "Để quên trên taxi", "occurredOn": "2026-11-12",
+    "reportedBy": { "id": 4, "name": "Nhân Viên A" }, "handledBy": null, "handledAt": null, "handlingNote": null,
+    "maintenanceId": null, "photoDocumentIds": [], "createdAt": "2026-11-13T10:12:41.000Z"
+  }
+}
+```
+
+| HTTP | `error.code` | Khi nào |
+|---|---|---|
+| 400 | `ASSET_INCIDENT_TOO_MANY_PHOTOS` · `ASSET_INCIDENT_PHOTO_TYPE` · `ASSET_FILE_TOO_LARGE` | Ảnh không hợp lệ |
+| 400 | `ASSET_INCIDENT_DATE_IN_FUTURE` | `occurredOn` sau hôm nay |
+| 403 | `ASSET_NOT_HELD` | Không phải thiết bị mình đang giữ hoặc chịu trách nhiệm |
+| 409 | `ASSET_INCIDENT_OPEN` | Đã có báo cáo cùng loại đang chờ |
+| 409 | `ASSET_INCIDENT_NOT_ALLOWED` | Tài sản đang sửa, bảo dưỡng hoặc chờ xác minh mất |
+| 409 | `ASSET_STATUS_CHANGED` | Người khác vừa đổi tài sản, tải lại |
+
+Báo mất đổi tài sản sang `LOSS_REPORTED` ngay. Báo hỏng không đổi trạng thái. Cả hai gửi N-06 cho người quản lý
+tài sản và quản lý trực tiếp của người báo.
+
+#### GET /v1/me/assets/incidents · GET /v1/asset-incidents
+
+Query: `page`, `limit`, `status`, `type`, `assetId` (`IncidentQuery`). Response `ApiPaginated<AssetIncident>`, mới
+nhất trước. Route `/me` chỉ trả báo cáo của chính mình; route quản lý theo phạm vi tài sản (MANAGER chỉ phòng mình),
+nhân viên gọi → 403 `FORBIDDEN`. Route quản lý với `assetId` ngoài phạm vi → 403 `ASSET_SCOPE_FORBIDDEN`, tài sản
+không có → 404 `ASSET_NOT_FOUND` (giống trang chi tiết). Tab Báo hỏng của trang chi tiết dùng
+`GET /v1/asset-incidents?assetId=:id`.
+`GET /v1/asset-incidents/:id` trả một báo cáo (người gửi luôn xem được của mình), 404 `ASSET_INCIDENT_NOT_FOUND`.
+Trang nhận `?open_id=` từ thông báo N-06 thì gọi route này rồi mở hộp chi tiết.
+
+Ảnh: người quản lý mở bằng `GET /v1/asset-documents/:id/url`, người gửi mở bằng
+`GET /v1/me/assets/documents/:id/url`. Cả hai trả `{ url }` presigned 1 giờ. Ảnh cũng hiện trong
+`GET /v1/assets/:id/documents` (tab Giấy tờ) với `type: 'CONDITION_PHOTO'` và link có `incidentId`; tạo phiếu sửa từ
+báo hỏng thì ảnh được gắn thêm vào phiếu đó (link có `maintenanceId`).
+
+#### Xử lý (người có `asset:manage`)
+
+| Route | Body | Kết quả | Lỗi riêng |
+|---|---|---|---|
+| `POST /v1/asset-incidents/:id/repair` | `{ "note"?, "vendorId"?, "underWarranty"? }` | Chỉ báo hỏng. Mở phiếu sửa mang sẵn mô tả và ảnh, báo cáo `REPAIR_OPENED`, tài sản `IN_REPAIR` | 400 `ASSET_INCIDENT_TYPE_MISMATCH`; 409 `ASSET_REPAIR_OPEN`, `ASSET_NOT_REPAIRABLE` |
+| `POST /v1/asset-incidents/:id/confirm-loss` | `{ "note"?, "lostOn"? }` | Chỉ báo mất. Tài sản `LOST`, đóng cấp phát, thôi khấu hao từ `lostOn` (mặc định `occurredOn`) | 400 `ASSET_INCIDENT_TYPE_MISMATCH` |
+| `POST /v1/asset-incidents/:id/close` | `{ "note"? }` | Báo hỏng: đóng không sửa. Báo mất: "Đã tìm thấy", tài sản về trạng thái trước khi báo | |
+
+Mọi route xử lý trả 201 `ApiSuccess<AssetIncident>`; báo cáo đã xử lý → 409 `ASSET_INCIDENT_HANDLED`.
+
+### Biên bản PDF (F-20)
+
+`GET /v1/asset-assignments/:id/handover-pdf?kind=assign|return` (người quản lý) và
+`GET /v1/me/assets/assignments/:id/handover-pdf?kind=` (người nhận hoặc người chịu trách nhiệm của lần đó).
+
+```json
+{
+  "success": true,
+  "data": {
+    "document": { "id": 3, "type": "HANDOVER_RECORD", "typeLabel": "Biên bản bàn giao", "number": "BBG-CTA000004-1", "fileName": "BBG-CTA000004-1.pdf", "mimeType": "application/pdf", "...": "như AssetDocument" },
+    "url": "https://…/tenants/cta/assets/documents/….pdf?X-Amz-Signature=…"
+  }
+}
+```
+
+- Lần đầu sinh PDF A4 và lưu thành giấy tờ gắn vào lần cấp phát; các lần sau trả lại đúng giấy tờ đó. `url`
+  hết hạn sau 1 giờ, gọi lại để lấy link mới. PDF không in giá trị tài sản.
+- `kind=return` khi chưa thu hồi → 409 `ASSET_ASSIGNMENT_NOT_RETURNED`. Ghế dịch vụ → 400 `ASSET_NOT_PHYSICAL`.
+  Route `/me` cho người khác → 403 `ASSET_ASSIGNMENT_NOT_YOURS`.
+
+### Báo cáo (F-22, RP-02, RP-05, F-29)
+
+#### GET /v1/asset-reports/overview
+
+```json
+{
+  "success": true,
+  "data": {
+    "asOf": "2026-11-13", "canViewValue": true, "total": 9,
+    "byStatus": [{ "status": "IN_USE", "statusLabel": "Đang sử dụng", "count": 3 }],
+    "byDepartment": [{ "departmentName": "Kỹ thuật", "count": 2, "costVnd": 72000000, "bookValue": 47000000 }],
+    "totals": { "costVnd": 156000000, "bookValue": 98000000 },
+    "serviceCostThisMonth": 6450000,
+    "expiringIn30Days": 1, "maintenanceDueIn30Days": 0, "pendingConfirmations": 2, "openIncidents": 0
+  }
+}
+```
+
+`byDepartment` chỉ tính thiết bị chưa mất, chưa thanh lý; không ai giữ thì `departmentName` là "Chưa cấp phát" (từ 14/11, luôn đứng cuối).
+Người không có `asset:value:read`: `totals`, `serviceCostThisMonth` và cột tiền trong `byDepartment` là `null`.
+MANAGER chỉ thấy tài sản phòng mình.
+
+#### GET /v1/asset-reports/service-costs?month=YYYY-MM
+
+Query thêm `vendorId`, `categoryId`, `ownerId`. Mỗi dòng là một lần gia hạn có phần phân bổ vào tháng đó theo
+BR-07 (chia đều theo số tháng của kỳ, tháng cuối gánh phần lẻ).
+
+```json
+{ "success": true, "data": { "month": "2026-11", "rows": [
+  { "renewalId": 1, "assetId": 12, "code": "CTA000008", "name": "ChatGPT Team", "categoryName": "Tài khoản AI", "vendorName": null, "ownerName": "Nhân Viên A", "periodStart": "2026-11-01", "periodEnd": "2026-11-30", "amountVnd": 3900000, "shareVnd": 3900000 }
+], "totalVnd": 6450000 } }
+```
+
+`/export` nhận cùng query, trả `chi-phi-dich-vu-YYYY-MM.xlsx`.
+
+#### GET /v1/asset-reports/maintenance-costs?from=&to=
+
+`from`, `to` bắt buộc (`YYYY-MM-DD`). Query thêm `assetId`, `vendorId`, `type`. Phiếu đã đóng `DONE`/`UNREPAIRABLE`
+có ngày xong trong kỳ, kỳ tối đa 24 tháng. Response `MaintenanceCostReport`:
+
+```json
+{ "success": true, "data": { "from": "2026-11-01", "to": "2026-11-30", "rows": [
+  { "maintenanceId": 1, "assetId": 6, "code": "CTA000006", "name": "Laptop Dell 4", "type": "REPAIR", "typeLabel": "Sửa chữa", "vendorName": null, "underWarranty": false, "doneAt": "2026-11-13", "cost": 1200000 }
+], "totalVnd": 1200000 } }
+```
+
+`/export` trả `chi-phi-sua-chua-bao-duong.xlsx`.
+
+#### GET /v1/asset-reports/accounting-export?from=&to=
+
+Kỳ tối đa 12 tháng. Trả `tai-san-ke-toan-<from>-<to>.xlsx` ba sheet, dòng đầu mỗi sheet ghi kỳ:
+
+| Sheet | Cột |
+|---|---|
+| Khấu hao trong kỳ | Mã, Tên, Phân loại, Phòng ban sử dụng, Nguyên giá, Luỹ kế đầu kỳ, Khấu hao trong kỳ, Luỹ kế cuối kỳ, Giá trị còn lại cuối kỳ; dòng Tổng |
+| Tăng trong kỳ | Mã, Tên, Phân loại, Phòng ban, Ngày ghi tăng, Nguyên giá, Số tháng khấu hao |
+| Giảm trong kỳ | Mã, Tên, Phân loại, Hình thức (Mất, Đã thanh lý), Ngày ghi giảm, Nguyên giá, Luỹ kế đến ngày giảm, Giá trị còn lại |
+
+Chỉ thiết bị có nguyên giá và khấu hao. Phòng ban lấy theo người giữ tại ngày cuối kỳ (phòng ban hiện tại của
+người đó). Lỗi kỳ: 400 `ASSET_REPORT_RANGE_INVALID` (đến trước từ), `ASSET_REPORT_RANGE_TOO_LONG`.
+
+### Thông báo mới
+
+| Mã | `type` | Người nhận | Push | `refType` → trang |
+|---|---|---|---|---|
+| N-06 | `ASSET_INCIDENT_REPORTED` | Người quản lý tài sản, quản lý trực tiếp của người báo | ✓ | `asset_incident` → `/management/assets/incidents?open_id=:refId` |
+| N-08 | `ASSET_MAINTENANCE_DUE` | Người quản lý tài sản | – | `asset` → `/management/assets/:refId` |
+
+Quản lý trực tiếp của người báo thường có vai trò MANAGER nên vào được trang Báo hỏng. Nếu người đó không có
+`asset:read`, guard trang chặn như mọi trang quản lý khác; đó không phải lỗi của thông báo.
+
+### Màn hình web lô 2a
+
+Bản đầy đủ của thiết kế ở `docs/modules/15-assets.md` mục 16.8. Phần thuộc lô 2a:
+
+| Màn | Việc |
+|---|---|
+| `/management/assets` | Thêm **Tổng quan** (F-22) làm phần đầu trang hoặc tab đầu, từ `GET /v1/asset-reports/overview`: thẻ số theo trạng thái (tách riêng "Mất (chờ xác minh)" và "Đang bảo dưỡng"), bảng theo phòng ban, thẻ việc chờ (sắp hết hạn, sắp bảo dưỡng, chờ xác nhận, báo hỏng đang mở). Mỗi thẻ dẫn tới danh sách tương ứng: "sắp hết hạn" → `/management/assets/reports?tab=expiring`, "báo hỏng đang mở" → `/management/assets/incidents`, "sắp bảo dưỡng" → `/management/assets?maintenanceDueWithinDays=30`, "chờ xác nhận" → `/management/assets?pendingConfirmation=true`. Trang danh sách đọc hai tham số này từ URL, hiện thành nhãn lọc có nút bỏ, và giữ chúng khi đổi trang, khi lọc thêm và khi xuất Excel. Thẻ tiền ẩn khi `canViewValue = false`. Bảng danh sách hiện biểu tượng cảnh báo khi `openIncidents` không rỗng |
+| `/management/assets/[id]` | Khối **Bảo dưỡng định kỳ** ở tab Thông tin (chu kỳ, hạn kế tiếp, tô màu khi còn ≤ 30 ngày hoặc quá hạn); tab mới **Báo hỏng** (`GET /v1/asset-incidents?assetId=`); tab Sửa chữa thêm cột Loại và nút Mở phiếu bảo dưỡng; dòng cấp phát ở tab Người dùng có nút **Biên bản** (bàn giao, thu hồi) |
+| Form tài sản (`AssetFormModal`) | Thêm hai ô chu kỳ bảo dưỡng (tháng, 0–120) và hạn kế tiếp cho thiết bị. Khi sửa, ô chu kỳ để 0 là bỏ lịch |
+| `/management/assets/settings` | Cột và ô **Chu kỳ bảo dưỡng mặc định** cho loại thiết bị; gửi `0` để bỏ |
+| `/management/assets/maintenances` | Bộ lọc Loại (Sửa chữa / Bảo dưỡng), cột Loại, người tạo `null` hiện "Hệ thống" |
+| `/management/assets/incidents` | **Trang mới.** Danh sách có phân trang, lọc trạng thái và loại, mặc định `status=OPEN`; hộp chi tiết có ảnh và các nút ở mục "Bật tắt nút theo trạng thái"; nhận `?open_id=` |
+| `/management/assets/reports` | Thêm tab **Chi phí dịch vụ** (chọn tháng, lọc nhà cung cấp, loại, người phụ trách, xuất Excel), tab **Chi phí sửa chữa, bảo dưỡng** (chọn kỳ, lọc loại, xuất Excel) và nút **Xuất cho kế toán** (chọn kỳ tối đa 12 tháng, tải file). Ba phần này cần `asset:value:read`: ẩn với người không có |
+| Bộ lọc trạng thái mọi màn | Thêm "Mất (chờ xác minh)" và "Đang bảo dưỡng"; thêm màu cho hai trạng thái này |
+| `/assets/my` | Nút **Báo hỏng**, **Báo mất** trên từng thiết bị (hộp thoại: mô tả, ngày phát hiện, tối đa 10 ảnh); khu **Báo cáo của tôi** từ `GET /v1/me/assets/incidents`; nút **Biên bản** trên thiết bị đang giữ và đã trả |
+| Menu, thông báo | Mục "Báo hỏng, báo mất"; `case 'asset_incident'` trong `utils/notification-route.ts` |
+
+Excel: gọi bằng `responseType: 'blob'` rồi `downloadAssetBlob(blob, tên)` như `/v1/assets/export`. FE tự đặt tên
+file (`chi-phi-dich-vu-YYYY-MM.xlsx`, `chi-phi-sua-chua-bao-duong.xlsx`, `tai-san-ke-toan-<from>-<to>.xlsx`), vì
+`Content-Disposition` không được expose qua CORS. Biên bản PDF thì khác: route trả JSON `HandoverPdf`, mở `url` ở tab
+mới.
+
+### Composable — hàm mới
+
+Đã thêm vào `useAssetService` (`app/services/asset.service.ts`), đặt tên theo kiểu các hàm sẵn có. Kiểu ở web có
+tiền tố `Asset` (ví dụ `AssetOverview`, `AssetServiceCostQuery`):
+
+```typescript
+overview(): Promise<AssetOverview>                                        // GET  /v1/asset-reports/overview
+serviceCosts(q: ServiceCostQuery): Promise<ServiceCostReport>             // GET  /v1/asset-reports/service-costs
+exportServiceCosts(q: ServiceCostQuery): Promise<Blob>                    // GET  .../service-costs/export
+maintenanceCosts(q: MaintenanceCostQuery): Promise<MaintenanceCostReport> // GET  /v1/asset-reports/maintenance-costs
+exportMaintenanceCosts(q: MaintenanceCostQuery): Promise<Blob>            // GET  .../maintenance-costs/export
+exportAccounting(q: DateRangeQuery): Promise<Blob>                        // GET  /v1/asset-reports/accounting-export
+handoverPdf(assignmentId: number, kind: 'assign' | 'return'): Promise<HandoverPdf>    // GET /v1/asset-assignments/:id/handover-pdf
+findIncidents(q: IncidentQuery): Promise<{ data: AssetIncident[]; meta: PaginatedMeta }>  // GET /v1/asset-incidents
+findIncident(id: number): Promise<AssetIncident>                          // GET  /v1/asset-incidents/:id
+repairFromIncident(id: number, body: RepairFromIncidentBody): Promise<AssetIncident> // POST .../repair
+confirmIncidentLoss(id: number, body: ConfirmLossBody): Promise<AssetIncident> // POST .../confirm-loss
+closeIncident(id: number, body: HandleIncidentBody): Promise<AssetIncident> // POST .../close
+// Tự phục vụ
+reportIncident(assetId: number, body: ReportIncidentBody): Promise<AssetIncident> // POST /v1/me/assets/:assetId/incidents
+myIncidents(q: IncidentQuery): Promise<{ data: AssetIncident[]; meta: PaginatedMeta }> // GET /v1/me/assets/incidents
+myHandoverPdf(assignmentId: number, kind: 'assign' | 'return'): Promise<HandoverPdf>  // GET /v1/me/assets/assignments/:id/handover-pdf
+```
+
+`reportIncident` nhận body có kiểu (`type`, `description`, `occurredOn?`, `photos?: File[]`) rồi tự dựng `FormData`
+như `uploadDocument`: mỗi ảnh một lần `append('photos', file)`, không tự đặt header `Content-Type` để trình duyệt
+điền boundary. `openMaintenance` sẵn có nhận thêm
+`type: 'MAINTENANCE'`; `findMaintenances` nhận thêm `type`.
+
+### Khi module chỉ xem hoặc tắt
+
+| Route lô 2a | `READ_ONLY` |
+|---|---|
+| Mọi `GET`: tổng quan, báo cáo, Excel, biên bản PDF, danh sách và chi tiết báo hỏng | Chạy |
+| Báo hỏng, báo mất (`POST /v1/me/assets/:id/incidents`) | 403 `MODULE_READ_ONLY` hoặc `MODULE_EXPIRED`: ẩn hai nút báo |
+| Xử lý báo cáo, mở phiếu bảo dưỡng, sửa lịch bảo dưỡng | 403 như trên: ẩn nút như các thao tác ghi khác |
+
+Việc định kỳ J-03 không chạy khi module chỉ xem hoặc tắt. Module tắt thì mọi route 403 `MODULE_*`, ẩn menu.
+
+### Edge cases lô 2a
+
+| Tình huống | HTTP | Ghi chú |
+|---|---|---|
+| Nhân viên báo hỏng thiết bị đang giữ, 2 ảnh | 201 | Tài sản vẫn `IN_USE`, có `openIncidents`; N-06 tới người quản lý tài sản và quản lý trực tiếp |
+| Báo hỏng lần hai khi lần trước chưa xử lý | 409 | `ASSET_INCIDENT_OPEN` |
+| Báo hỏng thiết bị người khác giữ | 403 | `ASSET_NOT_HELD` |
+| Gửi 11 ảnh, hoặc một ảnh 6 MB | 400 | `ASSET_INCIDENT_TOO_MANY_PHOTOS`, `ASSET_FILE_TOO_LARGE`. FE nên chặn trước |
+| Ảnh PDF hay TXT | 400 | `ASSET_INCIDENT_PHOTO_TYPE` |
+| Ngày phát hiện là ngày mai | 400 | `ASSET_INCIDENT_DATE_IN_FUTURE` |
+| Báo mất | 201 | Tài sản `LOSS_REPORTED` ngay, lọc được bằng `?status=LOSS_REPORTED` |
+| HR thu hồi, điều chuyển tài sản chờ xác minh mất | 409 | `ASSET_LOSS_REPORTED`: xử lý báo mất trước |
+| HR xác nhận mất | 201 | Tài sản `LOST`, đóng cấp phát, `physical.depreciationStopDate` = ngày nhân viên khai |
+| HR bấm Đã tìm thấy | 201 | Tài sản về trạng thái trước khi báo, người giữ giữ nguyên |
+| Tạo phiếu sửa từ báo hỏng | 201 | Báo cáo `REPAIR_OPENED`, tài sản `IN_REPAIR`, ảnh gắn sang phiếu |
+| Hai HR cùng xử lý một báo cáo | 201 / 409 | Người sau `ASSET_INCIDENT_HANDLED` |
+| Lọc `assetId` của tài sản phòng khác (MANAGER) | 403 | `ASSET_SCOPE_FORBIDDEN`. Tài sản người trong phòng làm mất vẫn thuộc phòng (từ 14/11) |
+| J-03 chạy, thiết bị đến hạn | – | Phiếu `MAINTENANCE` mới, `createdBy: null`, tài sản `IN_MAINTENANCE`, N-08 |
+| Cấp phát thiết bị đang bảo dưỡng | 409 | `ASSET_NOT_ASSIGNABLE`. Điều chuyển vẫn được |
+| Đóng phiếu bảo dưỡng "Không sửa được" | 400 | `ASSET_MAINTENANCE_OUTCOME_INVALID`: phiếu bảo dưỡng chỉ có Xong hoặc Huỷ |
+| Đóng hoặc huỷ phiếu bảo dưỡng | 201 | Hạn kế tiếp = ngày đóng + chu kỳ |
+| Sửa tài sản với `maintenanceIntervalMonths: 0` | 200 | Bỏ lịch, hạn về `null` |
+| Gửi `nextMaintenanceDate` khi chưa có chu kỳ | 400 | `ASSET_MAINTENANCE_INTERVAL_REQUIRED` |
+| Biên bản thu hồi của cấp phát chưa trả | 409 | `ASSET_ASSIGNMENT_NOT_RETURNED` |
+| Biên bản cho ghế dịch vụ | 400 | `ASSET_NOT_PHYSICAL`: ẩn nút với dịch vụ |
+| Nhân viên xin biên bản của người khác | 403 | `ASSET_ASSIGNMENT_NOT_YOURS` |
+| Tải biên bản lần hai | 200 | Cùng `document.id`, `url` mới |
+| MANAGER mở tổng quan | 200 | Chỉ tài sản phòng mình, mọi trường tiền `null` |
+| MANAGER gọi báo cáo chi phí hoặc Excel kế toán | 403 | `FORBIDDEN`: thiếu `asset:value:read` |
+| Excel kế toán kỳ 13 tháng | 400 | `ASSET_REPORT_RANGE_TOO_LONG` |
+| `month=2026-13` | 400 | `BAD_REQUEST`, `message` nói rõ |
+| Bấm thẻ "sắp bảo dưỡng" rồi mở phiếu sửa một máy trong danh sách | 200 | Máy đó ra khỏi danh sách và thẻ giảm 1, vì đang sửa thì không xét bảo dưỡng |
+| Nhân viên bấm "Đã nhận" | 200 | Tài sản ra khỏi `pendingConfirmation=true`, thẻ "chờ xác nhận" giảm 1 |
+| `maintenanceDueWithinDays=0`, `366` hoặc `abc`; `pendingConfirmation=abc` | 400 | `BAD_REQUEST` |
+| MANAGER bấm hai thẻ này | 200 | Chỉ tài sản phòng mình, số khớp thẻ của chính họ |
+
+---
+
+## Đợt 2 — sửa sau bài nhập vai (14/11/2026)
+
+Bài nhập vai toàn luồng lô 2a tìm ra ba chỗ chặn việc và năm lỗi dữ liệu; người dùng duyệt sửa toàn bộ. Phần này
+chỉ nói chỗ **đổi so với mục "Đợt 2 — lô 2a"** ở trên. Thiết kế đầy đủ: `docs/modules/15-assets.md` mục 16.13.
+Backend cần migration `20261114075502_add_asset_assignment_end_reason_and_dispute_response`.
+
+### Kiểu dữ liệu đổi
+
+```typescript
+// Trạng thái báo hỏng, báo mất: thêm RESOLVED = phiếu sửa tạo từ báo hỏng đã đóng (kết quả ở `maintenance`)
+type AssetIncidentStatus = 'OPEN' | 'REPAIR_OPENED' | 'LOSS_CONFIRMED' | 'CLOSED' | 'RESOLVED'
+
+// Sự kiện lịch sử: thêm một loại
+// ASSIGNMENT_DISPUTE_RESOLVED  payload { assignmentId, reason, response }
+
+interface AssignmentAsset {
+  // ...các trường cũ
+  serialNumber: string | null           // mới: hiện ở Tài sản của tôi (O4)
+}
+
+interface AssetAssignment {
+  // ...các trường cũ
+  endReason: 'RETURNED' | 'TRANSFERRED' | 'LOST' | null   // null khi đang giữ
+  endReasonLabel: string | null         // "Thu hồi" | "Điều chuyển" | "Mất"
+  transferredFrom: { assignmentId: number; holderName: string } | null  // lần này sinh ra do điều chuyển
+  transferredTo: { assignmentId: number; holderName: string } | null    // lần này kết thúc do điều chuyển
+  disputeResponse: string | null        // câu trả lời của người quản lý tài sản khi người nhận báo chưa đúng
+  disputeRespondedAt: string | null     // ISO
+}
+
+interface AssetIncident {
+  // ...các trường cũ
+  maintenance: {
+    id: number
+    status: AssetMaintenanceStatus
+    statusLabel: string                 // "Xong" | "Không sửa được" | "Đã huỷ" | ...
+    doneAt: string | null
+    workDone: string | null
+  } | null
+}
+
+interface AssetOverview {
+  // ...các trường cũ
+  total: number                         // ĐỔI: không gồm Mất, Đã thanh lý, Đã huỷ (byStatus vẫn đủ)
+  physicalCount: number                 // mới
+  serviceCount: number                  // mới
+  disputedConfirmations: number         // mới: = meta.total của GET /assets?disputed=true
+}
+
+interface AssetQueryParams {
+  // ...các trường cũ
+  disputed?: boolean                    // mới
+}
+```
+
+Sự kiện cũ có thêm trường: `ASSIGNED` có `note`, và khi điều chuyển có `fromName`; `RETURNED` có `endReason`, và khi
+điều chuyển có `toName`, `note`, `condition`; `STATUS_CHANGED` sang LOST có `closedAssignmentId`, `holderName` khi
+đóng một lần cấp phát; `UPDATED` có thể là `{ maintenanceId, maintenanceVendor: { from, to } }` (đổi đơn vị sửa của
+phiếu, tên đơn vị); `INCIDENT_HANDLED` có thể là `{ incidentId, outcome: 'RESOLVED', maintenanceId,
+maintenanceOutcome }`.
+
+### Nhãn đổi (`…Label` trong response)
+
+| Nhóm | Mã | Nhãn cũ | Nhãn mới |
+|---|---|---|---|
+| Loại hình | PHYSICAL | Tài sản hữu hình | **Thiết bị** |
+| Trạng thái | BROKEN | Hỏng chờ xử lý | **Hỏng** |
+| Trạng thái | LOSS_REPORTED | Mất (chờ xác minh) | **Chờ xác minh mất** |
+| Chu kỳ | ONE_TIME | Một lần | **Mua đứt** |
+| Xác nhận | PENDING | Chờ xác nhận | **Chờ người nhận xác nhận** |
+| Xác nhận | DISPUTED | Báo không đúng | **Người nhận báo chưa đúng** |
+| Phiếu | OPEN | Mới | **Mới mở** |
+| Nhà cung cấp | SUPPLIER / SERVICE | Bán hàng / Dịch vụ | **Bán thiết bị** / **Cung cấp dịch vụ** |
+| Giấy tờ | HANDOVER_RECORD | Biên bản bàn giao | **Biên bản bàn giao, thu hồi** |
+| Sự kiện | ASSIGNED / ASSIGNMENT_DISPUTED | Bàn giao / Báo bàn giao không đúng | **Cấp phát** / **Người nhận báo chưa đúng** |
+| Báo cáo | RESOLVED | – | **Đã xử lý xong** |
+
+Bộ nhãn tại chỗ của web (ô lọc) phải khớp bảng này. Thuật ngữ thao tác: **Cấp phát**, **Điều chuyển**,
+**Thu hồi**; "bàn giao" chỉ còn trong tên giấy tờ "Biên bản bàn giao".
+
+### Endpoint mới: POST /v1/asset-assignments/:id/dispute-response
+
+Người có `asset:manage` trả lời khi người nhận báo cấp phát chưa đúng. Cấp phát về `PENDING`, lưu câu trả lời,
+người nhận nhận thông báo N-15 rồi kiểm lại và bấm Đã nhận. Muốn đổi tài sản khác thì thu hồi rồi cấp phát lại như
+thường, không cần trả lời.
+
+```json
+// Request
+{ "response": "Đã gửi bổ sung sạc qua tổ xe chiều nay" }
+
+// Response 201: AssetAssignment
+{ "success": true, "data": { "id": 12, "confirmation": "PENDING", "confirmationLabel": "Chờ người nhận xác nhận",
+  "disputeReason": "Không có sạc", "disputeResponse": "Đã gửi bổ sung sạc qua tổ xe chiều nay",
+  "disputeRespondedAt": "2026-11-14T03:10:00.000Z", "...": "..." } }
+```
+
+| HTTP | Mã | Khi nào |
+|---|---|---|
+| 400 | `ASSET_DISPUTE_RESPONSE_REQUIRED` | `response` chỉ có khoảng trắng |
+| 400 | `BAD_REQUEST` | Thiếu `response` ("Câu trả lời không được để trống."), dài quá 1000 ký tự |
+| 403 | `FORBIDDEN` / `ASSET_FORBIDDEN` | Không có `asset:manage` |
+| 404 | `ASSET_ASSIGNMENT_NOT_FOUND` | |
+| 409 | `ASSET_ASSIGNMENT_CLOSED` | Lần cấp phát đã kết thúc |
+| 409 | `ASSET_ASSIGNMENT_NOT_DISPUTED` | Người nhận chưa báo chưa đúng, hoặc đã có người trả lời trước |
+
+Người nhận vẫn tự bấm Đã nhận được khi đang `DISPUTED` (hai bên thống nhất ngoài hệ thống), không phải chờ trả lời.
+
+### Hành vi đổi
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| Phạm vi MANAGER (`/assets`, chi tiết, tổng quan, báo cáo, Excel) | Chỉ tài sản đang cấp phát cho người trong phòng hoặc cho phòng | Thêm **dịch vụ do người trong phòng phụ trách** và **thiết bị đã mất mà lần cấp phát cuối thuộc phòng** |
+| `/asset-incidents` của MANAGER | Theo phạm vi tài sản | Thêm mọi báo cáo do người trong phòng gửi; `GET /asset-incidents/:id` mở được báo cáo đó |
+| `?departmentId=` (HR lọc theo phòng) | Như phạm vi cũ | Cùng điều kiện mới |
+| `?search=` | Mã, tên, serial, model | Thêm tên, mã nhân viên của người đang giữ, người chịu trách nhiệm, người phụ trách dịch vụ |
+| `?pendingConfirmation=true` | Cấp phát `PENDING` | Không đổi; cấp phát `DISPUTED` nằm ở `?disputed=true` |
+| Xác nhận mất, đánh dấu Mất | Cấp phát đóng như thu hồi, gửi N-02 | `endReason: 'LOST'`, `returnNote` là lý do; người giữ nhận N-13; biên bản thu hồi trả 409 `ASSET_ASSIGNMENT_LOST` |
+| Điều chuyển | Ghi chú "Điều chuyển", tình trạng trống, hai biên bản rời | Lần cũ `endReason: 'TRANSFERRED'`, `returnNote` "Điều chuyển sang {người mới}. {ghi chú}"; không gửi tình trạng thì lấy tình trạng đang ghi; lần mới có `transferredFrom`. **Một biên bản điều chuyển** số `BBDC-{mã}-{id}` cho cả hai bên: `handover-pdf?kind=assign` của lần mới và `kind=return` của lần cũ trả cùng một `document`; người giữ cũ mở được qua `/me/...` |
+| Biên bản | Người tải lên là người mở đầu tiên | `uploadedBy` là người lập: người cấp phát (bàn giao, điều chuyển) hoặc người thu hồi. Có câu dẫn, câu kết, "Biên bản lập thành 02 bản" |
+| Tạo phiếu sửa từ báo hỏng | Báo cáo đứng mãi ở `REPAIR_OPENED` | Phiếu đóng (Xong, Không sửa được, Huỷ) thì báo cáo sang `RESOLVED`, xem kết quả ở `maintenance` |
+| Đóng phiếu | Nhận ngày xong bất kỳ | 400 `ASSET_MAINTENANCE_DONE_IN_FUTURE` (sau hôm nay), 400 `ASSET_MAINTENANCE_DONE_BEFORE_SENT` (trước ngày gửi đi) |
+| Báo cáo Khấu hao `GET /asset-reports/depreciation` | Gồm tài sản đã ghi giảm | Bỏ tài sản có ngày thôi khấu hao ≤ `asOf`. Tổng khớp `overview.totals` |
+| Excel kế toán, sheet "Khấu hao trong kỳ" | Cộng tài sản ghi giảm vào cuối kỳ | Vẫn có dòng (khấu hao đến ngày giảm), luỹ kế và giá trị còn lại cuối kỳ = 0, cột "Ghi chú" mới, không cộng vào dòng Tổng |
+| Mọi file Excel | Ngày là chữ `2026-11-13`, tiền không định dạng | Ô ngày thật `dd/mm/yyyy`, tiền có dấu phân cách, dòng tiêu đề cố định có bộ lọc, dòng 1 ghi kỳ báo cáo (trừ file danh sách). Tên sheet: "Khấu hao", "Chi phí dịch vụ" (không còn ngày). Cột "Mã tài sản" thay "Mã QLTS". File danh sách thêm cột "Hạn bảo dưỡng" |
+| Câu lỗi | Có câu tiếng Anh: `Forbidden resource`, `email must be an email`, `Cannot POST …`, `Internal server error`, `Validation failed (numeric string is expected)` | Mọi câu là tiếng Việt, có nhãn trường người dùng thấy và bước tiếp theo. **Mã lỗi không đổi**, web vẫn hiện `error.message` |
+| Thông báo cho chính mình | Cấp phát cho chính mình cũng nhận N-01 | Người thao tác không nhận thông báo về việc mình vừa làm; một việc chỉ một thông báo cho một người |
+
+### Thông báo mới và đổi
+
+| Mã | `type` | Người nhận | `refType` → trang |
+|---|---|---|---|
+| N-01 (đổi chữ) | `ASSET_ASSIGNED` | Người được cấp phát | `asset_holding` → `/assets/my` |
+| N-02b | `ASSET_RETURNED` | Người giữ cũ khi điều chuyển, title "🔄 Tài sản đã được điều chuyển" | `asset_holding` → `/assets/my` |
+| N-13 | `ASSET_LOST` | Người đang giữ khi tài sản được xác nhận mất | `asset_holding` → `/assets/my` |
+| N-13b | `ASSET_LOST` | Quản lý trực tiếp của người giữ, chỉ đọc | `asset` → `/management/assets/:refId` |
+| N-14 | `ASSET_INCIDENT_HANDLED` | Người gửi báo hỏng, báo mất | **`asset_my_incident`** → `/assets/my?incident_id=:refId` (refId là **id báo cáo**) |
+| N-15 | `ASSET_DISPUTE_RESOLVED` | Người nhận khi người quản lý trả lời | `asset_holding` → `/assets/my` |
+| N-16 | `ASSET_RENEWED` | Người phụ trách dịch vụ khi người khác gia hạn | `asset_service` → `/assets/my?tab=services&open_id=:refId` |
+| N-17 | `ASSET_REPAIR_OPENED` | Người đang giữ khi mở phiếu sửa hoặc bảo dưỡng | `asset_holding` → `/assets/my` |
+| N-07b | `ASSET_REPAIR_DONE` | Quản lý trực tiếp của người giữ, chỉ đọc | `asset` → `/management/assets/:refId` |
+| N-06 (đổi) | `ASSET_INCIDENT_REPORTED` | Người quản lý tài sản nhận bản "…, cần xử lý" kèm việc cần làm; quản lý trực tiếp giữ bản "Thông tin:" | không đổi |
+
+Nội dung từng câu: `docs/notifications/notification-content-map.md`. Định tuyến app: `fcm-notification-routing.json`.
+
+### Mã lỗi mới
+
+| HTTP | Mã | Khi nào |
+|---|---|---|
+| 400 | `ASSET_DISPUTE_RESPONSE_REQUIRED` | Trả lời rỗng |
+| 409 | `ASSET_ASSIGNMENT_NOT_DISPUTED` | Trả lời một cấp phát không ở trạng thái báo chưa đúng |
+| 409 | `ASSET_ASSIGNMENT_LOST` | Xin biên bản thu hồi của lần cấp phát kết thúc vì mất: ẩn nút này khi `endReason === 'LOST'` |
+| 400 | `ASSET_MAINTENANCE_DONE_IN_FUTURE` | Ngày xong sau hôm nay |
+| 400 | `ASSET_MAINTENANCE_DONE_BEFORE_SENT` | Ngày xong trước ngày gửi đi |
+
+### Màn hình web cần đổi theo contract này
+
+| Màn | Việc |
+|---|---|
+| Chi tiết tài sản, tab Người dùng | Dòng `DISPUTED`: hiện lý do và nút **Trả lời** (hộp nhập câu trả lời → `dispute-response`); đã trả lời thì hiện câu trả lời và giờ. Lần cấp phát đã kết thúc hiện `endReasonLabel`; `TRANSFERRED` hiện "Điều chuyển sang {transferredTo.holderName}", lần mới hiện "Nhận từ {transferredFrom.holderName}". Nút Biên bản thu hồi ẩn khi `endReason === 'LOST'`; khi `TRANSFERRED` ghi "Biên bản điều chuyển" |
+| Hộp Điều chuyển | Có ô tình trạng lúc điều chuyển (mặc định tình trạng đang ghi của thiết bị) và ô ghi chú; toast "Đã điều chuyển {mã} từ {người cũ} sang {người mới} …" |
+| Tổng quan | Thẻ "Người nhận báo chưa đúng" (`disputedConfirmations`) bấm sang `/management/assets?disputed=true`; số tổng dùng `total` mới, tách `physicalCount`, `serviceCount` |
+| Danh sách tài sản | Đọc `?disputed=true` từ URL như hai bộ lọc thẻ cũ, có nhãn lọc |
+| Tài sản của tôi | Thẻ cấp phát `PENDING` có `disputeResponse` (người quản lý đã trả lời): hiện "Người quản lý tài sản trả lời: …" cạnh nút Đã nhận. Mục lịch sử: `endReason === 'LOST'` nằm ở nhóm riêng "Đã ghi nhận mất", không ở "Đã thu hồi", không có nút biên bản thu hồi. Hiện `asset.serialNumber`. Nhận `?incident_id=` để mở đúng báo cáo |
+| Báo hỏng, báo mất (của tôi và trang quản lý) | Trạng thái `RESOLVED` "Đã xử lý xong" kèm kết quả phiếu (`maintenance.statusLabel`, `doneAt`, `workDone`) |
+| Lịch sử tài sản | Nhãn cho `ASSIGNMENT_DISPUTE_RESOLVED`, trường `maintenanceVendor` ("Đơn vị sửa chữa của phiếu"), `fromName`, `toName`, `note`, `closedAssignmentId`/`holderName`, `INCIDENT_HANDLED` outcome `RESOLVED` |
+| Định tuyến thông báo (`notification-route.ts`) | `asset_my_incident` → `/assets/my?incident_id=:refId`; năm `type` mới |
+
+### Edge cases
+
+| Tình huống | HTTP | Ghi chú |
+|---|---|---|
+| MANAGER mở thiết bị nhân viên phòng mình làm mất | 200 | Trước là 403 |
+| MANAGER phòng khác mở thiết bị đó | 403 | `ASSET_SCOPE_FORBIDDEN` |
+| MANAGER mở dịch vụ do chính mình hoặc người trong phòng phụ trách | 200 | Có trong danh sách, thẻ "Sắp đến hạn", báo cáo Sắp hết hạn |
+| Người nhận báo chưa đúng rồi tự bấm Đã nhận | 200 | `CONFIRMED`, không cần chờ trả lời |
+| HR trả lời rồi người nhận lại báo chưa đúng | 200 | Lại `DISPUTED` với lý do mới; `disputeResponse`, `disputeRespondedAt` về `null` (câu trả lời cũ còn ở sự kiện `ASSIGNMENT_DISPUTE_RESOLVED`) |
+| Người nhận bấm Đã nhận sau khi báo chưa đúng hoặc sau khi được trả lời | 200 | `CONFIRMED`; `disputeReason`, `disputeResponse`, `disputeRespondedAt` cùng về `null`, lịch sử còn ở tab sự kiện |
+| Điều chuyển không gửi tình trạng | 201 | Cả hai lần cấp phát lấy tình trạng đang ghi của thiết bị |
+| Người giữ cũ mở biên bản thu hồi của lần đã điều chuyển | 200 | Trả biên bản điều chuyển `BBDC-…` dùng chung |
+| Biên bản thu hồi của lần kết thúc vì mất | 409 | `ASSET_ASSIGNMENT_LOST` |
+| Dữ liệu điều chuyển trước 14/11 | 200 | Không nối được hai lần (`transferredFrom` null), biên bản giữ cách ghi cũ |
+| Nhân viên báo hỏng thiết bị mình giữ, HR tạo phiếu rồi đóng Xong | – | Người báo nhận N-14 hai lần (tiếp nhận, sửa xong), không nhận N-17 hay N-07; báo cáo `RESOLVED`; quản lý trực tiếp nhận N-07b |
+| Đóng phiếu với ngày xong là ngày mai | 400 | `ASSET_MAINTENANCE_DONE_IN_FUTURE` |
+| Overview sau khi có tài sản mất | 200 | `total` giảm, `byStatus` vẫn có `LOST`; `totals.bookValue` bằng tổng của báo cáo Khấu hao |

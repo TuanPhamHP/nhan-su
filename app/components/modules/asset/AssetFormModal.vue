@@ -79,6 +79,8 @@
 				depreciationMonths: assetNumberField,
 				salvageValue: assetNumberField,
 				accountingClass: z.string().optional(),
+				maintenanceIntervalMonths: assetNumberField,
+				nextMaintenanceDate: z.string().optional(),
 				// dịch vụ
 				billingCycle: z.string().optional(),
 				ownerId: z.number().optional(),
@@ -135,6 +137,11 @@
 				a?.physical?.depreciationMonths != null ? String(a.physical.depreciationMonths) : '',
 			salvageValue: a?.physical?.salvageValue != null ? String(a.physical.salvageValue) : '',
 			accountingClass: a?.physical?.accountingClass ?? '',
+			maintenanceIntervalMonths:
+				a?.physical?.maintenanceIntervalMonths != null
+					? String(a.physical.maintenanceIntervalMonths)
+					: '',
+			nextMaintenanceDate: a?.physical?.nextMaintenanceDate ?? '',
 			billingCycle: a?.service?.billingCycle ?? 'MONTHLY',
 			ownerId: a?.service?.owner.id,
 			nextRenewalDate: a?.service?.nextRenewalDate ?? '',
@@ -173,6 +180,8 @@
 	const [depreciationMonths, depreciationMonthsAttrs] = defineField('depreciationMonths');
 	const [salvageValue, salvageValueAttrs] = defineField('salvageValue');
 	const [accountingClass, accountingClassAttrs] = defineField('accountingClass');
+	const [maintenanceIntervalMonths, maintenanceIntervalMonthsAttrs] = defineField('maintenanceIntervalMonths');
+	const [nextMaintenanceDate, nextMaintenanceDateAttrs] = defineField('nextMaintenanceDate');
 	const [billingCycle, billingCycleAttrs] = defineField('billingCycle');
 	const [ownerId, ownerIdAttrs] = defineField('ownerId');
 	const [nextRenewalDate, nextRenewalDateAttrs] = defineField('nextRenewalDate');
@@ -223,6 +232,78 @@
 	const requiresSerial = computed(
 		() => categories.value.find(c => c.id === categoryId.value)?.requireSerial ?? false,
 	);
+
+	/**
+	 * Chưa có chu kỳ thì chưa nhập được hạn bảo dưỡng.
+	 *
+	 * Gửi hạn mà không có chu kỳ là 400 `ASSET_MAINTENANCE_INTERVAL_REQUIRED`, nên khoá ô
+	 * ngày luôn cho người dùng khỏi điền xong mới biết là sai.
+	 */
+	const hasMaintenanceInterval = computed(() => {
+		const months = toAssetNumber(maintenanceIntervalMonths.value);
+		return !!months && months > 0;
+	});
+
+	/** Chu kỳ mặc định của loại đang chọn, để gợi ý khi tạo mới. */
+	const categoryMaintenanceMonths = computed(
+		() => categories.value.find(c => c.id === categoryId.value)?.defaultMaintenanceMonths ?? null,
+	);
+
+	// Xoá chu kỳ thì hạn cũ không còn nghĩa, và giữ lại sẽ bị BE từ chối.
+	watch(hasMaintenanceInterval, has => {
+		if (!has) nextMaintenanceDate.value = '';
+	});
+
+	/**
+	 * Câu dưới ô hạn bảo dưỡng (H7). Tạo mới mà loại có chu kỳ mặc định thì nói rõ hệ thống tự
+	 * đặt lịch, kẻo người dùng thấy ô hạn bị khoá rồi tưởng phải tự nhập chu kỳ.
+	 */
+	const maintenanceDateHint = computed(() => {
+		if (hasMaintenanceInterval.value) return 'Bỏ trống thì hạn đầu tiên là hôm nay cộng chu kỳ.';
+		if (!isEdit.value && categoryMaintenanceMonths.value) {
+			return `Loại này bảo dưỡng ${categoryMaintenanceMonths.value} tháng một lần. Bạn để trống chu kỳ thì hệ thống tự lấy theo loại và hạn đầu tiên là hôm nay cộng ${categoryMaintenanceMonths.value} tháng. Muốn chọn hạn khác thì bạn nhập chu kỳ trước.`;
+		}
+		return 'Bạn nhập chu kỳ bảo dưỡng trước rồi mới chọn được hạn.';
+	});
+
+	// ─── Ô tiền có dấu chấm phân cách khi gõ (H10) ────────────────────────────────
+
+	const MONEY_INPUT = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 6 });
+
+	/** Giá trị đang lưu (`"12500000.5"`) → chữ hiện trong ô (`"12.500.000,5"`). */
+	function moneyText(v: string | number | null | undefined): string {
+		if (v == null || v === '') return '';
+		const s = String(v);
+		const [int, frac] = s.split('.');
+		const intText = int ? MONEY_INPUT.format(Number(int)) : '0';
+		return frac !== undefined ? `${intText},${frac}` : intText;
+	}
+
+	/** Chữ người dùng gõ → giá trị lưu: bỏ dấu chấm phân cách, dấu phẩy là phần thập phân. */
+	function moneyValue(text: string): string {
+		const cleaned = text.replace(/[^\d,]/g, '');
+		const [int = '', ...rest] = cleaned.split(',');
+		const digits = int.replace(/^0+(?=\d)/, '');
+		return rest.length ? `${digits || '0'}.${rest.join('').slice(0, 6)}` : digits;
+	}
+
+	/**
+	 * Gõ vào ô tiền: lưu giá trị số, rồi ghi lại chữ đã định dạng vào ô. Ghi thẳng vào ô vì nếu
+	 * người dùng gõ một chữ cái thì giá trị không đổi, Vue không vẽ lại và chữ cái sẽ nằm lì đó.
+	 */
+	const MONEY_FIELDS = { cost, salvageValue, unitPrice };
+
+	function onMoneyInput(e: Event, key: keyof typeof MONEY_FIELDS) {
+		const el = e.target as HTMLInputElement;
+		const field = MONEY_FIELDS[key];
+		field.value = moneyValue(el.value);
+		el.value = moneyText(field.value);
+	}
+
+	/** Mã tiền tệ luôn viết hoa, gõ "usd" thì thành "USD". */
+	watch(currency, v => {
+		if (typeof v === 'string' && v !== v.toUpperCase()) currency.value = v.toUpperCase();
+	});
 
 	onMounted(async () => {
 		try {
@@ -280,6 +361,8 @@
 				depreciationMonths: num(v.depreciationMonths),
 				salvageValue: num(v.salvageValue),
 				accountingClass: asAssetEnum(v.accountingClass, ACCOUNTING_CLASSES),
+				maintenanceIntervalMonths: num(v.maintenanceIntervalMonths),
+				nextMaintenanceDate: str(v.nextMaintenanceDate),
 			};
 		} else {
 			body.service = {
@@ -316,13 +399,26 @@
 			} else {
 				saved = await service.create(body);
 			}
-			toast.success(props.asset ? 'Đã lưu thay đổi' : 'Đã tạo tài sản');
+			if (props.asset) {
+				toast.success(`Đã lưu thay đổi của ${saved.code} · ${saved.name}.`);
+			} else {
+				// Mã do hệ thống sinh là thứ người dùng cần ngay để dán tem, và tài sản mới có thể
+				// nằm ở trang sau của danh sách, nên toast kèm nút mở thẳng tài sản (H13).
+				toast.success(`Đã tạo tài sản ${saved.code} · ${saved.name}.`, {
+					action: { label: 'Mở tài sản vừa tạo', to: `/management/assets/${saved.id}` },
+				});
+			}
 			emit('saved', saved);
 		} catch (e) {
 			// Lỗi nghiệp vụ (serial bắt buộc, thiếu tỷ giá, ghi đủ số thẻ...) để nguyên form.
-			toast.error(e instanceof Error ? e.message : 'Lưu thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa lưu được tài sản. Bạn thử lại sau ít phút.');
 		}
 	});
+
+	useEscapeKey(
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
 
 	const inputCls =
 		'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
@@ -342,7 +438,7 @@
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						:aria-label="isEdit ? 'Đóng hộp sửa tài sản' : 'Đóng hộp thêm tài sản'"
 						@click="emit('close')"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -411,17 +507,26 @@
 
 						<div class="space-y-1">
 							<label :class="labelCls">Nguyên giá</label>
-							<input v-model="cost" v-bind="costAttrs" type="number" min="0" step="any" :class="inputCls" placeholder="0" />
+							<input
+								:value="moneyText(cost)"
+								v-bind="costAttrs"
+								type="text"
+								inputmode="decimal"
+								:class="inputCls"
+								placeholder="VD: 18.500.000"
+								@input="onMoneyInput($event, 'cost')"
+							/>
 						</div>
 
 						<div class="grid grid-cols-2 gap-3">
 							<div class="space-y-1">
 								<label :class="labelCls">Tiền tệ</label>
-								<input v-model="currency" v-bind="currencyAttrs" type="text" maxlength="3" :class="inputCls" placeholder="VND" />
+								<input v-model="currency" v-bind="currencyAttrs" type="text" maxlength="3" :class="`${inputCls} uppercase`" placeholder="VND" />
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Tỷ giá</label>
-								<input v-model="exchangeRate" v-bind="exchangeRateAttrs" type="number" min="0" step="any" :class="inputCls" placeholder="Khác VND thì bắt buộc" />
+								<input v-model="exchangeRate" v-bind="exchangeRateAttrs" type="number" min="0" step="any" :class="inputCls" />
+								<p class="text-xs text-gray-500 dark:text-gray-400">Bắt buộc khi tiền tệ không phải VND.</p>
 							</div>
 						</div>
 					</div>
@@ -475,11 +580,49 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Số tháng khấu hao</label>
-								<input v-model="depreciationMonths" v-bind="depreciationMonthsAttrs" type="number" min="0" :class="inputCls" placeholder="Mặc định theo loại" />
+								<input v-model="depreciationMonths" v-bind="depreciationMonthsAttrs" type="number" min="1" :class="inputCls" placeholder="Mặc định theo loại" />
 							</div>
 							<div class="space-y-1">
-								<label :class="labelCls">Giá trị thu hồi</label>
-								<input v-model="salvageValue" v-bind="salvageValueAttrs" type="number" min="0" step="any" :class="inputCls" />
+								<label :class="labelCls">Giá trị thanh lý ước tính</label>
+								<input
+									:value="moneyText(salvageValue)"
+									v-bind="salvageValueAttrs"
+									type="text"
+									inputmode="decimal"
+									:class="inputCls"
+									@input="onMoneyInput($event, 'salvageValue')"
+								/>
+							</div>
+							<div class="space-y-1">
+								<label :class="labelCls">Chu kỳ bảo dưỡng (tháng)</label>
+								<input
+									v-model="maintenanceIntervalMonths"
+									v-bind="maintenanceIntervalMonthsAttrs"
+									type="number"
+									min="0"
+									max="120"
+									:class="inputCls"
+									:placeholder="
+										isEdit
+											? 'Nhập 0 để bỏ lịch bảo dưỡng'
+											: categoryMaintenanceMonths != null
+												? `Bỏ trống để theo loại (${categoryMaintenanceMonths} tháng)`
+												: 'Bỏ trống nếu không bảo dưỡng định kỳ'
+									"
+								/>
+								<p v-if="isEdit" class="text-xs text-gray-500 dark:text-gray-400">
+									Nhập 0 là bỏ lịch bảo dưỡng của thiết bị này.
+								</p>
+							</div>
+							<div class="space-y-1">
+								<label :class="labelCls">Hạn bảo dưỡng kế tiếp</label>
+								<UiDatePicker
+									v-model="nextMaintenanceDate"
+									v-bind="nextMaintenanceDateAttrs"
+									:disabled="!hasMaintenanceInterval"
+									:placeholder="hasMaintenanceInterval ? 'dd/mm/yyyy' : 'Đặt chu kỳ trước'"
+								/>
+								<p class="text-xs text-gray-500 dark:text-gray-400">{{ maintenanceDateHint }}</p>
 							</div>
 						</div>
 					</fieldset>
@@ -506,9 +649,9 @@
 								<p v-if="errors.ownerId" class="text-xs text-red-500">{{ errors.ownerId }}</p>
 							</div>
 							<div class="space-y-1">
-								<label :class="labelCls">Ngày gia hạn kế tiếp</label>
+								<label :class="labelCls">Hạn gia hạn kế tiếp</label>
 								<UiDatePicker v-model="nextRenewalDate" v-bind="nextRenewalDateAttrs" />
-								<p class="text-xs text-gray-500 dark:text-gray-400">Bắt buộc trừ khi mua đứt.</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">Bắt buộc với dịch vụ trả theo tháng, quý hoặc năm.</p>
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Ngày neo trong tháng</label>
@@ -520,11 +663,18 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Số ghế</label>
-								<input v-model="seatCount" v-bind="seatCountAttrs" type="number" min="0" :class="inputCls" placeholder="Bỏ trống nếu không tính theo ghế" />
+								<input v-model="seatCount" v-bind="seatCountAttrs" type="number" min="1" :class="inputCls" placeholder="Bỏ trống nếu không tính theo ghế" />
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Đơn giá</label>
-								<input v-model="unitPrice" v-bind="unitPriceAttrs" type="number" min="0" step="any" :class="inputCls" />
+								<input
+									:value="moneyText(unitPrice)"
+									v-bind="unitPriceAttrs"
+									type="text"
+									inputmode="decimal"
+									:class="inputCls"
+									@input="onMoneyInput($event, 'unitPrice')"
+								/>
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Tính giá theo</label>
@@ -539,10 +689,11 @@
 								<input v-model="adminUrl" v-bind="adminUrlAttrs" type="url" :class="inputCls" placeholder="https://" />
 							</div>
 							<div class="space-y-1 sm:col-span-2">
-								<label :class="labelCls">Link password manager</label>
+								<label :class="labelCls">Đường dẫn trình quản lý mật khẩu</label>
 								<input v-model="passwordManagerUrl" v-bind="passwordManagerUrlAttrs" type="url" :class="inputCls" placeholder="https://" />
 								<p class="text-xs text-gray-500 dark:text-gray-400">
-									Hệ thống không lưu mật khẩu, API key hay mã 2FA — để chúng ở password manager và dán link vào đây.
+									Hệ thống không lưu mật khẩu, API key hay mã 2FA. Bạn để chúng ở trình quản lý mật khẩu và dán
+									đường dẫn vào đây.
 								</p>
 							</div>
 							<div class="space-y-1 sm:col-span-2">
@@ -574,11 +725,12 @@
 					</div>
 
 					<p v-if="isEdit" class="text-xs text-gray-500 dark:text-gray-400">
-						Bản này chưa xoá được một trường đã có giá trị: để trống ô nào thì giá trị cũ của ô đó giữ nguyên.
+						Ô nào bạn để trống sẽ giữ nguyên giá trị cũ. Hiện chưa xoá hẳn được một giá trị đã nhập, bạn cần xoá
+						thì báo quản trị hệ thống.
 					</p>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" type="submit" :loading="isSubmitting">
 							{{ isEdit ? 'Lưu thay đổi' : 'Tạo tài sản' }}
 						</CommonAppButton>

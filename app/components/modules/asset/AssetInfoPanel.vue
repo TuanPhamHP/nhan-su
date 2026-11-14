@@ -1,9 +1,9 @@
 <script setup lang="ts">
-	import { formatAssetMoney } from '~/utils/asset.utils';
+	import { formatAssetMoney, maintenanceDueClass, maintenanceDueLabel } from '~/utils/asset.utils';
 	import { formatDate } from '~/utils/date';
 	import type { Asset } from '~/types/asset.types';
 
-	const props = defineProps<{ asset: Asset }>();
+	const props = withDefaults(defineProps<{ asset: Asset; canManage?: boolean }>(), { canManage: false });
 
 	interface Row {
 		label: string;
@@ -56,9 +56,21 @@
 			{ label: 'Hết hạn bảo hành', value: p.warrantyEndDate ? formatDate(p.warrantyEndDate) : '—' },
 			{ label: 'Bắt đầu khấu hao', value: p.depreciationStartDate ? formatDate(p.depreciationStartDate) : '—' },
 			{ label: 'Số tháng khấu hao', value: p.depreciationMonths != null ? String(p.depreciationMonths) : '—' },
-			{ label: 'Giá trị thu hồi', value: formatAssetMoney(p.salvageValue) },
+			{ label: 'Giá trị thanh lý ước tính', value: formatAssetMoney(p.salvageValue) },
 			{ label: 'Dừng khấu hao', value: p.depreciationStopDate ? formatDate(p.depreciationStopDate) : '—' },
 		];
+	});
+
+	/** Lịch bảo dưỡng định kỳ của thiết bị; hạn được tô màu nên không gộp vào bảng chung. */
+	const maintenance = computed(() => {
+		const p = props.asset.physical;
+		if (!p) return null;
+		return {
+			interval: p.maintenanceIntervalMonths,
+			nextDate: p.nextMaintenanceDate,
+			dueClass: maintenanceDueClass(p.nextMaintenanceDate),
+			dueLabel: maintenanceDueLabel(p.nextMaintenanceDate),
+		};
 	});
 
 	const serviceRows = computed<Row[]>(() => {
@@ -68,7 +80,7 @@
 			{ label: 'Gói', value: dash(s.plan) },
 			{ label: 'Chu kỳ thanh toán', value: s.billingCycleLabel },
 			{ label: 'Người phụ trách', value: `${s.owner.fullName} · ${s.owner.employeeCode}` },
-			{ label: 'Hạn gia hạn', value: s.nextRenewalDate ? formatDate(s.nextRenewalDate) : '—' },
+			{ label: 'Hạn gia hạn kế tiếp', value: s.nextRenewalDate ? formatDate(s.nextRenewalDate) : '—' },
 			{ label: 'Ngày neo', value: s.anchorDay != null ? `Ngày ${s.anchorDay}` : '—' },
 			{
 				label: 'Ghế',
@@ -79,7 +91,7 @@
 			{ label: 'Tự động gia hạn', value: s.autoRenew ? 'Có' : 'Không' },
 			{ label: 'Tài khoản quản trị', value: dash(s.adminAccount) },
 			{ label: 'Trang quản trị', value: dash(s.adminUrl), href: s.adminUrl },
-			{ label: 'Password manager', value: dash(s.passwordManagerUrl), href: s.passwordManagerUrl },
+			{ label: 'Trình quản lý mật khẩu', value: dash(s.passwordManagerUrl), href: s.passwordManagerUrl },
 			{ label: 'Ghi chú thanh toán', value: dash(s.paymentMethodNote) },
 			{ label: 'Thông tin kỹ thuật', value: dash(s.technicalInfo) },
 		];
@@ -120,6 +132,32 @@
 				<div v-for="row in physicalRows" :key="row.label" class="flex gap-4 border-b border-gray-100 py-2 dark:border-gray-800">
 					<dt class="w-40 flex-shrink-0 text-sm text-gray-500 dark:text-gray-400">{{ row.label }}</dt>
 					<dd class="min-w-0 flex-1 break-words text-sm text-gray-900 dark:text-gray-100">{{ row.value }}</dd>
+				</div>
+			</dl>
+		</section>
+
+		<section
+			v-if="maintenance"
+			class="rounded-xl border border-gray-200 bg-white p-4 lg:col-span-2 dark:border-gray-700 dark:bg-gray-900"
+		>
+			<h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">Bảo dưỡng định kỳ</h3>
+			<p v-if="!maintenance.interval" class="text-sm text-gray-500 dark:text-gray-400">
+				Thiết bị này chưa đặt lịch bảo dưỡng.<template v-if="canManage">
+					Bạn mở Tác vụ, chọn Chỉnh sửa rồi nhập chu kỳ bảo dưỡng.</template>
+			</p>
+			<dl v-else class="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+				<div class="flex gap-4 border-b border-gray-100 py-2 dark:border-gray-800">
+					<dt class="w-40 flex-shrink-0 text-sm text-gray-500 dark:text-gray-400">Chu kỳ</dt>
+					<dd class="min-w-0 flex-1 text-sm text-gray-900 dark:text-gray-100">
+						{{ maintenance.interval }} tháng một lần
+					</dd>
+				</div>
+				<div class="flex gap-4 border-b border-gray-100 py-2 dark:border-gray-800">
+					<dt class="w-40 flex-shrink-0 text-sm text-gray-500 dark:text-gray-400">Hạn kế tiếp</dt>
+					<dd class="min-w-0 flex-1 text-sm" :class="maintenance.dueClass">
+						{{ maintenance.nextDate ? formatDate(maintenance.nextDate) : '—' }}
+						<span v-if="maintenance.dueLabel" class="text-xs">({{ maintenance.dueLabel }})</span>
+					</dd>
 				</div>
 			</dl>
 		</section>

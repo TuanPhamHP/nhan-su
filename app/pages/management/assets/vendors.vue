@@ -41,8 +41,11 @@
 	const detail = ref<AssetVendorDetail | null>(null);
 	const loadingDetail = ref(false);
 
+	const loadError = ref<string | null>(null);
+
 	async function load() {
 		loading.value = true;
+		loadError.value = null;
 		try {
 			vendors.value = await service.findVendors({
 				search: search.value || undefined,
@@ -50,7 +53,7 @@
 			});
 		} catch (e) {
 			vendors.value = [];
-			toast.error(e instanceof Error ? e.message : 'Không tải được nhà cung cấp');
+			loadError.value = e instanceof Error ? e.message : 'Chưa tải được danh sách nhà cung cấp. Bạn bấm Thử lại.';
 		} finally {
 			loading.value = false;
 		}
@@ -108,8 +111,18 @@
 		else form.types.push(t);
 	}
 
+	/**
+	 * Email sai định dạng thì báo ngay dưới ô (copy-review mục 4). Ô nằm ngoài thẻ `<form>` nên
+	 * trình duyệt không tự chặn, và trước đây người dùng chỉ thấy câu tiếng Anh của máy chủ.
+	 */
+	const emailError = computed(() => {
+		const v = form.email.trim();
+		if (!v) return '';
+		return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'Email chưa đúng định dạng, ví dụ ketoan@congty.vn.';
+	});
+
 	async function save() {
-		if (!form.name.trim() || saving.value) return;
+		if (!form.name.trim() || emailError.value || saving.value) return;
 		saving.value = true;
 		try {
 			const body = {
@@ -126,11 +139,13 @@
 			};
 			if (editing.value) await service.updateVendor(editing.value.id, body);
 			else await service.createVendor(body);
-			toast.success(editing.value ? 'Đã lưu nhà cung cấp' : 'Đã thêm nhà cung cấp');
+			toast.success(
+				editing.value ? `Đã lưu nhà cung cấp ${body.name}.` : `Đã thêm nhà cung cấp ${body.name}.`,
+			);
 			showForm.value = false;
 			await load();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Lưu nhà cung cấp thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa lưu được nhà cung cấp. Bạn thử lại sau ít phút.');
 		} finally {
 			saving.value = false;
 		}
@@ -142,7 +157,7 @@
 		try {
 			detail.value = await service.findVendor(v.id);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không mở được nhà cung cấp');
+			toast.error(e instanceof Error ? e.message : 'Chưa mở được nhà cung cấp. Bạn thử lại sau ít phút.');
 		} finally {
 			loadingDetail.value = false;
 		}
@@ -225,7 +240,7 @@
 				</div>
 				<div class="space-y-1">
 					<label :class="labelCls">Mã số thuế</label>
-					<input v-model="form.taxCode" type="text" :class="inputCls" />
+					<input v-model="form.taxCode" type="text" maxlength="20" :class="inputCls" />
 				</div>
 				<div class="space-y-1">
 					<label :class="labelCls">Người liên hệ</label>
@@ -237,7 +252,8 @@
 				</div>
 				<div class="space-y-1">
 					<label :class="labelCls">Email</label>
-					<input v-model="form.email" type="email" :class="inputCls" />
+					<input v-model="form.email" type="email" :class="inputCls" placeholder="VD: ketoan@congty.vn" />
+					<p v-if="emailError" class="text-sm text-red-600">{{ emailError }}</p>
 				</div>
 				<div class="space-y-1">
 					<label :class="labelCls">Website</label>
@@ -257,11 +273,11 @@
 				</label>
 			</div>
 			<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-				Không xoá được nhà cung cấp — bỏ dấu "Đang dùng" để ngừng chọn trong các form mới.
+				Nhà cung cấp không xoá được. Bạn bỏ dấu "Đang dùng" để nhà cung cấp này không còn hiện trong các form mới.
 			</p>
 			<div class="mt-4 flex justify-end gap-3">
-				<CommonAppButton variant="secondary" @click="showForm = false">Huỷ</CommonAppButton>
-				<CommonAppButton variant="primary" :disabled="!form.name.trim()" :loading="saving" @click="save">
+				<CommonAppButton variant="secondary" @click="showForm = false">Đóng</CommonAppButton>
+				<CommonAppButton variant="primary" :disabled="!form.name.trim() || !!emailError" :loading="saving" @click="save">
 					Lưu
 				</CommonAppButton>
 			</div>
@@ -273,8 +289,17 @@
 				<div v-for="i in 4" :key="i" class="h-10 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
 			</div>
 
-			<p v-else-if="!vendors.length" class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
-				Chưa có nhà cung cấp nào.
+			<div v-else-if="loadError" class="flex flex-col items-center gap-3 px-4 py-12 text-center">
+				<p class="text-sm text-rose-700 dark:text-rose-300">{{ loadError }}</p>
+				<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
+			</div>
+
+			<p v-else-if="!vendors.length" class="px-4 py-16 text-center text-sm text-gray-600 dark:text-gray-400">
+				{{
+					search
+						? `Không có nhà cung cấp nào khớp "${search}". Bạn thử từ khoá khác.`
+						: 'Chưa có nhà cung cấp nào. Bạn bấm Thêm nhà cung cấp để tạo.'
+				}}
 			</p>
 
 			<div v-else class="overflow-x-auto">

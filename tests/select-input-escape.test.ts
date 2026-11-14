@@ -112,3 +112,44 @@ describe('tìm kiếm vẫn hoạt động như cũ', () => {
 		expect(w.emitted('update:modelValue')?.[0]).toEqual([3]);
 	});
 });
+
+/**
+ * Lỗi H1 của bài nhập vai: gõ "Bùi Thị" thì dấu cách xoá trắng chữ đã gõ, vì ô tìm nằm trong
+ * trigger và phím cách nổi bọt lên trigger, nơi nó bị `preventDefault` rồi gọi lại
+ * `openDropdown()`. Chọn nhầm người nhận tài sản là hậu quả thật, nên chốt bằng test.
+ */
+describe('gõ từ khoá có dấu cách', () => {
+	const options = [
+		{ label: 'Bùi Thị Mai · KHO01', value: 1 },
+		{ label: 'Bùi Văn Thịnh · KD03', value: 2 },
+		{ label: 'Công ty CP Xe nâng Đông Á', value: 3 },
+	];
+
+	it('phím cách trong ô tìm không bị chặn và không xoá chữ', async () => {
+		const w = await open(options, 'Bùi');
+		const input = w.find('input');
+		const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+		input.element.dispatchEvent(ev);
+		await nextTick();
+		// Không ai gọi preventDefault thì trình duyệt mới chèn được dấu cách vào ô.
+		expect(ev.defaultPrevented).toBe(false);
+		expect((input.element as HTMLInputElement).value).toBe('Bùi');
+		await input.setValue('Bùi Thị');
+		const labels = w.findAll('span[class*="optionLabel"]').map(s => s.text());
+		expect(labels).toEqual(['Bùi Thị Mai · KHO01']);
+	});
+
+	it('Enter khi chưa tô dòng nào thì chọn dòng khớp đầu tiên và đóng danh sách', async () => {
+		const w = await open(options, 'Đông Á');
+		await w.find('input').trigger('keydown', { key: 'Enter' });
+		expect(w.emitted('update:modelValue')?.[0]).toEqual([3]);
+		// Enter không được nổi bọt lên trigger để mở lại danh sách vừa đóng.
+		expect(w.find('input').exists()).toBe(false);
+	});
+
+	it('[EDGE] bấm vào khoảng trống của trigger khi đang mở không xoá chữ đã gõ', async () => {
+		const w = await open(options, 'Bùi');
+		await w.find('[tabindex="0"]').trigger('click');
+		expect((w.find('input').element as HTMLInputElement).value).toBe('Bùi');
+	});
+});

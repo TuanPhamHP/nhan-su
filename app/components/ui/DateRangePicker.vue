@@ -375,10 +375,16 @@
 	}
 
 	// --- Display ---
+	/** `YYYY-MM-DD` → `dd/mm/yyyy`, cách ghi ngày ở mọi chỗ khác trên giao diện. */
+	function viDate(ymd: string): string {
+		const [y, m, d] = ymd.split('-');
+		return y && m && d ? `${d}/${m}/${y}` : ymd;
+	}
+
 	const displayText = computed(() => {
 		if (!rangeStart.value && !rangeEnd.value) return '';
-		if (rangeStart.value && !rangeEnd.value) return rangeStart.value;
-		return `${rangeStart.value} ~ ${rangeEnd.value}`;
+		if (rangeStart.value && !rangeEnd.value) return viDate(rangeStart.value);
+		return `${viDate(rangeStart.value)} – ${viDate(rangeEnd.value)}`;
 	});
 
 	// --- Close dropdown, emit from if only start was picked ---

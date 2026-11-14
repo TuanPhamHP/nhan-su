@@ -3,7 +3,7 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import { useAssetService } from '~/services/asset.service';
-	import type { AssetMaintenance, AssetVendor } from '~/types/asset.types';
+	import type { AssetMaintenance, AssetMaintenanceType, AssetVendor } from '~/types/asset.types';
 	import { assetNumberField, toAssetNumber } from '~/utils/asset.utils';
 
 	const props = withDefaults(
@@ -12,8 +12,14 @@
 			assetLabel: string;
 			/** Có phiếu là sửa phiếu đang mở, không có là mở phiếu mới. */
 			maintenance?: AssetMaintenance | null;
+			/**
+				 * Loại phiếu khi mở mới. Phiếu bảo dưỡng là việc theo lịch, đưa tài sản sang
+				 * "Đang bảo dưỡng" chứ không phải "Đang sửa"; khi sửa phiếu thì lấy loại của
+				 * chính phiếu đó vì BE không cho đổi loại.
+				 */
+			type?: AssetMaintenanceType;
 		}>(),
-		{ maintenance: null },
+		{ maintenance: null, type: 'REPAIR' },
 	);
 
 	const emit = defineEmits<{
@@ -26,10 +32,21 @@
 	const vendors = ref<AssetVendor[]>([]);
 
 	const isEdit = computed(() => !!props.maintenance);
+	const kind = computed<AssetMaintenanceType>(() => props.maintenance?.type ?? props.type);
+	const isMaintenance = computed(() => kind.value === 'MAINTENANCE');
+	const ticketName = computed(() => (isMaintenance.value ? 'phiếu bảo dưỡng' : 'phiếu sửa'));
+	const title = computed(() =>
+		isEdit.value ? `Cập nhật ${ticketName.value}` : `Mở ${ticketName.value}`,
+	);
+	const descriptionLabel = computed(() =>
+		isMaintenance.value ? 'Nội dung bảo dưỡng' : 'Mô tả hỏng hóc',
+	);
+	/** Phiếu bảo dưỡng không "sửa" gì, nên đơn vị và ngày gửi đặt tên theo việc chung. */
+	const vendorLabel = computed(() => (isMaintenance.value ? 'Đơn vị thực hiện' : 'Đơn vị sửa chữa'));
 
 	const schema = toTypedSchema(
 		z.object({
-			description: z.string().min(1, 'Mô tả hỏng hóc'),
+			description: z.string().min(1, 'Nhập nội dung của phiếu'),
 			vendorId: z.number().optional(),
 			underWarranty: z.boolean().optional(),
 			cost: assetNumberField,
@@ -70,14 +87,23 @@
 	]);
 	const statusOptions = [
 		{ value: 'OPEN', label: 'Mới mở' },
-		{ value: 'IN_PROGRESS', label: 'Đang sửa' },
+		{ value: 'IN_PROGRESS', label: 'Đang xử lý' },
 	];
+
+	useEscapeKey(
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
+
+	/** Danh sách đơn vị tải lỗi thì nói ra, kẻo người dùng tưởng công ty chưa có đơn vị nào. */
+	const vendorsError = ref(false);
 
 	onMounted(async () => {
 		try {
 			vendors.value = await service.findVendors({ isActive: true });
 		} catch {
-			// ô chọn nhà cung cấp rỗng, form vẫn gửi được
+			// Ô chọn đơn vị rỗng, form vẫn gửi được vì đơn vị là tuỳ chọn.
+			vendorsError.value = true;
 		}
 	});
 
@@ -97,11 +123,21 @@
 						workDone: v.workDone || undefined,
 						status: (v.status as 'OPEN' | 'IN_PROGRESS') ?? undefined,
 					})
-				: await service.createMaintenance(props.assetId, base);
-			toast.success(props.maintenance ? 'Đã lưu phiếu sửa' : 'Đã mở phiếu sửa');
+				: await service.createMaintenance(props.assetId, { ...base, type: kind.value });
+			if (isEdit.value) {
+				toast.success(`Đã lưu thay đổi của ${ticketName.value} ${props.assetLabel}.`);
+			} else if (isMaintenance.value) {
+				toast.success(
+					`Đã mở phiếu bảo dưỡng cho ${props.assetLabel}. Tài sản chuyển sang Đang bảo dưỡng, người đang giữ vẫn giữ nguyên.`,
+				);
+			} else {
+				toast.success(
+					`Đã mở phiếu sửa cho ${props.assetLabel}. Tài sản chuyển sang Đang sửa, người đang giữ vẫn giữ nguyên.`,
+				);
+			}
 			emit('saved', saved);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Lưu phiếu sửa thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa lưu được phiếu. Bạn thử lại sau ít phút.');
 		}
 	});
 
@@ -116,15 +152,13 @@
 			<div class="my-8 w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-gray-900">
 				<div class="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
 					<div>
-						<h2 class="text-base font-semibold text-gray-900 dark:text-white">
-							{{ isEdit ? 'Sửa phiếu sửa chữa' : 'Mở phiếu sửa chữa' }}
-						</h2>
+						<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h2>
 						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ assetLabel }}</p>
 					</div>
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						:aria-label="`Đóng hộp ${title.toLowerCase()}`"
 						@click="emit('close')"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -135,22 +169,25 @@
 
 				<form class="space-y-4 p-6" @submit.prevent="onSubmit">
 					<div class="space-y-1">
-						<label :class="labelCls">Mô tả hỏng hóc <span class="text-red-500">*</span></label>
+						<label :class="labelCls">{{ descriptionLabel }} <span class="text-red-500">*</span></label>
 						<textarea v-model="description" v-bind="descriptionAttrs" rows="2" :class="`${inputCls} resize-none`" />
 						<p v-if="errors.description" class="text-xs text-red-500">{{ errors.description }}</p>
 					</div>
 
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<div class="space-y-1">
-							<label :class="labelCls">Đơn vị sửa</label>
+							<label :class="labelCls">{{ vendorLabel }}</label>
 							<UiSelectInput v-model="vendorId" v-bind="vendorIdAttrs" :options="vendorOptions" placeholder="Không chọn" />
+							<p v-if="vendorsError" class="text-xs text-amber-700 dark:text-amber-400">
+								Chưa tải được danh sách đơn vị. Bạn vẫn lưu phiếu được và chọn đơn vị sau.
+							</p>
 						</div>
 						<div v-if="isEdit" class="space-y-1">
 							<label :class="labelCls">Trạng thái</label>
 							<UiSelect v-model="status" v-bind="statusAttrs" :options="statusOptions" />
 						</div>
 						<div class="space-y-1">
-							<label :class="labelCls">Ngày gửi sửa</label>
+							<label :class="labelCls">Ngày gửi đi</label>
 							<UiDatePicker v-model="sentAt" v-bind="sentAtAttrs" />
 						</div>
 						<div class="space-y-1">
@@ -160,7 +197,7 @@
 						<div class="space-y-1">
 							<label :class="labelCls">Chi phí dự kiến</label>
 							<input v-model="cost" v-bind="costAttrs" type="number" min="0" step="any" :class="inputCls" />
-							<p class="text-xs text-gray-500 dark:text-gray-400">Chi phí sửa không cộng vào nguyên giá.</p>
+							<p class="text-xs text-gray-500 dark:text-gray-400">Chi phí này không cộng vào nguyên giá.</p>
 						</div>
 						<label class="flex items-center gap-2 pt-6">
 							<input v-model="underWarranty" v-bind="underWarrantyAttrs" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
@@ -169,17 +206,26 @@
 						<div v-if="isEdit" class="space-y-1 sm:col-span-2">
 							<label :class="labelCls">Đã làm gì</label>
 							<textarea v-model="workDone" v-bind="workDoneAttrs" rows="2" :class="`${inputCls} resize-none`" />
+							<p class="text-xs text-gray-500 dark:text-gray-400">
+								Trưởng phòng và người giữ tài sản đọc được ô này, nên bạn ghi tiền ở ô chi phí thay vì ở đây.
+							</p>
 						</div>
 					</div>
 
 					<p v-if="!isEdit" class="text-xs text-gray-500 dark:text-gray-400">
-						Mở phiếu sẽ chuyển tài sản sang trạng thái Đang sửa. Người đang giữ vẫn giữ nguyên.
+						<template v-if="isMaintenance">
+							Mở phiếu sẽ chuyển tài sản sang trạng thái Đang bảo dưỡng. Người đang giữ vẫn giữ nguyên,
+							và đóng phiếu xong hạn bảo dưỡng kế tiếp được tính lại từ ngày đóng.
+						</template>
+						<template v-else>
+							Mở phiếu sẽ chuyển tài sản sang trạng thái Đang sửa. Người đang giữ vẫn giữ nguyên.
+						</template>
 					</p>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" type="submit" :loading="isSubmitting">
-							{{ isEdit ? 'Lưu' : 'Mở phiếu' }}
+							{{ isEdit ? 'Lưu thay đổi' : 'Mở phiếu' }}
 						</CommonAppButton>
 					</div>
 				</form>

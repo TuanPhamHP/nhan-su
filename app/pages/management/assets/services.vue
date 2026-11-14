@@ -22,8 +22,11 @@
 	const search = ref('');
 	const filterStatus = ref<AssetStatus | ''>('');
 
+	const loadError = ref<string | null>(null);
+
 	async function load() {
 		loading.value = true;
+		loadError.value = null;
 		try {
 			const res = await service.findAll({
 				kind: 'SERVICE',
@@ -37,7 +40,7 @@
 		} catch (e) {
 			items.value = [];
 			meta.value = null;
-			toast.error(e instanceof Error ? e.message : 'Không tải được danh sách dịch vụ');
+			loadError.value = e instanceof Error ? e.message : 'Chưa tải được danh sách dịch vụ. Bạn bấm Thử lại.';
 		} finally {
 			loading.value = false;
 		}
@@ -84,7 +87,7 @@
 		<div>
 			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Dịch vụ thuê bao</h1>
 			<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-				VPS, tên miền, license phần mềm — xếp theo thứ sắp đến hạn trước
+				Phần mềm, tên miền và máy chủ thuê theo kỳ, xếp theo hạn gia hạn gần nhất trước.
 			</p>
 		</div>
 
@@ -118,8 +121,19 @@
 				<div v-for="i in 5" :key="i" class="h-10 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
 			</div>
 
-			<p v-else-if="!sorted.length" class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
-				Chưa có dịch vụ nào.
+			<div v-else-if="loadError" class="flex flex-col items-center gap-3 px-4 py-12 text-center">
+				<p class="text-sm text-rose-700 dark:text-rose-300">{{ loadError }}</p>
+				<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
+			</div>
+
+			<p v-else-if="!sorted.length" class="px-4 py-16 text-center text-sm text-gray-600 dark:text-gray-400">
+				{{
+					search
+						? `Không có dịch vụ nào khớp từ khoá "${search}". Bạn thử từ khoá khác.`
+						: filterStatus
+							? 'Không có dịch vụ nào ở trạng thái này. Bạn chọn trạng thái khác để xem thêm.'
+							: 'Chưa có dịch vụ thuê bao nào trong phạm vi bạn được xem.'
+				}}
 			</p>
 
 			<div v-else class="overflow-x-auto">

@@ -46,7 +46,7 @@
 		try {
 			renewals.value = await api.myServiceRenewals(props.service.id);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không tải được lịch sử gia hạn');
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được lịch sử gia hạn. Bạn đóng thẻ rồi mở lại.');
 		} finally {
 			loadingRenewals.value = false;
 		}
@@ -91,32 +91,47 @@
 				employeeId: newSeatEmployee.value,
 				assignedAt: todayYmd(),
 			});
+			const name = result.assignment.employee?.fullName ?? 'nhân viên đã chọn';
 			if (result.warnings?.includes('SEATS_EXCEEDED')) {
-				toast.warning('Đã cấp vượt số ghế đăng ký của dịch vụ này.');
+				const s = svc.value;
+				toast.warning(
+					s?.seatCount != null
+						? `${props.service.name} đang dùng ${s.seatsUsed + 1}/${s.seatCount} ghế, nhiều hơn số ghế đã đăng ký. Bạn cân nhắc tăng số ghế ở lần gia hạn tới.`
+						: `${props.service.name} đang dùng nhiều ghế hơn số đã đăng ký. Bạn cân nhắc tăng số ghế ở lần gia hạn tới.`,
+				);
 			}
-			toast.success('Đã cấp ghế');
+			toast.success(`Đã cấp ghế ${props.service.name} cho ${name}.`);
 			newSeatEmployee.value = undefined;
 			emit('changed');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Cấp ghế thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa cấp được ghế. Bạn thử lại sau ít phút.');
 		} finally {
 			addingSeat.value = false;
 		}
 	}
 
-	async function returnSeat(assignmentId: number) {
+	/** Ghế đang chờ người dùng xác nhận thu hồi, vì bấm một lần là người kia mất quyền dùng ngay. */
+	const confirmingSeat = ref<{ assignmentId: number; name: string } | null>(null);
+
+	async function returnSeat(assignmentId: number, name: string) {
 		if (returningSeat.value) return;
 		returningSeat.value = assignmentId;
 		try {
 			await api.returnMyServiceSeat(props.service.id, assignmentId);
-			toast.success('Đã thu ghế');
+			toast.success(`Đã thu hồi ghế ${props.service.name} của ${name}.`);
+			confirmingSeat.value = null;
 			emit('changed');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Thu ghế thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa thu hồi được ghế. Bạn thử lại sau ít phút.');
 		} finally {
 			returningSeat.value = null;
 		}
 	}
+
+	useEscapeKey(
+		() => (confirmingSeat.value = null),
+		() => !!confirmingSeat.value && !returningSeat.value,
+	);
 
 	const revealKey = () => api.revealMyServiceLicenseKey(props.service.id);
 	const saveKey = async (key: string) => {
@@ -179,7 +194,7 @@
 				v-if="overSeats"
 				class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
 			>
-				Đang dùng nhiều hơn số ghế đã đăng ký. Cân nhắc nâng số ghế ở lần gia hạn tới.
+				Dịch vụ đang dùng nhiều ghế hơn số đã đăng ký. Bạn cân nhắc tăng số ghế ở lần gia hạn tới.
 			</p>
 
 			<!-- Ghế -->
@@ -198,10 +213,9 @@
 						<CommonAppButton
 							size="sm"
 							variant="outline"
-							:loading="returningSeat === h.assignmentId"
-							@click="returnSeat(h.assignmentId)"
+							@click="confirmingSeat = { assignmentId: h.assignmentId, name: h.employee?.fullName ?? 'người này' }"
 						>
-							Thu ghế
+							Thu hồi ghế
 						</CommonAppButton>
 					</li>
 				</ul>
@@ -280,5 +294,35 @@
 			@renewed="onRenewed"
 			@close="showRenewal = false"
 		/>
+
+		<Teleport to="body">
+			<div
+				v-if="confirmingSeat"
+				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+				role="alertdialog"
+				aria-modal="true"
+				aria-label="Thu hồi ghế"
+			>
+				<div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Thu hồi ghế</h2>
+					<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+						Thu hồi ghế {{ service.name }} của <strong>{{ confirmingSeat.name }}</strong>? Hệ thống ghi nhận
+						ngày thu hồi là hôm nay, còn tài khoản trên phần mềm bạn tự khoá ở trang quản trị của dịch vụ.
+					</p>
+					<div class="mt-5 flex justify-end gap-3">
+						<CommonAppButton variant="secondary" :disabled="!!returningSeat" @click="confirmingSeat = null">
+							Giữ lại
+						</CommonAppButton>
+						<CommonAppButton
+							variant="danger"
+							:loading="returningSeat === confirmingSeat.assignmentId"
+							@click="returnSeat(confirmingSeat.assignmentId, confirmingSeat.name)"
+						>
+							Thu hồi ghế
+						</CommonAppButton>
+					</div>
+				</div>
+			</div>
+		</Teleport>
 	</section>
 </template>

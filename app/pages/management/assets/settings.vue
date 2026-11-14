@@ -23,6 +23,7 @@
 		groupName: '',
 		kind: 'PHYSICAL' as AssetKind,
 		defaultDepreciationMonths: '',
+		defaultMaintenanceMonths: '',
 		requireSerial: false,
 		isActive: true,
 	});
@@ -64,6 +65,7 @@
 			groupName: '',
 			kind: 'PHYSICAL' as AssetKind,
 			defaultDepreciationMonths: '',
+			defaultMaintenanceMonths: '',
 			requireSerial: false,
 			isActive: true,
 		});
@@ -78,6 +80,8 @@
 			kind: c.kind,
 			defaultDepreciationMonths:
 				c.defaultDepreciationMonths != null ? String(c.defaultDepreciationMonths) : '',
+			defaultMaintenanceMonths:
+				c.defaultMaintenanceMonths != null ? String(c.defaultMaintenanceMonths) : '',
 			requireSerial: c.requireSerial,
 			isActive: c.isActive,
 		});
@@ -89,12 +93,18 @@
 		saving.value = true;
 		try {
 			const months = form.defaultDepreciationMonths ? Number(form.defaultDepreciationMonths) : undefined;
+			const maintenanceMonths = form.defaultMaintenanceMonths
+				? Number(form.defaultMaintenanceMonths)
+				: undefined;
 			if (editing.value) {
 				// `kind` không đổi được khi loại đã có tài sản (BE trả 409), nên không gửi lại.
 				await service.updateCategory(editing.value.id, {
 					name: form.name.trim(),
 					groupName: form.groupName.trim(),
 					defaultDepreciationMonths: months,
+					// Xoá trắng ô là bỏ chu kỳ mặc định, và cách bỏ của BE là gửi số 0 — gửi
+					// `undefined` thì BE hiểu là "không đổi" nên chu kỳ cũ ở lại mãi.
+					defaultMaintenanceMonths: maintenanceMonths ?? 0,
 					requireSerial: form.requireSerial,
 					isActive: form.isActive,
 				});
@@ -104,15 +114,20 @@
 					groupName: form.groupName.trim(),
 					kind: form.kind,
 					defaultDepreciationMonths: months,
+					defaultMaintenanceMonths: maintenanceMonths,
 					requireSerial: form.requireSerial,
 					isActive: form.isActive,
 				});
 			}
-			toast.success(editing.value ? 'Đã lưu loại tài sản' : 'Đã thêm loại tài sản');
+			toast.success(
+				editing.value
+					? `Đã lưu loại ${form.groupName.trim()} → ${form.name.trim()}.`
+					: `Đã thêm loại ${form.groupName.trim()} → ${form.name.trim()}.`,
+			);
 			showForm.value = false;
 			await load();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Lưu loại tài sản thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa lưu được loại tài sản. Bạn thử lại sau ít phút.');
 		} finally {
 			saving.value = false;
 		}
@@ -161,15 +176,30 @@
 					<input v-model="form.name" type="text" :class="inputCls" placeholder="VD: Laptop" />
 				</div>
 				<div class="space-y-1">
-					<label :class="labelCls">Họ tài sản</label>
+					<label :class="labelCls">Loại hình</label>
 					<UiSelect v-if="!editing" v-model="form.kind" :options="kindOptions" />
-					<p v-else class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-						{{ ASSET_KIND_LABELS[form.kind] }} — không đổi được sau khi tạo
+					<p v-else class="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+						{{ ASSET_KIND_LABELS[form.kind] }}, không đổi được sau khi tạo.
 					</p>
 				</div>
 				<div class="space-y-1">
 					<label :class="labelCls">Số tháng khấu hao mặc định</label>
-					<input v-model="form.defaultDepreciationMonths" type="number" min="0" :class="inputCls" placeholder="Bỏ trống nếu loại này không khấu hao" />
+					<input v-model="form.defaultDepreciationMonths" type="number" min="1" :class="inputCls" placeholder="Bỏ trống nếu loại này không khấu hao" />
+				</div>
+				<div v-if="form.kind === 'PHYSICAL'" class="space-y-1">
+					<label :class="labelCls">Chu kỳ bảo dưỡng mặc định (tháng)</label>
+					<input
+						v-model="form.defaultMaintenanceMonths"
+						type="number"
+						min="0"
+						max="120"
+						:class="inputCls"
+						placeholder="Bỏ trống nếu loại này không bảo dưỡng định kỳ"
+					/>
+					<p class="text-xs text-gray-500 dark:text-gray-400">
+						Thiết bị mới thuộc loại này được điền sẵn chu kỳ bảo dưỡng, và hạn đầu tiên là hôm nay cộng
+						chu kỳ.
+					</p>
 				</div>
 				<label class="flex items-center gap-2">
 					<input v-model="form.requireSerial" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
@@ -181,10 +211,10 @@
 				</label>
 			</div>
 			<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-				Không xoá được loại — bỏ dấu "Đang dùng" để ngừng chọn trong các form mới.
+				Loại tài sản không xoá được. Bạn bỏ dấu "Đang dùng" để loại này không còn hiện trong các form mới.
 			</p>
 			<div class="mt-4 flex justify-end gap-3">
-				<CommonAppButton variant="secondary" @click="showForm = false">Huỷ</CommonAppButton>
+				<CommonAppButton variant="secondary" @click="showForm = false">Đóng</CommonAppButton>
 				<CommonAppButton
 					variant="primary"
 					:disabled="!form.name.trim() || !form.groupName.trim()"
@@ -205,7 +235,7 @@
 			v-else-if="!grouped.length"
 			class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
 		>
-			Chưa có loại tài sản nào.
+			Chưa có loại tài sản nào.<template v-if="canEdit"> Bạn bấm Thêm loại để tạo loại đầu tiên.</template>
 		</p>
 
 		<div v-else class="space-y-4">
@@ -227,6 +257,13 @@
 							</td>
 							<td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
 								{{ c.defaultDepreciationMonths != null ? `Khấu hao ${c.defaultDepreciationMonths} tháng` : 'Không khấu hao' }}
+							</td>
+							<td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+								{{
+									c.defaultMaintenanceMonths != null
+										? `Bảo dưỡng ${c.defaultMaintenanceMonths} tháng một lần`
+										: 'Không bảo dưỡng định kỳ'
+								}}
 							</td>
 							<td class="px-4 py-3">
 								<span v-if="c.requireSerial" class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">

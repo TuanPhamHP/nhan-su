@@ -32,12 +32,20 @@ const bgMap = {
 
 const icon = computed(() => iconMap[props.toast.type]);
 const bg = computed(() => bgMap[props.toast.type]);
+
+/** Bấm nút kèm toast thì đi tới trang đó và đóng luôn toast, khỏi phải bấm thêm dấu ×. */
+async function runAction() {
+	const action = props.toast.action;
+	if (!action) return;
+	emit('close', props.toast.id);
+	await navigateTo(action.to);
+}
 </script>
 
 <template>
 	<div
 		:class="[
-			'flex items-start gap-3 w-80 px-4 py-3 rounded-lg shadow-lg pointer-events-auto',
+			'flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-lg px-4 py-3 shadow-lg pointer-events-auto',
 			bg,
 		]"
 		role="alert"
@@ -52,10 +60,22 @@ const bg = computed(() => bgMap[props.toast.type]);
 			<path stroke-linecap="round" stroke-linejoin="round" :d="icon.path" />
 		</svg>
 
-		<p class="flex-1 text-sm text-gray-800 dark:text-gray-200">{{ toast.message }}</p>
+		<div class="min-w-0 flex-1">
+			<p class="break-words text-sm text-gray-800 dark:text-gray-200">{{ toast.message }}</p>
+			<button
+				v-if="toast.action"
+				type="button"
+				class="mt-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+				@click="runAction"
+			>
+				{{ toast.action.label }}
+			</button>
+		</div>
 
 		<button
+			type="button"
 			class="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+			aria-label="Đóng thông báo"
 			@click="emit('close', toast.id)"
 		>
 			<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

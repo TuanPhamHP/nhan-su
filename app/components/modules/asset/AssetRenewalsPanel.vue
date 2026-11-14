@@ -12,11 +12,11 @@
 
 	const emit = defineEmits<{ 'asset-changed': [] }>();
 
-	const toast = useToast();
 	const service = useAssetService();
 
 	const renewals = ref<AssetRenewal[]>([]);
 	const loading = ref(true);
+	const loadError = ref<string | null>(null);
 	const showModal = ref(false);
 
 	/** Mua đứt và dịch vụ đã huỷ thì không gia hạn được (BE trả `ASSET_NOT_RENEWABLE`). */
@@ -29,11 +29,13 @@
 
 	async function load() {
 		loading.value = true;
+		loadError.value = null;
 		try {
 			renewals.value = await service.findRenewals(props.asset.id);
 		} catch (e) {
 			renewals.value = [];
-			toast.error(e instanceof Error ? e.message : 'Không tải được lịch sử gia hạn');
+			loadError.value =
+				e instanceof Error ? e.message : 'Chưa tải được lịch sử gia hạn của dịch vụ này. Bạn bấm Thử lại.';
 		} finally {
 			loading.value = false;
 		}
@@ -81,8 +83,13 @@
 				<div v-for="i in 3" :key="i" class="h-12 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
 			</div>
 
+			<div v-else-if="loadError" class="flex flex-col items-center gap-3 px-4 py-10 text-center">
+				<p class="text-sm text-rose-700 dark:text-rose-300">{{ loadError }}</p>
+				<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
+			</div>
+
 			<p v-else-if="!renewals.length" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-				Chưa ghi nhận lần gia hạn nào.
+				Chưa ghi nhận lần gia hạn nào.<template v-if="canRenew"> Khi đã trả tiền cho kỳ mới, bạn bấm Ghi nhận gia hạn.</template>
 			</p>
 
 			<div v-else class="overflow-x-auto">

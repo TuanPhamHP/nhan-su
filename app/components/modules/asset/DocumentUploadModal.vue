@@ -53,7 +53,7 @@
 	// `UiFileDropzone` không tự biết, phải kiểm lại ở đây.
 	watch(docType, () => {
 		if (file.value && file.value.size > maxMb.value * 1024 * 1024) {
-			fileError.value = `Loại giấy tờ này tối đa ${maxMb.value} MB`;
+			fileError.value = `Loại giấy tờ này nhận file tối đa ${maxMb.value} MB, nên bạn chọn lại file nhỏ hơn.`;
 			file.value = null;
 		}
 	});
@@ -77,14 +77,19 @@
 				props.serviceId != null && props.renewalId != null
 					? await service.uploadMyServiceDocument(props.serviceId, { ...body, renewalId: props.renewalId })
 					: await service.uploadDocument(body);
-			toast.success('Đã tải giấy tờ lên');
+			toast.success(`Đã tải lên ${doc.typeLabel.toLowerCase()} ${doc.fileName}.`);
 			emit('uploaded', doc);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Tải giấy tờ thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được giấy tờ lên. Bạn thử lại sau ít phút.');
 		} finally {
 			uploading.value = false;
 		}
 	}
+
+	useEscapeKey(
+		() => emit('close'),
+		() => !uploading.value,
+	);
 
 	const inputCls =
 		'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
@@ -100,7 +105,7 @@
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						aria-label="Đóng hộp tải giấy tờ"
 						@click="emit('close')"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -130,7 +135,7 @@
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 						<div class="space-y-1">
 							<label :class="labelCls">Số hiệu</label>
-							<input v-model="number" type="text" :class="inputCls" />
+							<input v-model="number" type="text" maxlength="100" :class="inputCls" />
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Ngày phát hành</label>
@@ -147,7 +152,7 @@
 					</p>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" :disabled="!file" :loading="uploading" @click="upload">
 							Tải lên
 						</CommonAppButton>

@@ -18,6 +18,12 @@
 				<span v-else-if="!isOpen" :class="$style.placeholder">{{ placeholder }}</span>
 
 				<!-- Search input (visible when open) -->
+				<!--
+					Ô tìm nằm BÊN TRONG trigger, nên phím nào trigger cũng bắt thì ở đây phải chặn nổi
+					bọt. Thiếu `.stop` ở phím cách thì trigger `preventDefault` mất dấu cách và gọi lại
+					`openDropdown()`, xoá trắng chữ đang gõ ("Bùi Thị" thành "Thị"); thiếu ở Enter thì
+					chọn xong danh sách lại bật mở ngay.
+				-->
 				<input
 					v-if="isOpen"
 					ref="searchInputRef"
@@ -25,8 +31,9 @@
 					:class="[$style.searchInput, 'none-focus']"
 					:placeholder="searchPlaceholder"
 					@click.stop
-					@keydown.esc.prevent="closeDropdown"
-					@keydown.enter.prevent="selectHighlighted"
+					@keydown.space.stop
+					@keydown.esc.prevent.stop="closeDropdown"
+					@keydown.enter.prevent.stop="selectHighlighted"
 					@keydown.arrow-down.prevent="moveHighlight(1)"
 					@keydown.arrow-up.prevent="moveHighlight(-1)"
 				/>
@@ -152,7 +159,15 @@
 		return out + escapeHtml(label.slice(last));
 	}
 
+	/**
+	 * Mở danh sách. Đang mở sẵn thì chỉ đưa con trỏ về ô tìm: bấm vào khoảng trống của trigger
+	 * không được xoá chữ người dùng đã gõ.
+	 */
 	function openDropdown() {
+		if (isOpen.value) {
+			searchInputRef.value?.focus();
+			return;
+		}
 		isOpen.value = true;
 		searchQuery.value = '';
 		highlightedIndex.value = -1;
@@ -191,11 +206,12 @@
 		highlightedIndex.value = (highlightedIndex.value + dir + len) % len;
 	}
 
+	/** Enter chọn dòng đang tô; chưa tô dòng nào mà đã gõ từ khoá thì chọn dòng khớp đầu tiên. */
 	function selectHighlighted() {
-		if (highlightedIndex.value >= 0 && filteredOptions.value[highlightedIndex.value]) {
-			const opt = filteredOptions.value[highlightedIndex.value];
-			selectOption(opt.value, opt.type);
-		}
+		const index =
+			highlightedIndex.value >= 0 ? highlightedIndex.value : searchQuery.value.trim() ? 0 : -1;
+		const opt = index >= 0 ? filteredOptions.value[index] : undefined;
+		if (opt) selectOption(opt.value, opt.type);
 	}
 
 	// Reset highlight when filter changes

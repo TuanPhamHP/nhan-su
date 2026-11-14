@@ -39,8 +39,9 @@
 		try {
 			const blob = await service.downloadImportTemplate();
 			downloadAssetBlob(blob, 'mau-nhap-tai-san.xlsx');
+			toast.success('Đã tải file mẫu mau-nhap-tai-san.xlsx gồm hai sheet Tài sản và Dịch vụ.');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không tải được file mẫu');
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được file mẫu. Bạn thử lại sau ít phút.');
 		} finally {
 			downloading.value = false;
 		}
@@ -53,11 +54,25 @@
 		try {
 			result.value = await service.importFromExcel(selectedFile.value);
 			const { physical, service: svc } = result.value.created;
-			if (physical + svc > 0) toast.success(`Đã nhập ${physical + svc} dòng`);
-			else if (result.value.errors.length) toast.warning('Không dòng nào vào được, xem bảng lỗi bên dưới');
+			const errorRows = result.value.errors.length;
+			if (physical + svc > 0) {
+				toast.success(
+					errorRows
+						? `Đã nhập ${physical + svc} tài sản, gồm ${physical} thiết bị và ${svc} dịch vụ. Còn ${errorRows} dòng lỗi, bạn xem bảng bên dưới.`
+						: `Đã nhập ${physical + svc} tài sản, gồm ${physical} thiết bị và ${svc} dịch vụ.`,
+				);
+			} else if (errorRows) {
+				toast.warning(
+					`Chưa nhập được dòng nào vì cả ${errorRows} dòng đều có lỗi. Bạn sửa theo bảng bên dưới rồi tải lại file.`,
+				);
+			} else {
+				toast.warning(
+					'File không có dòng dữ liệu nào. Bạn kiểm tra lại sheet Tài sản và sheet Dịch vụ, nhớ giữ nguyên dòng tiêu đề.',
+				);
+			}
 		} catch (e) {
 			unreadableFile.value = errorCode(e) === 'ASSET_IMPORT_INVALID_FILE';
-			toast.error(e instanceof Error ? e.message : 'Nhập file thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa nhập được file. Bạn thử lại sau ít phút.');
 		} finally {
 			uploading.value = false;
 		}
@@ -88,7 +103,7 @@
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						aria-label="Đóng hộp nhập Excel"
 						@click="finish"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -105,8 +120,8 @@
 							bao. Mỗi sheet tối đa 2.000 dòng.
 						</p>
 						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-							Loại và nhà cung cấp chưa có sẽ được tạo tự động. Cột nào có chữ "password", "mật khẩu" hay
-							"sudo" đều bị bỏ qua — hệ thống không lưu mật khẩu.
+							Loại và nhà cung cấp chưa có sẽ được tạo tự động. Hệ thống không lưu mật khẩu, nên cột nào
+							chứa mật khẩu sẽ bị bỏ qua.
 						</p>
 						<CommonAppButton class="mt-3" size="sm" variant="outline" :loading="downloading" @click="downloadTemplate">
 							Tải file mẫu
@@ -140,7 +155,7 @@
 					</div>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" :disabled="!selectedFile" :loading="uploading" @click="upload">
 							Nhập file
 						</CommonAppButton>

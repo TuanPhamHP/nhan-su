@@ -21,6 +21,12 @@
 			hint?: string;
 			/** Lỗi từ bên ngoài (VD server trả về), hiện cùng chỗ với lỗi tự kiểm. */
 			error?: string | null;
+			/**
+			 * `false` thì nhận mọi file rồi để nơi gọi tự kiểm. Dùng khi nơi gọi cần xử lý thêm
+			 * (VD nén ảnh lớn) hoặc cần giữ file sai trong danh sách kèm lý do, thay vì bị loại
+			 * ngay ở đây. `accept` vẫn lọc sẵn trong hộp chọn file của hệ điều hành.
+			 */
+			validate?: boolean;
 		}>(),
 		{
 			accept: '',
@@ -29,6 +35,7 @@
 			disabled: false,
 			hint: '',
 			error: null,
+			validate: true,
 		},
 	);
 
@@ -113,7 +120,7 @@
 
 		const good: File[] = [];
 		for (const f of incoming) {
-			const err = validate(f);
+			const err = props.validate ? validate(f) : null;
 			if (err) {
 				localError.value = err;
 				emit('reject', err);
@@ -230,9 +237,13 @@
 
 			<p class="text-sm font-medium text-gray-700 dark:text-gray-200">
 				<template v-if="dragging">Thả file vào đây</template>
+				<!-- Điện thoại không kéo thả được, nên chỉ mời bấm chọn. -->
 				<template v-else>
-					Kéo thả file vào đây hoặc
-					<span class="text-brand-600 underline-offset-2 hover:underline dark:text-brand-400">bấm để chọn</span>
+					<span class="sm:hidden text-brand-600 dark:text-brand-400">Bấm để chọn file</span>
+					<span class="hidden sm:inline">
+						Kéo thả file vào đây hoặc
+						<span class="text-brand-600 underline-offset-2 hover:underline dark:text-brand-400">bấm để chọn</span>
+					</span>
 				</template>
 			</p>
 			<p v-if="autoHint" class="text-xs text-gray-400 dark:text-gray-500">{{ autoHint }}</p>

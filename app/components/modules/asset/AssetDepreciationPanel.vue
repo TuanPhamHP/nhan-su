@@ -6,7 +6,6 @@
 
 	const props = defineProps<{ assetId: number }>();
 
-	const toast = useToast();
 	const service = useAssetService();
 
 	const data = ref<AssetDepreciation | null>(null);
@@ -37,19 +36,42 @@
 		const d = data.value;
 		if (!d) return '';
 		if (d.accountingClassLabel) return d.accountingClassLabel;
-		return `chưa đặt (gợi ý: ${d.suggestedAccountingClassLabel})`;
+		return `chưa đặt, hệ thống gợi ý ${d.suggestedAccountingClassLabel}`;
 	});
+
+	/**
+	 * Khấu hao một tháng đủ ngày (G4). Lấy đúng số BE tính ở một tháng trọn vẹn trong lịch, để
+	 * khớp cách làm tròn của BE; lịch chưa có tháng trọn thì chia đều phần phải khấu hao.
+	 */
+	const monthlyAmount = computed(() => {
+		const d = data.value;
+		if (!d) return null;
+		const full = d.schedule.find(p => p.days === p.daysInMonth);
+		if (full) return full.amount;
+		if (d.costVnd == null || !d.months) return null;
+		return Math.round((d.costVnd - d.salvageValue) / d.months);
+	});
+
+	/** Tháng chứa ngày đang xem, `YYYY-MM`, để tô nổi dòng đó trong lịch. */
+	const asOfMonth = computed(() => (data.value?.asOf ?? asOf.value).slice(0, 7));
+
+	/** `YYYY-MM` → `mm/yyyy`, cách ghi tháng ở mọi chỗ khác trên giao diện (G9). */
+	function viMonth(ym: string): string {
+		const [y, m] = ym.split('-');
+		return y && m ? `${m}/${y}` : ym;
+	}
 
 	const summary = computed(() => {
 		const d = data.value;
 		if (!d) return [];
 		return [
 			{ label: 'Nguyên giá', value: formatAssetMoney(d.costVnd) },
-			{ label: 'Giá trị thu hồi', value: formatAssetMoney(d.salvageValue) },
+			{ label: 'Giá trị thanh lý ước tính', value: formatAssetMoney(d.salvageValue) },
 			{ label: 'Bắt đầu', value: d.startDate ? formatDate(d.startDate) : '—' },
 			{ label: 'Số tháng', value: d.months != null ? String(d.months) : '—' },
-			{ label: 'Đã trích', value: formatAssetMoney(d.accumulated) },
-			{ label: 'Còn lại', value: formatAssetMoney(d.bookValue) },
+			{ label: 'Khấu hao mỗi tháng', value: formatAssetMoney(monthlyAmount.value) },
+			{ label: 'Đã trích đến ngày đang xem', value: formatAssetMoney(d.accumulated) },
+			{ label: 'Còn lại đến ngày đang xem', value: formatAssetMoney(d.bookValue) },
 		];
 	});
 </script>
@@ -70,9 +92,10 @@
 
 		<div
 			v-else-if="error"
-			class="rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+			class="flex flex-col items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
 		>
-			{{ error }}
+			<p>{{ error }}</p>
+			<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
 		</div>
 
 		<template v-else-if="data">
@@ -90,7 +113,12 @@
 			<p class="text-xs text-gray-500 dark:text-gray-400">
 				Phân loại kế toán:
 				<strong class="text-gray-700 dark:text-gray-200">{{ accountingClassText }}</strong>
-				<template v-if="data.stopDate"> · đã dừng trích từ {{ formatDate(data.stopDate) }}</template>
+				<template v-if="data.stopDate">. Đã dừng trích từ ngày {{ formatDate(data.stopDate) }}</template>.
+			</p>
+			<p v-if="data.schedule.length" class="text-xs text-gray-600 dark:text-gray-400">
+				Mỗi dòng trong bảng ghi giá trị còn lại vào cuối tháng đó, còn ô "Còn lại đến ngày đang xem" tính tới
+				ngày {{ formatDate(data.asOf) }}, nên dòng tháng {{ viMonth(asOfMonth) }} được tô nổi có thể lệch với
+				ô đó vài ngày khấu hao.
 			</p>
 
 			<div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
@@ -110,8 +138,20 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-							<tr v-for="p in data.schedule" :key="p.month">
-								<td class="px-4 py-2 font-mono text-xs text-gray-700 dark:text-gray-300">{{ p.month }}</td>
+							<tr
+								v-for="p in data.schedule"
+								:key="p.month"
+								:class="p.month === asOfMonth ? 'bg-brand-50 font-medium dark:bg-brand-900/20' : ''"
+							>
+								<td class="whitespace-nowrap px-4 py-2 text-xs text-gray-700 dark:text-gray-300">
+									{{ viMonth(p.month) }}
+									<span
+										v-if="p.month === asOfMonth"
+										class="ml-1 rounded-full bg-brand-100 px-1.5 py-0.5 text-[11px] text-brand-700 dark:bg-brand-900/40 dark:text-brand-300"
+									>
+										Tháng đang xem
+									</span>
+								</td>
 								<td class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
 									{{ formatDate(p.from) }} – {{ formatDate(p.to) }}
 								</td>
