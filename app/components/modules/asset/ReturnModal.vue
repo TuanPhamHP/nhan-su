@@ -5,7 +5,7 @@
 	import { useAssetService } from '~/services/asset.service';
 	import { todayYmd } from '~/utils/date';
 	import { ASSET_CONDITION_LABELS, type AssetAssignment } from '~/types/asset.types';
-	import { asAssetEnum, ASSET_CONDITION_CODES } from '~/utils/asset.utils';
+	import { asAssetEnum, assignmentHolderName, ASSET_CONDITION_CODES } from '~/utils/asset.utils';
 
 	const props = defineProps<{ assignment: AssetAssignment }>();
 
@@ -17,15 +17,7 @@
 	const toast = useToast();
 	const service = useAssetService();
 
-	const holderName = computed(() => {
-		if (props.assignment.employee) return props.assignment.employee.fullName;
-		if (props.assignment.department) {
-			const dept = props.assignment.department.name;
-			const who = props.assignment.responsible?.fullName;
-			return who ? `${dept} (${who})` : dept;
-		}
-		return 'người đang giữ';
-	});
+	const holderName = computed(() => assignmentHolderName(props.assignment));
 
 	const schema = toTypedSchema(
 		z.object({
@@ -59,12 +51,23 @@
 				condition: asAssetEnum(v.condition, ASSET_CONDITION_CODES),
 				note: v.note || undefined,
 			});
-			toast.success('Đã thu hồi tài sản');
+			const a = props.assignment.asset;
+			const next = v.condition === 'BROKEN' ? 'Hỏng' : 'Sẵn sàng';
+			toast.success(
+				a.kind === 'SERVICE'
+					? `Đã thu hồi ghế ${a.name} của ${holderName.value}.`
+					: `Đã thu hồi ${a.code} · ${a.name} từ ${holderName.value}. Tài sản chuyển về ${next} và người giữ sẽ nhận được thông báo.`,
+			);
 			emit('returned', updated);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Thu hồi thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa thu hồi được. Bạn thử lại sau ít phút.');
 		}
 	});
+
+	useEscapeKey(
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
 </script>
 
 <template>
@@ -81,7 +84,7 @@
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						aria-label="Đóng hộp thu hồi"
 						@click="emit('close')"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -92,7 +95,8 @@
 
 				<form class="space-y-4 p-6" @submit.prevent="onSubmit">
 					<p class="text-sm text-gray-600 dark:text-gray-400">
-						Thu hồi từ <strong class="text-gray-900 dark:text-white">{{ holderName }}</strong>.
+						Thu hồi từ <strong class="text-gray-900 dark:text-white">{{ holderName }}</strong>. Người giữ sẽ nhận
+						được thông báo sau khi bạn bấm Thu hồi.
 					</p>
 
 					<div class="space-y-1">
@@ -104,7 +108,7 @@
 					</div>
 
 					<div class="space-y-1">
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tình trạng khi thu</label>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tình trạng khi thu hồi</label>
 						<UiSelect v-model="condition" v-bind="conditionAttrs" :options="conditionOptions" />
 						<p v-if="willMarkBroken" class="text-xs text-amber-600 dark:text-amber-400">
 							Tài sản sẽ chuyển sang trạng thái Hỏng, không cấp phát tiếp được cho đến khi sửa xong.
@@ -123,7 +127,7 @@
 					</div>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" type="submit" :loading="isSubmitting">Thu hồi</CommonAppButton>
 					</div>
 				</form>

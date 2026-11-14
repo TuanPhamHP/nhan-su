@@ -13,8 +13,9 @@
 	import TransferModal from '~/components/modules/asset/TransferModal.vue';
 	import ChangeStatusModal from '~/components/modules/asset/ChangeStatusModal.vue';
 	import MaintenanceFormModal from '~/components/modules/asset/MaintenanceFormModal.vue';
+	import AssetIncidentsPanel from '~/components/modules/asset/AssetIncidentsPanel.vue';
 	import { ASSET_STATUS_CLASS } from '~/utils/asset.utils';
-	import type { Asset } from '~/types/asset.types';
+	import type { Asset, AssetMaintenanceType } from '~/types/asset.types';
 
 	definePageMeta({ title: 'Chi tiết tài sản' });
 
@@ -31,6 +32,11 @@
 	const loadError = ref<string | null>(null);
 
 	const canManage = computed(() => canWrite('ASSET') && hasPermission('asset:manage'));
+	/**
+	 * Biên bản PDF chỉ cần quyền, không cần module đang ghi được: đó là một route `GET` vẫn
+	 * chạy ở chế độ chỉ xem, để việc bàn giao giấy tờ không bị kẹt khi công ty hết hạn.
+	 */
+	const canHandoverPdf = computed(() => hasPermission('asset:manage'));
 	const isService = computed(() => asset.value?.kind === 'SERVICE');
 
 	const showEdit = ref(false);
@@ -55,9 +61,28 @@
 		}
 	}
 
-	onMounted(load);
+	onMounted(async () => {
+		await load();
+		applyTabQuery();
+	});
 
-	/** Tab khác nhau theo họ tài sản (bridge doc mục 11). */
+	// Link "xem phiếu sửa" hay thông báo mở trang này khi đang đứng sẵn ở đây: chỉ query đổi.
+	watch(
+		() => route.query.tab,
+		tab => {
+			if (typeof tab === 'string' && asset.value) {
+				maintenanceVersion.value += 1;
+				applyTabQuery();
+			}
+		},
+	);
+
+	/**
+	 * Tab khác nhau theo họ tài sản (bridge doc mục 11).
+	 *
+	 * Tab Khấu hao chỉ hiện với người xem được giá trị (`canViewValue` của chính tài sản):
+	 * trưởng phòng thiếu `asset:value:read` mà bấm vào chỉ nhận câu từ chối của BE (M1).
+	 */
 	const tabs = computed(() =>
 		isService.value
 			? [
@@ -71,8 +96,9 @@
 					{ id: 'info', label: 'Thông tin' },
 					{ id: 'holders', label: 'Người dùng' },
 					{ id: 'events', label: 'Lịch sử' },
-					{ id: 'maintenances', label: 'Sửa chữa' },
-					{ id: 'depreciation', label: 'Khấu hao' },
+					{ id: 'maintenances', label: 'Sửa chữa, bảo dưỡng' },
+					{ id: 'incidents', label: 'Báo hỏng, báo mất' },
+					...(asset.value?.canViewValue ? [{ id: 'depreciation', label: 'Khấu hao' }] : []),
 					{ id: 'documents', label: 'Giấy tờ' },
 				],
 	);
@@ -83,6 +109,24 @@
 		if (!list.some(t => t.id === activeTab.value)) activeTab.value = 'info';
 	});
 
+	/**
+	 * `?tab=` mở thẳng một tab, dùng cho link "xem phiếu sửa" từ hộp báo hỏng.
+	 *
+	 * Chỉ áp dụng sau khi tải xong vì danh sách tab phụ thuộc họ tài sản, và dọn query để
+	 * F5 không ghim mãi một tab.
+	 */
+	function applyTabQuery() {
+		const wanted = route.query.tab;
+		if (typeof wanted !== 'string') return;
+		if (tabs.value.some(t => t.id === wanted)) activeTab.value = wanted;
+		const mId = Number(route.query.maintenance_id);
+		if (Number.isInteger(mId) && mId > 0) highlightMaintenanceId.value = mId;
+		router.replace({ path: `/management/assets/${assetId.value}` });
+	}
+
+	/** Phiếu cần tô nổi khi đến từ trang Sửa chữa, bảo dưỡng hoặc từ một báo hỏng (G18). */
+	const highlightMaintenanceId = ref<number | null>(null);
+
 	// ─── Thao tác trên tài sản ────────────────────────────────────────────────────
 
 	/** Thiết bị chỉ cấp được khi Sẵn sàng; dịch vụ cấp ghế khi đang hoạt động. */
@@ -90,18 +134,28 @@
 		if (!asset.value || !canManage.value) return false;
 		return isService.value ? asset.value.status === 'ACTIVE' : asset.value.status === 'AVAILABLE';
 	});
+	/**
+	 * Điều chuyển và thu hồi chạy khi còn người giữ, trừ lúc tài sản đang chờ xác minh mất:
+	 * lúc đó BE trả 409 `ASSET_LOSS_REPORTED` và bảo xử lý báo mất trước.
+	 */
 	const canTransfer = computed(
-		() => !!asset.value && canManage.value && !isService.value && asset.value.status === 'IN_USE',
+		() =>
+			!!asset.value &&
+			canManage.value &&
+			!isService.value &&
+			!!asset.value.holders.length &&
+			asset.value.status !== 'LOSS_REPORTED',
 	);
 	const canMarkStatus = computed(() => {
 		if (!asset.value || !canManage.value) return false;
 		return isService.value
 			? ['ACTIVE', 'EXPIRED'].includes(asset.value.status)
-			: ['AVAILABLE', 'IN_USE', 'BROKEN'].includes(asset.value.status);
+			: ['AVAILABLE', 'IN_USE', 'BROKEN', 'LOSS_REPORTED'].includes(asset.value.status);
 	});
 	/**
 	 * Mở phiếu sửa được khi thiết bị đang Sẵn sàng, Đang dùng hoặc Hỏng (bridge doc mục 7).
-	 * Đang sửa thì đã có phiếu mở — đóng phiếu đó ở tab Sửa chữa, không mở thêm.
+	 * Đang sửa hay đang bảo dưỡng thì đã có phiếu mở — đóng phiếu đó ở tab Sửa chữa, bảo
+	 * dưỡng, không mở thêm.
 	 */
 	const canOpenRepair = computed(
 		() =>
@@ -110,8 +164,33 @@
 			!isService.value &&
 			['AVAILABLE', 'IN_USE', 'BROKEN'].includes(asset.value.status),
 	);
+	/** Phiếu bảo dưỡng hẹp hơn: chỉ thiết bị lành, tức Sẵn sàng hoặc Đang dùng. */
+	const canOpenMaintenance = computed(
+		() =>
+			!!asset.value &&
+			canManage.value &&
+			!isService.value &&
+			['AVAILABLE', 'IN_USE'].includes(asset.value.status),
+	);
+
+	/** Dải cảnh báo ở đầu trang khi còn báo hỏng, báo mất chưa xử lý. */
+	const openIncidentText = computed(() => {
+		const list = asset.value?.openIncidents ?? [];
+		if (!list.length) return '';
+		const damage = list.filter(i => i.type === 'DAMAGE').length;
+		const loss = list.filter(i => i.type === 'LOSS').length;
+		const parts = [damage ? `${damage} báo hỏng` : '', loss ? `${loss} báo mất` : ''].filter(Boolean);
+		return `Tài sản có ${parts.join(' và ')} đang chờ xử lý.`;
+	});
 
 	const showRepairForm = ref(false);
+	/** Loại phiếu sắp mở, để dùng chung một hộp thoại cho sửa chữa và bảo dưỡng. */
+	const repairFormType = ref<AssetMaintenanceType>('REPAIR');
+
+	function openMaintenanceForm(type: AssetMaintenanceType) {
+		repairFormType.value = type;
+		showRepairForm.value = true;
+	}
 	/** Tăng lên để ép tab Sửa chữa tải lại sau khi mở phiếu từ menu Tác vụ. */
 	const maintenanceVersion = ref(0);
 
@@ -125,7 +204,7 @@
 	/** Mọi thao tác trên tài sản gom vào một menu, thay vì một hàng nút dài ở đầu trang. */
 	const actionItems = computed(() => [
 		{
-			label: isService.value ? 'Cấp ghế' : 'Bàn giao',
+			label: isService.value ? 'Cấp ghế' : 'Cấp phát',
 			icon: 'M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z',
 			action: () => {
 				showAssign.value = true;
@@ -143,10 +222,14 @@
 		{
 			label: 'Mở phiếu sửa',
 			icon: 'M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437',
-			action: () => {
-				showRepairForm.value = true;
-			},
+			action: () => openMaintenanceForm('REPAIR'),
 			hidden: !canOpenRepair.value,
+		},
+		{
+			label: 'Mở phiếu bảo dưỡng',
+			icon: 'M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437',
+			action: () => openMaintenanceForm('MAINTENANCE'),
+			hidden: !canOpenMaintenance.value,
 		},
 		{
 			label: 'Chỉnh sửa',
@@ -157,7 +240,7 @@
 			hidden: !canManage.value,
 		},
 		{
-			label: isService.value ? 'Huỷ dịch vụ' : 'Đánh dấu mất',
+			label: isService.value ? 'Huỷ dịch vụ' : 'Xác nhận mất',
 			icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z',
 			action: () => {
 				showStatus.value = true;
@@ -186,12 +269,13 @@
 	async function removeAsset() {
 		if (deleting.value) return;
 		deleting.value = true;
+		const label = asset.value ? `${asset.value.code} · ${asset.value.name}` : 'tài sản';
 		try {
 			await service.remove(assetId.value);
-			toast.success('Đã xoá tài sản');
+			toast.success(`Đã xoá ${label} khỏi danh sách tài sản.`);
 			router.push('/management/assets');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Xoá tài sản thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa xoá được tài sản. Bạn thử lại sau ít phút.');
 		} finally {
 			deleting.value = false;
 			confirmDelete.value = false;
@@ -234,9 +318,12 @@
 			class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-6 text-center dark:border-rose-800 dark:bg-rose-900/20"
 		>
 			<p class="text-sm text-rose-700 dark:text-rose-300">{{ loadError }}</p>
-			<NuxtLink to="/management/assets" class="mt-2 inline-block text-sm text-brand-600 hover:underline dark:text-brand-400">
-				Quay lại danh sách
-			</NuxtLink>
+			<div class="mt-3 flex flex-wrap items-center justify-center gap-3">
+				<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
+				<NuxtLink to="/management/assets" class="text-sm text-brand-600 hover:underline dark:text-brand-400">
+					Quay lại danh sách
+				</NuxtLink>
+			</div>
 		</div>
 
 		<template v-else-if="asset">
@@ -258,15 +345,31 @@
 				<UiDropdownMenu v-if="canManage" label="Tác vụ" :items="actionItems" />
 			</div>
 
+			<!-- Báo hỏng, báo mất chưa xử lý: nói ngay ở đầu trang, kèm lối sang tab xử lý. -->
+			<div
+				v-if="openIncidentText"
+				class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20"
+			>
+				<p class="text-sm text-amber-800 dark:text-amber-300">{{ openIncidentText }}</p>
+				<button
+					type="button"
+					class="text-sm font-medium text-amber-900 underline hover:no-underline dark:text-amber-200"
+					@click="activeTab = 'incidents'"
+				>
+					Xem báo hỏng, báo mất
+				</button>
+			</div>
+
 			<!-- Tab -->
-			<div class="border-b border-gray-200 dark:border-gray-700">
-				<nav class="-mb-px flex flex-wrap gap-1">
+			<!-- Điện thoại: một hàng tab vuốt ngang thay vì bảy tab xếp ba hàng. -->
+			<div class="overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+				<nav class="-mb-px flex gap-1 sm:flex-wrap">
 					<button
 						v-for="tab in tabs"
 						:key="tab.id"
 						type="button"
 						:class="[
-							'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+							'whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
 							activeTab === tab.id
 								? 'border-brand-600 text-brand-600 dark:border-brand-400 dark:text-brand-400'
 								: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
@@ -280,7 +383,7 @@
 
 			<!-- Nội dung tab. `:key` buộc panel tải lại khi đổi tài sản. -->
 			<template v-if="activeTab === 'info'">
-				<AssetInfoPanel :asset="asset" />
+				<AssetInfoPanel :asset="asset" :can-manage="canManage" />
 				<AssetLicenseKeyCard
 					v-if="isService"
 					:has-key="asset.service?.hasLicenseKey ?? false"
@@ -299,6 +402,7 @@
 				:key="`holders-${asset.id}`"
 				:asset="asset"
 				:can-manage="canManage"
+				:can-handover-pdf="canHandoverPdf"
 				@asset-changed="load"
 			/>
 
@@ -315,6 +419,15 @@
 			<AssetMaintenancePanel
 				v-else-if="activeTab === 'maintenances'"
 				:key="`maint-${asset.id}-${maintenanceVersion}`"
+				:asset="asset"
+				:can-manage="canManage"
+				:highlight-id="highlightMaintenanceId"
+				@asset-changed="load"
+			/>
+
+			<AssetIncidentsPanel
+				v-else-if="activeTab === 'incidents'"
+				:key="`incidents-${asset.id}`"
 				:asset="asset"
 				:can-manage="canManage"
 				@asset-changed="load"
@@ -339,6 +452,7 @@
 				v-if="showRepairForm"
 				:asset-id="asset.id"
 				:asset-label="`${asset.code} · ${asset.name}`"
+				:type="repairFormType"
 				@saved="onRepairOpened"
 				@close="showRepairForm = false"
 			/>
@@ -347,16 +461,22 @@
 			<ChangeStatusModal v-if="showStatus" :asset="asset" @changed="afterChange" @close="showStatus = false" />
 
 			<Teleport to="body">
-				<div v-if="confirmDelete" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+				<div
+					v-if="confirmDelete"
+					class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+					role="alertdialog"
+					aria-modal="true"
+					aria-label="Xoá tài sản"
+				>
 					<div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
 						<h2 class="text-base font-semibold text-gray-900 dark:text-white">Xoá tài sản</h2>
 						<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
 							Xoá <strong>{{ asset.code }} · {{ asset.name }}</strong> khỏi hệ thống. Chỉ xoá được bản nhập
-							nhầm: tài sản đã từng bàn giao, sửa chữa hay gia hạn thì hệ thống sẽ từ chối.
+							nhầm, vì tài sản đã từng cấp phát, sửa chữa hay gia hạn thì hệ thống sẽ từ chối.
 						</p>
 						<div class="mt-5 flex justify-end gap-3">
-							<CommonAppButton variant="secondary" @click="confirmDelete = false">Huỷ</CommonAppButton>
-							<CommonAppButton variant="danger" :loading="deleting" @click="removeAsset">Xoá</CommonAppButton>
+							<CommonAppButton variant="secondary" @click="confirmDelete = false">Giữ lại</CommonAppButton>
+							<CommonAppButton variant="danger" :loading="deleting" @click="removeAsset">Xoá tài sản</CommonAppButton>
 						</div>
 					</div>
 				</div>

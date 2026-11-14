@@ -23,10 +23,17 @@ import { isManagementRole } from '~/utils/role';
  * | company_announcement | /management/announcements/:id (HR/ADMIN) | /announcements/:id (các role còn lại) |
  *
  * Module tài sản không rẽ theo vai trò — BE chọn sẵn refType cho từng người nhận:
- * | asset_holding   | /assets/my                            |
- * | asset_service   | /assets/my?tab=services&open_id=:id   |
- * | asset           | /management/assets/:id                |
- * | employee_assets | /management/employees/:id?tab=assets  |
+ * | asset_holding     | /assets/my?asset_id=:id (refId là id tài sản; trang cuộn tới thẻ đó) |
+ * | asset_service     | /assets/my?tab=services&open_id=:id            |
+ * | asset             | /management/assets/:id                         |
+ * | employee_assets   | /management/employees/:id?tab=assets           |
+ * | asset_incident    | /management/assets/incidents?open_id=:id       |
+ * | asset_my_incident | /assets/my?incident_id=:id (refId là id BÁO CÁO, không phải id tài sản) |
+ *
+ * Loại thông báo thêm sau bài nhập vai (14/11) đi theo các refType trên, không cần nhánh riêng:
+ * `ASSET_LOST` (asset_holding cho người giữ, asset cho quản lý trực tiếp),
+ * `ASSET_INCIDENT_HANDLED` (asset_my_incident), `ASSET_DISPUTE_RESOLVED` (asset_holding),
+ * `ASSET_RENEWED` (asset_service), `ASSET_REPAIR_OPENED` (asset_holding).
  *
  * Module tuyển dụng cũng không rẽ theo vai trò — BE chọn sẵn refType `recruitment_my_*` cho
  * người nhận là thành viên hội đồng (xem `docs/backend/bridges/recruitment.md` mục Thông báo):
@@ -40,7 +47,24 @@ import { isManagementRole } from '~/utils/role';
  * | recruitment_my_interviews | /recruitment/my-interviews               |
  * | employee                  | /management/employees/:id                |
  */
-export function resolveNotificationRoute(refType: string | null, refId: number | null, role: UserRole): string | null {
+/**
+ * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
+ * thay vì tab Thông tin: người nhận báo chưa đúng thì sang tab Người dùng (có nút Trả lời), việc
+ * về phiếu sửa, bảo dưỡng thì sang tab Sửa chữa, bảo dưỡng.
+ */
+const ASSET_TYPE_TAB: Record<string, string> = {
+	ASSET_ASSIGNMENT_DISPUTED: 'holders',
+	ASSET_MAINTENANCE_DUE: 'maintenances',
+	ASSET_REPAIR_DONE: 'maintenances',
+};
+
+export function resolveNotificationRoute(
+	refType: string | null,
+	refId: number | null,
+	role: UserRole,
+	/** Loại thông báo, chỉ dùng để chọn tab ở trang chi tiết tài sản. */
+	type?: string | null,
+): string | null {
 	if (!refType) return null;
 
 	const manage = isManagementRole(role);
@@ -81,21 +105,36 @@ export function resolveNotificationRoute(refType: string | null, refId: number |
 		case 'general_request':
 			return id ? `/general-requests/${id}` : '/general-requests';
 
-		// Bốn refType của module tài sản. BE đã chọn sẵn refType theo từng người nhận
+		// Năm refType của module tài sản. BE đã chọn sẵn refType theo từng người nhận
 		// (`docs/backend/bridges/assets.md` mục 9) nên ở đây KHÔNG rẽ theo vai trò: người
 		// phụ trách dịch vụ thường là EMPLOYEE, vào trang quản lý không được, và đó đúng
 		// là lý do `asset_service` tồn tại.
+		// refId là id tài sản: trang "Tài sản của tôi" cuộn tới đúng thẻ thay vì để người dùng tự tìm.
 		case 'asset_holding':
-			return '/assets/my';
+			return id ? `/assets/my?asset_id=${id}` : '/assets/my';
+
+		// Kết quả xử lý báo hỏng, báo mất của chính mình (N-14): refId là id báo cáo.
+		case 'asset_my_incident':
+			return id ? `/assets/my?incident_id=${id}` : '/assets/my';
 
 		case 'asset_service':
 			return id ? `/assets/my?tab=services&open_id=${id}` : '/assets/my?tab=services';
 
-		case 'asset':
-			return id ? `/management/assets/${id}` : '/management/assets';
+		case 'asset': {
+			if (!id) return '/management/assets';
+			const tab = type ? ASSET_TYPE_TAB[type] : undefined;
+			return tab ? `/management/assets/${id}?tab=${tab}` : `/management/assets/${id}`;
+		}
 
 		case 'employee_assets':
 			return id ? `/management/employees/${id}?tab=assets` : '/management/employees';
+
+		// N-06: người nhận là người quản lý tài sản và quản lý trực tiếp của người báo, đều
+		// là vai trò quản lý, nên luôn về trang Báo hỏng, báo mất.
+		case 'asset_incident':
+			return id
+				? `/management/assets/incidents?open_id=${id}`
+				: '/management/assets/incidents';
 
 		// Tám refType của module tuyển dụng. Giống module tài sản, BE đã chọn refType theo
 		// từng người nhận nên ở đây KHÔNG rẽ theo vai trò: thành viên hội đồng thường là

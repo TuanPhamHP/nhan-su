@@ -119,7 +119,8 @@
 
 	// ─── Badge cho các mục cá nhân ───────────────────────────────────────────────
 	const unreadAnnouncementCount = ref(0);
-	const pendingAssetCount = ref(0);
+	// Dùng chung với trang "Tài sản của tôi" để số giảm ngay sau khi bấm Đã nhận.
+	const { pendingAssetCount, setPendingAssetCount } = useMyAssetBadge();
 	const { fetchMyAnnouncements } = useCompanyAnnouncements();
 	const assetService = useAssetService();
 
@@ -132,11 +133,11 @@
 		}
 	}
 
-	/** Badge "Tài sản của tôi": số lần bàn giao chờ chính người này xác nhận. */
+	/** Badge "Tài sản của tôi": số lần cấp phát chờ chính người này xác nhận. */
 	async function loadPendingAssetCount() {
 		try {
 			const res = await assetService.myAssets();
-			pendingAssetCount.value = res.pendingConfirmationCount;
+			setPendingAssetCount(res.pendingConfirmationCount);
 		} catch {
 			// non-critical
 		}

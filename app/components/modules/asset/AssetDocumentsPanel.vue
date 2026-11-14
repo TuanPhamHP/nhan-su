@@ -15,17 +15,21 @@
 
 	const docs = ref<AssetDocument[]>([]);
 	const loading = ref(true);
+	const loadError = ref<string | null>(null);
 	const showUpload = ref(false);
 	const opening = ref<number | null>(null);
 	const removing = ref<number | null>(null);
+	/** Giấy tờ đang chờ người dùng xác nhận xoá. */
+	const confirmingRemove = ref<AssetDocument | null>(null);
 
 	async function load() {
 		loading.value = true;
+		loadError.value = null;
 		try {
 			docs.value = await service.findDocuments(props.asset.id);
 		} catch (e) {
 			docs.value = [];
-			toast.error(e instanceof Error ? e.message : 'Không tải được giấy tờ');
+			loadError.value = e instanceof Error ? e.message : 'Chưa tải được giấy tờ của tài sản này. Bạn bấm Thử lại.';
 		} finally {
 			loading.value = false;
 		}
@@ -47,25 +51,37 @@
 			const url = await service.documentUrl(doc.id);
 			window.open(url, '_blank', 'noopener');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không mở được file');
+			toast.error(e instanceof Error ? e.message : 'Chưa mở được file. Bạn thử lại sau ít phút.');
 		} finally {
 			opening.value = null;
 		}
 	}
 
+	/**
+	 * Xoá giấy tờ, sau khi người dùng đã xác nhận.
+	 *
+	 * BE xoá cả giấy tờ chứ không chỉ gỡ khỏi tài sản đang xem, nên hoá đơn dùng chung cho cả lô
+	 * cũng mất ở các tài sản khác. Hộp xác nhận nói rõ điều này trước khi xoá.
+	 */
 	async function removeDoc(doc: AssetDocument) {
 		if (removing.value) return;
 		removing.value = doc.id;
 		try {
 			await service.removeDocument(doc.id);
-			toast.success('Đã xoá giấy tờ');
+			toast.success(`Đã xoá ${doc.fileName}.`);
+			confirmingRemove.value = null;
 			await load();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Xoá giấy tờ thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa xoá được giấy tờ. Bạn thử lại sau ít phút.');
 		} finally {
 			removing.value = null;
 		}
 	}
+
+	useEscapeKey(
+		() => (confirmingRemove.value = null),
+		() => !!confirmingRemove.value && !removing.value,
+	);
 
 	async function onUploaded() {
 		showUpload.value = false;
@@ -91,8 +107,13 @@
 			<div v-for="i in 3" :key="i" class="h-12 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
 		</div>
 
+		<div v-else-if="loadError" class="flex flex-col items-center gap-3 px-4 py-10 text-center">
+			<p class="text-sm text-rose-700 dark:text-rose-300">{{ loadError }}</p>
+			<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
+		</div>
+
 		<p v-else-if="!docs.length" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-			Chưa có giấy tờ nào.
+			Chưa có giấy tờ nào.<template v-if="canManage"> Bạn bấm Tải lên để thêm hoá đơn, hợp đồng hay phiếu bảo hành.</template>
 		</p>
 
 		<div v-else class="overflow-x-auto">
@@ -137,8 +158,8 @@
 									v-if="canManage"
 									size="sm"
 									variant="danger"
-									:loading="removing === doc.id"
-									@click="removeDoc(doc)"
+									:aria-label="`Xoá ${doc.fileName}`"
+									@click="confirmingRemove = doc"
 								>
 									Xoá
 								</CommonAppButton>
@@ -155,5 +176,38 @@
 			@uploaded="onUploaded"
 			@close="showUpload = false"
 		/>
+
+		<Teleport to="body">
+			<div
+				v-if="confirmingRemove"
+				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+				role="alertdialog"
+				aria-modal="true"
+				aria-label="Xoá giấy tờ"
+			>
+				<div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Xoá giấy tờ</h2>
+					<p class="mt-2 break-words text-sm text-gray-600 dark:text-gray-300">
+						Xoá <strong>{{ confirmingRemove.fileName }}</strong>?
+						<template v-if="sharedWith(confirmingRemove) > 0">
+							Giấy tờ này đang gắn với {{ sharedWith(confirmingRemove) + 1 }} tài sản và sẽ bị gỡ khỏi tất cả.
+						</template>
+						<template v-else>Giấy tờ sẽ bị xoá hẳn và không khôi phục được.</template>
+					</p>
+					<div class="mt-5 flex justify-end gap-3">
+						<CommonAppButton variant="secondary" :disabled="!!removing" @click="confirmingRemove = null">
+							Giữ lại
+						</CommonAppButton>
+						<CommonAppButton
+							variant="danger"
+							:loading="removing === confirmingRemove.id"
+							@click="removeDoc(confirmingRemove)"
+						>
+							Xoá giấy tờ
+						</CommonAppButton>
+					</div>
+				</div>
+			</div>
+		</Teleport>
 	</section>
 </template>

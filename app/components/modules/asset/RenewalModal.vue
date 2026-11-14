@@ -2,7 +2,7 @@
 	import { useForm } from 'vee-validate';
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
-	import { todayYmd } from '~/utils/date';
+	import { formatDate, todayYmd } from '~/utils/date';
 	import { assetNumberField, toAssetNumber } from '~/utils/asset.utils';
 	import type { Asset, AssetRenewal, AssetRenewalBody } from '~/types/asset.types';
 
@@ -63,12 +63,19 @@
 				nextRenewalDate: v.nextRenewalDate || undefined,
 				note: v.note || undefined,
 			});
-			toast.success('Đã ghi nhận gia hạn');
+			toast.success(
+				`Đã ghi nhận gia hạn ${props.asset.name} cho kỳ ${formatDate(renewal.periodStart)} – ${formatDate(renewal.periodEnd)}.`,
+			);
 			emit('renewed', renewal);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Ghi nhận gia hạn thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa ghi nhận được gia hạn. Bạn thử lại sau ít phút.');
 		}
 	});
+
+	useEscapeKey(
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
 
 	const inputCls =
 		'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
@@ -87,7 +94,7 @@
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						aria-label="Đóng hộp ghi nhận gia hạn"
 						@click="emit('close')"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -120,7 +127,7 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Số ghế</label>
-							<input v-model="seatCount" v-bind="seatCountAttrs" type="number" min="0" :class="inputCls" />
+							<input v-model="seatCount" v-bind="seatCountAttrs" type="number" min="1" :class="inputCls" />
 							<p class="text-xs text-gray-500 dark:text-gray-400">Khác hiện tại thì cập nhật luôn cho dịch vụ.</p>
 						</div>
 						<div class="space-y-1 sm:col-span-2">
@@ -137,7 +144,7 @@
 					</div>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" type="submit" :loading="isSubmitting">Ghi nhận</CommonAppButton>
 					</div>
 				</form>

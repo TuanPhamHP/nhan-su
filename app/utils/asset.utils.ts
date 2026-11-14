@@ -1,13 +1,23 @@
 import * as z from 'zod';
 import {
+	ASSET_ACCOUNTING_CLASS_LABELS,
+	ASSET_BILLING_CYCLE_LABELS,
 	ASSET_CONDITION_LABELS,
+	ASSET_KIND_LABELS,
+	ASSET_MAINTENANCE_STATUS_LABELS,
+	ASSET_MAINTENANCE_TYPE_LABELS,
+	ASSET_PRICING_UNIT_LABELS,
 	ASSET_STATUS_LABELS,
+	type AssetAssignment,
 	type AssetAssignmentConfirmation,
 	type AssetCondition,
+	type AssetIncidentStatus,
+	type AssetIncidentType,
 	type AssetMaintenanceStatus,
+	type AssetMaintenanceType,
 	type AssetStatus,
 } from '~/types/asset.types';
-import { formatDate } from '~/utils/date';
+import { formatDate, todayYmd, vnCalendarDaysBetween } from '~/utils/date';
 
 /**
  * Tải blob về máy.
@@ -44,7 +54,11 @@ export const ASSET_STATUS_CLASS: Record<AssetStatus, string> = {
 	AVAILABLE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
 	IN_USE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
 	IN_REPAIR: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	// Đang bảo dưỡng là việc theo lịch, không phải hỏng hóc, nên tách màu khỏi Đang sửa.
+	IN_MAINTENANCE: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
 	BROKEN: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+	// Chờ xác minh mất là việc cần người xử lý, khác hẳn Mất đã chốt (màu xám, đã xong).
+	LOSS_REPORTED: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 	LOST: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
 	DISPOSED: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 	ACTIVE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -59,6 +73,124 @@ export const MAINTENANCE_STATUS_CLASS: Record<AssetMaintenanceStatus, string> = 
 	UNREPAIRABLE: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
 	CANCELLED: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
 };
+
+export const MAINTENANCE_TYPE_CLASS: Record<AssetMaintenanceType, string> = {
+	REPAIR: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	MAINTENANCE: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+};
+
+export const INCIDENT_STATUS_CLASS: Record<AssetIncidentStatus, string> = {
+	OPEN: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	REPAIR_OPENED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+	LOSS_CONFIRMED: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+	CLOSED: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+	RESOLVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+};
+
+/**
+ * Tên người giữ của một lần cấp phát, dùng chung cho bảng người dùng, hộp thu hồi và toast.
+ * Giao cho phòng ban thì kèm người chịu trách nhiệm.
+ */
+export function assignmentHolderName(a: {
+	employee: { fullName: string } | null;
+	department: { name: string } | null;
+	responsible: { fullName: string } | null;
+}): string {
+	if (a.employee) return a.employee.fullName;
+	if (a.department) {
+		return a.responsible ? `${a.department.name} (${a.responsible.fullName})` : a.department.name;
+	}
+	return '—';
+}
+
+/**
+ * Viết thường chữ cái đầu để ghép vào giữa câu. Chỉ chữ đầu: câu có tên người phía sau
+ * ("Điều chuyển sang Ngô Thị Hương") mà hạ cả câu thì tên người cũng thành chữ thường.
+ */
+export function lowerFirst(text: string): string {
+	return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
+
+/**
+ * Câu nói vì sao một lần cấp phát đã kết thúc.
+ *
+ * Điều chuyển thì gọi tên người nhận mới thay vì chỉ ghi "Điều chuyển"; dữ liệu cũ trước 14/11
+ * không nối được hai lần (`transferredTo` null) nên rơi về nhãn của BE.
+ */
+export function assignmentEndText(a: {
+	endReason: AssetAssignment['endReason'];
+	endReasonLabel: string | null;
+	transferredTo: AssetAssignment['transferredTo'];
+}): string {
+	if (a.endReason === 'TRANSFERRED' && a.transferredTo) {
+		return `Điều chuyển sang ${a.transferredTo.holderName}`;
+	}
+	return a.endReasonLabel ?? 'Thu hồi';
+}
+
+export const INCIDENT_TYPE_CLASS: Record<AssetIncidentType, string> = {
+	DAMAGE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	LOSS: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+};
+
+/**
+ * Trạng thái mà nhân viên còn báo hỏng, báo mất được.
+ *
+ * Thiết bị đang sửa, đang bảo dưỡng hay đã báo mất thì BE trả 409
+ * `ASSET_INCIDENT_NOT_ALLOWED`: đã có người đang xử lý, báo thêm chỉ gây trùng.
+ */
+export const INCIDENT_REPORTABLE_STATUSES: AssetStatus[] = ['IN_USE', 'AVAILABLE', 'BROKEN'];
+
+/** Trạng thái đang có người xử lý — hiện nhãn trạng thái thay cho nút báo. */
+export const INCIDENT_BLOCKED_STATUSES: AssetStatus[] = [
+	'IN_REPAIR',
+	'IN_MAINTENANCE',
+	'LOSS_REPORTED',
+];
+
+/**
+ * Còn báo được loại này không.
+ *
+ * `hasOpenSameType` là "mình đã có báo cáo CÙNG LOẠI đang chờ": báo hỏng đang chờ không
+ * chặn báo mất và ngược lại, đúng như luật 409 `ASSET_INCIDENT_OPEN` của BE.
+ */
+export function canReportIncident(status: AssetStatus, hasOpenSameType: boolean): boolean {
+	return INCIDENT_REPORTABLE_STATUSES.includes(status) && !hasOpenSameType;
+}
+
+/** Người tạo phiếu; `null` là phiếu bảo dưỡng do việc định kỳ tự mở. */
+export function maintenanceCreatorName(createdBy: { name: string } | null): string {
+	return createdBy?.name ?? 'Hệ thống';
+}
+
+/**
+ * Hạn bảo dưỡng còn bao nhiêu ngày. `null` khi tài sản không có lịch.
+ *
+ * Đếm theo lịch Việt Nam chứ không theo giờ máy, để máy đặt múi giờ khác không làm lệch
+ * một ngày quanh nửa đêm — cùng cách các mốc hạn khác trong app đang tính.
+ */
+export function maintenanceDaysLeft(nextMaintenanceDate: string | null): number | null {
+	if (!nextMaintenanceDate) return null;
+	return vnCalendarDaysBetween(todayYmd(), nextMaintenanceDate);
+}
+
+/** Màu của hạn bảo dưỡng: đỏ khi quá hạn, hổ phách khi còn 30 ngày trở xuống. */
+export function maintenanceDueClass(nextMaintenanceDate: string | null): string {
+	const days = maintenanceDaysLeft(nextMaintenanceDate);
+	if (days == null) return 'text-gray-400 dark:text-gray-500';
+	if (days < 0) return 'text-rose-600 dark:text-rose-400 font-semibold';
+	if (days <= 30) return 'text-amber-600 dark:text-amber-400 font-semibold';
+	return 'text-gray-700 dark:text-gray-200';
+}
+
+/** Chữ đi kèm hạn bảo dưỡng, VD "còn 10 ngày" hay "quá hạn 3 ngày". */
+export function maintenanceDueLabel(nextMaintenanceDate: string | null): string {
+	const days = maintenanceDaysLeft(nextMaintenanceDate);
+	if (days == null) return '';
+	if (days < 0) return `quá hạn ${Math.abs(days)} ngày`;
+	if (days === 0) return 'đến hạn hôm nay';
+	return `còn ${days} ngày`;
+}
 
 export const CONFIRMATION_CLASS: Record<AssetAssignmentConfirmation, string> = {
 	PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -161,7 +293,10 @@ const FIELD_LABELS: Record<string, string> = {
 	exchangeRate: 'Tỷ giá',
 	costVnd: 'Nguyên giá quy đổi',
 	categoryId: 'Loại tài sản',
+	category: 'Loại tài sản',
 	vendorId: 'Nhà cung cấp',
+	vendor: 'Nhà cung cấp',
+	maintenanceVendor: 'Đơn vị sửa chữa của phiếu',
 	manufacturer: 'Hãng',
 	model: 'Model',
 	serialNumber: 'Số serial',
@@ -172,11 +307,11 @@ const FIELD_LABELS: Record<string, string> = {
 	depreciationStartDate: 'Bắt đầu khấu hao',
 	depreciationMonths: 'Số tháng khấu hao',
 	depreciationStopDate: 'Dừng khấu hao',
-	salvageValue: 'Giá trị thu hồi',
+	salvageValue: 'Giá trị thanh lý ước tính',
 	accountingClass: 'Phân loại kế toán',
 	plan: 'Gói',
 	billingCycle: 'Chu kỳ thanh toán',
-	nextRenewalDate: 'Hạn gia hạn',
+	nextRenewalDate: 'Hạn gia hạn kế tiếp',
 	anchorDay: 'Ngày neo',
 	seatCount: 'Số ghế',
 	unitPrice: 'Đơn giá',
@@ -185,25 +320,50 @@ const FIELD_LABELS: Record<string, string> = {
 	ownerId: 'Người phụ trách',
 	adminAccount: 'Tài khoản quản trị',
 	adminUrl: 'Trang quản trị',
-	passwordManagerUrl: 'Link password manager',
+	passwordManagerUrl: 'Đường dẫn trình quản lý mật khẩu',
 	paymentMethodNote: 'Ghi chú thanh toán',
 	technicalInfo: 'Thông tin kỹ thuật',
+	intervalMonths: 'Chu kỳ bảo dưỡng',
+	nextMaintenanceDate: 'Hạn bảo dưỡng kế tiếp',
 };
 
 const DATE_FIELDS = new Set([
 	'purchaseDate', 'warrantyEndDate', 'depreciationStartDate', 'depreciationStopDate',
 	'nextRenewalDate', 'assignedAt', 'returnedAt', 'doneAt', 'date', 'periodStart', 'periodEnd',
+	'nextMaintenanceDate', 'occurredOn', 'lostOn',
 ]);
 const MONEY_FIELDS = new Set(['cost', 'costVnd', 'salvageValue', 'unitPrice', 'amount', 'amountVnd']);
 
+/** Kết quả đóng phiếu. "Xong" dùng chung cho phiếu sửa và phiếu bảo dưỡng. */
 const OUTCOME_LABELS: Record<string, string> = {
-	DONE: 'Sửa xong',
+	DONE: 'Xong',
 	UNREPAIRABLE: 'Không sửa được',
 	CANCELLED: 'Huỷ phiếu',
 };
 const SOURCE_LABELS: Record<string, string> = {
 	MANUAL: 'Tạo thủ công',
 	IMPORT: 'Nhập từ file Excel',
+};
+/** Cách một báo hỏng, báo mất được xử lý (`INCIDENT_HANDLED`). */
+const INCIDENT_OUTCOME_LABELS: Record<string, string> = {
+	REPAIR_OPENED: 'Đã tạo phiếu sửa',
+	LOSS_CONFIRMED: 'Đã xác nhận mất',
+	FOUND: 'Đã tìm thấy tài sản',
+	CLOSED: 'Đóng, không cần sửa',
+	RESOLVED: 'Phiếu sửa tạo từ báo hỏng đã đóng',
+};
+
+/**
+ * Trường lưu mã enum trong sự kiện sửa thông tin. Đổ mã thô ra màn hình thì người đọc thấy
+ * "Chu kỳ thanh toán: MONTHLY → YEARLY", nên dịch qua đúng bộ nhãn của ô chọn.
+ */
+const ENUM_FIELD_LABELS: Record<string, Record<string, string>> = {
+	condition: ASSET_CONDITION_LABELS,
+	billingCycle: ASSET_BILLING_CYCLE_LABELS,
+	pricingUnit: ASSET_PRICING_UNIT_LABELS,
+	accountingClass: ASSET_ACCOUNTING_CLASS_LABELS,
+	kind: ASSET_KIND_LABELS,
+	status: ASSET_STATUS_LABELS,
 };
 
 const isDateString = (v: unknown): v is string =>
@@ -215,9 +375,8 @@ function fieldValue(field: string, value: unknown): string {
 	if (typeof value === 'boolean') return value ? 'Có' : 'Không';
 	if (MONEY_FIELDS.has(field) && typeof value === 'number') return formatAssetMoney(value);
 	if (DATE_FIELDS.has(field) && isDateString(value)) return formatDate(value);
-	if (field === 'condition' && typeof value === 'string') {
-		return ASSET_CONDITION_LABELS[value as AssetCondition] ?? value;
-	}
+	const enumLabels = ENUM_FIELD_LABELS[field];
+	if (enumLabels && typeof value === 'string') return enumLabels[value] ?? value;
 	if ((field === 'from' || field === 'to' || field === 'statusAfter') && typeof value === 'string') {
 		return ASSET_STATUS_LABELS[value as AssetStatus] ?? value;
 	}
@@ -266,28 +425,52 @@ export function describeAssetEvent(type: string, payload: Record<string, unknown
 		case 'ASSIGNED': {
 			if (who) {
 				const resp = str('responsibleName');
-				lines.push(`Giao cho ${who}${resp ? ` (người chịu trách nhiệm: ${resp})` : ''}`);
+				lines.push(`Cấp phát cho ${who}${resp ? `, ${resp} chịu trách nhiệm` : ''}`);
 			}
-			if (isDateString(p.assignedAt)) lines.push(`Ngày giao ${formatDate(p.assignedAt as string)}`);
-			if (p.condition) lines.push(`Tình trạng khi giao: ${fieldValue('condition', p.condition)}`);
+			if (str('fromName')) lines.push(`Điều chuyển từ ${str('fromName')}`);
+			if (isDateString(p.assignedAt)) lines.push(`Ngày cấp phát ${formatDate(p.assignedAt as string)}`);
+			if (p.condition) lines.push(`Tình trạng khi cấp phát: ${fieldValue('condition', p.condition)}`);
+			if (str('note')) lines.push(`Ghi chú: ${str('note')}`);
 			if (str('source')) lines.push(SOURCE_LABELS[str('source')!] ?? '');
 			return lines.filter(Boolean);
 		}
 		case 'RETURNED': {
-			if (who) lines.push(`Thu hồi từ ${who}`);
-			if (isDateString(p.returnedAt)) lines.push(`Ngày thu ${formatDate(p.returnedAt as string)}`);
-			if (p.condition) lines.push(`Tình trạng khi thu: ${fieldValue('condition', p.condition)}`);
+			const reason = str('endReason');
+			if (reason === 'TRANSFERRED' || p.transfer === true) {
+				lines.push(
+					str('toName')
+						? `Điều chuyển từ ${who ?? 'người giữ cũ'} sang ${str('toName')}`
+						: `Điều chuyển, người giữ cũ là ${who ?? 'không rõ'}`,
+				);
+			} else if (reason === 'LOST') {
+				lines.push(who ? `Kết thúc vì tài sản mất khi ${who} đang giữ` : 'Kết thúc vì tài sản mất');
+			} else if (who) {
+				lines.push(`Thu hồi từ ${who}`);
+			}
+			if (isDateString(p.returnedAt)) lines.push(`Ngày thu hồi ${formatDate(p.returnedAt as string)}`);
+			if (p.condition) lines.push(`Tình trạng khi thu hồi: ${fieldValue('condition', p.condition)}`);
 			if (str('note')) lines.push(`Ghi chú: ${str('note')}`);
-			if (p.transfer === true) lines.push('Nằm trong một lần điều chuyển');
 			return lines;
 		}
 		case 'ASSIGNMENT_CONFIRMED':
 			return who ? [`${who} xác nhận đã nhận`] : [];
 		case 'ASSIGNMENT_DISPUTED':
-			return str('reason') ? [`Lý do báo không đúng: ${str('reason')}`] : [];
-		case 'REPAIR_OPENED':
-			return str('description') ? [`Hỏng hóc: ${str('description')}`] : [];
+			return str('reason') ? [`Lý do người nhận báo chưa đúng: ${str('reason')}`] : [];
+		case 'ASSIGNMENT_DISPUTE_RESOLVED': {
+			if (str('reason')) lines.push(`Người nhận báo: ${str('reason')}`);
+			if (str('response')) lines.push(`Trả lời: ${str('response')}`);
+			return lines;
+		}
+		case 'REPAIR_OPENED': {
+			// Một loại sự kiện dùng cho cả phiếu sửa và phiếu bảo dưỡng, nên phải nói rõ loại nào.
+			const mType = str('maintenanceType');
+			if (mType) lines.push(`Loại phiếu: ${ASSET_MAINTENANCE_TYPE_LABELS[mType as AssetMaintenanceType] ?? mType}`);
+			if (str('description')) lines.push(`Nội dung: ${str('description')}`);
+			return lines;
+		}
 		case 'REPAIR_CLOSED': {
+			const mType = str('maintenanceType');
+			if (mType) lines.push(`Loại phiếu: ${ASSET_MAINTENANCE_TYPE_LABELS[mType as AssetMaintenanceType] ?? mType}`);
 			const outcome = str('outcome');
 			if (outcome) lines.push(`Kết quả: ${OUTCOME_LABELS[outcome] ?? outcome}`);
 			if (str('workDone')) lines.push(`Đã làm: ${str('workDone')}`);
@@ -301,6 +484,8 @@ export function describeAssetEvent(type: string, payload: Record<string, unknown
 			}
 			if (isDateString(p.date)) lines.push(`Ngày ${formatDate(p.date as string)}`);
 			if (str('reason')) lines.push(`Lý do: ${str('reason')}`);
+			// Ghi mất khi còn người giữ thì lần cấp phát của người đó đóng luôn.
+			if (str('holderName')) lines.push(`Đóng lần cấp phát của ${str('holderName')}`);
 			return lines;
 		}
 		case 'RENEWED': {
@@ -319,6 +504,37 @@ export function describeAssetEvent(type: string, payload: Record<string, unknown
 			return [`Số ghế: ${p.from ?? 'không giới hạn'} → ${p.to ?? 'không giới hạn'}`];
 		case 'LICENSE_KEY_CHANGED':
 			return [str('action') === 'CLEAR' ? 'Đã xoá license key' : 'Đã đặt license key mới'];
+		case 'INCIDENT_REPORTED': {
+			const incidentType = str('incidentType');
+			if (incidentType) {
+				lines.push(incidentType === 'LOSS' ? 'Nhân viên báo mất' : 'Nhân viên báo hỏng');
+			}
+			if (str('description')) lines.push(`Nội dung: ${str('description')}`);
+			if (isDateString(p.occurredOn)) {
+				lines.push(`Ngày phát hiện ${formatDate(p.occurredOn as string)}`);
+			}
+			if (num('photoCount')) lines.push(`${num('photoCount')} ảnh kèm theo`);
+			if (p.from || p.to) {
+				lines.push(`Từ "${fieldValue('from', p.from)}" sang "${fieldValue('to', p.to)}"`);
+			}
+			return lines;
+		}
+		case 'INCIDENT_HANDLED': {
+			const outcome = str('outcome');
+			if (outcome) lines.push(INCIDENT_OUTCOME_LABELS[outcome] ?? outcome);
+			const mOutcome = str('maintenanceOutcome');
+			if (mOutcome) {
+				lines.push(
+					`Kết quả phiếu sửa: ${OUTCOME_LABELS[mOutcome] ?? ASSET_MAINTENANCE_STATUS_LABELS[mOutcome as AssetMaintenanceStatus] ?? mOutcome}`,
+				);
+			}
+			if (isDateString(p.lostOn)) lines.push(`Ngày mất ${formatDate(p.lostOn as string)}`);
+			if (p.from || p.to) {
+				lines.push(`Từ "${fieldValue('from', p.from)}" sang "${fieldValue('to', p.to)}"`);
+			}
+			return lines;
+		}
+		case 'MAINTENANCE_SCHEDULED':
 		case 'UPDATED':
 		case 'VALUE_CHANGED':
 			return diffLines(p);

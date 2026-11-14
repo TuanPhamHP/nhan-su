@@ -42,21 +42,86 @@ const NGROK_HEADERS = { 'ngrok-skip-browser-warning': '1' };
 // Singleton refresh promise — prevents concurrent refresh calls
 let _refreshPromise: Promise<string> | null = null;
 
-function _errorInfo(err: unknown): { status?: number; code?: string; message?: string; data?: ApiErrorBody } {
+/**
+ * Câu dự phòng khi response không mang `error.message` của BE.
+ *
+ * Trước đây những lúc này `_wrap` ném nguyên lỗi của `$fetch`, mà lỗi đó cũng là `Error` nên
+ * câu dự phòng tiếng Việt ở từng trang không bao giờ chạy: người dùng đọc được
+ * `[POST] "https://…/v1/…": <no response> Failed to fetch`. Giờ mọi lỗi ra khỏi file này đều
+ * mang một câu tiếng Việt, không có URL, mã HTTP hay chữ tiếng Anh.
+ *
+ * Request đọc dữ liệu và request gửi dữ liệu nói khác nhau: chỉ request gửi mới cần trấn an
+ * rằng thông tin người dùng vừa nhập vẫn còn trên màn hình.
+ */
+const NETWORK_SEND_MESSAGE =
+	'Chưa gửi được vì mạng bị gián đoạn. Thông tin bạn nhập vẫn còn trên màn hình, bạn bấm gửi lại khi có mạng.';
+const NETWORK_READ_MESSAGE =
+	'Chưa tải được dữ liệu vì mạng bị gián đoạn. Bạn kiểm tra kết nối rồi tải lại trang.';
+const TOO_LARGE_MESSAGE =
+	'Tệp bạn chọn vượt dung lượng cho phép. Bạn giảm dung lượng ảnh hoặc gửi ít ảnh hơn rồi thử lại.';
+const SERVER_SEND_MESSAGE =
+	'Xin lỗi, hệ thống đang gặp sự cố nên chưa xử lý được. Thông tin bạn nhập vẫn còn, bạn thử lại sau ít phút.';
+const SERVER_READ_MESSAGE =
+	'Xin lỗi, hệ thống đang gặp sự cố nên chưa tải được dữ liệu. Bạn thử lại sau ít phút; nếu vẫn lỗi, hãy báo quản trị hệ thống.';
+const UNKNOWN_SEND_MESSAGE =
+	'Chưa thực hiện được thao tác này. Bạn thử lại sau ít phút; nếu vẫn lỗi, hãy báo quản trị hệ thống.';
+const UNKNOWN_READ_MESSAGE =
+	'Chưa tải được dữ liệu. Bạn tải lại trang; nếu vẫn lỗi, hãy báo quản trị hệ thống.';
+
+/**
+ * Thân lỗi của BE.
+ *
+ * Request tải file (`responseType: 'blob'`, như xuất Excel hay tải file mẫu) nhận cả lỗi dưới
+ * dạng Blob, nên phải đọc lại thành chữ rồi `JSON.parse` mới lấy được `error.message`. Không
+ * đọc được thì coi như BE không gửi câu nào.
+ */
+async function _readErrorBody(err: unknown): Promise<ApiErrorBody | undefined> {
+	const data = (err as { data?: unknown } | null)?.data;
+	if (typeof Blob !== 'undefined' && data instanceof Blob) {
+		try {
+			const parsed: unknown = JSON.parse(await data.text());
+			return parsed && typeof parsed === 'object' ? (parsed as ApiErrorBody) : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+	return data && typeof data === 'object' ? (data as ApiErrorBody) : undefined;
+}
+
+function _errorInfo(
+	err: unknown,
+	body?: ApiErrorBody,
+): { status?: number; code?: string; message?: string; data?: ApiErrorBody } {
 	const e = err as { response?: { status?: number }; data?: ApiErrorBody } | null;
+	const data = body ?? (e?.data && typeof e.data === 'object' && !(e.data instanceof Blob) ? e.data : undefined);
 	return {
 		status: e?.response?.status,
-		code: e?.data?.error?.code,
-		message: e?.data?.error?.message,
-		data: e?.data,
+		code: data?.error?.code,
+		message: data?.error?.message,
+		data,
 	};
 }
 
-/** Đổi lỗi $fetch thành Error mang message tiếng Việt của BE, giữ `data` + `status` để trang phân nhánh theo mã. */
-function _wrap(err: unknown): unknown {
-	const { status, message, data } = _errorInfo(err);
-	if (!message) return err;
-	const wrapped = new Error(message) as Error & { data?: unknown; status?: number };
+/** Câu tiếng Việt cho lỗi không có `error.message`, theo tình huống và loại request. */
+function _fallbackMessage(status: number | undefined, method: string): string {
+	const sending = method !== 'GET' && method !== 'HEAD';
+	if (status == null) return sending ? NETWORK_SEND_MESSAGE : NETWORK_READ_MESSAGE;
+	if (status === 413) return TOO_LARGE_MESSAGE;
+	if (status >= 500) return sending ? SERVER_SEND_MESSAGE : SERVER_READ_MESSAGE;
+	return sending ? UNKNOWN_SEND_MESSAGE : UNKNOWN_READ_MESSAGE;
+}
+
+/**
+ * Đổi lỗi $fetch thành Error mang câu tiếng Việt, giữ `data` + `status` để trang phân nhánh
+ * theo mã. `status` để trống khi không có response (mất mạng), đúng như lỗi gốc của `$fetch`.
+ */
+async function _wrap(err: unknown, method: string): Promise<Error> {
+	const body = await _readErrorBody(err);
+	const { status, message, data } = _errorInfo(err, body);
+	const wrapped = new Error(message || _fallbackMessage(status, method)) as Error & {
+		data?: unknown;
+		status?: number;
+	};
 	wrapped.data = data;
 	wrapped.status = status;
 	return wrapped;
@@ -132,17 +197,19 @@ export const useAuthFetch = () => {
 			},
 		};
 
+		const method = String(opts.method ?? 'GET').toUpperCase();
+
 		try {
 			return await $fetch<T>(url, options);
 		} catch (err: unknown) {
-			const { status, code, message } = _errorInfo(err);
+			const { status, code, message } = _errorInfo(err, await _readErrorBody(err));
 
 			notifyIfModuleDenied(code);
 
 			// Công ty ngừng dịch vụ: phiên này không dùng tiếp được nữa.
 			if (code === 'TENANT_SUSPENDED') {
 				await _forceLogout(message || TENANT_SUSPENDED_MESSAGE);
-				throw _wrap(err);
+				throw await _wrap(err, method);
 			}
 
 			/**
@@ -166,13 +233,13 @@ export const useAuthFetch = () => {
 					// Bảo trì là tạm thời: giữ nguyên phiên, chỉ báo cho người dùng biết.
 					if (refresh.code === 'TENANT_MAINTENANCE') {
 						_notifyMaintenance(refresh.message);
-						throw _wrap(refreshErr);
+						throw await _wrap(refreshErr, method);
 					}
 					await _forceLogout(
 						refresh.code === 'TENANT_SUSPENDED' ? refresh.message || TENANT_SUSPENDED_MESSAGE : undefined,
 					);
 					// Không ném nguyên lỗi $fetch: `message` của nó chứa cả URL, trang sẽ toast ra cho người dùng.
-					throw _wrap(err);
+					throw await _wrap(err, method);
 				}
 
 				try {
@@ -187,18 +254,18 @@ export const useAuthFetch = () => {
 				} catch (retryErr) {
 					// Đã có token mới mà vẫn 401 thì phiên thật sự không còn. Lỗi khác (400, 404…)
 					// là lỗi nghiệp vụ của chính request, trả về cho trang xử lý như thường.
-					const retry = _errorInfo(retryErr);
+					const retry = _errorInfo(retryErr, await _readErrorBody(retryErr));
 					notifyIfModuleDenied(retry.code);
 					if (retry.code === 'TENANT_SUSPENDED') {
 						await _forceLogout(retry.message || TENANT_SUSPENDED_MESSAGE);
 					} else if (retry.status === 401 && retry.code !== 'AUTH_INVALID_CREDENTIALS') {
 						await _forceLogout();
 					}
-					throw _wrap(retryErr);
+					throw await _wrap(retryErr, method);
 				}
 			}
 
-			throw _wrap(err);
+			throw await _wrap(err, method);
 		}
 	};
 };

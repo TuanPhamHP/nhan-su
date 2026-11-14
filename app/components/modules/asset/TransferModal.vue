@@ -5,7 +5,7 @@
 	import { useAssetService } from '~/services/asset.service';
 	import { todayYmd } from '~/utils/date';
 	import { ASSET_CONDITION_LABELS, type Asset, type AssetAssignResult } from '~/types/asset.types';
-	import { asAssetEnum, ASSET_CONDITION_CODES } from '~/utils/asset.utils';
+	import { asAssetEnum, assignmentHolderName, ASSET_CONDITION_CODES } from '~/utils/asset.utils';
 
 	const props = defineProps<{ asset: Asset }>();
 
@@ -32,6 +32,11 @@
 
 	const target = ref<'employee' | 'department'>('employee');
 
+	/**
+	 * Tình trạng lúc điều chuyển: một ô cho cả hai bên, vì hai bên ký chung một biên bản điều
+	 * chuyển và nhìn cùng một chiếc máy. Mặc định là tình trạng đang ghi của thiết bị, đúng như
+	 * BE tự lấy khi không gửi.
+	 */
 	const schema = toTypedSchema(
 		z
 			.object({
@@ -39,7 +44,6 @@
 				departmentId: z.number().optional(),
 				responsibleId: z.number().optional(),
 				assignedAt: z.string().min(1, 'Chọn ngày điều chuyển'),
-				conditionOnReturn: z.string().optional(),
 				condition: z.string().optional(),
 				expectedReturnDate: z.string().optional(),
 				note: z.string().optional(),
@@ -58,7 +62,7 @@
 					ctx.addIssue({
 						code: z.ZodIssueCode.custom,
 						path: ['responsibleId'],
-						message: 'Giao cho phòng ban phải có người chịu trách nhiệm',
+						message: 'Điều chuyển cho phòng ban cần chọn một người chịu trách nhiệm',
 					});
 				}
 			}),
@@ -66,14 +70,13 @@
 
 	const { handleSubmit, defineField, errors, isSubmitting } = useForm({
 		validationSchema: schema,
-		initialValues: { assignedAt: todayYmd() },
+		initialValues: { assignedAt: todayYmd(), condition: props.asset.physical?.condition ?? '' },
 	});
 
 	const [employeeId, employeeIdAttrs] = defineField('employeeId');
 	const [departmentId, departmentIdAttrs] = defineField('departmentId');
 	const [responsibleId, responsibleIdAttrs] = defineField('responsibleId');
 	const [assignedAt, assignedAtAttrs] = defineField('assignedAt');
-	const [conditionOnReturn, conditionOnReturnAttrs] = defineField('conditionOnReturn');
 	const [condition, conditionAttrs] = defineField('condition');
 	const [note, noteAttrs] = defineField('note');
 
@@ -82,7 +85,7 @@
 	);
 	const departmentOptions = computed(() => departments.value.map(d => ({ value: d.id, label: d.name })));
 	const conditionOptions = [
-		{ value: '', label: 'Không ghi tình trạng' },
+		{ value: '', label: 'Theo tình trạng đang ghi của thiết bị' },
 		...Object.entries(ASSET_CONDITION_LABELS).map(([value, label]) => ({ value, label })),
 	];
 
@@ -90,25 +93,35 @@
 		try {
 			await directoryStore.load();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không tải được danh sách nhân viên');
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được danh sách nhân viên. Bạn đóng hộp rồi mở lại.');
 		}
 	});
 
+	useEscapeKey(
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
+
 	const onSubmit = handleSubmit(async values => {
+		const formerHolder = currentHolder.value ?? 'người giữ cũ';
+		const cond = asAssetEnum(values.condition, ASSET_CONDITION_CODES);
 		try {
 			const result = await service.transfer(props.asset.id, {
 				employeeId: target.value === 'employee' ? values.employeeId : undefined,
 				departmentId: target.value === 'department' ? values.departmentId : undefined,
 				responsibleId: target.value === 'department' ? values.responsibleId : undefined,
 				assignedAt: values.assignedAt,
-				conditionOnReturn: asAssetEnum(values.conditionOnReturn, ASSET_CONDITION_CODES),
-				condition: asAssetEnum(values.condition, ASSET_CONDITION_CODES),
-				note: values.note || undefined,
+				conditionOnReturn: cond,
+				condition: cond,
+				note: values.note?.trim() || undefined,
 			});
-			toast.success('Đã điều chuyển tài sản');
+			const newHolder = assignmentHolderName(result.assignment);
+			toast.success(
+				`Đã điều chuyển ${props.asset.code} từ ${formerHolder} sang ${newHolder}. Người nhận mới sẽ nhận được thông báo để xác nhận, còn ${formerHolder} được báo là tài sản đã điều chuyển.`,
+			);
 			emit('transferred', result);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Điều chuyển thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa điều chuyển được. Bạn thử lại sau ít phút.');
 		}
 	});
 </script>
@@ -125,7 +138,7 @@
 					<button
 						type="button"
 						class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-						aria-label="Đóng"
+						aria-label="Đóng hộp điều chuyển"
 						@click="emit('close')"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -136,8 +149,9 @@
 
 				<form class="space-y-4 p-6" @submit.prevent="onSubmit">
 					<p v-if="currentHolder" class="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-						Đang giao cho <strong class="text-gray-900 dark:text-white">{{ currentHolder }}</strong>. Điều chuyển
-						sẽ thu hồi của người này và giao cho người mới trong một lần.
+						Đang cấp phát cho <strong class="text-gray-900 dark:text-white">{{ currentHolder }}</strong>. Điều
+						chuyển sẽ thu hồi của người này và cấp phát cho người mới trong một lần, hai bên dùng chung một biên
+						bản điều chuyển.
 					</p>
 
 					<div class="flex rounded-lg border border-gray-300 p-0.5 dark:border-gray-600">
@@ -149,7 +163,7 @@
 							]"
 							@click="target = 'employee'"
 						>
-							Giao cho nhân viên
+							Điều chuyển cho nhân viên
 						</button>
 						<button
 							type="button"
@@ -159,7 +173,7 @@
 							]"
 							@click="target = 'department'"
 						>
-							Giao cho phòng ban
+							Điều chuyển cho phòng ban
 						</button>
 					</div>
 
@@ -215,22 +229,14 @@
 						</div>
 						<div class="space-y-1">
 							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-								Tình trạng khi thu của người cũ
+								Tình trạng lúc điều chuyển
 							</label>
-							<UiSelect
-								v-model="conditionOnReturn"
-								v-bind="conditionOnReturnAttrs"
-								:options="conditionOptions"
-							/>
+							<UiSelect v-model="condition" v-bind="conditionAttrs" :options="conditionOptions" />
 						</div>
 					</div>
-
-					<div class="space-y-1">
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-							Tình trạng khi giao người mới
-						</label>
-						<UiSelect v-model="condition" v-bind="conditionAttrs" :options="conditionOptions" />
-					</div>
+					<p class="-mt-2 text-xs text-gray-600 dark:text-gray-400">
+						Tình trạng này ghi cho cả người giữ cũ và người nhận mới trên biên bản điều chuyển.
+					</p>
 
 					<div class="space-y-1">
 						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Ghi chú</label>
@@ -238,13 +244,14 @@
 							v-model="note"
 							v-bind="noteAttrs"
 							rows="2"
-							placeholder="Lý do điều chuyển..."
+							placeholder="VD: người giữ cũ chuyển bộ phận, máy giao cho người thay thế"
 							class="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 						/>
+						<p class="text-xs text-gray-600 dark:text-gray-400">Ghi chú hiện ở lịch sử và trên biên bản điều chuyển.</p>
 					</div>
 
 					<div class="flex justify-end gap-3 pt-2">
-						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Huỷ</CommonAppButton>
+						<CommonAppButton variant="secondary" type="button" @click="emit('close')">Đóng</CommonAppButton>
 						<CommonAppButton variant="primary" type="submit" :loading="isSubmitting">Điều chuyển</CommonAppButton>
 					</div>
 				</form>

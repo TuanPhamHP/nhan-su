@@ -6,11 +6,11 @@
 
 	const props = defineProps<{ assetId: number }>();
 
-	const toast = useToast();
 	const service = useAssetService();
 
 	const events = ref<AssetEvent[]>([]);
 	const loading = ref(true);
+	const loadError = ref<string | null>(null);
 
 	/** Chấm màu theo nhóm sự kiện để lướt dọc dòng thời gian cho nhanh. */
 	const DOT_CLASS: Partial<Record<AssetEventType, string>> = {
@@ -19,6 +19,7 @@
 		RETURNED: 'bg-gray-400',
 		ASSIGNMENT_CONFIRMED: 'bg-emerald-500',
 		ASSIGNMENT_DISPUTED: 'bg-rose-500',
+		ASSIGNMENT_DISPUTE_RESOLVED: 'bg-blue-500',
 		REPAIR_OPENED: 'bg-amber-500',
 		REPAIR_CLOSED: 'bg-emerald-500',
 		STATUS_CHANGED: 'bg-amber-500',
@@ -26,15 +27,25 @@
 		LICENSE_KEY_CHANGED: 'bg-violet-500',
 	};
 
-	onMounted(async () => {
+	/**
+	 * Tải lỗi thì hiện khung lỗi có nút Thử lại tại chỗ. Trước đây lỗi chỉ hiện toast vài giây
+	 * rồi để lại câu "Chưa có sự kiện nào", khiến người xem tin là tài sản chưa có lịch sử.
+	 */
+	async function load() {
+		loading.value = true;
+		loadError.value = null;
 		try {
 			events.value = await service.findEvents(props.assetId);
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không tải được lịch sử');
+			events.value = [];
+			loadError.value =
+				e instanceof Error ? e.message : 'Chưa tải được lịch sử của tài sản này. Bạn bấm Thử lại.';
 		} finally {
 			loading.value = false;
 		}
-	});
+	}
+
+	onMounted(load);
 
 	/** Dịch payload kỹ thuật sang câu tiếng Việt; xem `describeAssetEvent`. */
 	const detailsOf = (ev: AssetEvent) => describeAssetEvent(ev.type, ev.payload);
@@ -46,6 +57,11 @@
 
 		<div v-if="loading" class="space-y-3">
 			<div v-for="i in 4" :key="i" class="h-12 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+		</div>
+
+		<div v-else-if="loadError" class="flex flex-col items-center gap-3 py-10 text-center">
+			<p class="text-sm text-rose-700 dark:text-rose-300">{{ loadError }}</p>
+			<CommonAppButton size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
 		</div>
 
 		<p v-else-if="!events.length" class="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -69,7 +85,7 @@
 					<p class="text-xs text-gray-500 dark:text-gray-400">
 						{{ formatDateTime(ev.occurredAt) }}
 						<span v-if="ev.actor"> · {{ ev.actor.name }}</span>
-						<span v-else> · hệ thống</span>
+						<span v-else> · Hệ thống</span>
 					</p>
 					<p
 						v-for="line in detailsOf(ev)"

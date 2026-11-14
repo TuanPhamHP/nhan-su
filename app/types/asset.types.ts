@@ -19,10 +19,28 @@ export type AssetStatus =
 	| 'BROKEN'
 	| 'LOST'
 	| 'DISPOSED'
+	// thiết bị, đợt 2
+	| 'LOSS_REPORTED'
+	| 'IN_MAINTENANCE'
 	// dịch vụ
 	| 'ACTIVE'
 	| 'EXPIRED'
 	| 'CANCELLED';
+
+/** Đợt 2 thêm `MAINTENANCE`: phiếu bảo dưỡng định kỳ, bên cạnh phiếu sửa chữa. */
+export type AssetMaintenanceType = 'REPAIR' | 'MAINTENANCE';
+
+/** Đợt 2. Nhân viên báo hỏng hoặc báo mất thiết bị mình đang giữ. */
+export type AssetIncidentType = 'DAMAGE' | 'LOSS';
+
+/**
+ * Sửa sau bài nhập vai (14/11) thêm `RESOLVED`: phiếu sửa tạo từ báo hỏng đã đóng (Xong, Không
+ * sửa được hoặc Huỷ), kết quả nằm ở `AssetIncident.maintenance`.
+ */
+export type AssetIncidentStatus = 'OPEN' | 'REPAIR_OPENED' | 'LOSS_CONFIRMED' | 'CLOSED' | 'RESOLVED';
+
+/** Sửa sau bài nhập vai. Vì sao một lần cấp phát kết thúc; `null` khi còn đang giữ. */
+export type AssetAssignmentEndReason = 'RETURNED' | 'TRANSFERRED' | 'LOST';
 
 export type AssetCondition = 'NEW' | 'GOOD' | 'SCRATCHED' | 'FAULTY' | 'BROKEN';
 export type AssetAccountingClass = 'FIXED_ASSET' | 'TOOL';
@@ -58,7 +76,13 @@ export type AssetEventType =
 	| 'VALUE_CHANGED'
 	| 'DOCUMENT_ADDED'
 	| 'DOCUMENT_REMOVED'
-	| 'LICENSE_KEY_CHANGED';
+	| 'LICENSE_KEY_CHANGED'
+	// đợt 2
+	| 'INCIDENT_REPORTED'
+	| 'INCIDENT_HANDLED'
+	| 'MAINTENANCE_SCHEDULED'
+	// sửa sau bài nhập vai: người quản lý tài sản trả lời người nhận báo chưa đúng
+	| 'ASSIGNMENT_DISPUTE_RESOLVED';
 
 // ─── Thành phần dùng lại ──────────────────────────────────────────────────────
 
@@ -85,6 +109,8 @@ export interface AssetCategory {
 	kindLabel: string;
 	/** `null` = loại này không khấu hao. */
 	defaultDepreciationMonths: number | null;
+	/** Đợt 2. Chu kỳ bảo dưỡng mặc định của loại, tính bằng tháng; `null` = không có lịch. */
+	defaultMaintenanceMonths: number | null;
 	requireSerial: boolean;
 	isActive: boolean;
 }
@@ -157,6 +183,10 @@ export interface AssetPhysical {
 	depreciationStopDate: string | null;
 	accountingClass: AssetAccountingClass | null;
 	accountingClassLabel: string | null;
+	/** Đợt 2. Chu kỳ bảo dưỡng định kỳ, tính bằng tháng; `null` = không có lịch. */
+	maintenanceIntervalMonths: number | null;
+	/** Đợt 2. Hạn bảo dưỡng kế tiếp, `YYYY-MM-DD`. */
+	nextMaintenanceDate: string | null;
 }
 
 export interface AssetServiceInfo {
@@ -210,6 +240,8 @@ export interface Asset {
 	holders: AssetHolder[];
 	physical: AssetPhysical | null;
 	service: AssetServiceInfo | null;
+	/** Đợt 2. Báo hỏng, báo mất đang chờ xử lý; mảng rỗng là không có. */
+	openIncidents: AssetOpenIncident[];
 	/**
 	 * Ẩn cột tiền theo cờ này, đừng tự suy từ vai trò: người thiếu `asset:value:read`
 	 * nhận `null` ở mọi trường tiền.
@@ -217,6 +249,14 @@ export interface Asset {
 	canViewValue: boolean;
 	createdAt: string;
 	updatedAt: string;
+}
+
+/** Đợt 2. Bản rút gọn của báo cáo đang chờ, đính kèm trong mỗi tài sản. */
+export interface AssetOpenIncident {
+	id: number;
+	type: AssetIncidentType;
+	typeLabel: string;
+	createdAt: string;
 }
 
 export interface AssetEvent {
@@ -242,6 +282,14 @@ export interface AssetAssignmentAsset {
 	statusLabel: string;
 	categoryName: string;
 	groupName: string;
+	/** Sửa sau bài nhập vai: hiện ở "Tài sản của tôi" để người nhận đối chiếu máy thật. */
+	serialNumber: string | null;
+}
+
+/** Hai đầu của một lần điều chuyển: lần cấp phát bên kia và tên người giữ ở lần đó. */
+export interface AssetTransferLink {
+	assignmentId: number;
+	holderName: string;
 }
 
 export interface AssetAssignment {
@@ -266,6 +314,18 @@ export interface AssetAssignment {
 	conditionOnReturn: AssetCondition | null;
 	conditionOnReturnLabel: string | null;
 	returnNote: string | null;
+	// ─── sửa sau bài nhập vai (14/11) ───
+	/** `null` khi đang giữ. `LOST` thì không có biên bản thu hồi (409 `ASSET_ASSIGNMENT_LOST`). */
+	endReason: AssetAssignmentEndReason | null;
+	/** "Thu hồi", "Điều chuyển" hoặc "Mất". */
+	endReasonLabel: string | null;
+	/** Lần cấp phát này sinh ra do điều chuyển từ người khác. */
+	transferredFrom: AssetTransferLink | null;
+	/** Lần cấp phát này kết thúc vì điều chuyển sang người khác. */
+	transferredTo: AssetTransferLink | null;
+	/** Câu trả lời của người quản lý tài sản khi người nhận báo chưa đúng. */
+	disputeResponse: string | null;
+	disputeRespondedAt: string | null;
 }
 
 export interface AssetAssignResult {
@@ -301,8 +361,7 @@ export interface AssetRenewal {
 export interface AssetMaintenance {
 	id: number;
 	asset: { id: number; code: string; name: string };
-	/** Bản đầu chỉ có sửa chữa. */
-	type: 'REPAIR';
+	type: AssetMaintenanceType;
 	typeLabel: string;
 	status: AssetMaintenanceStatus;
 	statusLabel: string;
@@ -314,7 +373,8 @@ export interface AssetMaintenance {
 	sentAt: string | null;
 	expectedDoneAt: string | null;
 	doneAt: string | null;
-	createdBy: AssetIdName;
+	/** Đợt 2: `null` là phiếu bảo dưỡng do việc định kỳ tự mở — hiển thị "Hệ thống". */
+	createdBy: AssetIdName | null;
 	createdAt: string;
 }
 
@@ -325,6 +385,8 @@ export interface AssetDocumentLink {
 	assignmentId: number | null;
 	renewalId: number | null;
 	maintenanceId: number | null;
+	/** Đợt 2. Ảnh kèm theo một báo hỏng, báo mất. */
+	incidentId: number | null;
 }
 
 /** KHÔNG có URL file: lấy qua `GET /asset-documents/:id/url` khi người dùng bấm mở. */
@@ -415,6 +477,135 @@ export interface AssetImportResult {
 	ignoredColumns: string[];
 }
 
+// ─── Đợt 2: báo hỏng, báo mất ─────────────────────────────────────────────────
+
+export interface AssetIncident {
+	id: number;
+	asset: { id: number; code: string; name: string; status: AssetStatus; statusLabel: string };
+	type: AssetIncidentType;
+	typeLabel: string;
+	status: AssetIncidentStatus;
+	statusLabel: string;
+	description: string;
+	/** Ngày phát hiện do nhân viên khai, `YYYY-MM-DD`. */
+	occurredOn: string | null;
+	reportedBy: AssetIdName;
+	handledBy: AssetIdName | null;
+	handledAt: string | null;
+	handlingNote: string | null;
+	/** Phiếu sửa được tạo từ báo hỏng này. */
+	maintenanceId: number | null;
+	/** Sửa sau bài nhập vai: phiếu sửa tạo từ báo hỏng, kèm kết quả khi phiếu đã đóng. */
+	maintenance: AssetIncidentMaintenance | null;
+	/**
+	 * Ảnh kèm theo. Mở từng ảnh qua `GET /asset-documents/:id/url` (người quản lý) hoặc
+	 * `GET /me/assets/documents/:id/url` (người gửi) — response không mang sẵn URL.
+	 */
+	photoDocumentIds: number[];
+	createdAt: string;
+}
+
+export interface AssetIncidentMaintenance {
+	id: number;
+	status: AssetMaintenanceStatus;
+	/** "Xong", "Không sửa được", "Đã huỷ"... */
+	statusLabel: string;
+	doneAt: string | null;
+	workDone: string | null;
+}
+
+/**
+ * Biên bản bàn giao, thu hồi hoặc điều chuyển. `url` là presigned, hết hạn sau 1 giờ.
+ * Lần cấp phát kết thúc vì điều chuyển thì `kind=return` trả cùng biên bản `BBDC-…` với
+ * `kind=assign` của lần mới.
+ */
+export interface AssetHandoverPdf {
+	document: AssetDocument;
+	url: string;
+}
+
+// ─── Đợt 2: tổng quan và báo cáo tiền ─────────────────────────────────────────
+
+export interface AssetOverviewStatus {
+	status: AssetStatus;
+	statusLabel: string;
+	count: number;
+}
+
+export interface AssetOverviewDepartment {
+	/** "Chưa giao" khi thiết bị chưa ở ai; web hiện thành "Chưa cấp phát" và xếp cuối. */
+	departmentName: string;
+	count: number;
+	costVnd: number | null;
+	bookValue: number | null;
+}
+
+export interface AssetOverview {
+	asOf: string;
+	canViewValue: boolean;
+	/** Sửa sau bài nhập vai: KHÔNG gồm Mất, Đã thanh lý, Đã huỷ (`byStatus` vẫn đủ). */
+	total: number;
+	physicalCount: number;
+	serviceCount: number;
+	/** Bằng `meta.total` của `GET /assets?disputed=true`. */
+	disputedConfirmations: number;
+	/** Chỉ những trạng thái đang có ít nhất một tài sản. */
+	byStatus: AssetOverviewStatus[];
+	byDepartment: AssetOverviewDepartment[];
+	/** `null` khi người xem không có `asset:value:read`. */
+	totals: { costVnd: number; bookValue: number } | null;
+	serviceCostThisMonth: number | null;
+	/** Dịch vụ sắp gia hạn cộng thiết bị sắp hết bảo hành trong 30 ngày tới. */
+	expiringIn30Days: number;
+	maintenanceDueIn30Days: number;
+	pendingConfirmations: number;
+	openIncidents: number;
+}
+
+export interface AssetServiceCostRow {
+	renewalId: number;
+	assetId: number;
+	code: string;
+	name: string;
+	categoryName: string;
+	vendorName: string | null;
+	ownerName: string | null;
+	periodStart: string;
+	periodEnd: string;
+	/** Số tiền của cả kỳ gia hạn. */
+	amountVnd: number;
+	/** Phần phân bổ vào tháng đang xem — cột chính của báo cáo. */
+	shareVnd: number;
+}
+
+export interface AssetServiceCostReport {
+	/** `YYYY-MM`. */
+	month: string;
+	rows: AssetServiceCostRow[];
+	/** Tổng của `shareVnd`. */
+	totalVnd: number;
+}
+
+export interface AssetMaintenanceCostRow {
+	maintenanceId: number;
+	assetId: number;
+	code: string;
+	name: string;
+	type: AssetMaintenanceType;
+	typeLabel: string;
+	vendorName: string | null;
+	underWarranty: boolean;
+	doneAt: string;
+	cost: number;
+}
+
+export interface AssetMaintenanceCostReport {
+	from: string;
+	to: string;
+	rows: AssetMaintenanceCostRow[];
+	totalVnd: number;
+}
+
 // ─── Query và body ────────────────────────────────────────────────────────────
 
 export interface AssetQueryParams {
@@ -428,6 +619,15 @@ export interface AssetQueryParams {
 	employeeId?: number;
 	departmentId?: number;
 	search?: string;
+	/**
+	 * Đợt 2. Thiết bị Sẵn sàng hoặc Đang sử dụng, có lịch bảo dưỡng và hạn kế tiếp trong
+	 * `N` ngày tới, kể cả đã quá hạn. Nhận 1–365, ngoài khoảng đó BE trả 400.
+	 */
+	maintenanceDueWithinDays?: number;
+	/** Đợt 2. `true` = chỉ tài sản có lần cấp phát đang chờ người nhận xác nhận. */
+	pendingConfirmation?: boolean;
+	/** Sửa sau bài nhập vai. `true` = chỉ tài sản có lần cấp phát người nhận báo chưa đúng. */
+	disputed?: boolean;
 }
 
 export interface AssetPhysicalBody {
@@ -444,6 +644,10 @@ export interface AssetPhysicalBody {
 	salvageValue?: number;
 	/** Bỏ trống = BE gợi ý. */
 	accountingClass?: AssetAccountingClass;
+	/** Đợt 2. 0–120 tháng. Khi tạo bỏ trống = theo loại; khi sửa gửi `0` là bỏ lịch. */
+	maintenanceIntervalMonths?: number;
+	/** Đợt 2. Bỏ trống khi đã có chu kỳ = hôm nay cộng chu kỳ. */
+	nextMaintenanceDate?: string;
 }
 
 export interface AssetServiceBody {
@@ -535,6 +739,8 @@ export interface CreateAssetCategoryBody {
 	groupName: string;
 	kind: AssetKind;
 	defaultDepreciationMonths?: number;
+	/** Đợt 2. Chu kỳ bảo dưỡng mặc định, tính bằng tháng; gửi `0` để bỏ. */
+	defaultMaintenanceMonths?: number;
 	requireSerial?: boolean;
 	isActive?: boolean;
 }
@@ -562,11 +768,15 @@ export interface AssetMaintenanceQueryParams {
 	page?: number;
 	limit?: number;
 	status?: AssetMaintenanceStatus;
+	/** Đợt 2. Lọc phiếu sửa chữa hay phiếu bảo dưỡng. */
+	type?: AssetMaintenanceType;
 	assetId?: number;
 	vendorId?: number;
 }
 
 export interface CreateAssetMaintenanceBody {
+	/** Đợt 2. Mặc định `REPAIR`; `MAINTENANCE` là phiếu bảo dưỡng định kỳ. */
+	type?: AssetMaintenanceType;
 	description: string;
 	vendorId?: number;
 	underWarranty?: boolean;
@@ -619,28 +829,95 @@ export interface ConfirmAssignmentBody {
 	reason?: string;
 }
 
+/** Sửa sau bài nhập vai. Câu trả lời cho người nhận, tối đa 1000 ký tự, không chỉ khoảng trắng. */
+export interface RespondDisputeBody {
+	response: string;
+}
+
 export interface AssetSeatBody {
 	employeeId: number;
 	assignedAt?: string;
 	note?: string;
 }
 
+// ─── Đợt 2: query và body ─────────────────────────────────────────────────────
+
+export interface AssetIncidentQueryParams {
+	page?: number;
+	limit?: number;
+	status?: AssetIncidentStatus;
+	type?: AssetIncidentType;
+	assetId?: number;
+}
+
+/** Đóng báo cáo: "không cần sửa" với báo hỏng, "đã tìm thấy" với báo mất. */
+export interface HandleAssetIncidentBody {
+	note?: string;
+}
+
+export interface ConfirmAssetLossBody extends HandleAssetIncidentBody {
+	/** Ngày mất, thôi khấu hao từ ngày này. Mặc định là ngày nhân viên khai. */
+	lostOn?: string;
+}
+
+export interface RepairFromAssetIncidentBody extends HandleAssetIncidentBody {
+	vendorId?: number;
+	underWarranty?: boolean;
+}
+
+/** Nhân viên gửi báo hỏng, báo mất. Ảnh gửi kèm dưới dạng `multipart/form-data`. */
+export interface ReportAssetIncidentBody {
+	type: AssetIncidentType;
+	description: string;
+	occurredOn?: string;
+	/** Tối đa 10 ảnh, mỗi ảnh ≤ 5 MB, JPG/PNG/HEIC. */
+	photos?: File[];
+}
+
+export interface AssetServiceCostQuery {
+	/** `YYYY-MM`, bắt buộc. */
+	month: string;
+	vendorId?: number;
+	categoryId?: number;
+	ownerId?: number;
+}
+
+export interface AssetMaintenanceCostQuery {
+	from: string;
+	to: string;
+	assetId?: number;
+	vendorId?: number;
+	type?: AssetMaintenanceType;
+}
+
+/** Kỳ của Excel kế toán, tối đa 12 tháng. */
+export interface AssetDateRangeQuery {
+	from: string;
+	to: string;
+}
+
 // ─── Nhãn tĩnh cho bộ lọc ─────────────────────────────────────────────────────
 //
 // BE đã gửi `*Label` kèm mọi bản ghi nên chỗ hiển thị KHÔNG dùng mấy bảng này. Chúng chỉ
 // để dựng option cho ô lọc và ô chọn, nơi chưa có bản ghi nào để lấy nhãn.
+//
+// Từng chữ ở đây phải khớp đúng bảng nhãn của BE (`vi-labels.ts`, bảng "Nhãn đổi" ở bridge
+// doc mục sửa sau bài nhập vai): lệch một chữ là cùng màn hình có hai cách gọi một trạng thái,
+// ví dụ ô lọc ghi "Đang dùng" mà chip ghi "Đang sử dụng".
 
 export const ASSET_KIND_LABELS: Record<AssetKind, string> = {
 	PHYSICAL: 'Thiết bị',
-	SERVICE: 'Dịch vụ',
+	SERVICE: 'Dịch vụ thuê bao',
 };
 
 export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
 	AVAILABLE: 'Sẵn sàng',
-	IN_USE: 'Đang dùng',
+	IN_USE: 'Đang sử dụng',
 	IN_REPAIR: 'Đang sửa',
 	BROKEN: 'Hỏng',
 	LOST: 'Mất',
+	LOSS_REPORTED: 'Chờ xác minh mất',
+	IN_MAINTENANCE: 'Đang bảo dưỡng',
 	DISPOSED: 'Đã thanh lý',
 	ACTIVE: 'Đang hoạt động',
 	EXPIRED: 'Hết hạn',
@@ -650,16 +927,23 @@ export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
 export const ASSET_CONDITION_LABELS: Record<AssetCondition, string> = {
 	NEW: 'Mới',
 	GOOD: 'Tốt',
-	SCRATCHED: 'Xước',
-	FAULTY: 'Lỗi',
+	SCRATCHED: 'Trầy xước',
+	FAULTY: 'Có lỗi nhỏ',
 	BROKEN: 'Hỏng',
 };
 
 export const ASSET_BILLING_CYCLE_LABELS: Record<AssetBillingCycle, string> = {
-	MONTHLY: 'Hàng tháng',
-	QUARTERLY: 'Hàng quý',
-	YEARLY: 'Hàng năm',
+	MONTHLY: 'Hằng tháng',
+	QUARTERLY: 'Hằng quý',
+	YEARLY: 'Hằng năm',
 	ONE_TIME: 'Mua đứt',
+};
+
+export const ASSET_CONFIRMATION_LABELS: Record<AssetAssignmentConfirmation, string> = {
+	PENDING: 'Chờ người nhận xác nhận',
+	CONFIRMED: 'Đã nhận',
+	DISPUTED: 'Người nhận báo chưa đúng',
+	NOT_REQUIRED: 'Không cần xác nhận',
 };
 
 export const ASSET_PRICING_UNIT_LABELS: Record<AssetPricingUnit, string> = {
@@ -673,14 +957,14 @@ export const ASSET_ACCOUNTING_CLASS_LABELS: Record<AssetAccountingClass, string>
 };
 
 export const ASSET_VENDOR_TYPE_LABELS: Record<AssetVendorType, string> = {
-	SUPPLIER: 'Nhà cung cấp',
-	REPAIR: 'Đơn vị sửa chữa',
-	SERVICE: 'Nhà cung cấp dịch vụ',
+	SUPPLIER: 'Bán thiết bị',
+	REPAIR: 'Sửa chữa',
+	SERVICE: 'Cung cấp dịch vụ',
 };
 
 export const ASSET_MAINTENANCE_STATUS_LABELS: Record<AssetMaintenanceStatus, string> = {
 	OPEN: 'Mới mở',
-	IN_PROGRESS: 'Đang sửa',
+	IN_PROGRESS: 'Đang xử lý',
 	DONE: 'Xong',
 	UNREPAIRABLE: 'Không sửa được',
 	CANCELLED: 'Đã huỷ',
@@ -691,11 +975,35 @@ export const ASSET_DOCUMENT_TYPE_LABELS: Record<AssetDocumentType, string> = {
 	SERVICE_CONTRACT: 'Hợp đồng dịch vụ',
 	INVOICE: 'Hoá đơn',
 	WARRANTY: 'Phiếu bảo hành',
-	HANDOVER_RECORD: 'Biên bản bàn giao',
+	HANDOVER_RECORD: 'Biên bản bàn giao, thu hồi',
 	CONDITION_PHOTO: 'Ảnh tình trạng',
-	REPAIR_QUOTE: 'Báo giá sửa chữa',
+	REPAIR_QUOTE: 'Báo giá, biên bản sửa chữa',
 	DISPOSAL_RECORD: 'Biên bản thanh lý',
 	OTHER: 'Khác',
+};
+
+export const ASSET_MAINTENANCE_TYPE_LABELS: Record<AssetMaintenanceType, string> = {
+	REPAIR: 'Sửa chữa',
+	MAINTENANCE: 'Bảo dưỡng',
+};
+
+export const ASSET_INCIDENT_TYPE_LABELS: Record<AssetIncidentType, string> = {
+	DAMAGE: 'Báo hỏng',
+	LOSS: 'Báo mất',
+};
+
+export const ASSET_INCIDENT_STATUS_LABELS: Record<AssetIncidentStatus, string> = {
+	OPEN: 'Chờ xử lý',
+	REPAIR_OPENED: 'Đã tạo phiếu sửa',
+	LOSS_CONFIRMED: 'Đã xác nhận mất',
+	CLOSED: 'Đã đóng',
+	RESOLVED: 'Đã xử lý xong',
+};
+
+export const ASSET_END_REASON_LABELS: Record<AssetAssignmentEndReason, string> = {
+	RETURNED: 'Thu hồi',
+	TRANSFERRED: 'Điều chuyển',
+	LOST: 'Mất',
 };
 
 /** Trạng thái nào thuộc họ nào — để dựng option lọc theo `kind` đang chọn. */
@@ -703,7 +1011,9 @@ export const PHYSICAL_STATUSES: AssetStatus[] = [
 	'AVAILABLE',
 	'IN_USE',
 	'IN_REPAIR',
+	'IN_MAINTENANCE',
 	'BROKEN',
+	'LOSS_REPORTED',
 	'LOST',
 	'DISPOSED',
 ];
