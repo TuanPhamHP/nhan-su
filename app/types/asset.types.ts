@@ -1036,7 +1036,14 @@ export interface AssetDisposal {
 	decidedAt: string | null;
 	/** Lý do từ chối, hoặc ghi chú khi duyệt. */
 	decisionNote: string | null;
+	/** Với trưởng phòng (phạm vi phòng) chỉ gồm thiết bị thuộc phòng mình; số còn lại ở `hiddenItemCount`. */
 	items: AssetDisposalItem[];
+	/**
+	 * 16/11/2026. Số thiết bị trên phiếu không thuộc phòng của người xem. Chỉ khác 0 với trưởng
+	 * phòng; khi khác 0 thì `documents` rỗng, `totalBookValue` chỉ tính các thiết bị trong `items`,
+	 * và `history[].changes` chỉ nêu số lượng thiết bị ẩn.
+	 */
+	hiddenItemCount: number;
 	/**
 	 * Sửa sau bài nhập vai: có cả khi chưa duyệt. Đã duyệt là tổng đã chốt, chưa duyệt là tổng
 	 * `estimatedBookValue`. `null` khi không có quyền xem giá.

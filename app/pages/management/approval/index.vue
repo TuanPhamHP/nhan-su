@@ -27,7 +27,13 @@
 	import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
 	import ApprovalFilterBar from '~/components/modules/approval/ApprovalFilterBar.vue';
 	import { useAssetService } from '~/services/asset.service';
-	import { DISPOSAL_STATUS_CLASS, disposalNumber, disposalResubmitText } from '~/utils/asset.utils';
+	import {
+		DISPOSAL_STATUS_CLASS,
+		disposalCountText,
+		disposalItemsSummary,
+		disposalNumber,
+		disposalResubmitText,
+	} from '~/utils/asset.utils';
 	import { APPROVE_PERMISSIONS } from '~/utils/permission';
 	import {
 		ASSET_DISPOSAL_STATUS_LABELS,
@@ -471,11 +477,8 @@
 		}
 	}
 
-	function disposalItemsText(d: AssetDisposal): string {
-		const names = d.items.slice(0, 2).map(i => i.name);
-		const more = d.items.length - names.length;
-		return more > 0 ? `${names.join(', ')} và ${more} thiết bị khác` : names.join(', ');
-	}
+	/** Dùng chung cách đếm với trang Thanh lý; người duyệt có phạm vi toàn công ty nên `hiddenItemCount` luôn 0. */
+	const disposalItemsText = (d: AssetDisposal) => disposalItemsSummary(d);
 
 	function loadCurrentTab() {
 		switch (activeTab.value) {
@@ -1277,7 +1280,7 @@
 									</td>
 									<td class="px-4 py-3 max-w-[260px] text-gray-700 dark:text-gray-300">
 										{{ disposalItemsText(d) }}
-										<p class="text-xs text-gray-400 mt-0.5">{{ d.items.length }} thiết bị</p>
+										<p class="text-xs text-gray-400 mt-0.5">{{ disposalCountText(d) }}</p>
 									</td>
 									<td class="px-4 py-3 text-gray-700 dark:text-gray-300">
 										{{ d.createdBy.name }}

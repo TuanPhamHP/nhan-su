@@ -1,7 +1,13 @@
 <script setup lang="ts">
 	import { useAssetService } from '~/services/asset.service';
 	import DisposalFormModal from '~/components/modules/asset/DisposalFormModal.vue';
-	import { DISPOSAL_STATUS_CLASS, disposalNumber, disposalResubmitText } from '~/utils/asset.utils';
+	import {
+		DISPOSAL_STATUS_CLASS,
+		disposalCountText,
+		disposalItemsSummary,
+		disposalNumber,
+		disposalResubmitText,
+	} from '~/utils/asset.utils';
 	import { formatDate, formatDateTime } from '~/utils/date';
 	import {
 		ASSET_DISPOSAL_STATUS_LABELS,
@@ -85,12 +91,11 @@
 			: 'Chưa có phiếu thanh lý nào.';
 	});
 
-	/** Tên vài thiết bị đầu tiên của phiếu, đủ để nhận ra phiếu trong danh sách. */
-	function itemsSummary(d: AssetDisposal): string {
-		const names = d.items.slice(0, 2).map(i => i.name);
-		const more = d.items.length - names.length;
-		return more > 0 ? `${names.join(', ')} và ${more} thiết bị khác` : names.join(', ');
-	}
+	/**
+	 * Tên vài thiết bị đầu tiên của phiếu, đủ để nhận ra phiếu trong danh sách. Trưởng phòng chỉ nhận
+	 * thiết bị của phòng mình (`hiddenItemCount` là phần còn lại), nên số "khác" tính cả phần ẩn.
+	 */
+	const itemsSummary = (d: AssetDisposal) => disposalItemsSummary(d);
 
 	function onSaved(d: AssetDisposal) {
 		showForm.value = false;
@@ -147,6 +152,7 @@
 								</span>
 							</div>
 							<p class="break-words text-sm text-gray-700 dark:text-gray-300">{{ itemsSummary(d) }}</p>
+							<p class="text-xs text-gray-600 dark:text-gray-400">{{ disposalCountText(d) }}</p>
 							<p class="text-xs text-gray-600 dark:text-gray-400">
 								Ngày thanh lý {{ formatDate(d.disposalDate) }}<template v-if="disposalResubmitText(d.round)"> · {{ disposalResubmitText(d.round) }}</template>
 							</p>
@@ -180,7 +186,7 @@
 								</td>
 								<td class="max-w-xs px-4 py-3">
 									<p class="break-words text-gray-700 dark:text-gray-300">{{ itemsSummary(d) }}</p>
-									<p class="text-xs text-gray-500">{{ d.items.length }} thiết bị</p>
+									<p class="text-xs text-gray-500">{{ disposalCountText(d) }}</p>
 								</td>
 								<td class="whitespace-nowrap px-4 py-3 text-gray-700 dark:text-gray-300">{{ formatDate(d.disposalDate) }}</td>
 								<td class="px-4 py-3 text-gray-600 dark:text-gray-300">

@@ -122,3 +122,33 @@ bản bàn giao". Ngày `dd/mm/yyyy`. Câu chữ là câu trọn vẹn, có bư�
 - Không commit, không push. Không thêm package. Không đụng cổng 4000 và tiến trình đang chạy ở `fe-recruitment`,
   `be-recruitment`.
 - Không sửa ba file bridge doc đã đồng bộ.
+## Bổ sung 16/11/2026 — trưởng phòng chỉ thấy thiết bị của phòng mình trên phiếu thanh lý
+
+User đã duyệt hướng sửa này ngày 16/11/2026 (chọn "Chỉ máy phòng mình"). Làm luôn, không hỏi lại.
+
+Contract: `docs/backend/bridges/assets.md`, mục "Sửa sau cổng bảo mật lô 2b (16/11/2026)". Tóm tắt:
+
+- `AssetDisposal.hiddenItemCount: number` mới. Với trưởng phòng, `items` chỉ có thiết bị thuộc phòng mình.
+- `hiddenItemCount > 0` thì `documents` rỗng và `history[].changes` chỉ nêu số lượng thiết bị ẩn.
+- `GET /v1/asset-documents/:id/url` của giấy tờ phiếu gộp trả 403 với trưởng phòng; `GET /v1/assets/:id/documents` bỏ giấy tờ đó.
+
+Màn hình phải đổi:
+
+| # | Chỗ | Việc |
+|---|---|---|
+| G1 | `app/pages/management/assets/disposals/[id].vue` | Dưới bảng (và danh sách thẻ trên điện thoại) thiết bị: khi `hiddenItemCount > 0` thêm dòng "và {n} thiết bị không thuộc phòng bạn". Khu Giấy tờ: khi `hiddenItemCount > 0` thay câu rỗng bằng "Phiếu có thiết bị của phòng khác nên giấy tờ của phiếu chỉ người quản lý tài sản xem được." |
+| G2 | `app/pages/management/assets/disposals/index.vue` | Cột hoặc dòng số thiết bị: dùng `items.length + hiddenItemCount` cho tổng, và nếu `hiddenItemCount > 0` ghi rõ "{items.length} của phòng bạn" (đừng để trưởng phòng tưởng phiếu chỉ có 1 máy) |
+| G3 | `app/types/asset.types.ts` | Thêm `hiddenItemCount: number` vào kiểu phiếu |
+| G4 | Mọi chỗ mở giấy tờ (tab Giấy tờ, dòng sự kiện `DOCUMENT_ADDED` có `disposalId` nếu có nút mở) | 403 phải hiện toast câu lỗi của backend, không trắng trang |
+
+Smoke (sandbox như mục ⑤, tài khoản trong `roleplay-sandbox.json`): trước hết dựng phiếu gộp bằng API như kịch bản S0–S2 trong `_asset-2b-scratch/smoke-2b.cjs`, gồm xe bán tải Mất của phòng Điều phối, điện thoại Mất của Kinh doanh (cho Mất bằng `POST /v1/assets/:id/status`) và máy quét cũ trong kho, kèm một biên bản.
+
+| # | Vai | Thao tác | Mong đợi |
+|---|---|---|---|
+| G-S1 | MANAGER `dp` | Mở danh sách Thanh lý, mở phiếu gộp | Chỉ thấy xe bán tải; dòng "và 2 thiết bị không thuộc phòng bạn"; khu Giấy tờ có câu giải thích; danh sách không làm hiểu nhầm số máy |
+| G-S2 | MANAGER `dp` | Mở trang xe bán tải, tab Giấy tờ | Không có biên bản của phiếu gộp |
+| G-S3 | HR, DIRECTOR | Mở cùng phiếu | Thấy đủ 3 thiết bị và biên bản, không có dòng "thiết bị không thuộc phòng bạn" |
+| G-S4 | MANAGER `dp` | Điện thoại 390 px, chi tiết phiếu gộp | Dòng mới không tràn, không vỡ bố cục |
+
+Báo lại và giới hạn như mục ⑥, ⑦: bạn chỉ sửa và smoke, không commit, không push. BE kiểm lại rồi commit trên nhánh
+`feat/asset-round2b` của worktree `fe-asset-2b`.

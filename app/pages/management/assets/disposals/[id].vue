@@ -14,6 +14,8 @@
 		disposalChangesText,
 		disposalResubmitText,
 		disposalStopDateText,
+		disposalCountText,
+		hiddenItemsText,
 		formatAssetMoney,
 		formatFileSize,
 	} from '~/utils/asset.utils';
@@ -397,7 +399,7 @@
 						</span>
 					</div>
 					<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-						{{ disposal.methodLabel }} · {{ disposal.items.length }} thiết bị · ngày thanh lý {{ formatDate(disposal.disposalDate) }}
+						{{ disposal.methodLabel }} · {{ disposalCountText(disposal) }} · ngày thanh lý {{ formatDate(disposal.disposalDate) }}
 					</p>
 				</div>
 
@@ -455,6 +457,10 @@
 								{{ formatAssetMoney(disposal.totalBookValue) }}
 								<span class="block text-xs text-gray-500">
 									{{ isApproved ? 'Đã chốt khi duyệt' : disposal.status === 'PENDING' ? 'Tạm tính đến ngày thanh lý, chốt khi duyệt' : 'Tạm tính đến ngày thanh lý' }}
+								</span>
+								<!-- Trưởng phòng: BE chỉ cộng các thiết bị có trong `items`. -->
+								<span v-if="disposal.hiddenItemCount > 0" class="block text-xs text-gray-500">
+									Chỉ tính các thiết bị của phòng bạn.
 								</span>
 							</dd>
 						</div>
@@ -556,6 +562,13 @@
 						</tbody>
 					</table>
 				</div>
+				<!-- Trưởng phòng chỉ nhận thiết bị của phòng mình; nói rõ phiếu còn thiết bị khác để không hiểu nhầm số máy. -->
+				<p
+					v-if="hiddenItemsText(disposal.hiddenItemCount)"
+					class="break-words border-t border-gray-100 px-4 py-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-400"
+				>
+					{{ hiddenItemsText(disposal.hiddenItemCount) }}
+				</p>
 				<p v-if="bookValueNote" class="border-t border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
 					{{ bookValueNote }}
 				</p>
@@ -606,7 +619,10 @@
 							Tải lên biên bản thanh lý
 						</CommonAppButton>
 					</div>
-					<p v-if="!disposal.documents.length" class="text-sm text-gray-500 dark:text-gray-400">
+					<p v-if="!disposal.documents.length && disposal.hiddenItemCount > 0" class="text-sm text-gray-500 dark:text-gray-400">
+						Phiếu có thiết bị của phòng khác nên giấy tờ của phiếu chỉ người quản lý tài sản xem được.
+					</p>
+					<p v-else-if="!disposal.documents.length" class="text-sm text-gray-500 dark:text-gray-400">
 						Chưa có giấy tờ nào.<template v-if="canUpload"> Ký biên bản xong, bạn chụp hoặc quét rồi tải lên đây.</template>
 					</p>
 					<ul v-else class="divide-y divide-gray-100 dark:divide-gray-800">

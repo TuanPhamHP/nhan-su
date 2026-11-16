@@ -2217,7 +2217,8 @@ interface AssetDisposal {
     categoryName: string; serialNumber: string | null; location: string | null;
     costVnd: number | null;               // null khi không có quyền xem giá
     bookValueAtDisposal: number | null;   // chốt lúc duyệt; null khi chưa duyệt hoặc không có quyền xem giá
-  }[];
+  }[];                           // trưởng phòng chỉ nhận thiết bị thuộc phòng mình, xem hiddenItemCount
+  hiddenItemCount: number;       // số thiết bị trên phiếu không thuộc phòng người xem; khác 0 thì documents rỗng
   totalBookValue: number | null;          // chỉ khi APPROVED và có quyền xem giá
   history: { round: number; action: 'SUBMITTED' | 'RESUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
              actionLabel: string; actorName: string; at: string; note: string | null }[];
@@ -2298,7 +2299,7 @@ interface PrintLabelsBody extends Omit<AssetQuery, 'page' | 'limit' | 'kind'> { 
 | Method | Path | Quyền | Chỉ xem | Ghi chú |
 |---|---|---|---|---|
 | POST | `/v1/asset-disposals` | `asset:manage` | | Body `CreateDisposalBody` → 201 `AssetDisposal` (PENDING, round 1) |
-| GET | `/v1/asset-disposals` | `asset:read` | ✓ | Phân trang. MANAGER chỉ thấy phiếu có tài sản thuộc phòng mình |
+| GET | `/v1/asset-disposals` | `asset:read` | ✓ | Phân trang. MANAGER chỉ thấy phiếu có tài sản thuộc phòng mình, và trên phiếu chỉ thấy các tài sản đó (`hiddenItemCount`) |
 | GET | `/v1/asset-disposals/:id` | `asset:read` | ✓ | Kèm `history`, `documents`, `actions` |
 | PATCH | `/v1/asset-disposals/:id` | `asset:manage`, người lập (hoặc ADMIN) | | Chỉ khi `REJECTED`. `resubmit: true` → PENDING, `round + 1` |
 | POST | `/v1/asset-disposals/:id/approve` | `asset:disposal:approve` | | Body `{ round, note? }`. Tài sản → `DISPOSED`, thôi khấu hao, chốt giá trị còn lại |
@@ -2528,3 +2529,30 @@ Kế toán (in biên bản, gửi lại phiếu) và tổng giám đốc (duyệ
 | `ASSET_STOCKTAKE_RESOLVE_INPUT` khi `IGNORED` không có ghi chú | "Bạn ghi lý do bỏ qua…" | "Bạn ghi lý do giữ nguyên sổ, để người xem biên bản hiểu vì sao chênh lệch này không cần sửa." |
 
 **Quyền xem kiểm kê**: backend đã cho mọi người có `asset:read` phạm vi toàn công ty (ADMIN, HR, DIRECTOR, CHIEF, hoặc có `asset:manage`) đọc danh sách, chi tiết, dòng, Excel của đợt kiểm kê. Trưởng phòng (phạm vi phòng) vẫn 403. Web đang ẩn mục "Kiểm kê" với người không có `asset:manage`, nên lãnh đạo không thấy; web cần mở mục này ở chế độ chỉ xem cho các vai trò trên.
+
+### Sửa sau cổng bảo mật lô 2b (16/11/2026)
+
+HR được gộp thiết bị của nhiều phòng và của kho vào một phiếu thanh lý. Trước bản này, trưởng phòng có một thiết bị trên phiếu thì thấy mọi thiết bị còn lại (mã, tên, serial, vị trí), mở được biên bản của phiếu, và đọc được mã các thiết bị ngoài phòng trong câu tả lần gửi lại. Đó là những thiết bị mà `GET /v1/assets/:id` trả 403 với trưởng phòng. Ngoài ra thông báo N-10 ghi giá thu về cho mọi người duyệt, kể cả người không có `asset:value:read`.
+
+**Thêm field**
+
+| Chỗ | Thay đổi |
+|---|---|
+| `AssetDisposal.hiddenItemCount: number` | Mới. Số thiết bị trên phiếu không thuộc phòng của người xem. Chỉ khác 0 với trưởng phòng (phạm vi phòng); người có phạm vi toàn công ty luôn 0 |
+
+**Hành vi đổi** (chỉ với trưởng phòng, tức phạm vi phòng)
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| `GET /v1/asset-disposals`, `GET /v1/asset-disposals/:id` → `items` | Mọi thiết bị trên phiếu | Chỉ thiết bị thuộc phòng mình. Số còn lại ở `hiddenItemCount`. Web ghi thêm một dòng "và {n} thiết bị không thuộc phòng bạn" dưới bảng thiết bị |
+| `totalBookValue` | Tổng mọi thiết bị | Tổng các thiết bị trong `items` |
+| `documents` | Mọi giấy tờ của phiếu | Rỗng khi `hiddenItemCount > 0`, vì biên bản, báo giá nói về mọi thiết bị trên phiếu. Web thay câu "Chưa có giấy tờ" bằng "Phiếu có thiết bị của phòng khác nên giấy tờ của phiếu chỉ người quản lý tài sản xem được" |
+| `history[].changes` | Nêu mã mọi thiết bị bị bỏ, thêm | Thiết bị không thuộc phòng mình chỉ nêu số lượng, ví dụ "Bỏ CTA000021 và 1 thiết bị không thuộc phòng bạn khỏi phiếu." hoặc "Bỏ 2 thiết bị không thuộc phòng bạn khỏi phiếu." |
+| `GET /v1/asset-documents/:id/url` với giấy tờ của phiếu thanh lý | Mở được nếu một thiết bị bất kỳ trên phiếu thuộc phòng mình | Chỉ mở được khi **mọi** thiết bị trên phiếu thuộc phòng mình, không thì 403 `ASSET_SCOPE_FORBIDDEN` |
+| `GET /v1/assets/:id/documents` | Có giấy tờ của mọi phiếu thanh lý chứa tài sản | Bỏ giấy tờ của phiếu có thiết bị không thuộc phòng mình |
+
+Phiếu chỉ gồm thiết bị của phòng mình thì trưởng phòng vẫn thấy đủ như trước, kể cả giấy tờ. `reason` và `decisionNote` là chữ người lập, người duyệt tự gõ nên không lọc được; HR nên lập phiếu riêng cho từng phòng khi lý do nhắc tới thiết bị cụ thể.
+
+**Thông báo N-10**: người duyệt không có `asset:value:read` (và không phải ADMIN) nhận thông báo không có đoạn ", giá thu về …". Vai trò mặc định (Ban giám đốc, Trưởng bộ phận kế toán) đều có quyền xem giá nên không đổi gì với họ.
+
+**Lịch sử thiết bị**: sự kiện `DOCUMENT_ADDED` có `payload.disposalId` vẫn hiện trên thiết bị của phòng mình. Nếu web cho bấm mở giấy tờ từ dòng sự kiện thì với phiếu gộp sẽ nhận 403 như trên và phải hiện toast câu lỗi của backend.

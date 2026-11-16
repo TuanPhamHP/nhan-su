@@ -6,6 +6,10 @@ import {
 	defaultStatusLabel,
 	describeAssetEvent,
 	disposalChangesText,
+	disposalCountText,
+	disposalItemsSummary,
+	disposalTotalItems,
+	hiddenItemsText,
 	disposalItemErrors,
 	disposalResubmitText,
 	disposalStopDateText,
@@ -290,5 +294,34 @@ describe('Tooltip L13', () => {
 		expect(STOCKTAKE_ONE_OPEN_HINT).toBe(
 			'Mỗi lúc chỉ mở được một đợt kiểm kê, để mỗi lần quét luôn ghi vào đúng một đợt. Muốn mở đợt mới, bạn đóng hoặc huỷ đợt đang mở.',
 		);
+	});
+});
+
+describe('16/11/2026: trưởng phòng chỉ thấy thiết bị của phòng mình trên phiếu thanh lý', () => {
+	const managerView = { items: [{ name: 'Xe bán tải Ford Ranger XLS' }], hiddenItemCount: 2 };
+	const fullView = { items: [{ name: 'Xe bán tải Ford Ranger XLS' }, { name: 'Điện thoại Samsung Galaxy A15' }, { name: 'Máy quét cũ' }], hiddenItemCount: 0 };
+
+	it('tổng số thiết bị tính cả phần bị ẩn', () => {
+		expect(disposalTotalItems(managerView)).toBe(3);
+		expect(disposalTotalItems(fullView)).toBe(3);
+	});
+
+	it('danh sách ghi rõ số của phòng mình để không hiểu nhầm phiếu chỉ có một máy', () => {
+		expect(disposalCountText(managerView)).toBe('3 thiết bị, 1 của phòng bạn');
+		expect(disposalCountText(fullView)).toBe('3 thiết bị');
+	});
+
+	it('tóm tắt tên thiết bị đếm cả thiết bị ẩn vào phần "khác"', () => {
+		expect(disposalItemsSummary(managerView)).toBe('Xe bán tải Ford Ranger XLS và 2 thiết bị khác');
+		expect(disposalItemsSummary(fullView)).toBe('Xe bán tải Ford Ranger XLS, Điện thoại Samsung Galaxy A15 và 1 thiết bị khác');
+	});
+
+	it('dòng dưới bảng chỉ có khi có thiết bị ẩn', () => {
+		expect(hiddenItemsText(2)).toBe('và 2 thiết bị không thuộc phòng bạn');
+		expect(hiddenItemsText(0)).toBe('');
+	});
+
+	it('[EDGE] không thấy thiết bị nào thì vẫn nói số thiết bị ẩn', () => {
+		expect(disposalItemsSummary({ items: [], hiddenItemCount: 2 })).toBe('2 thiết bị không thuộc phòng bạn');
 	});
 });

@@ -371,6 +371,40 @@ export function defaultStatusLabel(kind: string | null | undefined, search: stri
 	return 'Tất cả, trừ Đã thanh lý';
 }
 
+// ─── 16/11/2026: trưởng phòng chỉ thấy thiết bị của phòng mình trên phiếu thanh lý ──────────────
+
+interface DisposalCountLike {
+	items: { name: string }[];
+	hiddenItemCount: number;
+}
+
+/** Tổng số thiết bị trên phiếu, kể cả thiết bị trưởng phòng không được thấy. */
+export function disposalTotalItems(d: DisposalCountLike): number {
+	return d.items.length + (d.hiddenItemCount ?? 0);
+}
+
+/**
+ * Số thiết bị cho danh sách phiếu: "3 thiết bị", hoặc với trưởng phòng "3 thiết bị, 1 của phòng bạn"
+ * để không ai tưởng phiếu chỉ có đúng số máy mình nhìn thấy.
+ */
+export function disposalCountText(d: DisposalCountLike): string {
+	const total = disposalTotalItems(d);
+	return d.hiddenItemCount > 0 ? `${total} thiết bị, ${d.items.length} của phòng bạn` : `${total} thiết bị`;
+}
+
+/** Tên vài thiết bị đầu của phiếu; phần còn lại (tính cả thiết bị ẩn) gộp thành "và n thiết bị khác". */
+export function disposalItemsSummary(d: DisposalCountLike): string {
+	const names = d.items.slice(0, 2).map(i => i.name);
+	const more = disposalTotalItems(d) - names.length;
+	if (!names.length) return `${more} thiết bị không thuộc phòng bạn`;
+	return more > 0 ? `${names.join(', ')} và ${more} thiết bị khác` : names.join(', ');
+}
+
+/** Dòng dưới bảng thiết bị của trang phiếu; chuỗi rỗng khi không có thiết bị ẩn. */
+export function hiddenItemsText(hiddenItemCount: number): string {
+	return hiddenItemCount > 0 ? `và ${hiddenItemCount} thiết bị không thuộc phòng bạn` : '';
+}
+
 /**
  * Dòng "đã đổi gì" của lần gửi lại (`history[].changes`, vòng 3). BE trả sẵn câu hoàn chỉnh, ví dụ
  * "Bỏ CTA000011 khỏi phiếu. Sửa lý do." hoặc "Gửi lại, không đổi nội dung phiếu.", nên web hiện
