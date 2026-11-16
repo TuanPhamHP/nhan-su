@@ -998,7 +998,7 @@ tại với trợ lý (không xuất hiện trong `toolsCalled`).
 | Tool | Playbook | Việc | Quyền |
 |---|---|---|---|
 | `asset_listMine` | `asset-my` | Tài sản đang giữ, đã trả, dịch vụ mình phụ trách | mọi role |
-| `asset_listServices` | `asset-my`, `asset-lookup` | Dịch vụ thuê bao: số ghế, ngày gia hạn, người phụ trách | mọi role (không có `asset:read` thì chỉ dịch vụ mình phụ trách) |
+| `asset_listServices` | `asset-my`, `asset-lookup` | Dịch vụ thuê bao: số ghế, ngày gia hạn, người phụ trách | mọi role (EMPLOYEE, hoặc thiếu `asset:read`, thì chỉ dịch vụ mình phụ trách) |
 | `asset_listByEmployee` | `asset-lookup` | Tài sản một nhân viên đang giữ | vai trò quản lý + `asset:read`, theo phạm vi |
 | `asset_getDetail` | `asset-lookup` | Chi tiết một tài sản: người giữ, người dùng trước, lịch sử sửa | như trên |
 | `asset_listExpiring` | `asset-lookup` | Dịch vụ sắp gia hạn, thiết bị sắp hết bảo hành | như trên |
@@ -1006,7 +1006,7 @@ tại với trợ lý (không xuất hiện trong `toolsCalled`).
 | `asset_getServiceCosts` | `asset-value` | Chi phí dịch vụ theo tháng | như trên |
 | `recruit_myInterviews` | `recruit-my` | Lịch phỏng vấn mình tham gia | mọi role |
 | `recruit_myPendingScorecards` | `recruit-my` | Phiếu đánh giá mình chưa nộp | mọi role |
-| `recruit_jobPipeline` | `recruit-my`, `recruit-overview` | Tin tuyển dụng và số hồ sơ đang xét theo vòng | mọi role (không có `recruitment:read` thì chỉ tin mình ngồi hội đồng) |
+| `recruit_jobPipeline` | `recruit-my`, `recruit-overview` | Tin tuyển dụng và số hồ sơ đang xét theo vòng | mọi role (EMPLOYEE, hoặc thiếu `recruitment:read`, thì chỉ tin mình ngồi hội đồng) |
 | `recruit_headcountAvailable` | `recruit-overview` | Định biên còn trống theo phòng ban, vị trí | vai trò quản lý + `recruitment:read` |
 | `recruit_candidateHistory` | `recruit-overview` | Các lần ứng tuyển của một ứng viên (không có liên hệ, lương mong muốn) | như trên |
 | `recruit_pendingApprovals` | `recruit-overview` | Yêu cầu tuyển, offer, định biên chờ chính mình duyệt (chỉ liệt kê) | như trên |

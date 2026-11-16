@@ -57,7 +57,7 @@ hai module.
 chạy ở **cổng 4010** (CORS sandbox chỉ mở 4010): `npm run build` trong worktree rồi
 `node /tmp/claude-1000/-home-tuanpham-work-hr-system-hr-system-be/2c4ab2e8-dc5e-4777-9a3a-40711488c6b8/scratchpad/scripts/serve-web-agent.cjs`
 (chạy bản build với `.env.sandbox`), hoặc `npx nuxt dev --dotenv .env.sandbox --port 4010`.
-**Tài khoản:** ADMIN `admin@cta.drill`, mật khẩu `Drill-user-1234!`.
+**Tài khoản:** ADMIN `admin@cta.drill`, mật khẩu là hằng `PASSWORD` trong `scripts/tenancy/drills/sandbox.cjs` của BE.
 
 | # | Vai | Thao tác | Mong đợi |
 |---|---|---|---|
