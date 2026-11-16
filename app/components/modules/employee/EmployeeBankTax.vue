@@ -3,6 +3,7 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import { useEmployeeProfileService } from '~/services/employee-profile.service';
+	import SelfEditNotice from '~/components/modules/employee/SelfEditNotice.vue';
 	import type { PrivateProfile } from '~/types/hr-profile.types';
 
 	/**
@@ -12,11 +13,16 @@
 	 * một dòng nhật ký `employee.private_view`. Không có quyền `employee:private:read` thì nút
 	 * Xem không hiện, và BE cũng chặn luôn ở phía máy chủ.
 	 */
-	const props = defineProps<{
-		employeeId: number;
-		employeeName: string;
-		canUpdate: boolean;
-	}>();
+	const props = withDefaults(
+		defineProps<{
+			employeeId: number;
+			employeeName: string;
+			canUpdate: boolean;
+			/** Hồ sơ của chính người đang đăng nhập: backend chặn tự sửa, nên chỉ còn nút Xem. */
+			selfEditBlocked?: boolean;
+		}>(),
+		{ selfEditBlocked: false },
+	);
 
 	const toast = useToast();
 	const service = useEmployeeProfileService();
@@ -123,6 +129,7 @@
 				<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
 					Mỗi lần xem được ghi vào nhật ký hệ thống.
 				</p>
+				<SelfEditNotice v-if="selfEditBlocked" class="mt-1" text="Đây là hồ sơ của chính bạn nên phần này chỉ xem." />
 			</div>
 			<div class="flex items-center gap-2">
 				<CommonAppButton v-if="!profile && !loading" size="sm" variant="outline" @click="reveal">Xem</CommonAppButton>

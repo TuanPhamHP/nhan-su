@@ -8,6 +8,7 @@ import type {
 	MyPrivateProfile,
 	MyProfile,
 	MyProfileChange,
+	PendingDocument,
 	Relative,
 	UpdateEmergencyContactDto,
 	UpdateMyContactDto,
@@ -132,6 +133,22 @@ export const useMeProfileService = () => {
 				{ method: 'POST', body: formData },
 			);
 			return res.data;
+		},
+
+		/** Giấy tờ chờ của chính mình; dòng có `requestId` là đang kèm một yêu cầu chờ duyệt. */
+		async findChangeRequestDocuments(): Promise<PendingDocument[]> {
+			const res = await authFetch<ApiResponse<PendingDocument[]>>('/v1/me/profile-change-requests/documents');
+			return res.data;
+		},
+
+		/**
+		 * Xoá một giấy tờ chờ chưa gửi kèm yêu cầu, xoá luôn cả file.
+		 *
+		 * Giấy tờ đang kèm một yêu cầu chờ duyệt thì BE trả 409 `PROFILE_CHANGE_DOCUMENT_IN_USE`:
+		 * muốn bỏ thì huỷ yêu cầu đó, huỷ xong giấy tờ tự xoá.
+		 */
+		removeChangeRequestDocument(id: number): Promise<void> {
+			return authFetch<void>(`/v1/me/profile-change-requests/documents/${id}`, { method: 'DELETE' });
 		},
 	};
 };

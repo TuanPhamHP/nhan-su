@@ -55,6 +55,19 @@
 	// riêng, và mỗi lần xem được ghi vào nhật ký. Không có quyền thì ẩn hẳn nút Xem và tab Thân
 	// nhân, thay vì để người dùng bấm rồi nhận 403.
 	const canReadPrivate = computed(() => hasPermission('employee:private:read'));
+
+	/**
+	 * Người dùng đang mở hồ sơ của chính mình qua đường quản trị.
+	 *
+	 * Từ 16/11/2026 backend trả 403 `PROFILE_SELF_EDIT_FORBIDDEN` khi một người tự sửa hồ sơ mở
+	 * rộng, thân nhân hoặc kinh nghiệm của mình bằng các route `/employees/:id/...`, trừ ADMIN.
+	 * Lý do là người giữ quyền nhân sự không nên vừa sửa vừa tự duyệt hồ sơ của mình; muốn đổi
+	 * thì gửi yêu cầu ở trang cá nhân để người khác duyệt. Giao diện ẩn luôn các nút đó và chỉ
+	 * đường sang trang cá nhân, thay vì để người dùng bấm rồi nhận lỗi.
+	 */
+	const isOwnProfile = computed(() => authStore.user?.id === id);
+	const selfEditBlocked = computed(() => isOwnProfile.value && authStore.user?.role !== 'ADMIN');
+	const canUpdateProfileParts = computed(() => canUpdate.value && !selfEditBlocked.value);
 	// Tab Hợp đồng lộ cả lương cơ bản → phải theo đúng quyền, không chỉ theo vai trò.
 	// BE đã chặn (contract:read), đây là để không hiện tab rồi mới báo lỗi.
 	// Hai tab này thuộc module CONTRACT_INSURANCE: công ty chưa mở thì ẩn, kể cả với ADMIN.
@@ -953,14 +966,23 @@
 
 				<!-- Hồ sơ mở rộng (lô 3a). Khối nhạy cảm đóng sẵn, mở ra là một dòng nhật ký. -->
 				<template v-if="!isEditing">
-					<EmployeeExtraProfile :employee-id="id" :can-update="canUpdate" />
+					<EmployeeExtraProfile
+						:employee-id="id"
+						:can-update="canUpdateProfileParts"
+						:self-edit-blocked="selfEditBlocked"
+					/>
 					<EmployeeBankTax
 						v-if="canReadPrivate"
 						:employee-id="id"
 						:employee-name="currentEmployee.fullName"
-						:can-update="canUpdate"
+						:can-update="canUpdateProfileParts"
+						:self-edit-blocked="selfEditBlocked"
 					/>
-					<EmployeeWorkExperiences :employee-id="id" :can-update="canUpdate" />
+					<EmployeeWorkExperiences
+						:employee-id="id"
+						:can-update="canUpdateProfileParts"
+						:self-edit-blocked="selfEditBlocked"
+					/>
 				</template>
 			</template>
 
@@ -969,7 +991,8 @@
 				v-else-if="activeTab === 'relatives' && canReadPrivate"
 				:employee-id="id"
 				:employee-name="currentEmployee.fullName"
-				:can-update="canUpdate"
+				:can-update="canUpdateProfileParts"
+				:self-edit-blocked="selfEditBlocked"
 			/>
 
 			<!-- Tab: Tài liệu -->

@@ -154,6 +154,11 @@
 				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
 					Công ty gọi những người này khi bạn gặp sự cố. Bạn nên có một người liên hệ chính.
 				</p>
+				<!-- Lô 3a: hai route liên hệ khẩn cấp không bắt nhập lại mật khẩu nên server luôn trả
+				     số định danh và ngày sinh là null; nói trước để người dùng không tưởng mất dữ liệu. -->
+				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+					Danh sách này không hiện số định danh và ngày sinh của người thân.
+				</p>
 			</div>
 			<CommonAppButton size="sm" variant="outline" @click="openCreate">Thêm người liên hệ</CommonAppButton>
 		</div>
@@ -195,8 +200,13 @@
 							{{ tag }}
 						</span>
 					</div>
-					<p v-if="item.isDependent" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+					<!-- Route này không trả khoảng giảm trừ cho người phụ thuộc (các trường đó về null),
+					     nên chỉ hiện dòng tháng khi thật sự có dữ liệu. -->
+					<p v-if="item.isDependent && item.dependentFrom" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
 						Giảm trừ {{ dependentPeriodText(item) }}
+					</p>
+					<p v-else-if="item.isDependent" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+						Người này đang được giảm trừ thuế, nên mọi thay đổi phải do phòng nhân sự duyệt.
 					</p>
 				</div>
 				<div class="flex flex-shrink-0 items-center gap-1.5">

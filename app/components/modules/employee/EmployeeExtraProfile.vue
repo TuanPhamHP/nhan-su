@@ -3,6 +3,7 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import { useEmployeeProfileService } from '~/services/employee-profile.service';
+	import SelfEditNotice from '~/components/modules/employee/SelfEditNotice.vue';
 	import {
 		EDUCATION_LEVEL_LABELS,
 		MARITAL_STATUS_LABELS,
@@ -17,10 +18,15 @@
 	 * Đây là phần không nhạy cảm nên tải ngay cùng trang; ngân hàng và mã số thuế nằm ở khối
 	 * riêng có cửa quyền, xem `EmployeeBankTax.vue`.
 	 */
-	const props = defineProps<{
-		employeeId: number;
-		canUpdate: boolean;
-	}>();
+	const props = withDefaults(
+		defineProps<{
+			employeeId: number;
+			canUpdate: boolean;
+			/** Hồ sơ của chính người đang đăng nhập: backend chặn tự sửa, nên chỉ hiện dòng nhắc. */
+			selfEditBlocked?: boolean;
+		}>(),
+		{ selfEditBlocked: false },
+	);
 
 	const toast = useToast();
 	const service = useEmployeeProfileService();
@@ -113,7 +119,13 @@
 	<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
 		<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3">
 			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Thông tin thêm</h3>
-			<CommonAppButton v-if="canUpdate && !isEditing && !loading && !loadError" size="sm" variant="outline" @click="startEditing">
+			<SelfEditNotice v-if="selfEditBlocked" class="max-w-md text-right" />
+			<CommonAppButton
+				v-else-if="canUpdate && !isEditing && !loading && !loadError"
+				size="sm"
+				variant="outline"
+				@click="startEditing"
+			>
 				Chỉnh sửa
 			</CommonAppButton>
 		</div>

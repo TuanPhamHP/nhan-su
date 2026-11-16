@@ -39,7 +39,7 @@ export interface EmployeeDocumentResponse {
   typeLabel: string;         // tên loại trong danh mục, ví dụ 'Giấy khám sức khoẻ'
   isSensitive: boolean;      // loại nhạy cảm
   fileName: string;
-  fileUrl: string;           // S3 URL gốc — KHÔNG render trực tiếp, dùng endpoint /url
+  fileUrl: string | null;    // link đã ký 1 giờ; NULL với giấy tờ nhạy cảm của người khác trong danh sách → mở qua /url
   fileType: string;          // 'pdf' | 'docx' | 'jpg' | 'png'
   issuedDate: string | null; // 'YYYY-MM-DD'
   expiryDate: string | null; // 'YYYY-MM-DD'
@@ -102,7 +102,9 @@ giấy tờ đang chờ đi kèm một yêu cầu thay đổi chưa duyệt.
 ## GET /v1/employees/:id/documents — Tài liệu của một nhân viên
 
 Shape giống `/me/documents`. Người xem không có `employee:private:read` **không thấy** giấy tờ loại nhạy cảm trong danh sách
-(server lọc, không trả 403). Gọi cho chính mình qua đường này thì kết quả như `/me/documents`.
+(server lọc, không trả 403). Người có quyền thấy dòng giấy tờ nhạy cảm nhưng **`fileUrl: null`**: mở file phải qua
+`GET .../documents/:documentId/url`, nơi ghi nhật ký từng lượt mở. Gọi cho chính mình qua đường này thì kết quả như
+`/me/documents` (có link).
 
 | Lỗi | HTTP | `code` |
 |---|---|---|

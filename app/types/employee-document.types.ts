@@ -15,8 +15,14 @@ export interface EmployeeDocumentResponse {
 	typeLabel: string;
 	isSensitive: boolean;
 	fileName: string;
-	/** URL gốc trên S3, không render trực tiếp mà gọi endpoint `/url`. */
-	fileUrl: string;
+	/**
+	 * Link đã ký, hết hạn sau một giờ.
+	 *
+	 * Null với giấy tờ loại nhạy cảm của người khác trong danh sách: muốn mở thì gọi
+	 * `GET .../documents/:documentId/url`, nơi ghi nhật ký từng lượt mở. Vì vậy giao diện luôn
+	 * đi qua endpoint đó thay vì render thẳng trường này.
+	 */
+	fileUrl: string | null;
 	fileType: string;
 	issuedDate: string | null;
 	expiryDate: string | null;

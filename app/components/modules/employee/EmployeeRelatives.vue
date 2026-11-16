@@ -3,6 +3,7 @@
 	import { dependentPeriodText, relativeRoleTags } from '~/utils/hr-profile.utils';
 	import { useEmployeeProfileService } from '~/services/employee-profile.service';
 	import RelativeFormModal from '~/components/modules/employee/RelativeFormModal.vue';
+	import SelfEditNotice from '~/components/modules/employee/SelfEditNotice.vue';
 	import type { CreateRelativeDto, Relative } from '~/types/hr-profile.types';
 
 	/**
@@ -11,11 +12,16 @@
 	 * Response có số định danh nên tab này chỉ hiện với người có `employee:private:read`, và
 	 * thêm, sửa, xoá còn cần `employee:update`. Mỗi lần mở tab được ghi vào nhật ký hệ thống.
 	 */
-	const props = defineProps<{
-		employeeId: number;
-		employeeName: string;
-		canUpdate: boolean;
-	}>();
+	const props = withDefaults(
+		defineProps<{
+			employeeId: number;
+			employeeName: string;
+			canUpdate: boolean;
+			/** Hồ sơ của chính người đang đăng nhập: backend chặn tự thêm, sửa, xoá thân nhân. */
+			selfEditBlocked?: boolean;
+		}>(),
+		{ selfEditBlocked: false },
+	);
 
 	const toast = useToast();
 	const service = useEmployeeProfileService();
@@ -108,7 +114,8 @@
 						nhật ký hệ thống.
 					</p>
 				</div>
-				<CommonAppButton v-if="canUpdate" size="sm" @click="openCreate">Thêm thân nhân</CommonAppButton>
+				<SelfEditNotice v-if="selfEditBlocked" class="max-w-md sm:text-right" />
+				<CommonAppButton v-else-if="canUpdate" size="sm" @click="openCreate">Thêm thân nhân</CommonAppButton>
 			</div>
 
 			<!-- Cảnh báo BR-04 -->

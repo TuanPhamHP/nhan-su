@@ -59,6 +59,13 @@
 			<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
 				Hệ thống giữ 100 yêu cầu gần nhất. Yêu cầu đang chờ thì bạn còn thu hồi được.
 			</p>
+			<!-- Danh sách này không bắt nhập lại mật khẩu nên server che giá trị của các mục nhạy
+			     cảm. Nói rõ để người đọc không tưởng dữ liệu bị hỏng, và giao diện giữ nguyên những
+			     gì server trả, không định dạng lại dấu sao thành ngày hay nhãn. -->
+			<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+				Yêu cầu về ngân hàng, thuế, căn cước và thân nhân hiện dấu sao thay cho giá trị, riêng các số dài còn bốn
+				ký tự cuối. Muốn xem đủ thì bạn mở khối có nhập mật khẩu ở tab Hồ sơ.
+			</p>
 		</div>
 
 		<div v-if="loading" class="space-y-3 p-6">

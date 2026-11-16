@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import { formatMonth } from '~/utils/hr-profile.utils';
+	import SelfEditNotice from '~/components/modules/employee/SelfEditNotice.vue';
 	import type { WorkExperience } from '~/types/hr-profile.types';
 
 	/**
@@ -19,6 +20,8 @@
 			editLabel?: string;
 			removeLabel?: string;
 			emptyText?: string;
+			/** Hồ sơ của chính người đang đăng nhập: thay nút thêm bằng dòng chỉ sang trang cá nhân. */
+			selfEditBlocked?: boolean;
 		}>(),
 		{
 			loading: false,
@@ -26,6 +29,7 @@
 			editLabel: '',
 			removeLabel: '',
 			emptyText: 'Chưa ghi nhận kinh nghiệm nào trước khi vào công ty.',
+			selfEditBlocked: false,
 		},
 	);
 
@@ -48,7 +52,8 @@
 	<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
 		<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3">
 			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Kinh nghiệm làm việc</h3>
-			<CommonAppButton v-if="addLabel" size="sm" variant="outline" @click="emit('add')">
+			<SelfEditNotice v-if="selfEditBlocked" class="max-w-md sm:text-right" />
+			<CommonAppButton v-else-if="addLabel" size="sm" variant="outline" @click="emit('add')">
 				{{ addLabel }}
 			</CommonAppButton>
 		</div>

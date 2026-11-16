@@ -17,6 +17,7 @@
 	import ProfileEmergencyContacts from '~/components/modules/profile/ProfileEmergencyContacts.vue';
 	import ProfileWorkExperiences from '~/components/modules/profile/ProfileWorkExperiences.vue';
 	import ProfileMyRequests from '~/components/modules/profile/ProfileMyRequests.vue';
+	import ProfilePendingDocuments from '~/components/modules/profile/ProfilePendingDocuments.vue';
 	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
 
 	definePageMeta({ title: 'Hồ sơ cá nhân' });
@@ -40,6 +41,8 @@
 
 	const requests = ref<MyProfileChange[]>([]);
 	const requestsLoading = ref(true);
+	/** Khối giấy tờ chờ tự tải dữ liệu, nhưng gửi hoặc huỷ yêu cầu xong thì phải đọc lại. */
+	const pendingDocuments = ref<{ reload: () => void } | null>(null);
 
 	async function loadRequests() {
 		requestsLoading.value = true;
@@ -50,6 +53,7 @@
 		} finally {
 			requestsLoading.value = false;
 		}
+		pendingDocuments.value?.reload();
 	}
 
 	onMounted(async () => {
@@ -319,6 +323,9 @@
 					@created="loadRequests"
 					@cancelled="loadRequests"
 				/>
+
+				<!-- Chỉ hiện khi còn giấy tờ đã tải mà chưa gửi kèm yêu cầu nào. -->
+				<ProfilePendingDocuments ref="pendingDocuments" />
 
 				<!-- Chỉ đọc, có cửa mật khẩu. Không nhận employeeId: server lấy từ JWT. -->
 				<ProfileIdentity />

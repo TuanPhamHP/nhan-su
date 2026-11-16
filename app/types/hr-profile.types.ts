@@ -6,6 +6,8 @@
  * đổi thông tin. Contract ở `docs/backend/bridges/hr-profile.md`.
  */
 
+import type { EmployeeDocumentResponse } from './employee-document.types';
+
 export type MaritalStatus = 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED';
 
 export type EducationLevel =
@@ -371,11 +373,35 @@ export interface ProfileChange {
 	createdAt: string;
 }
 
-/** Yêu cầu của chính mình: kèm giá trị cũ và mới. */
+/**
+ * Yêu cầu của chính mình: kèm giá trị cũ và mới, nhưng **đã bị che**.
+ *
+ * Với mục ngân hàng, thuế, căn cước và thân nhân thì **mọi** giá trị trong `before`, `after` và
+ * `fields[]` đều bị che: số tài khoản, mã số thuế, số căn cước và số định danh còn `***` cộng
+ * bốn ký tự cuối, các giá trị khác chỉ còn `***`, ô trống vẫn là `null`. Mục thông tin định
+ * danh và kinh nghiệm không che.
+ *
+ * Lý do: các route này không bắt nhập lại mật khẩu, nên trả giá trị thật ở đây thì ai cầm được
+ * phiên đăng nhập cũng đọc được hồ sơ. Vì vậy màn hình chỉ việc hiện đúng những gì server trả,
+ * đừng định dạng lại `***` thành ngày, nhãn hay Có/Không; còn form "Đề nghị thay đổi" lấy giá
+ * trị điền sẵn từ `POST /me/profile/private`, không lấy từ `before`.
+ */
 export interface MyProfileChange extends ProfileChange {
 	fields: ProfileChangeField[];
 	before: Record<string, unknown> | null;
 	after: Record<string, unknown>;
+}
+
+/**
+ * Giấy tờ đã tải lên nhưng chưa thành tài liệu chính thức.
+ *
+ * `requestId` là yêu cầu đang chờ duyệt mang giấy tờ này; `null` nghĩa là chưa gửi kèm yêu cầu
+ * nào nên xoá được. Mỗi người giữ tối đa 10 giấy tờ dạng `null`, và giấy tờ quá 24 giờ không
+ * đi kèm yêu cầu nào bị hệ thống tự dọn. `relativeName` ở đây luôn null vì route không bắt
+ * nhập lại mật khẩu.
+ */
+export interface PendingDocument extends EmployeeDocumentResponse {
+	requestId: number | null;
 }
 
 export interface ProfileChangeDocument {

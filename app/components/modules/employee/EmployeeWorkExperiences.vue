@@ -5,10 +5,15 @@
 	import type { CreateWorkExperienceDto, WorkExperience } from '~/types/hr-profile.types';
 
 	/** Kinh nghiệm làm việc của một nhân viên, phòng nhân sự sửa trực tiếp vào hồ sơ. */
-	const props = defineProps<{
-		employeeId: number;
-		canUpdate: boolean;
-	}>();
+	const props = withDefaults(
+		defineProps<{
+			employeeId: number;
+			canUpdate: boolean;
+			/** Hồ sơ của chính người đang đăng nhập: backend chặn tự sửa kinh nghiệm. */
+			selfEditBlocked?: boolean;
+		}>(),
+		{ selfEditBlocked: false },
+	);
 
 	const toast = useToast();
 	const service = useEmployeeProfileService();
@@ -87,6 +92,7 @@
 		<WorkExperienceList
 			:items="items"
 			:loading="loading"
+			:self-edit-blocked="selfEditBlocked"
 			:add-label="canUpdate ? 'Thêm kinh nghiệm' : ''"
 			:edit-label="canUpdate ? 'Sửa' : ''"
 			:remove-label="canUpdate ? 'Xoá' : ''"

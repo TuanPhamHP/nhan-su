@@ -30,12 +30,15 @@
 	const showModal = ref(false);
 	const submitting = ref(false);
 
+	// Họ tên và email công việc là trường bắt buộc của hồ sơ: để trống thì server trả 400, nên
+	// form chặn ngay.
 	const fields = computed<ChangeRequestField[]>(() => [
-		{ key: 'fullName', label: 'Họ và tên', value: props.employee.fullName },
+		{ key: 'fullName', label: 'Họ và tên', value: props.employee.fullName, required: true },
 		{
 			key: 'email',
 			label: 'Email công việc',
 			value: props.employee.email,
+			required: true,
 			hint: 'Email này cũng là tên đăng nhập, nên phòng nhân sự sẽ kiểm tra trước khi đổi.',
 		},
 		{ key: 'dateOfBirth', label: 'Ngày sinh', type: 'date', value: props.employee.dateOfBirth ?? '' },

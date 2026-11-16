@@ -28,6 +28,11 @@ lịch sử công tác. Ngoài phạm vi trả **403 `EMPLOYEE_SCOPE_FORBIDDEN`*
 
 **Thêm, sửa, xoá thân nhân của người khác cần cả `employee:update` và `employee:private:read`** (response có số định danh).
 
+**Không sửa hồ sơ của chính mình qua đường HR** (trừ ADMIN, chốt 16/11): `PATCH /employees/:id/profile`, thêm/sửa/xoá
+thân nhân và kinh nghiệm với `:id` là chính người gọi trả **403 `PROFILE_SELF_EDIT_FORBIDDEN`**. HR đổi ngân hàng, MST,
+người phụ thuộc, kinh nghiệm của mình phải gửi yêu cầu ở trang cá nhân để ADMIN hoặc HR khác duyệt. Web ẩn các nút sửa
+này khi HR xem hồ sơ của chính mình và chỉ sang trang cá nhân.
+
 ---
 
 ## 2. TypeScript types
@@ -254,9 +259,9 @@ Chỉ cần đăng nhập; mọi route lấy nhân viên từ JWT.
 | GET | `/v1/me/profile` | `MyProfile` |
 | POST | `/v1/me/profile/private` | Body `{ password }` → `MyPrivateProfile`. Như `POST /employees/me/identity`: sai mật khẩu 400 `AUTH_INVALID_CREDENTIALS` (không phải 401), 5 lần khoá 30 phút, 30 lần/5 phút theo IP. **200**, không phải 201 |
 | PATCH | `/v1/me/profile/contact` | `{ phone?, personalEmail?, address? }` (`null`/`""` là xoá). **Ghi ngay** → `MyProfile` |
-| GET | `/v1/me/emergency-contacts` | `Relative[]` có `isEmergencyContact` |
+| GET | `/v1/me/emergency-contacts` | `Relative[]` có `isEmergencyContact`. **`identityNumber`, `dateOfBirth` luôn null** ở các route này (không nhập lại mật khẩu). Người vừa là người phụ thuộc (`isDependent: true`) còn có thêm `dependentFrom`, `dependentTo`, `registration`, `registrationLabel`, `occupation`, `note` là null. Xem đủ qua `POST /me/profile/private` |
 | POST | `/v1/me/emergency-contacts` | `{ fullName, relationship, phone?, occupation?, isPrimaryEmergency?, note? }`. Ghi ngay, luôn là liên hệ khẩn cấp, **không** là người phụ thuộc |
-| PATCH, DELETE | `/v1/me/emergency-contacts/:id` | Người này đang là người phụ thuộc → 409 `PROFILE_RELATIVE_NEEDS_REQUEST` (phải gửi yêu cầu mục RELATIVE) |
+| PATCH, DELETE | `/v1/me/emergency-contacts/:id` | Người này đang là người phụ thuộc → 409 `PROFILE_RELATIVE_NEEDS_REQUEST` (phải gửi yêu cầu mục RELATIVE). Thân nhân không phải liên hệ khẩn cấp (HR nhập) → 404 `EMPLOYEE_RELATIVE_NOT_FOUND` |
 | GET | `/v1/me/work-experiences` | Chỉ xem; đổi thì gửi yêu cầu mục EXPERIENCE |
 | GET | `/v1/employees/me/documents` | Có sẵn (thiết kế ghi `/v1/me/documents`, không làm thêm route trùng) |
 
@@ -269,9 +274,11 @@ Chỉ cần đăng nhập; mọi route lấy nhân viên từ JWT.
 | Method | Path | Ghi chú |
 |---|---|---|
 | POST | `/v1/me/profile-change-requests` | Body bên dưới → 201 `{ request: MyProfileChange, supersededIds: number[] }` |
-| GET | `/v1/me/profile-change-requests` | `MyProfileChange[]`, 100 yêu cầu gần nhất |
+| GET | `/v1/me/profile-change-requests` | `MyProfileChange[]`, 100 yêu cầu gần nhất. **Giá trị nhạy cảm bị che** (xem dưới bảng) |
 | POST | `/v1/me/profile-change-requests/:id/cancel` | Chỉ khi PENDING → 200 `MyProfileChange` (`cancelReason: 'Người gửi tự huỷ'`) |
-| POST | `/v1/me/profile-change-requests/documents` | Multipart như upload tài liệu (mục POST ở employee-documents.md) → `EmployeeDocumentResponse`. Giấy tờ ở **trạng thái chờ** |
+| POST | `/v1/me/profile-change-requests/documents` | Multipart như upload tài liệu (mục POST ở employee-documents.md) → `EmployeeDocumentResponse`. Giấy tờ ở **trạng thái chờ**. Có `relativeId` thì giấy tờ vẫn gắn thân nhân nhưng response trả `relativeName: null` (route không nhập lại mật khẩu) |
+| GET | `/v1/me/profile-change-requests/documents` | Giấy tờ chờ của tôi → `PendingDocument[]` = `EmployeeDocumentResponse` + `requestId: number \| null` (yêu cầu đang chờ duyệt kèm giấy tờ này; `null` là chưa gửi kèm, xoá được). Có `fileUrl` đã ký, `relativeName` luôn null |
+| DELETE | `/v1/me/profile-change-requests/documents/:id` | Xoá giấy tờ chờ chưa gửi kèm yêu cầu → 204, xoá cả file. Không phải giấy tờ chờ của mình, hoặc đã thành tài liệu chính thức → 404 `EMPLOYEE_DOCUMENT_NOT_FOUND`. Đang kèm yêu cầu chờ duyệt → 409 `PROFILE_CHANGE_DOCUMENT_IN_USE` (huỷ yêu cầu thì giấy tờ tự xoá) |
 
 **Body POST:**
 
@@ -294,16 +301,36 @@ Chỉ cần đăng nhập; mọi route lấy nhân viên từ JWT.
 | `RELATIVE` | Như POST thân nhân của HR, **trừ `registration`** | CREATE / UPDATE (`targetId`) / DELETE (`targetId`) |
 | `EXPERIENCE` | Như POST kinh nghiệm | CREATE / UPDATE / DELETE |
 
+**Che giá trị ở mọi response `/me/profile-change-requests...`** (tạo, danh sách, huỷ) với mục **BANK, TAX, CITIZEN_ID,
+RELATIVE**: `bankAccountNumber`, `taxCode`, `citizenIdNumber`, `identityNumber` thành `***` + 4 ký tự cuối, **mọi giá trị
+khác** (tên ngân hàng, địa chỉ thường trú, ngày cấp, họ tên thân nhân, `true`/`false`…) thành `***`; ô trống giữ `null`. Áp cho
+cả `before`, `after` và `fields[].before/after`; giữ nguyên tên trường để FE vẫn biết trường nào đổi. Mục BASIC, EXPERIENCE
+không che (đã xem được không cần mật khẩu). Lý do: các route này không nhập lại mật khẩu, nếu trả giá trị thật thì người cầm
+phiên đăng nhập chỉ cần gửi một yêu cầu rồi huỷ là đọc được giá trị đang lưu, còn `after` của yêu cầu đã duyệt chính là giá trị
+đang lưu. Form "Đề nghị thay đổi" lấy giá trị điền sẵn từ `POST /me/profile/private` (CCCD từ `POST /employees/me/identity`).
+Người duyệt xem đủ ở chi tiết.
+
 Server:
 - Kiểm `after` theo mục, **cấm trường lạ** → 400 `PROFILE_CHANGE_SECTION_INVALID` (câu lỗi tiếng Việt ở `message`).
-- **Bỏ trường giống giá trị hiện tại**; không còn gì khác → 400 `PROFILE_CHANGE_NO_DIFF`.
+  Gửi `null` cho trường bắt buộc (họ tên, email, quan hệ, số CCCD, ngày cấp, tên công ty) cũng 400.
+- Mục BASIC, EXPERIENCE: **bỏ trường giống giá trị hiện tại**; không còn gì khác → 400 `PROFILE_CHANGE_NO_DIFF`. Mục BANK,
+  TAX, CITIZEN_ID, RELATIVE **không lọc**, đề nghị trùng giá trị đang lưu vẫn tạo yêu cầu: lọc thì lỗi `NO_DIFF` cho biết đoán
+  trúng, người cầm phiên không biết mật khẩu dò được số CCCD, ngày sinh thân nhân dù response đã che. FE nên tự so với giá trị
+  vừa lấy từ `POST /me/profile/private` để báo "không có gì thay đổi" trước khi gửi.
+- Lúc gửi **không** kiểm hai luật mà kết quả phụ thuộc dữ liệu người gửi không được xem: số CCCD trùng nhân viên khác
+  (`CITIZEN_ID_EXISTS`), và luật thân nhân ghép với bản ghi đang lưu khi **sửa** thân nhân (`EMPLOYEE_RELATIVE_INVALID`, ví dụ
+  tháng kết thúc giảm trừ trước tháng bắt đầu đang lưu). Hai lỗi này chỉ hiện ở bước duyệt, người duyệt từ chối và ghi lý do.
+  Thêm thân nhân (CREATE) vẫn kiểm luật ngay lúc gửi.
 - Chụp giá trị hiện tại vào `before` để lúc duyệt phát hiện người khác đã sửa chen vào.
 - **Q-05:** yêu cầu PENDING cũ cùng (mục, bản ghi đích) tự huỷ, `cancelReason: 'Thay bằng yêu cầu số {id mới}'`, id nằm trong
   `supersededIds`. Vì vậy **gửi lại thì gửi đủ các trường muốn đổi**. Yêu cầu CREATE không thay thế nhau (thêm hai người phụ thuộc
   là hai yêu cầu).
 - Giấy tờ kèm theo phải là giấy tờ chờ của chính mình, không đang đi kèm yêu cầu PENDING ở mục khác → 400
   `PROFILE_CHANGE_DOCUMENT_INVALID`. Giấy tờ chờ chỉ hiện sau khi duyệt; từ chối, huỷ, bị thay thì bị xoá. Chỉ chọn được loại có
-  `employeeVisible`.
+  `employeeVisible`. Mỗi người tối đa **10 giấy tờ chờ chưa gửi kèm yêu cầu** (giấy tờ đã kèm yêu cầu chờ duyệt không tính;
+  riêng với hạn mức 50 tài liệu của hồ sơ), quá thì 400 kèm câu hướng dẫn xoá bớt. Giấy tờ chờ quá 24 giờ không đi kèm yêu cầu
+  nào bị dọn ở lần tải tiếp theo. FE: bỏ file khỏi form thì gọi DELETE; trang cá nhân có khối "Giấy tờ đã tải chưa gửi" lấy từ
+  GET, cho xoá dòng `requestId: null`.
 - Gửi xong, người có quyền duyệt nhận **N-01**.
 
 FE gợi ý (UI-04): khối nhạy cảm có nút "Đề nghị thay đổi" mở form điền sẵn giá trị hiện tại (lấy từ `POST /me/profile/private`),
@@ -331,7 +358,8 @@ Duyệt áp `after` vào hồ sơ trong một transaction, giấy tờ kèm theo
 | Đã duyệt, từ chối, huỷ | 409 | `PROFILE_CHANGE_NOT_PENDING` |
 | Giá trị hiện tại khác lúc gửi, hoặc bản ghi đích đã bị xoá | 409 | `PROFILE_CHANGE_STALE` |
 | Email công việc vừa bị người khác dùng | 409 | `EMPLOYEE_EMAIL_EXISTS` |
-| Số CCCD đã có ở nhân viên khác | 409 | `CITIZEN_ID_EXISTS` |
+| Số CCCD đã có ở nhân viên khác (chỉ báo ở bước duyệt, không báo lúc gửi) | 409 | `CITIZEN_ID_EXISTS` |
+| Sửa thân nhân vi phạm luật khi ghép với bản ghi đang lưu (chỉ báo ở bước duyệt) | 400 | `EMPLOYEE_RELATIVE_INVALID` |
 | Từ chối không ghi lý do | 400 | `PROFILE_CHANGE_REJECT_NOTE_REQUIRED` |
 
 `GET /v1/approval/counts` có thêm `profileChanges`: số PENDING của người khác, 0 nếu không có quyền duyệt.
@@ -408,6 +436,7 @@ Cả ba `actionType: 'NAVIGATE_ONLY'`, có push. Mobile định tuyến theo [fc
 | `code` | HTTP | Khi nào |
 |---|---|---|
 | `EMPLOYEE_SCOPE_FORBIDDEN` | 403 | Ngoài phạm vi xem |
+| `PROFILE_SELF_EDIT_FORBIDDEN` | 403 | Sửa hồ sơ mở rộng, thân nhân, kinh nghiệm của chính mình qua đường HR (trừ ADMIN) |
 | `EMPLOYEE_PRIVATE_FORBIDDEN` | 403 | Giấy tờ nhạy cảm của người khác, thiếu `employee:private:read` |
 | `EMPLOYEE_RELATIVE_INVALID` | 400 | Vi phạm luật thân nhân, kinh nghiệm (mục 4, 5) |
 | `EMPLOYEE_RELATIVE_NOT_FOUND` | 404 / 400 | Thân nhân không thuộc nhân viên |
@@ -417,8 +446,10 @@ Cả ba `actionType: 'NAVIGATE_ONLY'`, có push. Mobile định tuyến theo [fc
 | `EMPLOYMENT_EFFECTIVE_DATE_INVALID` | 400 | Mục 9 |
 | `PROFILE_RELATIVE_NEEDS_REQUEST` | 409 | Tự sửa người phụ thuộc qua liên hệ khẩn cấp |
 | `PROFILE_CHANGE_SECTION_INVALID` | 400 | Mục, thao tác, `after` sai |
-| `PROFILE_CHANGE_NO_DIFF` | 400 | Đề nghị giống hiện tại |
+| `PROFILE_CHANGE_NO_DIFF` | 400 | Đề nghị giống hiện tại (chỉ mục BASIC, EXPERIENCE) |
 | `PROFILE_CHANGE_DOCUMENT_INVALID` | 400 | Mục 7.1 |
+| `PROFILE_CHANGE_DOCUMENT_IN_USE` | 409 | Xoá giấy tờ chờ đang kèm yêu cầu chờ duyệt |
+| `EMPLOYEE_DOCUMENT_NOT_FOUND` | 404 | Xoá giấy tờ chờ không phải của mình, hoặc đã thành tài liệu chính thức |
 | `PROFILE_CHANGE_TARGET_NOT_FOUND` | 404 | `targetId` không phải của mình |
 | `PROFILE_CHANGE_NOT_FOUND`, `_NOT_PENDING`, `_STALE`, `_SELF_DECIDE`, `_REJECT_NOTE_REQUIRED` | | Mục 7.2 |
 | `CITIZEN_ID_EXISTS`, `EMPLOYEE_EMAIL_EXISTS` | 409 | Trùng với nhân viên khác |

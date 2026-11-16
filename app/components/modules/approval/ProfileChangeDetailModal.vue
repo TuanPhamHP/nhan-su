@@ -59,8 +59,11 @@
 			toast.success('Đã duyệt yêu cầu và cập nhật hồ sơ nhân viên.');
 			emit('decided');
 		} catch (e) {
-			// Giữ hộp thoại mở: lỗi hay gặp nhất là có người sửa chen vào, và người duyệt cần
-			// đọc lại bảng ba cột rồi chọn từ chối.
+			// Giữ hộp thoại mở và hiện nguyên câu của máy chủ: người duyệt cần đọc lại bảng ba cột
+			// rồi chọn từ chối. Vài lỗi chỉ lộ ra đúng lúc duyệt chứ không có lúc nhân viên gửi:
+			// số căn cước trùng người khác (409 `CITIZEN_ID_EXISTS`), luật thân nhân vỡ khi ghép
+			// với bản ghi đang lưu (400 `EMPLOYEE_RELATIVE_INVALID`), và có người sửa chen vào
+			// (409 `PROFILE_CHANGE_STALE`). Yêu cầu vẫn ở trạng thái chờ sau những lỗi này.
 			toast.error(e instanceof Error ? e.message : 'Chưa duyệt được yêu cầu này.');
 		} finally {
 			approving.value = false;

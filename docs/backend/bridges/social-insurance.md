@@ -19,6 +19,10 @@
 > `dependentDetails` là mọi thân nhân là người phụ thuộc. Sửa MST ở `PATCH /v1/employees/:id/profile`, người phụ thuộc ở
 > `/v1/employees/:id/relatives` ([hr-profile.md](./hr-profile.md)). FE bỏ ba ô này khỏi form BHXH, thay bằng dòng chỉ đọc kèm
 > link sang hồ sơ nhân viên.
+>
+> Người đọc có `social-insurance:read` nhưng **không có** `employee:private:read` (vai trò tuỳ biến; HR mặc định có cả hai)
+> nhận `taxCode: null` và `idNumber: ""` ở mọi người phụ thuộc: hai giá trị này lấy từ hồ sơ mở rộng, nơi chúng cần quyền đó.
+> Số người phụ thuộc, họ tên, tháng giảm trừ vẫn trả.
 
 > ⚠️ **Thay đổi breaking:** `GET /:employeeId` trước đây cho chính chủ đọc, **nay không còn**.
 
@@ -137,14 +141,14 @@ export interface DependentDetail {
   name: string;
   relationship: string;       // nhãn: "Con", "Vợ hoặc chồng", "Bố", "Mẹ", ...
   relationshipCode: string;   // CHILD | SPOUSE | FATHER | MOTHER | FATHER_IN_LAW | MOTHER_IN_LAW | SIBLING | OTHER
-  idNumber: string;           // số định danh; "" khi chưa có
+  idNumber: string;           // số định danh; "" khi chưa có hoặc người đọc không có employee:private:read
   effectiveDate: string;      // ngày 1 của tháng bắt đầu giảm trừ; "" khi chưa có
   endDate: string | null;     // tháng cuối được giảm trừ; null là đang giảm trừ
   relativeId: number;         // id thân nhân, để mở hồ sơ
 }
 
 export interface TaxInfo {
-  taxCode: string | null;                // MST riêng, không có thì số CCCD
+  taxCode: string | null;                // MST riêng, không có thì số CCCD; null nếu người đọc không có employee:private:read
   dependents: number;                    // số người phụ thuộc giảm trừ trong tháng hiện tại
   dependentDetails: DependentDetail[];   // mọi người phụ thuộc, kể cả người đã thôi
   taxExemptionDocUrl: string | null;     // presigned URL chứng từ miễn giảm

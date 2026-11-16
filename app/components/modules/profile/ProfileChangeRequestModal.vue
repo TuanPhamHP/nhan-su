@@ -11,6 +11,13 @@
 		/** Giá trị hiện tại; ô nào người dùng không sửa thì không nằm trong đề nghị. */
 		value: string;
 		hint?: string;
+		/**
+		 * Trường hồ sơ bắt buộc phải có giá trị, ví dụ họ tên hay email công việc.
+		 *
+		 * Xoá trắng ô này nghĩa là gửi `null` lên server, và server trả 400. Chặn ngay tại form
+		 * để người dùng đọc được câu nhắc thay vì một lỗi chung chung sau khi bấm gửi.
+		 */
+		required?: boolean;
 	}
 
 	/**
@@ -47,7 +54,9 @@
 	const files = ref<File[]>([]);
 	const documentTypeId = ref<number | undefined>(undefined);
 	const uploading = ref(false);
-	const uploadedIds = ref<number[]>([]);
+	/** Giấy tờ đã tải lên trong lượt mở form này, theo thứ tự người dùng chọn. */
+	const attachments = ref<{ id: number; fileName: string }[]>([]);
+	const removingId = ref<number | null>(null);
 
 	const MAX_DOCUMENTS = 5;
 
@@ -65,43 +74,93 @@
 		activeTypes.value.filter(t => t.employeeVisible).map(t => ({ value: t.id, label: t.name })),
 	);
 
+	/**
+	 * Những ô người dùng thật sự sửa.
+	 *
+	 * Với mục ngân hàng, thuế, căn cước và thân nhân thì server không còn trả
+	 * `PROFILE_CHANGE_NO_DIFF` nữa, nên đây là chỗ duy nhất phát hiện "chưa đổi gì". Giá trị đem
+	 * so là giá trị vừa lấy từ `POST /me/profile/private`, không phải giá trị trong yêu cầu cũ,
+	 * vì yêu cầu cũ đã bị che.
+	 */
 	const changed = computed(() =>
 		props.fields.filter(f => (draft[f.key] ?? '').trim() !== (f.value ?? '').trim()),
 	);
 
-	async function submit() {
+	/**
+	 * Tải ngay từng tệp người dùng vừa chọn.
+	 *
+	 * Tải lúc chọn chứ không đợi lúc gửi, để người dùng bỏ được một tệp đã tải (gọi DELETE) và
+	 * để lỗi, ví dụ chạm trần 10 giấy tờ chờ, hiện ra đúng lúc họ vừa chọn. Endpoint nhận mỗi
+	 * lần một tệp nên phải tải lần lượt.
+	 */
+	async function onFilesPicked(picked: File | File[] | null) {
+		const list = Array.isArray(picked) ? picked : picked ? [picked] : [];
+		files.value = [];
+		if (!list.length) return;
 		formError.value = null;
-		if (!changed.value.length) {
-			formError.value = 'Bạn chưa sửa thông tin nào, nên chưa có gì để đề nghị.';
+		if (!documentTypeId.value) {
+			formError.value = 'Bạn chọn loại giấy tờ trước khi tải tệp lên.';
 			return;
 		}
-		if (files.value.length > MAX_DOCUMENTS) {
+		if (attachments.value.length + list.length > MAX_DOCUMENTS) {
 			formError.value = `Mỗi đề nghị kèm được tối đa ${MAX_DOCUMENTS} giấy tờ.`;
 			return;
 		}
-		let documentIds = uploadedIds.value;
-		if (files.value.length && !documentIds.length) {
-			if (!documentTypeId.value) {
-				formError.value = 'Bạn chọn loại giấy tờ cho tệp đính kèm.';
-				return;
+		uploading.value = true;
+		try {
+			for (const file of list) {
+				const doc = await meService.uploadChangeRequestDocument(file, documentTypeId.value);
+				attachments.value = [...attachments.value, { id: doc.id, fileName: doc.fileName }];
 			}
-			uploading.value = true;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được giấy tờ kèm theo.');
+		} finally {
+			uploading.value = false;
+		}
+	}
+
+	/** Bỏ một giấy tờ đã tải: xoá luôn trên máy chủ để không chiếm chỗ trong trần 10 giấy tờ chờ. */
+	async function removeAttachment(id: number) {
+		removingId.value = id;
+		try {
+			await meService.removeChangeRequestDocument(id);
+			attachments.value = attachments.value.filter(a => a.id !== id);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa bỏ được giấy tờ này.');
+		} finally {
+			removingId.value = null;
+		}
+	}
+
+	/**
+	 * Đóng form khi chưa gửi: dọn những giấy tờ vừa tải trong lượt này.
+	 *
+	 * Cố gắng hết sức rồi thôi: người dùng đã đóng form, báo lỗi dọn dẹp chỉ làm họ bối rối, và
+	 * máy chủ cũng tự dọn giấy tờ chờ quá 24 giờ.
+	 */
+	async function closeForm() {
+		const pending = attachments.value.map(a => a.id);
+		attachments.value = [];
+		emit('close');
+		for (const id of pending) {
 			try {
-				// Tải từng tệp một, vì endpoint nhận mỗi lần một tệp. Giấy tờ ở trạng thái chờ,
-				// chỉ hiện trong hồ sơ sau khi phòng nhân sự duyệt.
-				const ids: number[] = [];
-				for (const file of files.value) {
-					const doc = await meService.uploadChangeRequestDocument(file, documentTypeId.value);
-					ids.push(doc.id);
-				}
-				uploadedIds.value = ids;
-				documentIds = ids;
-			} catch (e) {
-				toast.error(e instanceof Error ? e.message : 'Chưa tải được giấy tờ kèm theo.');
-				return;
-			} finally {
-				uploading.value = false;
+				await meService.removeChangeRequestDocument(id);
+			} catch {
+				// Bỏ qua: máy chủ sẽ tự dọn sau 24 giờ.
 			}
+		}
+	}
+
+	async function submit() {
+		formError.value = null;
+		const emptyRequired = props.fields.find(f => f.required && !(draft[f.key] ?? '').trim());
+		if (emptyRequired) {
+			formError.value = `Bạn điền ${emptyRequired.label.toLowerCase()}, đây là thông tin bắt buộc của hồ sơ.`;
+			return;
+		}
+		if (!changed.value.length) {
+			formError.value = 'Bạn chưa sửa thông tin nào, nên chưa có gì để đề nghị.';
+			return;
 		}
 
 		const after: Record<string, unknown> = {};
@@ -109,7 +168,10 @@
 			const raw = (draft[f.key] ?? '').trim();
 			after[f.key] = raw === '' ? null : raw;
 		}
-		emit('submit', { after, documentIds });
+		// Giữ nguyên danh sách giấy tờ: gửi hỏng thì người dùng sửa rồi gửi lại vẫn còn đúng các
+		// tệp đó. Gửi được thì nơi gọi đóng form, component rời màn hình mà không chạy phần dọn,
+		// nên giấy tờ ở lại với yêu cầu như mong muốn.
+		emit('submit', { after, documentIds: attachments.value.map(a => a.id) });
 	}
 
 	const inputCls =
@@ -121,7 +183,7 @@
 	<Teleport to="body">
 		<div
 			class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm"
-			@click.self="emit('close')"
+			@click.self="closeForm"
 		>
 			<div
 				class="my-8 w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
@@ -133,7 +195,7 @@
 					<button
 						type="button"
 						class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
-						@click="emit('close')"
+						@click="closeForm"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -157,7 +219,10 @@
 							<p v-if="field.hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ field.hint }}</p>
 						</template>
 						<template v-else>
-							<label :class="labelCls">{{ field.label }}</label>
+							<label :class="labelCls">
+								{{ field.label }}
+								<span v-if="field.required" class="text-red-500">*</span>
+							</label>
 							<input v-model="draft[field.key]" :class="inputCls" />
 							<p v-if="field.hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ field.hint }}</p>
 						</template>
@@ -175,19 +240,43 @@
 								placeholder="-- Chọn loại giấy tờ --"
 							/>
 						</div>
+
+						<!-- Tệp được tải lên ngay lúc chọn, nên danh sách dưới đây là giấy tờ đã nằm
+						     trên máy chủ; bỏ một dòng là xoá thật. -->
+						<ul v-if="attachments.length" class="space-y-2">
+							<li
+								v-for="item in attachments"
+								:key="item.id"
+								class="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800"
+							>
+								<span class="min-w-0 truncate text-sm text-gray-800 dark:text-gray-100">{{ item.fileName }}</span>
+								<button
+									type="button"
+									class="flex-shrink-0 rounded-md px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+									:disabled="removingId === item.id"
+									@click="removeAttachment(item.id)"
+								>
+									{{ removingId === item.id ? 'Đang bỏ…' : 'Bỏ' }}
+								</button>
+							</li>
+						</ul>
+
 						<UiFileDropzone
-							v-model="files"
+							:model-value="files"
 							multiple
 							accept=".pdf,.docx,.jpg,.jpeg,.png"
 							:max-size-mb="10"
-							hint="Tối đa 5 tệp, mỗi tệp không quá 10MB. Giấy tờ chỉ vào hồ sơ sau khi đề nghị được duyệt."
+							:disabled="uploading || attachments.length >= 5"
+							hint="Tối đa 5 tệp, mỗi tệp không quá 10MB. Tệp được tải lên ngay khi chọn, và chỉ vào hồ sơ sau khi đề nghị được duyệt."
+							@update:model-value="onFilesPicked"
 						/>
+						<p v-if="uploading" class="text-xs text-gray-500 dark:text-gray-400">Đang tải tệp lên…</p>
 					</div>
 
 					<p v-if="formError" class="text-sm text-rose-600 dark:text-rose-400">{{ formError }}</p>
 
 					<div class="flex justify-end gap-3 pt-1">
-						<CommonAppButton type="button" variant="outline" @click="emit('close')">Hủy</CommonAppButton>
+						<CommonAppButton type="button" variant="outline" @click="closeForm">Hủy</CommonAppButton>
 						<CommonAppButton type="submit" :loading="submitting || uploading">Gửi đề nghị</CommonAppButton>
 					</div>
 				</form>
