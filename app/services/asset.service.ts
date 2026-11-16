@@ -10,6 +10,8 @@ import type {
 	AssetDepreciation,
 	AssetDepreciationReport,
 	AssetDepreciationReportQuery,
+	AssetDisposal,
+	AssetDisposalQueryParams,
 	AssetDocument,
 	AssetDocumentUploadBody,
 	AssetEvent,
@@ -33,23 +35,35 @@ import type {
 	AssetServiceCostQuery,
 	AssetServiceCostReport,
 	AssetStatusBody,
+	AssetStocktake,
+	AssetStocktakeLine,
+	AssetStocktakeLinesQuery,
+	AssetStocktakeQueryParams,
+	AssetStocktakeRef,
 	AssetTransferBody,
 	AssetVendor,
 	AssetVendorDetail,
+	CheckAssetStocktakeBody,
 	CloseAssetMaintenanceBody,
 	ConfirmAssetLossBody,
 	ConfirmAssignmentBody,
 	CreateAssetBody,
 	CreateAssetCategoryBody,
+	CreateAssetDisposalBody,
 	CreateAssetMaintenanceBody,
+	CreateAssetStocktakeBody,
 	CreateAssetVendorBody,
+	DecideAssetDisposalBody,
 	HandleAssetIncidentBody,
 	MyAssets,
+	PrintAssetLabelsBody,
 	RepairFromAssetIncidentBody,
 	ReportAssetIncidentBody,
+	ResolveAssetStocktakeLineBody,
 	RespondDisputeBody,
 	UpdateAssetBody,
 	UpdateAssetCategoryBody,
+	UpdateAssetDisposalBody,
 	UpdateAssetMaintenanceBody,
 	UpdateAssetVendorBody,
 } from '~/types/asset.types';
@@ -71,6 +85,7 @@ function documentFormData(body: AssetDocumentUploadBody): FormData {
 	if (body.assignmentId != null) form.append('assignmentId', String(body.assignmentId));
 	if (body.renewalId != null) form.append('renewalId', String(body.renewalId));
 	if (body.maintenanceId != null) form.append('maintenanceId', String(body.maintenanceId));
+	if (body.disposalId != null) form.append('disposalId', String(body.disposalId));
 	return form;
 }
 
@@ -502,6 +517,157 @@ export const useAssetService = () => {
 				method: 'POST',
 				body,
 			});
+			return res.data;
+		},
+
+		// ─── Lô 2b: thanh lý ──────────────────────────────────────────────────────
+
+		async findDisposals(
+			params?: AssetDisposalQueryParams,
+		): Promise<{ data: AssetDisposal[]; meta: PaginatedMeta }> {
+			const res = await authFetch<PaginatedResponse<AssetDisposal>>('/v1/asset-disposals', { params });
+			return { data: res.data, meta: res.meta };
+		},
+
+		async findDisposal(id: number): Promise<AssetDisposal> {
+			const res = await authFetch<ApiResponse<AssetDisposal>>(`/v1/asset-disposals/${id}`);
+			return res.data;
+		},
+
+		/**
+		 * 409 `ASSET_DISPOSAL_NOT_ALLOWED` mang `error.errors: [{ assetId, code, reason }]`, đọc qua
+		 * `disposalItemErrors` để đánh dấu đúng dòng tài sản.
+		 */
+		async createDisposal(body: CreateAssetDisposalBody): Promise<AssetDisposal> {
+			const res = await authFetch<ApiResponse<AssetDisposal>>('/v1/asset-disposals', {
+				method: 'POST',
+				body,
+			});
+			return res.data;
+		},
+
+		/** Chỉ khi phiếu Bị từ chối, và chỉ người lập (hoặc ADMIN). */
+		async updateDisposal(id: number, body: UpdateAssetDisposalBody): Promise<AssetDisposal> {
+			const res = await authFetch<ApiResponse<AssetDisposal>>(`/v1/asset-disposals/${id}`, {
+				method: 'PATCH',
+				body,
+			});
+			return res.data;
+		},
+
+		/** Gửi đúng `round` đang hiện; người khác vừa quyết định thì 409 `ASSET_DISPOSAL_CHANGED`. */
+		async approveDisposal(id: number, body: DecideAssetDisposalBody): Promise<AssetDisposal> {
+			const res = await authFetch<ApiResponse<AssetDisposal>>(`/v1/asset-disposals/${id}/approve`, {
+				method: 'POST',
+				body,
+			});
+			return res.data;
+		},
+
+		async rejectDisposal(id: number, body: DecideAssetDisposalBody): Promise<AssetDisposal> {
+			const res = await authFetch<ApiResponse<AssetDisposal>>(`/v1/asset-disposals/${id}/reject`, {
+				method: 'POST',
+				body,
+			});
+			return res.data;
+		},
+
+		async cancelDisposal(id: number, note?: string): Promise<AssetDisposal> {
+			const res = await authFetch<ApiResponse<AssetDisposal>>(`/v1/asset-disposals/${id}/cancel`, {
+				method: 'POST',
+				body: { note },
+			});
+			return res.data;
+		},
+
+		// ─── Lô 2b: tem QR ────────────────────────────────────────────────────────
+
+		/**
+		 * File PDF khổ A6, mỗi trang một tem. Tải như file Excel: BE trả blob, lỗi 4xx vẫn là JSON
+		 * và `authFetch` đã đọc lại thành câu của BE.
+		 */
+		async printLabels(body: PrintAssetLabelsBody): Promise<Blob> {
+			return authFetch<Blob>('/v1/asset-labels', { method: 'POST', body, responseType: 'blob' });
+		},
+
+		// ─── Lô 2b: kiểm kê ───────────────────────────────────────────────────────
+
+		async findStocktakes(
+			params?: AssetStocktakeQueryParams,
+		): Promise<{ data: AssetStocktake[]; meta: PaginatedMeta }> {
+			const res = await authFetch<PaginatedResponse<AssetStocktake>>('/v1/asset-stocktakes', { params });
+			return { data: res.data, meta: res.meta };
+		},
+
+		/** Đợt đang mở, `null` khi không có. Mọi người có `asset:read` đều gọi được. */
+		async openStocktake(): Promise<AssetStocktakeRef | null> {
+			const res = await authFetch<ApiResponse<AssetStocktakeRef | null>>('/v1/asset-stocktakes/open');
+			return res.data;
+		},
+
+		async findStocktake(id: number): Promise<AssetStocktake> {
+			const res = await authFetch<ApiResponse<AssetStocktake>>(`/v1/asset-stocktakes/${id}`);
+			return res.data;
+		},
+
+		async findStocktakeLines(
+			id: number,
+			params?: AssetStocktakeLinesQuery,
+		): Promise<{ data: AssetStocktakeLine[]; meta: PaginatedMeta }> {
+			const res = await authFetch<PaginatedResponse<AssetStocktakeLine>>(
+				`/v1/asset-stocktakes/${id}/lines`,
+				{ params },
+			);
+			return { data: res.data, meta: res.meta };
+		},
+
+		/** Biên bản kiểm kê `.xlsx`. */
+		async exportStocktake(id: number): Promise<Blob> {
+			return authFetch<Blob>(`/v1/asset-stocktakes/${id}/export`, { responseType: 'blob' });
+		},
+
+		async createStocktake(body: CreateAssetStocktakeBody): Promise<AssetStocktake> {
+			const res = await authFetch<ApiResponse<AssetStocktake>>('/v1/asset-stocktakes', {
+				method: 'POST',
+				body,
+			});
+			return res.data;
+		},
+
+		/** Ghi kết quả một tài sản; lần sau đè lần trước. */
+		async checkStocktake(id: number, body: CheckAssetStocktakeBody): Promise<AssetStocktakeLine> {
+			const res = await authFetch<ApiResponse<AssetStocktakeLine>>(`/v1/asset-stocktakes/${id}/check`, {
+				method: 'POST',
+				body,
+			});
+			return res.data;
+		},
+
+		/** Dòng chưa kiểm thành Không tìm thấy. */
+		async closeStocktake(id: number): Promise<AssetStocktake> {
+			const res = await authFetch<ApiResponse<AssetStocktake>>(`/v1/asset-stocktakes/${id}/close`, {
+				method: 'POST',
+			});
+			return res.data;
+		},
+
+		async cancelStocktake(id: number, note?: string): Promise<AssetStocktake> {
+			const res = await authFetch<ApiResponse<AssetStocktake>>(`/v1/asset-stocktakes/${id}/cancel`, {
+				method: 'POST',
+				body: { note },
+			});
+			return res.data;
+		},
+
+		/** Chỉ sau khi đóng đợt. Lỗi của luồng được gọi trả nguyên mã, dòng giữ Chưa xử lý. */
+		async resolveStocktakeLine(
+			lineId: number,
+			body: ResolveAssetStocktakeLineBody,
+		): Promise<AssetStocktakeLine> {
+			const res = await authFetch<ApiResponse<AssetStocktakeLine>>(
+				`/v1/asset-stocktake-lines/${lineId}/resolve`,
+				{ method: 'POST', body },
+			);
 			return res.data;
 		},
 

@@ -1556,8 +1556,7 @@ Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 
 Thiết kế: `docs/modules/15-assets.md` mục 16. Phần này bổ sung, không đổi hành vi nào của đợt 1 ngoài các điểm
 ghi rõ dưới đây. Các kiểu ở mục "TypeScript Types" phía trên **đã cập nhật** cho đợt 2 (dòng có chú thích
-`// đợt 2`); bảng dưới là tóm tắt phần thay đổi. Lô 2b (thanh lý, tem QR, kiểm kê) chưa có route nào, đừng dựng
-màn hình cho nó.
+`// đợt 2`); bảng dưới là tóm tắt phần thay đổi. Lô 2b (thanh lý, tem QR, kiểm kê) ở mục "Đợt 2 — lô 2b" cuối file.
 
 ### Thay đổi kiểu dữ liệu
 
@@ -2161,3 +2160,371 @@ Nội dung từng câu: `docs/notifications/notification-content-map.md`. Địn
 | Nhân viên báo hỏng thiết bị mình giữ, HR tạo phiếu rồi đóng Xong | – | Người báo nhận N-14 hai lần (tiếp nhận, sửa xong), không nhận N-17 hay N-07; báo cáo `RESOLVED`; quản lý trực tiếp nhận N-07b |
 | Đóng phiếu với ngày xong là ngày mai | 400 | `ASSET_MAINTENANCE_DONE_IN_FUTURE` |
 | Overview sau khi có tài sản mất | 200 | `total` giảm, `byStatus` vẫn có `LOST`; `totals.bookValue` bằng tổng của báo cáo Khấu hao |
+
+## Đợt 2 — lô 2b (14/11/2026): thanh lý, tem QR, kiểm kê
+
+Thiết kế: `docs/modules/15-assets.md` mục 16 (F-15, F-17, F-18, BR-16 đến BR-19). Migration
+`20261114231043_add_asset_disposals_and_stocktakes` và `20261115004940_add_counterparty_to_asset_disposals` (bên mua,
+bên nhận, thêm sau bài nhập vai). Phần này chỉ thêm; hành vi lô 2a giữ nguyên trừ các dòng "Hành vi đổi". App mobile
+(quét tem, màn kiểm kê) đọc `docs/mobile/assets.md`. Mục "Sửa sau bài nhập vai lô 2b" ở cuối liệt kê những gì đổi so
+với bản đầu của mục này.
+
+### Quyền mới
+
+| Mã | Mặc định | Dùng cho |
+|---|---|---|
+| `asset:disposal:approve` | DIRECTOR, CHIEF. ADMIN luôn qua | Duyệt, từ chối phiếu thanh lý; tab "Thanh lý tài sản" trong hộp thư duyệt |
+
+Tạo, sửa, gửi lại, huỷ phiếu; in tem; kiểm kê dùng `asset:manage` có sẵn. Người lập phiếu **không tự duyệt** được
+phiếu của mình (403 `ASSET_DISPOSAL_SELF_APPROVE`), trừ ADMIN. Công ty đang có nhận quyền mới khi người vận hành
+chạy `tenancy:seed-all --only permissions --apply`.
+
+### Hành vi đổi
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| `GET /v1/assets` và `/export` | Không chọn trạng thái thì có cả tài sản Đã thanh lý | Không chọn `status` thì **không** có `DISPOSED`. Chọn `status=DISPOSED` để xem riêng. Báo cáo, Excel kế toán vẫn có |
+| `Asset` | – | Thêm `pendingDisposalId: number \| null`: phiếu thanh lý đang chờ duyệt có tài sản này |
+| Cấp phát, mở phiếu sửa, bảo dưỡng | – | Tài sản có `pendingDisposalId` → 409 `ASSET_DISPOSAL_PENDING`. J-03 không tự mở phiếu bảo dưỡng cho nó, thẻ "Sắp bảo dưỡng" không đếm nó |
+| `AssetOverview` | – | Thêm `pendingDisposals: number` (= `meta.total` của `GET /asset-disposals?status=PENDING`) |
+| `GET /v1/approval/counts` | – | Thêm `assetDisposals: number`, cộng vào `total`. 0 khi module `ASSET` không `ENABLED` |
+| `AssetDocument.links[]` | – | Thêm `disposalId: number \| null`. `POST /v1/asset-documents` nhận thêm `disposalId` (biên bản thanh lý) |
+| Excel kế toán, sheet "Giảm trong kỳ" | Hình thức "Đã thanh lý" | "Thanh lý: Bán/Huỷ/Mất/Tặng", thêm cột "Phiếu thanh lý" (`Số {id}`) |
+| `AssetEvent.type` | – | Thêm `DISPOSAL_REQUESTED` "Đề nghị thanh lý", `DISPOSAL_REJECTED` "Phiếu thanh lý bị từ chối", `DISPOSAL_CANCELLED` "Huỷ phiếu thanh lý", `DISPOSED` "Thanh lý", `STOCKTAKE_CHECKED` "Kiểm kê", `STOCKTAKE_RESOLVED` "Xử lý chênh lệch kiểm kê" |
+
+### TypeScript Types
+
+```ts
+type DisposalMethod = 'SALE' | 'DESTROY' | 'LOSS' | 'DONATION';   // Bán | Huỷ | Mất | Tặng
+type DisposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'; // Chờ duyệt | Đã duyệt | Bị từ chối | Đã huỷ
+
+interface AssetDisposal {
+  id: number;
+  method: DisposalMethod; methodLabel: string;
+  status: DisposalStatus; statusLabel: string;
+  disposalDate: string;          // YYYY-MM-DD, ngày ghi giảm, thôi khấu hao từ ngày này
+  reason: string;
+  proceeds: number | null;       // giá thu về VND; null khi người lập không nhập (không thu tiền) hoặc khi không có quyền xem giá (xem canViewValue)
+  round: number;                 // vòng hiện tại; gửi khi duyệt, từ chối
+  submittedAt: string;           // ISO, lần gửi gần nhất
+  createdBy: { id: number; name: string };
+  decidedBy: { id: number; name: string } | null;
+  decidedAt: string | null;
+  decisionNote: string | null;   // lý do từ chối, hoặc ghi chú khi duyệt
+  items: {
+    assetId: number; code: string; name: string;
+    status: AssetStatus; statusLabel: string;
+    categoryName: string; serialNumber: string | null; location: string | null;
+    costVnd: number | null;               // null khi không có quyền xem giá
+    bookValueAtDisposal: number | null;   // chốt lúc duyệt; null khi chưa duyệt hoặc không có quyền xem giá
+  }[];
+  totalBookValue: number | null;          // chỉ khi APPROVED và có quyền xem giá
+  history: { round: number; action: 'SUBMITTED' | 'RESUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+             actionLabel: string; actorName: string; at: string; note: string | null }[];
+  documents: { id: number; type: string; typeLabel: string; fileName: string; mimeType: string; uploadedBy: { id: number; name: string };
+               sizeBytes: number; uploadedAt: string }[]; // mở qua GET /v1/asset-documents/:id/url
+  actions: { canDecide: boolean; canEdit: boolean; canCancel: boolean }; // tính theo người đang xem
+  canViewValue: boolean;
+  createdAt: string;
+}
+interface CreateDisposalBody {
+  assetIds: number[];            // 1–100 thiết bị
+  method: DisposalMethod;
+  disposalDate: string;          // không sau hôm nay
+  reason: string;                // 3–4000 ký tự
+  proceeds?: number;             // VND, số nguyên ≥ 0
+}
+interface UpdateDisposalBody extends CreateDisposalBody { resubmit?: boolean } // gửi đủ trường như lúc tạo
+interface DecideDisposalBody { round: number; note?: string }               // note bắt buộc khi từ chối
+interface DisposalQuery { page?: number; limit?: number; status?: DisposalStatus; assetId?: number }
+
+type StocktakeStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';                    // Đang kiểm kê | Đã đóng | Đã huỷ
+type StocktakeResult = 'PENDING' | 'OK' | 'WRONG_LOCATION' | 'WRONG_HOLDER' | 'DAMAGED' | 'NOT_FOUND';
+// Chưa kiểm | Đúng | Sai vị trí | Sai người giữ | Hỏng | Không tìm thấy
+type StocktakeResolution = 'NONE' | 'UPDATED' | 'REPAIR_OPENED' | 'MARKED_LOST' | 'IGNORED';
+// Chưa xử lý | Đã cập nhật | Đã mở phiếu sửa | Đã chuyển Mất | Bỏ qua
+
+interface AssetStocktake {
+  id: number; name: string;
+  status: StocktakeStatus; statusLabel: string;
+  scope: { departmentIds: number[]; departmentNames: string[]; categoryIds: number[]; categoryNames: string[];
+           text: string };       // "phòng Kỹ thuật; loại Laptop" hoặc "toàn công ty"
+  note: string | null;
+  openedBy: { id: number; name: string }; openedAt: string;
+  closedBy: { id: number; name: string } | null; closedAt: string | null;
+  summary: { total: number; checked: number; pending: number; ok: number; wrongLocation: number;
+             wrongHolder: number; damaged: number; notFound: number;
+             outOfScope: number;   // quét được ngoài phạm vi
+             unresolved: number }; // dòng chênh lệch chưa xử lý
+}
+interface AssetStocktakeLine {
+  id: number; stocktakeId: number;
+  asset: { id: number; code: string; name: string; status: AssetStatus; statusLabel: string;
+           categoryName: string; serialNumber: string | null; location: string | null };
+  inScope: boolean;              // false: quét được ngoài phạm vi, chỉ tham khảo
+  expectedHolderId: number | null; expectedHolderName: string | null;       // theo sổ lúc mở đợt
+  expectedDepartmentId: number | null; expectedDepartmentName: string | null;
+  expectedLocation: string | null;
+  result: StocktakeResult; resultLabel: string;
+  observedLocation: string | null; observedNote: string | null;
+  checkedBy: { id: number; name: string } | null; checkedAt: string | null; checkedByScan: boolean;
+  resolution: StocktakeResolution; resolutionLabel: string;
+  resolvedBy: { id: number; name: string } | null; resolvedAt: string | null; resolutionNote: string | null;
+}
+interface CreateStocktakeBody { name: string; departmentIds?: number[]; categoryIds?: number[]; note?: string }
+interface CheckStocktakeBody {
+  assetId?: number;              // ghi tay trên danh sách
+  code?: string;                 // ô "Nhập hoặc bắn mã": mã tài sản hoặc nguyên chuỗi QR
+  result: Exclude<StocktakeResult, 'PENDING'>;
+  observedLocation?: string; note?: string;
+  byScan?: boolean;              // true khi đến từ máy bắn mã hay ô bắn mã
+}
+interface ResolveStocktakeLineBody {
+  resolution: Exclude<StocktakeResolution, 'NONE'>;
+  location?: string;                               // UPDATED
+  toEmployeeId?: number;                           // UPDATED: người giữ đúng
+  toDepartmentId?: number; responsibleId?: number; // UPDATED: giao cho phòng ban
+  lostDate?: string;                               // MARKED_LOST, mặc định ngày đóng đợt
+  note?: string;                                   // bắt buộc khi IGNORED
+}
+interface StocktakeLinesQuery { page?: number; limit?: number /* ≤200, mặc định 50 */; result?: StocktakeResult;
+  inScope?: boolean; discrepancy?: boolean; unresolved?: boolean; search?: string }
+
+interface PrintLabelsBody extends Omit<AssetQuery, 'page' | 'limit' | 'kind'> { assetIds?: number[] } // ≤500
+```
+
+### Endpoint
+
+| Method | Path | Quyền | Chỉ xem | Ghi chú |
+|---|---|---|---|---|
+| POST | `/v1/asset-disposals` | `asset:manage` | | Body `CreateDisposalBody` → 201 `AssetDisposal` (PENDING, round 1) |
+| GET | `/v1/asset-disposals` | `asset:read` | ✓ | Phân trang. MANAGER chỉ thấy phiếu có tài sản thuộc phòng mình |
+| GET | `/v1/asset-disposals/:id` | `asset:read` | ✓ | Kèm `history`, `documents`, `actions` |
+| PATCH | `/v1/asset-disposals/:id` | `asset:manage`, người lập (hoặc ADMIN) | | Chỉ khi `REJECTED`. `resubmit: true` → PENDING, `round + 1` |
+| POST | `/v1/asset-disposals/:id/approve` | `asset:disposal:approve` | | Body `{ round, note? }`. Tài sản → `DISPOSED`, thôi khấu hao, chốt giá trị còn lại |
+| POST | `/v1/asset-disposals/:id/reject` | `asset:disposal:approve` | | Body `{ round, note }`, note bắt buộc. Tài sản giữ nguyên |
+| POST | `/v1/asset-disposals/:id/cancel` | `asset:manage`, người lập (hoặc ADMIN) | | Khi `PENDING` hoặc `REJECTED`. Body `{ note? }` |
+| POST | `/v1/asset-labels` | `asset:manage` | ✓ | Body `PrintLabelsBody` → **file PDF** (`application/pdf`, 201), khổ A6, mỗi trang một tem. Chỉ thiết bị, tối đa 500 |
+| POST | `/v1/asset-stocktakes` | `asset:manage` | | Body `CreateStocktakeBody` → 201 `AssetStocktake`. Đã có đợt mở → 409 |
+| GET | `/v1/asset-stocktakes` | `asset:read`, phạm vi toàn công ty | ✓ | Phân trang, `?status=`. MANAGER → 403 |
+| GET | `/v1/asset-stocktakes/open` | `asset:read` | ✓ | `{ id, name } \| null`: đợt đang mở, cho nút "Tạo đợt" và tooltip |
+| GET | `/v1/asset-stocktakes/:id` | `asset:read`, phạm vi toàn công ty | ✓ | `AssetStocktake` kèm `summary` |
+| GET | `/v1/asset-stocktakes/:id/lines` | `asset:read`, phạm vi toàn công ty | ✓ | `StocktakeLinesQuery`. Dòng trong phạm vi đứng trước |
+| GET | `/v1/asset-stocktakes/:id/export` | `asset:read`, phạm vi toàn công ty | ✓ | Biên bản kiểm kê `.xlsx`: sheet "Biên bản kiểm kê" (tiêu đề, phạm vi, số liệu, dòng), sheet "Ngoài phạm vi" nếu có |
+| POST | `/v1/asset-stocktakes/:id/check` | `asset:manage` | | Body `CheckStocktakeBody` → 201 `AssetStocktakeLine`. Lần sau đè lần trước |
+| POST | `/v1/asset-stocktakes/:id/close` | `asset:manage` | | Dòng `PENDING` → `NOT_FOUND`. → 201 `AssetStocktake` |
+| POST | `/v1/asset-stocktakes/:id/cancel` | `asset:manage` | | Body `{ note? }`. Chỉ khi đang mở |
+| POST | `/v1/asset-stocktake-lines/:id/resolve` | `asset:manage` | | Body `ResolveStocktakeLineBody` → 201 `AssetStocktakeLine`. Chỉ sau khi đóng đợt |
+| GET | `/v1/me/asset-scan/:code` | JWT | ✓ | Cho app mobile (xem `docs/mobile/assets.md`). Web không dùng |
+
+Tải PDF tem: gọi bằng `authFetch` với `responseType: 'blob'` rồi tạo link tải (`tem-tai-san.pdf`), giống tải Excel.
+Lỗi 4xx của route này vẫn trả JSON như mọi route khác.
+
+### Thanh lý: luồng và điều kiện (BR-16)
+
+```
+(tạo) ──▶ PENDING ──duyệt──▶ APPROVED: tài sản → DISPOSED
+             │  └──từ chối──▶ REJECTED ──người lập sửa, resubmit──▶ PENDING (round + 1)
+             └──────────────────────┴──người lập huỷ──▶ CANCELLED
+```
+
+- Thanh lý được thiết bị `AVAILABLE`, `BROKEN`, `LOST`, không có cấp phát mở, chưa nằm trong phiếu PENDING khác.
+  Sai một trong các điều kiện → 409 `ASSET_DISPOSAL_NOT_ALLOWED`, kèm `error.errors: [{ assetId, code, reason }]`
+  (một dòng cho mỗi tài sản lỗi). Hiện câu `error.message` và đánh dấu đỏ đúng các dòng trong `errors`.
+- Lúc duyệt, server kiểm lại các điều kiện trên; tài sản đã đổi từ lúc gửi thì cũng 409 `ASSET_DISPOSAL_NOT_ALLOWED`.
+- Duyệt: tài sản `DISPOSED`; `depreciationStopDate` = ngày thanh lý (tài sản đã Mất giữ ngày mất); báo hỏng còn chờ
+  của tài sản tự đóng với ghi chú "Tài sản đã thanh lý theo phiếu số …".
+- Duyệt và từ chối ghi có điều kiện `status = PENDING AND round = :round`: hai người bấm cùng lúc thì người sau 409
+  `ASSET_DISPOSAL_CHANGED`. Gặp mã này thì tải lại phiếu.
+- Nút theo `actions` của response: **Duyệt**, **Từ chối** khi `canDecide`; **Sửa và gửi lại** khi `canEdit`; **Huỷ
+  phiếu** khi `canCancel`. Không tự tính lại ở web.
+
+### Kiểm kê: luồng (BR-17)
+
+```
+(mở đợt: chốt danh sách) ──▶ OPEN ──ghi kết quả (quét, bắn mã, ghi tay; đè lần trước)──▶ OPEN
+                               ├──đóng──▶ CLOSED: PENDING → NOT_FOUND ──xử lý từng dòng chênh lệch
+                               └──huỷ──▶ CANCELLED
+```
+
+- Mỗi lúc chỉ **một** đợt mở (L13). Nút "Tạo đợt kiểm kê" khoá khi `GET /asset-stocktakes/open` khác `null`; tooltip
+  cạnh nút ở trang danh sách và đầu trang chi tiết: "Mỗi lúc chỉ mở được một đợt kiểm kê, để mỗi lần quét luôn ghi
+  vào đúng một đợt. Muốn mở đợt mới, hãy đóng hoặc huỷ đợt đang mở." Khi có đợt mở, tooltip ghi tên đợt đó.
+- Đợt không gồm thiết bị Mất, Đã thanh lý. Phạm vi theo phòng ban là phòng của lần cấp phát đang mở; thiết bị trong
+  kho (chưa cấp phát) chỉ vào đợt toàn công ty hoặc đợt theo loại.
+- Ô **"Nhập hoặc bắn mã"** gửi `code` (nguyên chuỗi máy bắn mã trả về) với `byScan: true`, kết quả mặc định `OK`;
+  sau khi ghi, xoá ô và giữ con trỏ trong ô để bắn tiếp. Response `inScope: false` thì báo "ngoài phạm vi, chỉ ghi
+  tham khảo". Ghi tay trên danh sách gửi `assetId` với `byScan: false`.
+- **Chênh lệch** = dòng trong phạm vi có kết quả khác Đúng (`?discrepancy=true`). Xử lý chỉ sau khi đóng đợt:
+  - `UPDATED`: vị trí mới (`location`) và/hoặc người giữ đúng (`toEmployeeId`, hoặc `toDepartmentId` +
+    `responsibleId`). Đổi người giữ đi qua đúng luồng điều chuyển (đang có người giữ) hoặc cấp phát (chưa có).
+  - `REPAIR_OPENED`: mở phiếu sửa, mô tả "Theo kiểm kê "{tên đợt}": {kết quả}…".
+  - `MARKED_LOST`: tài sản sang Mất, thôi khấu hao từ `lostDate` (mặc định ngày đóng đợt).
+  - `IGNORED`: bắt buộc `note`.
+  Lỗi của luồng được gọi (ví dụ 409 `ASSET_NOT_ASSIGNABLE`, `ASSET_REPAIR_OPEN`) trả nguyên mã và câu, dòng giữ
+  `NONE` để xử lý lại.
+
+### Thông báo mới
+
+| Mã | `type` | Người nhận | `refType` → trang |
+|---|---|---|---|
+| N-10 | `ASSET_DISPOSAL_PENDING` | Người có `asset:disposal:approve` và ADMIN, trừ người lập. Gửi, gửi lại, và J-07 nhắc sau 3 ngày | `asset_disposal` → `/management/assets/disposals/{refId}` |
+| N-10 | `ASSET_DISPOSAL_DECIDED` | Người lập phiếu, khi được duyệt (✅) hoặc bị từ chối (❌) | `asset_disposal` → `/management/assets/disposals/{refId}` |
+
+Hai thông báo đều `NAVIGATE_ONLY` (category `REQUEST`): người duyệt phải mở phiếu xem tài sản và vòng gửi, không duyệt
+nhanh từ chuông. Câu chữ: `docs/notifications/notification-content-map.md`.
+
+### Mã lỗi mới
+
+| HTTP | Mã | Khi nào |
+|---|---|---|
+| 400 | `ASSET_DISPOSAL_DATE_IN_FUTURE` | Ngày thanh lý sau hôm nay |
+| 400 | `ASSET_DISPOSAL_REJECT_NOTE_REQUIRED` | Từ chối mà không ghi lý do |
+| 403 | `ASSET_DISPOSAL_SELF_APPROVE` | Người lập tự duyệt, tự từ chối (trừ ADMIN) |
+| 403 | `ASSET_DISPOSAL_NOT_CREATOR` | Người khác người lập sửa, gửi lại, huỷ (trừ ADMIN) |
+| 404 | `ASSET_DISPOSAL_NOT_FOUND` | |
+| 409 | `ASSET_DISPOSAL_NOT_ALLOWED` | Tài sản không đủ điều kiện, kèm `error.errors` |
+| 409 | `ASSET_DISPOSAL_PENDING` | Cấp phát, mở phiếu sửa, bảo dưỡng tài sản đang chờ duyệt thanh lý |
+| 409 | `ASSET_DISPOSAL_CHANGED` | Phiếu đã sang trạng thái hoặc vòng khác |
+| 409 | `ASSET_DISPOSAL_NOT_EDITABLE` | Sửa phiếu không ở trạng thái Bị từ chối |
+| 409 | `ASSET_DISPOSAL_NOT_CANCELLABLE` | Huỷ phiếu đã duyệt hoặc đã huỷ |
+| 400 | `ASSET_LABEL_NOT_PHYSICAL` | Chọn dịch vụ để in tem |
+| 400 | `ASSET_LABEL_EMPTY` | Bộ lọc không có thiết bị nào |
+| 400 | `ASSET_LABEL_TOO_MANY` | Bộ lọc có hơn 500 thiết bị |
+| 400 | `ASSET_STOCKTAKE_SCOPE_INVALID` | Phòng ban, loại không còn, hoặc chọn loại dịch vụ |
+| 400 | `ASSET_STOCKTAKE_EMPTY` | Phạm vi không có thiết bị nào |
+| 400 | `ASSET_STOCKTAKE_ASSET_REQUIRED` | Ghi kết quả mà không có `assetId` hay `code` |
+| 400 | `ASSET_QR_INVALID` | `code` không phải mã tài sản hay tem của hệ thống |
+| 400 | `ASSET_QR_OTHER_COMPANY` | Tem của công ty khác |
+| 400 | `ASSET_STOCKTAKE_RESULT_INVALID` | `byScan: true` mà ghi Không tìm thấy |
+| 400 | `ASSET_STOCKTAKE_RESOLVE_INPUT` | `UPDATED` thiếu cả vị trí lẫn người giữ; `IGNORED` thiếu ghi chú |
+| 403 | `ASSET_SCOPE_FORBIDDEN` | MANAGER mở trang kiểm kê |
+| 404 | `ASSET_STOCKTAKE_NOT_FOUND`, `ASSET_STOCKTAKE_LINE_NOT_FOUND` | |
+| 404 | `ASSET_NOT_FOUND` | Mã bắn vào không có ở công ty đang chọn |
+| 409 | `ASSET_STOCKTAKE_OPEN_EXISTS` | Mở đợt khi đã có đợt mở; câu lỗi có tên đợt |
+| 409 | `ASSET_STOCKTAKE_CLOSED` | Ghi kết quả, đóng, huỷ đợt đã đóng hoặc đã huỷ |
+| 409 | `ASSET_STOCKTAKE_NOT_CLOSED` | Xử lý chênh lệch khi đợt còn mở (hoặc đã huỷ) |
+| 409 | `ASSET_STOCKTAKE_LINE_OUT_OF_SCOPE` | Xử lý dòng ngoài phạm vi |
+| 409 | `ASSET_STOCKTAKE_LINE_NO_DISCREPANCY` | Xử lý dòng Đúng |
+| 409 | `ASSET_STOCKTAKE_LINE_RESOLVED` | Dòng đã được xử lý |
+
+### Màn hình web lô 2b
+
+| Màn | Việc |
+|---|---|
+| `/management/assets` (danh sách) | Chọn nhiều dòng; nút **In tem** (theo lựa chọn, hoặc theo bộ lọc đang áp khi không chọn dòng nào). Dòng có `pendingDisposalId` có nhãn "Chờ duyệt thanh lý". Bộ lọc trạng thái có "Đã thanh lý" |
+| `/management/assets/[id]` | Nút **In tem**; nút **Đề nghị thanh lý** khi thiết bị `AVAILABLE`/`BROKEN`/`LOST`, không có người giữ, `pendingDisposalId === null`; có `pendingDisposalId` thì băng thông báo "Đang chờ duyệt thanh lý, phiếu số …" kèm link, và ẩn Cấp phát, Mở phiếu sửa |
+| `/management/assets/disposals` | Mới: danh sách phiếu, lọc trạng thái, nút **Tạo phiếu thanh lý** (chọn nhiều thiết bị đủ điều kiện, hình thức, ngày, lý do, giá thu về). Lỗi `ASSET_DISPOSAL_NOT_ALLOWED` đánh dấu đúng dòng |
+| `/management/assets/disposals/[id]` | Mới: thông tin phiếu, bảng tài sản (giá trị khi có quyền), lịch sử các vòng, giấy tờ (tải biên bản thanh lý với `type=DISPOSAL_RECORD`, `disposalId`), nút theo `actions`. Từ chối mở hộp bắt buộc lý do. Sửa và gửi lại mở form như lúc tạo |
+| `/management/assets/stocktakes` | Mới: danh sách đợt với số liệu `summary`; nút **Tạo đợt kiểm kê** (tên, phòng ban, loại) khoá kèm tooltip L13 khi có đợt mở |
+| `/management/assets/stocktakes/[id]` | Mới: đầu trang số liệu và tooltip L13; ô **Nhập hoặc bắn mã** (đợt mở); danh sách dòng lọc theo kết quả, trong/ngoài phạm vi, chênh lệch, chưa xử lý; ghi tay từng dòng (đợt mở); **Đóng đợt** (hộp xác nhận nói rõ số tài sản chưa kiểm sẽ thành Không tìm thấy), **Huỷ đợt**; sau khi đóng, mỗi dòng chênh lệch có nút **Xử lý** (bốn cách); **Xuất biên bản** |
+| `/management/approval` | Tab **Thanh lý tài sản** (khoá `assetDisposals`), hiện khi người xem có `asset:disposal:approve` và module `ASSET` dùng đầy đủ; danh sách `GET /asset-disposals?status=PENDING`, bấm dòng mở trang chi tiết phiếu |
+| Menu tài sản | Thêm "Thanh lý" và "Kiểm kê" (người có `asset:manage`; "Thanh lý" cả người có `asset:disposal:approve`) |
+| Tổng quan | Thẻ "Phiếu thanh lý chờ duyệt" (`pendingDisposals`) bấm sang `/management/assets/disposals?status=PENDING` |
+| Lịch sử tài sản | Nhãn sáu sự kiện mới; payload `disposalId`, `round`, `method`, `note`, `stocktakeName`, `result`, `resolution`, `location { from, to }`, `maintenanceId`, `lostDate` |
+| Định tuyến thông báo | `asset_disposal` → `/management/assets/disposals/:refId`; hai `type` mới |
+
+### Khi module chỉ xem hoặc tắt
+
+Chỉ xem: in tem, quét, xem phiếu, xem đợt, xuất biên bản vẫn chạy. Tạo, sửa, duyệt, huỷ phiếu; mở, ghi, đóng, huỷ
+đợt; xử lý chênh lệch → 403 `MODULE_*`. Số `assetDisposals` của hộp thư duyệt về 0. J-07 dừng.
+
+### Edge cases lô 2b
+
+| Tình huống | HTTP | Ghi chú |
+|---|---|---|
+| Đề nghị thanh lý laptop đang cấp phát (S-16) | 409 | `ASSET_DISPOSAL_NOT_ALLOWED`, lý do "Đang cấp phát… Bạn thu hồi trước" |
+| Giám đốc từ chối, HR sửa và gửi lại, giám đốc duyệt (S-15) | 201 | `history`: SUBMITTED, REJECTED, RESUBMITTED, APPROVED; tài sản có sự kiện từ chối và thanh lý |
+| HR bỏ bớt tài sản khi gửi lại | 200 | Tài sản bị bỏ hết `pendingDisposalId`, cấp phát lại được |
+| Thanh lý thiết bị đã Mất | 201 | `depreciationStopDate` giữ ngày mất |
+| Phiếu nhiều tài sản, một tài sản bị cấp phát lại trước khi duyệt | 409 | Không thể vì cấp phát bị chặn khi phiếu chờ duyệt; dữ liệu cũ sai thì duyệt trả `ASSET_DISPOSAL_NOT_ALLOWED` |
+| In tem không chọn dòng, bộ lọc 0 thiết bị | 400 | `ASSET_LABEL_EMPTY` |
+| Bắn mã tài sản phòng khác vào đợt theo phòng (S-30) | 201 | `inScope: false`, tài sản không đổi gì, không có sự kiện |
+| Bắn hai lần một tài sản | 201 | Lần sau đè lần trước |
+| Đóng đợt còn tài sản chưa kiểm | 201 | Thành `NOT_FOUND`, vào danh sách chênh lệch |
+| Chuyển Mất từ kiểm kê | 201 | Đóng cấp phát (lý do Mất), người giữ nhận N-13, thôi khấu hao từ ngày đóng đợt |
+| Hai người xử lý cùng một dòng | 409 | Người sau `ASSET_STOCKTAKE_LINE_RESOLVED` |
+| MANAGER mở `/management/assets/stocktakes` | 403 | Ẩn menu Kiểm kê với MANAGER |
+
+### Sửa sau bài nhập vai lô 2b (15/11/2026)
+
+Bài nhập vai (HR quản lý tài sản, giám đốc duyệt, trưởng phòng Kho vận, đi kiểm kê bằng máy quét USB) cùng bản rà câu
+chữ tìm ra các chỗ dưới đây. Kiểu ở mục "TypeScript Types" phía trên **chưa** sửa theo bảng này; bảng này là nguồn đúng.
+
+**Thêm field, thêm tham số**
+
+| Chỗ | Thay đổi |
+|---|---|
+| `AssetDisposal.counterparty: string \| null` | Bên mua (Bán) hoặc bên nhận (Tặng). `null` với Tiêu huỷ, Mất |
+| `CreateDisposalBody.counterparty?: string` (cả `UpdateDisposalBody`) | Tối đa 200 ký tự, server cắt khoảng trắng. **Bắt buộc** khi `method` là `SALE` hoặc `DONATION` (400 `ASSET_DISPOSAL_COUNTERPARTY_REQUIRED`); gửi với `DESTROY`, `LOSS` thì bị bỏ qua |
+| `proceeds` | Là **tổng** giá thu về của cả phiếu, không theo từng máy. Ghi rõ trên form |
+| `AssetDisposal.items[].estimatedBookValue: number \| null` | Giá trị còn lại tính tới ngày thanh lý của phiếu, cho phiếu **chưa duyệt** (Chờ duyệt, Bị từ chối, Đã huỷ). Đúng con số sẽ chốt nếu duyệt. `null` khi đã duyệt (xem `bookValueAtDisposal`), khi không có quyền xem giá, khi thiết bị không có nguyên giá |
+| `AssetDisposal.totalBookValue` | Có cả khi chưa duyệt: tổng `estimatedBookValue`. Đã duyệt thì là tổng đã chốt. `null` khi không có quyền xem giá |
+| `GET /v1/assets?disposable=true` | Chỉ thiết bị đề nghị thanh lý được: Sẵn sàng, Hỏng hoặc Mất, không ai giữ, chưa nằm trong phiếu chờ duyệt. Ô tìm thiết bị của form phiếu thanh lý **dùng tham số này**, không gợi ý máy sẽ bị từ chối |
+| `GET /v1/asset-stocktakes/:id/lines?unresolved=true` | Giờ là "dòng chênh lệch chưa xử lý" (đã gồm điều kiện của `discrepancy`). Trước đây gửi một mình thì ra mọi dòng |
+
+**Hành vi đổi**
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| `POST /v1/asset-labels` theo bộ lọc, không chọn `status` | Có cả thiết bị Mất | Bỏ thiết bị Mất (không còn vật để dán). Chọn `status=LOST` hoặc gửi `assetIds` thì vẫn in được |
+| Tem PDF | Mã, tên, loại, công ty | Thêm **số serial** sau tên loại ("Laptop · Serial DL-3440-0102"), để phân biệt máy trùng tên |
+| `ASSET_DISPOSAL_NOT_ALLOWED` lúc **duyệt** | Câu bảo bỏ tài sản khỏi phiếu | Câu cho người duyệt: "Có n thiết bị không còn đủ điều kiện thanh lý: … Bạn từ chối phiếu để người lập bỏ các thiết bị này rồi gửi lại." |
+| `error.errors[].reason` của thiết bị đang cấp phát | "Đang cấp phát cho người dùng…" | Có tên người hoặc phòng đang giữ và chỉ chỗ thu hồi: "Đang cấp phát cho Trịnh Văn Long. Bạn thu hồi ở tab Người dùng của trang tài sản rồi đề nghị thanh lý lại." Thiết bị không còn thì `code` là "Một thiết bị", không lộ id |
+| `ASSET_QR_OTHER_COMPANY` | "…công ty bạn đang chọn." | "Tem này không phải của {tên công ty} nên không ghi vào đợt kiểm kê được. Bạn để riêng tem này ra rồi quét tiếp thiết bị khác." |
+| `AssetStocktake.scope.text` | "phòng Kho vận; loại Laptop" (ra "phòng Phòng …" khi tên phòng đã có chữ Phòng) | "Kho vận, Điều phối vận tải; loại Laptop". Web ghép "Phạm vi: " phía trước, đừng thêm chữ "phòng" |
+| `expectedHolderName` khi cấp cho phòng ban | "Kỹ thuật (Lan chịu trách nhiệm)" | "Kỹ thuật, Lan chịu trách nhiệm"; thiếu người chịu trách nhiệm thì chỉ tên phòng |
+| Biên bản kiểm kê Excel | Một dòng tiêu đề dính tên công ty | Dòng 1 tên công ty, dòng 2 "BIÊN BẢN KIỂM KÊ TÀI SẢN: {tên đợt}", dòng 3 phạm vi và ai mở, đóng đợt, dòng 4 số liệu |
+| Excel kế toán, sheet "Giảm trong kỳ" | – | Thêm cột "Bên mua, bên nhận" |
+| Thông báo N-10 cho người duyệt | Tiêu đề giống nhau cho mọi phiếu | Tiêu đề có số phiếu: `📋 Cần duyệt phiếu thanh lý số {id}`; nội dung có bên mua, giá thu về khi có |
+
+**Nhãn đổi** (lấy từ `…Label` của response, web phải đổi các bản sao nhãn trong `asset.types.ts` cho khớp)
+
+| Mã | Trước | Sau |
+|---|---|---|
+| `AssetDisposalMethod.DESTROY` | Huỷ | **Tiêu huỷ** (tránh lẫn với nút "Huỷ phiếu" và trạng thái "Đã huỷ") |
+| `AssetStocktakeResolution.REPAIR_OPENED` | Đã mở phiếu sửa | Đã tạo phiếu sửa (khớp báo hỏng lô 2a) |
+| `AssetStocktakeResolution.MARKED_LOST` | Đã chuyển Mất | Đã xác nhận mất (khớp "Xác nhận mất" ở Tác vụ) |
+| `AssetStocktakeResolution.IGNORED` | Bỏ qua | **Giữ nguyên sổ** (đổi ở vòng 3, xem mục dưới) |
+| `AssetStocktakeResolution.UPDATED` | Đã cập nhật | **Đã cập nhật sổ** (đổi ở vòng 3) |
+| `AssetEventType.DISPOSAL_REJECTED` | Phiếu thanh lý bị từ chối | Từ chối phiếu thanh lý |
+
+**Thuật ngữ thống nhất cho câu chữ web** (backend đã theo): "dừng khấu hao" (không "thôi khấu hao"); "người lập phiếu";
+"thiết bị" cho mọi thứ trong phiếu thanh lý và đợt kiểm kê; "lần gửi" thay cho "vòng" (không hiện chữ "vòng" hay số
+vòng cho người dùng, chỉ hiện "Gửi lại lần {n}" khi `round > 1`); "quét tem" cho thao tác đọc tem bằng máy quét, ô nhập
+tên "Nhập mã hoặc quét tem"; "Xác nhận mất" cho cách xử lý chuyển Mất.
+
+**Mã lỗi mới**
+
+| HTTP | Mã | Khi nào |
+|---|---|---|
+| 400 | `ASSET_DISPOSAL_COUNTERPARTY_REQUIRED` | Bán hoặc Tặng mà không ghi bên mua, bên nhận |
+
+### Sửa sau vòng nhập vai thứ 3 của lô 2b (15/11/2026)
+
+Kế toán (in biên bản, gửi lại phiếu) và tổng giám đốc (duyệt trên máy tính bảng) tìm ra các chỗ dưới đây.
+
+**Thêm field**
+
+| Chỗ | Thay đổi |
+|---|---|
+| `AssetStocktake.summary.checked` | Giờ chỉ đếm thiết bị **có người ghi kết quả** (`checkedAt` khác null). Trước đây đợt đã đóng thì thiết bị tự thành Không tìm thấy cũng bị tính là đã kiểm |
+| `AssetStocktake.summary.autoNotFound: number` | Mới. Trong `notFound`: số thiết bị không ai kiểm, tự thành Không tìm thấy khi đóng đợt. Đợt đang mở thì luôn 0 (phần chưa kiểm vẫn ở `pending`) |
+| `AssetDisposal.history[].changes: string \| null` | Mới, chỉ ở dòng `RESUBMITTED`: câu tả những gì người lập đã đổi so với lần gửi trước, ví dụ "Bỏ CTA000011 khỏi phiếu. Đổi giá thu về từ 2.000.000 đ sang 500.000 đ." Không đổi gì thì "Gửi lại, không đổi nội dung phiếu." Người không có quyền xem giá chỉ thấy "Đổi giá thu về." không kèm số. Phiếu tạo trước bản này thì `null` |
+| `AssetDisposal.items[].depreciationStopDate: string` | Mới, `YYYY-MM-DD`: ngày dừng khấu hao sẽ dùng (hoặc đã dùng) khi duyệt. Thiết bị **Mất** giữ ngày ghi nhận mất, còn lại là `disposalDate`. Hộp xác nhận duyệt phải lấy ngày từ đây, không lấy `disposalDate` |
+| `AssetDisposal.documents[]` | Thêm `number: string \| null`, `issuedDate: string \| null` (`YYYY-MM-DD`), `amount: number \| null` (null khi không có quyền xem giá) |
+| `Asset.disposal: { id, method, methodLabel, disposalDate } \| null` | Mới: phiếu thanh lý **đã duyệt** của tài sản, để trang tài sản ghi "Đã thanh lý theo phiếu số {id}" có link. `null` khi chưa thanh lý |
+| `AssetEvent` `DOCUMENT_ADDED` | `payload` thêm `disposalId` khi giấy tờ đính vào phiếu thanh lý (đã có sẵn `fileName`, `number`, `documentType`). Lịch sử thiết bị nên ghi "Thêm giấy tờ vào phiếu thanh lý số {disposalId}: {fileName}" |
+
+**Hành vi đổi**
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| `GET /v1/assets` có `search`, không chọn `status` | Ẩn tài sản Đã thanh lý, gõ đúng tên máy vẫn "không tìm thấy" | Có `search` thì **có cả** tài sản Đã thanh lý. Không gõ gì và không chọn `status` thì vẫn ẩn như cũ |
+| `GET /v1/assets/:id/documents` | Không có giấy tờ đính vào phiếu thanh lý | Có giấy tờ của mọi phiếu thanh lý chứa tài sản này |
+| Biên bản kiểm kê Excel | Bảng 15 cột, không định dạng in | In A4 ngang vừa một trang theo chiều ngang, lặp dòng tiêu đề cột, kẻ ô, xuống dòng trong ô. 10 cột: STT, Mã, Tên, Serial, Theo sổ sách (người giữ, phòng, vị trí gộp một ô), Kết quả, Thực tế ghi nhận, Người kiểm (kèm quét tem hay ghi tay), **Thời điểm kiểm**, Xử lý chênh lệch. Dòng tự thành Không tìm thấy ghi "Không ai kiểm, tự ghi khi đóng đợt". Dưới bảng có ngày và chỗ ký: Người lập biên bản, Kế toán trưởng, Giám đốc |
+| Biên bản kiểm kê Excel, dòng số liệu | "Tổng n thiết bị: Đúng…, Chưa kiểm 0." | "Tổng n thiết bị, đã kiểm m. Kết quả: Đúng…"; "Chưa kiểm" chỉ có khi đợt còn mở; thêm câu "Có k thiết bị không ai kiểm nên tự ghi Không tìm thấy khi đóng đợt." khi k > 0 |
+| Phiếu sửa tạo từ dòng kiểm kê | Mô tả có thể dính hai dấu chấm | Ghép câu bỏ dấu câu cuối của ghi chú người gõ. Dòng **Hỏng** thì tình trạng thiết bị chuyển Hỏng |
+| `ASSET_STOCKTAKE_RESOLVE_INPUT` khi `IGNORED` không có ghi chú | "Bạn ghi lý do bỏ qua…" | "Bạn ghi lý do giữ nguyên sổ, để người xem biên bản hiểu vì sao chênh lệch này không cần sửa." |
+
+**Quyền xem kiểm kê**: backend đã cho mọi người có `asset:read` phạm vi toàn công ty (ADMIN, HR, DIRECTOR, CHIEF, hoặc có `asset:manage`) đọc danh sách, chi tiết, dòng, Excel của đợt kiểm kê. Trưởng phòng (phạm vi phòng) vẫn 403. Web đang ẩn mục "Kiểm kê" với người không có `asset:manage`, nên lãnh đạo không thấy; web cần mở mục này ở chế độ chỉ xem cho các vai trò trên.

@@ -1,8 +1,14 @@
 <script setup lang="ts">
 	import { useAssetService } from '~/services/asset.service';
-	import { ASSET_STATUS_CLASS, formatAssetMoney } from '~/utils/asset.utils';
+	import { ASSET_STATUS_CLASS, canViewStocktakes, formatAssetMoney } from '~/utils/asset.utils';
 	import { formatDate } from '~/utils/date';
-	import { PHYSICAL_STATUSES, SERVICE_STATUSES, type AssetOverview, type AssetStatus } from '~/types/asset.types';
+	import {
+		PHYSICAL_STATUSES,
+		SERVICE_STATUSES,
+		type AssetOverview,
+		type AssetStatus,
+		type AssetStocktakeRef,
+	} from '~/types/asset.types';
 
 	/**
 	 * Tổng quan tài sản (F-22) ở đầu trang danh sách.
@@ -16,11 +22,24 @@
 	const emit = defineEmits<{ 'pick-status': [status: AssetStatus] }>();
 
 	const service = useAssetService();
+	const { hasPermission } = usePermissions();
 
 	const data = ref<AssetOverview | null>(null);
 	const loading = ref(true);
 	const loadError = ref<string | null>(null);
 	const open = ref(true);
+
+	/**
+	 * Lô 2b. Kiểm kê và in tem là việc của người quản lý tài sản; thẻ phiếu thanh lý chỉ có nghĩa với
+	 * người lập phiếu và người duyệt. Trưởng phòng bấm vào chỉ gặp một trang trống, nên ẩn thẻ.
+	 */
+	const { user } = useAuth();
+	const canManageAssets = computed(() => hasPermission('asset:manage'));
+	/** Vòng 3: lãnh đạo có `asset:read` phạm vi toàn công ty cũng xem được đợt kiểm kê (chỉ xem). */
+	const canSeeStocktakes = computed(() => canViewStocktakes(user.value?.role, hasPermission));
+	const canSeeDisposals = computed(() => hasPermission(['asset:manage', 'asset:disposal:approve']));
+	/** Đợt kiểm kê đang mở, để người quản lý quay lại đợt đó từ trang đầu. */
+	const openStocktake = ref<AssetStocktakeRef | null>(null);
 
 	/**
 	 * Tổng quan hỏng thì bảng danh sách bên dưới vẫn dùng được, nhưng khối này không được biến
@@ -29,6 +48,13 @@
 	async function load() {
 		loading.value = true;
 		loadError.value = null;
+		if (canSeeStocktakes.value) {
+			// Không chặn Tổng quan: lỗi ở đây chỉ làm mất dòng đợt đang mở.
+			service
+				.openStocktake()
+				.then(r => (openStocktake.value = r))
+				.catch(() => (openStocktake.value = null));
+		}
 		try {
 			data.value = await service.overview();
 		} catch (e) {
@@ -173,7 +199,23 @@
 			<!-- Việc đang chờ -->
 			<div class="space-y-2">
 				<p class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">Việc đang chờ</p>
-				<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+				<NuxtLink
+					v-if="canSeeStocktakes && openStocktake"
+					:to="`/management/assets/stocktakes/${openStocktake.id}`"
+					class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 transition-colors hover:border-blue-400 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+				>
+					<span>Đợt kiểm kê đang mở: {{ openStocktake.name }}</span>
+					<span class="font-medium underline">Xem đợt kiểm kê</span>
+				</NuxtLink>
+				<p v-if="!canManageAssets" class="text-sm text-gray-600 dark:text-gray-400">
+					<template v-if="canSeeStocktakes">
+						Kiểm kê và in tem do người quản lý tài sản thực hiện. Bạn xem kết quả các đợt ở mục Kiểm kê.
+					</template>
+					<template v-else>
+						Kiểm kê và in tem do người quản lý tài sản thực hiện. Bạn cần thông tin thì liên hệ người quản lý tài sản.
+					</template>
+				</p>
+				<div class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
 					<NuxtLink
 						to="/management/assets/reports?tab=expiring"
 						class="rounded-xl border border-gray-200 px-4 py-3 transition-colors hover:border-brand-500 dark:border-gray-700"
@@ -217,6 +259,19 @@
 							:class="data.openIncidents ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white'"
 						>
 							{{ data.openIncidents }}
+						</p>
+					</NuxtLink>
+					<NuxtLink
+						v-if="canSeeDisposals"
+						to="/management/assets/disposals?status=PENDING"
+						class="rounded-xl border border-gray-200 px-4 py-3 transition-colors hover:border-brand-500 dark:border-gray-700"
+					>
+						<p class="text-xs text-gray-600 dark:text-gray-400">Phiếu thanh lý chờ duyệt</p>
+						<p
+							class="mt-0.5 text-lg font-bold tabular-nums"
+							:class="data.pendingDisposals ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white'"
+						>
+							{{ data.pendingDisposals }}
 						</p>
 					</NuxtLink>
 				</div>

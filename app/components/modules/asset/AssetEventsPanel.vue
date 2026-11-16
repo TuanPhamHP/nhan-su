@@ -1,7 +1,7 @@
 <script setup lang="ts">
 	import { useAssetService } from '~/services/asset.service';
 	import { formatDateTime } from '~/utils/date';
-	import { describeAssetEvent } from '~/utils/asset.utils';
+	import { canViewStocktakes, describeAssetEvent } from '~/utils/asset.utils';
 	import type { AssetEvent, AssetEventType } from '~/types/asset.types';
 
 	const props = defineProps<{ assetId: number }>();
@@ -25,7 +25,37 @@
 		STATUS_CHANGED: 'bg-amber-500',
 		RENEWED: 'bg-emerald-500',
 		LICENSE_KEY_CHANGED: 'bg-violet-500',
+		DISPOSAL_REQUESTED: 'bg-amber-500',
+		DISPOSAL_REJECTED: 'bg-rose-500',
+		DISPOSAL_CANCELLED: 'bg-gray-400',
+		DISPOSED: 'bg-gray-600',
+		STOCKTAKE_CHECKED: 'bg-blue-500',
+		STOCKTAKE_RESOLVED: 'bg-blue-500',
 	};
+
+	const { hasPermission } = usePermissions();
+	const { user } = useAuth();
+
+	/**
+	 * Lô 2b: sự kiện thanh lý, kiểm kê có lối sang phiếu hay đợt gốc. Giấy tờ đính vào phiếu thanh lý
+	 * (vòng 3, `DOCUMENT_ADDED` có `disposalId`) cũng dẫn sang phiếu. Đợt kiểm kê chỉ người xem được
+	 * kiểm kê mới thấy link (trưởng phòng nhận 403).
+	 */
+	function sourceLink(ev: AssetEvent): { to: string; label: string } | null {
+		const p = ev.payload ?? {};
+		const isDisposalEvent = ev.type.startsWith('DISPOSAL') || ev.type === 'DISPOSED' || ev.type === 'DOCUMENT_ADDED';
+		if (isDisposalEvent && typeof p.disposalId === 'number') {
+			return { to: `/management/assets/disposals/${p.disposalId}`, label: `Xem phiếu thanh lý số ${p.disposalId}` };
+		}
+		if (
+			typeof p.stocktakeId === 'number' &&
+			ev.type.startsWith('STOCKTAKE') &&
+			canViewStocktakes(user.value?.role, hasPermission)
+		) {
+			return { to: `/management/assets/stocktakes/${p.stocktakeId}`, label: 'Xem đợt kiểm kê' };
+		}
+		return null;
+	}
 
 	/**
 	 * Tải lỗi thì hiện khung lỗi có nút Thử lại tại chỗ. Trước đây lỗi chỉ hiện toast vài giây
@@ -94,6 +124,13 @@
 					>
 						{{ line }}
 					</p>
+					<NuxtLink
+						v-if="sourceLink(ev)"
+						:to="sourceLink(ev)!.to"
+						class="mt-0.5 inline-block text-sm text-brand-600 hover:underline dark:text-brand-400"
+					>
+						{{ sourceLink(ev)!.label }}
+					</NuxtLink>
 				</div>
 			</li>
 		</ol>

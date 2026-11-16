@@ -14,8 +14,16 @@
 	import ChangeStatusModal from '~/components/modules/asset/ChangeStatusModal.vue';
 	import MaintenanceFormModal from '~/components/modules/asset/MaintenanceFormModal.vue';
 	import AssetIncidentsPanel from '~/components/modules/asset/AssetIncidentsPanel.vue';
-	import { ASSET_STATUS_CLASS } from '~/utils/asset.utils';
-	import type { Asset, AssetMaintenanceType } from '~/types/asset.types';
+	import DisposalFormModal from '~/components/modules/asset/DisposalFormModal.vue';
+	import {
+		ASSET_STATUS_CLASS,
+		canProposeDisposal,
+		disposalNumber,
+		downloadAssetBlob,
+		labelsFileName,
+	} from '~/utils/asset.utils';
+	import { formatDate } from '~/utils/date';
+	import type { Asset, AssetDisposal, AssetMaintenanceType } from '~/types/asset.types';
 
 	definePageMeta({ title: 'Chi tiết tài sản' });
 
@@ -129,9 +137,15 @@
 
 	// ─── Thao tác trên tài sản ────────────────────────────────────────────────────
 
+	/**
+	 * Lô 2b: tài sản đang nằm trong phiếu thanh lý chờ duyệt thì BE chặn cấp phát, mở phiếu sửa và
+	 * bảo dưỡng (409 `ASSET_DISPOSAL_PENDING`), nên ẩn hẳn các nút đó và nói lý do ở băng đầu trang.
+	 */
+	const pendingDisposal = computed(() => asset.value?.pendingDisposalId ?? null);
+
 	/** Thiết bị chỉ cấp được khi Sẵn sàng; dịch vụ cấp ghế khi đang hoạt động. */
 	const canAssign = computed(() => {
-		if (!asset.value || !canManage.value) return false;
+		if (!asset.value || !canManage.value || pendingDisposal.value) return false;
 		return isService.value ? asset.value.status === 'ACTIVE' : asset.value.status === 'AVAILABLE';
 	});
 	/**
@@ -162,6 +176,7 @@
 			!!asset.value &&
 			canManage.value &&
 			!isService.value &&
+			!pendingDisposal.value &&
 			['AVAILABLE', 'IN_USE', 'BROKEN'].includes(asset.value.status),
 	);
 	/** Phiếu bảo dưỡng hẹp hơn: chỉ thiết bị lành, tức Sẵn sàng hoặc Đang dùng. */
@@ -170,8 +185,39 @@
 			!!asset.value &&
 			canManage.value &&
 			!isService.value &&
+			!pendingDisposal.value &&
 			['AVAILABLE', 'IN_USE'].includes(asset.value.status),
 	);
+
+	// ─── Lô 2b: đề nghị thanh lý, in tem ──────────────────────────────────────────
+
+	/** Điều kiện hiện nút theo bảng màn hình của bridge doc; BE vẫn kiểm lại khi gửi. */
+	const canDispose = computed(() => !!asset.value && canManage.value && canProposeDisposal(asset.value));
+	const showDisposalForm = ref(false);
+
+	function onDisposalCreated(d: AssetDisposal) {
+		showDisposalForm.value = false;
+		router.push(`/management/assets/disposals/${d.id}`);
+	}
+
+	/** In tem chạy cả khi module chỉ xem, nên chỉ cần quyền quản lý tài sản. Dịch vụ không có tem. */
+	const canPrintLabel = computed(() => !!asset.value && !isService.value && hasPermission('asset:manage'));
+	const printing = ref(false);
+
+	async function printLabel() {
+		if (!asset.value || printing.value) return;
+		printing.value = true;
+		try {
+			const blob = await service.printLabels({ assetIds: [asset.value.id] });
+			const fileName = labelsFileName();
+			downloadAssetBlob(blob, fileName);
+			toast.success(`Đã tải file ${fileName} có tem của ${asset.value.code}. Bạn in khổ A6 rồi dán lên thiết bị.`);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa in được tem. Bạn thử lại sau ít phút.');
+		} finally {
+			printing.value = false;
+		}
+	}
 
 	/** Dải cảnh báo ở đầu trang khi còn báo hỏng, báo mất chưa xử lý. */
 	const openIncidentText = computed(() => {
@@ -246,6 +292,14 @@
 				showStatus.value = true;
 			},
 			hidden: !canMarkStatus.value,
+		},
+		{
+			label: 'Đề nghị thanh lý',
+			icon: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0',
+			action: () => {
+				showDisposalForm.value = true;
+			},
+			hidden: !canDispose.value,
 		},
 		{
 			label: 'Xoá',
@@ -342,7 +396,54 @@
 					</p>
 				</div>
 
-				<UiDropdownMenu v-if="canManage" label="Tác vụ" :items="actionItems" />
+				<div class="flex flex-wrap items-center gap-2">
+					<CommonAppButton
+						v-if="canPrintLabel"
+						variant="outline"
+						:loading="printing"
+						:title="`In tem QR khổ A6 cho ${asset.code}`"
+						@click="printLabel"
+					>
+						In tem
+					</CommonAppButton>
+					<UiDropdownMenu v-if="canManage" label="Tác vụ" :items="actionItems" />
+				</div>
+			</div>
+
+			<!-- Vòng 3: tài sản đã thanh lý theo một phiếu đã duyệt. -->
+			<div
+				v-if="asset.disposal"
+				class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800"
+				role="status"
+			>
+				<p class="text-sm text-gray-700 dark:text-gray-300">
+					Đã thanh lý theo phiếu số {{ asset.disposal.id }}, hình thức {{ asset.disposal.methodLabel }}, ngày
+					{{ formatDate(asset.disposal.disposalDate) }}.
+				</p>
+				<NuxtLink
+					:to="`/management/assets/disposals/${asset.disposal.id}`"
+					class="text-sm font-medium text-brand-700 underline hover:no-underline dark:text-brand-300"
+				>
+					Xem phiếu thanh lý {{ disposalNumber(asset.disposal.id) }}
+				</NuxtLink>
+			</div>
+
+			<!-- Lô 2b: tài sản nằm trong phiếu thanh lý chờ duyệt. -->
+			<div
+				v-if="pendingDisposal"
+				class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20"
+				role="status"
+			>
+				<p class="text-sm text-amber-800 dark:text-amber-300">
+					Thiết bị này đang nằm trong phiếu thanh lý số {{ pendingDisposal }} chờ duyệt. Trong lúc chờ, bạn chưa cấp
+					phát, sửa chữa hay bảo dưỡng được thiết bị này.
+				</p>
+				<NuxtLink
+					:to="`/management/assets/disposals/${pendingDisposal}`"
+					class="text-sm font-medium text-amber-900 underline hover:no-underline dark:text-amber-200"
+				>
+					Xem phiếu thanh lý {{ disposalNumber(pendingDisposal) }}
+				</NuxtLink>
 			</div>
 
 			<!-- Báo hỏng, báo mất chưa xử lý: nói ngay ở đầu trang, kèm lối sang tab xử lý. -->
@@ -459,6 +560,12 @@
 			<AssignModal v-if="showAssign" :asset="asset" @assigned="afterChange" @close="showAssign = false" />
 			<TransferModal v-if="showTransfer" :asset="asset" @transferred="afterChange" @close="showTransfer = false" />
 			<ChangeStatusModal v-if="showStatus" :asset="asset" @changed="afterChange" @close="showStatus = false" />
+			<DisposalFormModal
+				v-if="showDisposalForm"
+				:initial-assets="[asset]"
+				@saved="onDisposalCreated"
+				@close="showDisposalForm = false"
+			/>
 
 			<Teleport to="body">
 				<div

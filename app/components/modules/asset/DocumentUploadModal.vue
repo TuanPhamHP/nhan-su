@@ -12,8 +12,20 @@
 			assignmentId?: number;
 			/** Người phụ trách dịch vụ upload qua route riêng của mình. */
 			serviceId?: number | null;
+			/** Lô 2b. Biên bản thanh lý gắn vào phiếu; BE tự gắn cho mọi tài sản trong phiếu. */
+			disposalId?: number;
+			/** Loại giấy tờ chọn sẵn khi mở hộp. */
+			defaultType?: AssetDocumentType;
 		}>(),
-		{ assetIds: () => [], renewalId: undefined, maintenanceId: undefined, assignmentId: undefined, serviceId: null },
+		{
+			assetIds: () => [],
+			renewalId: undefined,
+			maintenanceId: undefined,
+			assignmentId: undefined,
+			serviceId: null,
+			disposalId: undefined,
+			defaultType: 'INVOICE',
+		},
 	);
 
 	const emit = defineEmits<{
@@ -26,7 +38,7 @@
 
 	const file = ref<File | null>(null);
 	const fileError = ref<string | null>(null);
-	const docType = ref<AssetDocumentType>('INVOICE');
+	const docType = ref<AssetDocumentType>(props.defaultType);
 	const number = ref('');
 	const issuedDate = ref('');
 	const amount = ref('');
@@ -72,6 +84,7 @@
 				renewalId: props.renewalId,
 				maintenanceId: props.maintenanceId,
 				assignmentId: props.assignmentId,
+				disposalId: props.disposalId,
 			};
 			const doc =
 				props.serviceId != null && props.renewalId != null
@@ -149,6 +162,9 @@
 
 					<p v-if="assetIds.length > 1" class="text-xs text-gray-500 dark:text-gray-400">
 						Giấy tờ này sẽ gắn cho {{ assetIds.length }} tài sản cùng lúc.
+					</p>
+					<p v-if="disposalId" class="text-xs text-gray-500 dark:text-gray-400">
+						Giấy tờ này gắn vào phiếu thanh lý và hiện trong mục Giấy tờ của mọi tài sản trong phiếu.
 					</p>
 
 					<div class="flex justify-end gap-3 pt-2">

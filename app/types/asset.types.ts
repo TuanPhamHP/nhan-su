@@ -82,7 +82,27 @@ export type AssetEventType =
 	| 'INCIDENT_HANDLED'
 	| 'MAINTENANCE_SCHEDULED'
 	// sửa sau bài nhập vai: người quản lý tài sản trả lời người nhận báo chưa đúng
-	| 'ASSIGNMENT_DISPUTE_RESOLVED';
+	| 'ASSIGNMENT_DISPUTE_RESOLVED'
+	// lô 2b: thanh lý và kiểm kê
+	| 'DISPOSAL_REQUESTED'
+	| 'DISPOSAL_REJECTED'
+	| 'DISPOSAL_CANCELLED'
+	| 'DISPOSED'
+	| 'STOCKTAKE_CHECKED'
+	| 'STOCKTAKE_RESOLVED';
+
+/** Lô 2b. Hình thức thanh lý: Bán, Tiêu huỷ, Mất, Tặng. */
+export type AssetDisposalMethod = 'SALE' | 'DESTROY' | 'LOSS' | 'DONATION';
+/** Lô 2b. Chờ duyệt, Đã duyệt, Bị từ chối, Đã huỷ. */
+export type AssetDisposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export type AssetDisposalHistoryAction = 'SUBMITTED' | 'RESUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+/** Lô 2b. Đang kiểm kê, Đã đóng, Đã huỷ. */
+export type AssetStocktakeStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';
+/** Lô 2b. Chưa kiểm, Đúng, Sai vị trí, Sai người giữ, Hỏng, Không tìm thấy. */
+export type AssetStocktakeResult = 'PENDING' | 'OK' | 'WRONG_LOCATION' | 'WRONG_HOLDER' | 'DAMAGED' | 'NOT_FOUND';
+/** Lô 2b. Chưa xử lý, Đã cập nhật sổ, Đã tạo phiếu sửa, Đã xác nhận mất, Giữ nguyên sổ. */
+export type AssetStocktakeResolution = 'NONE' | 'UPDATED' | 'REPAIR_OPENED' | 'MARKED_LOST' | 'IGNORED';
 
 // ─── Thành phần dùng lại ──────────────────────────────────────────────────────
 
@@ -243,6 +263,13 @@ export interface Asset {
 	/** Đợt 2. Báo hỏng, báo mất đang chờ xử lý; mảng rỗng là không có. */
 	openIncidents: AssetOpenIncident[];
 	/**
+	 * Lô 2b. Số phiếu thanh lý đang chờ duyệt có tài sản này; `null` là không có. Khác `null` thì
+	 * không cấp phát, mở phiếu sửa hay bảo dưỡng được (409 `ASSET_DISPOSAL_PENDING`).
+	 */
+	pendingDisposalId: number | null;
+	/** Vòng 3. Phiếu thanh lý đã duyệt của tài sản này; `null` khi chưa thanh lý. */
+	disposal: AssetDisposalRef | null;
+	/**
 	 * Ẩn cột tiền theo cờ này, đừng tự suy từ vai trò: người thiếu `asset:value:read`
 	 * nhận `null` ở mọi trường tiền.
 	 */
@@ -387,6 +414,8 @@ export interface AssetDocumentLink {
 	maintenanceId: number | null;
 	/** Đợt 2. Ảnh kèm theo một báo hỏng, báo mất. */
 	incidentId: number | null;
+	/** Lô 2b. Biên bản thanh lý gắn vào một phiếu thanh lý. */
+	disposalId: number | null;
 }
 
 /** KHÔNG có URL file: lấy qua `GET /asset-documents/:id/url` khi người dùng bấm mở. */
@@ -560,6 +589,8 @@ export interface AssetOverview {
 	maintenanceDueIn30Days: number;
 	pendingConfirmations: number;
 	openIncidents: number;
+	/** Lô 2b. Bằng `meta.total` của `GET /asset-disposals?status=PENDING`. */
+	pendingDisposals: number;
 }
 
 export interface AssetServiceCostRow {
@@ -628,6 +659,12 @@ export interface AssetQueryParams {
 	pendingConfirmation?: boolean;
 	/** Sửa sau bài nhập vai. `true` = chỉ tài sản có lần cấp phát người nhận báo chưa đúng. */
 	disputed?: boolean;
+	/**
+	 * Lô 2b, sửa sau bài nhập vai. `true` = chỉ thiết bị đề nghị thanh lý được: Sẵn sàng, Hỏng
+	 * hoặc Mất, không ai giữ, chưa nằm trong phiếu thanh lý chờ duyệt. Dùng cho ô chọn thiết bị
+	 * của phiếu thanh lý.
+	 */
+	disposable?: boolean;
 }
 
 export interface AssetPhysicalBody {
@@ -808,6 +845,8 @@ export interface AssetDocumentUploadBody {
 	assignmentId?: number;
 	renewalId?: number;
 	maintenanceId?: number;
+	/** Lô 2b. Biên bản thanh lý gắn vào phiếu; BE tự gắn cho mọi tài sản trong phiếu. */
+	disposalId?: number;
 }
 
 export interface AssetDepreciationReportQuery {
@@ -894,6 +933,310 @@ export interface AssetMaintenanceCostQuery {
 export interface AssetDateRangeQuery {
 	from: string;
 	to: string;
+}
+
+// ─── Lô 2b: thanh lý ──────────────────────────────────────────────────────────
+
+export interface AssetDisposalItem {
+	assetId: number;
+	code: string;
+	name: string;
+	status: AssetStatus;
+	statusLabel: string;
+	categoryName: string;
+	serialNumber: string | null;
+	location: string | null;
+	/** `null` khi người xem không có quyền xem giá. */
+	costVnd: number | null;
+	/** Chốt lúc duyệt; `null` khi chưa duyệt hoặc không có quyền xem giá. */
+	bookValueAtDisposal: number | null;
+	/**
+	 * Sửa sau bài nhập vai. Giá trị còn lại tạm tính tới ngày thanh lý cho phiếu chưa duyệt (Chờ
+	 * duyệt, Bị từ chối, Đã huỷ), đúng con số sẽ chốt nếu duyệt. `null` khi đã duyệt (xem
+	 * `bookValueAtDisposal`), khi không có quyền xem giá, khi thiết bị không có nguyên giá.
+	 */
+	estimatedBookValue: number | null;
+	/**
+	 * Vòng 3. `YYYY-MM-DD`: ngày dừng khấu hao sẽ dùng (hoặc đã dùng) khi duyệt. Thiết bị Mất giữ
+	 * ngày ghi nhận mất, còn lại là `disposalDate`. Hộp xác nhận duyệt lấy ngày từ đây.
+	 */
+	depreciationStopDate: string;
+}
+
+export interface AssetDisposalHistoryEntry {
+	round: number;
+	action: AssetDisposalHistoryAction;
+	actionLabel: string;
+	actorName: string;
+	at: string;
+	note: string | null;
+	/**
+	 * Vòng 3, chỉ ở dòng `RESUBMITTED`: câu tả những gì người lập phiếu đã đổi so với lần gửi
+	 * trước, hoặc "Gửi lại, không đổi nội dung phiếu.". `null` với phiếu tạo trước bản này.
+	 */
+	changes: string | null;
+}
+
+export interface AssetDisposalDocument {
+	id: number;
+	type: AssetDocumentType;
+	typeLabel: string;
+	/** Vòng 3. Số hiệu giấy tờ. */
+	number: string | null;
+	/** Vòng 3. `YYYY-MM-DD`. */
+	issuedDate: string | null;
+	/** Vòng 3. `null` khi không có hoặc người xem không có quyền xem giá. */
+	amount: number | null;
+	fileName: string;
+	mimeType: string;
+	sizeBytes: number;
+	/** Có trong mã BE (transformer phiếu thanh lý) nhưng bridge doc chưa ghi, nên khai là tuỳ chọn. */
+	uploadedBy?: AssetIdName;
+	uploadedAt: string;
+}
+
+/** Vòng 3. Phiếu thanh lý đã duyệt của một tài sản (`Asset.disposal`). */
+export interface AssetDisposalRef {
+	id: number;
+	method: AssetDisposalMethod;
+	methodLabel: string;
+	/** `YYYY-MM-DD`. */
+	disposalDate: string;
+}
+
+/** Nút trên trang phiếu đi theo cờ này, tính sẵn cho người đang xem. Web không tự tính lại. */
+export interface AssetDisposalActions {
+	canDecide: boolean;
+	canEdit: boolean;
+	canCancel: boolean;
+}
+
+export interface AssetDisposal {
+	id: number;
+	method: AssetDisposalMethod;
+	methodLabel: string;
+	status: AssetDisposalStatus;
+	statusLabel: string;
+	/** `YYYY-MM-DD`, ngày ghi giảm, dừng khấu hao từ ngày này. */
+	disposalDate: string;
+	reason: string;
+	/**
+	 * Tổng giá thu về của cả phiếu (VND); `null` khi người lập không nhập hoặc người xem không có
+	 * quyền xem giá, phân biệt bằng `canViewValue`.
+	 */
+	proceeds: number | null;
+	/** Sửa sau bài nhập vai. Bên mua (Bán) hoặc bên nhận (Tặng); `null` với Tiêu huỷ, Mất. */
+	counterparty: string | null;
+	/** Vòng hiện tại; gửi kèm khi duyệt, từ chối. */
+	round: number;
+	/** Lần gửi gần nhất. */
+	submittedAt: string;
+	createdBy: AssetIdName;
+	decidedBy: AssetIdName | null;
+	decidedAt: string | null;
+	/** Lý do từ chối, hoặc ghi chú khi duyệt. */
+	decisionNote: string | null;
+	items: AssetDisposalItem[];
+	/**
+	 * Sửa sau bài nhập vai: có cả khi chưa duyệt. Đã duyệt là tổng đã chốt, chưa duyệt là tổng
+	 * `estimatedBookValue`. `null` khi không có quyền xem giá.
+	 */
+	totalBookValue: number | null;
+	history: AssetDisposalHistoryEntry[];
+	/** Mở qua `GET /asset-documents/:id/url`. */
+	documents: AssetDisposalDocument[];
+	actions: AssetDisposalActions;
+	canViewValue: boolean;
+	createdAt: string;
+}
+
+export interface CreateAssetDisposalBody {
+	/** 1–100 thiết bị. */
+	assetIds: number[];
+	method: AssetDisposalMethod;
+	/** Không sau hôm nay. */
+	disposalDate: string;
+	/** 3–4000 ký tự. */
+	reason: string;
+	/** Tổng giá thu về của cả phiếu, VND, số nguyên ≥ 0. */
+	proceeds?: number;
+	/**
+	 * Sửa sau bài nhập vai. Bên mua hoặc bên nhận, tối đa 200 ký tự. Bắt buộc khi `SALE`,
+	 * `DONATION` (400 `ASSET_DISPOSAL_COUNTERPARTY_REQUIRED`); BE bỏ qua với `DESTROY`, `LOSS`.
+	 */
+	counterparty?: string;
+}
+
+/** Gửi đủ trường như lúc tạo. `resubmit: true` thì phiếu về Chờ duyệt và sang vòng mới. */
+export interface UpdateAssetDisposalBody extends CreateAssetDisposalBody {
+	resubmit?: boolean;
+}
+
+/** `note` bắt buộc khi từ chối. */
+export interface DecideAssetDisposalBody {
+	round: number;
+	note?: string;
+}
+
+export interface AssetDisposalQueryParams {
+	page?: number;
+	limit?: number;
+	status?: AssetDisposalStatus;
+	assetId?: number;
+}
+
+/** Một dòng trong `error.errors` của 409 `ASSET_DISPOSAL_NOT_ALLOWED`. */
+export interface AssetDisposalItemError {
+	assetId: number;
+	code: string;
+	reason: string;
+}
+
+// ─── Lô 2b: tem QR ────────────────────────────────────────────────────────────
+
+/**
+ * In tem theo danh sách đã chọn (`assetIds`, tối đa 500) hoặc theo bộ lọc của danh sách tài sản.
+ * Không nhận `kind`, `page`, `limit`. Chỉ thiết bị có tem.
+ */
+export interface PrintAssetLabelsBody extends Omit<AssetQueryParams, 'page' | 'limit' | 'kind' | 'disposable'> {
+	assetIds?: number[];
+}
+
+// ─── Lô 2b: kiểm kê ───────────────────────────────────────────────────────────
+
+export interface AssetStocktakeScope {
+	departmentIds: number[];
+	departmentNames: string[];
+	categoryIds: number[];
+	categoryNames: string[];
+	/** VD "Kho vận, Điều phối vận tải; loại Laptop" hoặc "toàn công ty". Web ghép "Phạm vi: " phía trước. */
+	text: string;
+}
+
+export interface AssetStocktakeSummary {
+	total: number;
+	checked: number;
+	pending: number;
+	ok: number;
+	wrongLocation: number;
+	wrongHolder: number;
+	damaged: number;
+	notFound: number;
+	/** Quét được ngoài phạm vi. */
+	outOfScope: number;
+	/**
+	 * Vòng 3. Trong `notFound`: số thiết bị không ai kiểm, tự thành Không tìm thấy khi đóng đợt.
+	 * Đợt đang mở luôn 0. `checked` từ vòng 3 chỉ đếm dòng có người ghi kết quả.
+	 */
+	autoNotFound: number;
+	/** Dòng chênh lệch chưa xử lý. */
+	unresolved: number;
+}
+
+export interface AssetStocktake {
+	id: number;
+	name: string;
+	status: AssetStocktakeStatus;
+	statusLabel: string;
+	scope: AssetStocktakeScope;
+	note: string | null;
+	openedBy: AssetIdName;
+	openedAt: string;
+	closedBy: AssetIdName | null;
+	closedAt: string | null;
+	summary: AssetStocktakeSummary;
+}
+
+/** `GET /asset-stocktakes/open`: đợt đang mở, hoặc `null`. */
+export interface AssetStocktakeRef {
+	id: number;
+	name: string;
+}
+
+export interface AssetStocktakeLine {
+	id: number;
+	stocktakeId: number;
+	asset: {
+		id: number;
+		code: string;
+		name: string;
+		status: AssetStatus;
+		statusLabel: string;
+		categoryName: string;
+		serialNumber: string | null;
+		location: string | null;
+	};
+	/** `false`: quét được ngoài phạm vi, chỉ ghi tham khảo, không xử lý được. */
+	inScope: boolean;
+	/** Theo sổ lúc mở đợt. */
+	expectedHolderId: number | null;
+	expectedHolderName: string | null;
+	expectedDepartmentId: number | null;
+	expectedDepartmentName: string | null;
+	expectedLocation: string | null;
+	result: AssetStocktakeResult;
+	resultLabel: string;
+	observedLocation: string | null;
+	observedNote: string | null;
+	checkedBy: AssetIdName | null;
+	checkedAt: string | null;
+	checkedByScan: boolean;
+	resolution: AssetStocktakeResolution;
+	resolutionLabel: string;
+	resolvedBy: AssetIdName | null;
+	resolvedAt: string | null;
+	resolutionNote: string | null;
+}
+
+export interface CreateAssetStocktakeBody {
+	name: string;
+	departmentIds?: number[];
+	categoryIds?: number[];
+	note?: string;
+}
+
+export interface CheckAssetStocktakeBody {
+	/** Ghi tay trên danh sách. */
+	assetId?: number;
+	/** Ô "Nhập mã hoặc quét tem": mã tài sản hoặc nguyên chuỗi QR. */
+	code?: string;
+	result: Exclude<AssetStocktakeResult, 'PENDING'>;
+	observedLocation?: string;
+	note?: string;
+	/** `true` khi đến từ máy quét tem hay ô quét tem. */
+	byScan?: boolean;
+}
+
+export interface ResolveAssetStocktakeLineBody {
+	resolution: Exclude<AssetStocktakeResolution, 'NONE'>;
+	/** `UPDATED`: vị trí mới. */
+	location?: string;
+	/** `UPDATED`: người giữ đúng. */
+	toEmployeeId?: number;
+	/** `UPDATED`: giao cho phòng ban, kèm người chịu trách nhiệm. */
+	toDepartmentId?: number;
+	responsibleId?: number;
+	/** `MARKED_LOST`, mặc định ngày đóng đợt. */
+	lostDate?: string;
+	/** Bắt buộc khi `IGNORED`. */
+	note?: string;
+}
+
+export interface AssetStocktakeQueryParams {
+	page?: number;
+	limit?: number;
+	status?: AssetStocktakeStatus;
+}
+
+export interface AssetStocktakeLinesQuery {
+	page?: number;
+	/** ≤ 200, mặc định 50. */
+	limit?: number;
+	result?: AssetStocktakeResult;
+	inScope?: boolean;
+	discrepancy?: boolean;
+	unresolved?: boolean;
+	search?: string;
 }
 
 // ─── Nhãn tĩnh cho bộ lọc ─────────────────────────────────────────────────────
@@ -1004,6 +1347,45 @@ export const ASSET_END_REASON_LABELS: Record<AssetAssignmentEndReason, string> =
 	RETURNED: 'Thu hồi',
 	TRANSFERRED: 'Điều chuyển',
 	LOST: 'Mất',
+};
+
+// Lô 2b. Khớp từng chữ với `vi-labels.ts` của BE.
+
+export const ASSET_DISPOSAL_METHOD_LABELS: Record<AssetDisposalMethod, string> = {
+	SALE: 'Bán',
+	DESTROY: 'Tiêu huỷ',
+	LOSS: 'Mất',
+	DONATION: 'Tặng',
+};
+
+export const ASSET_DISPOSAL_STATUS_LABELS: Record<AssetDisposalStatus, string> = {
+	PENDING: 'Chờ duyệt',
+	APPROVED: 'Đã duyệt',
+	REJECTED: 'Bị từ chối',
+	CANCELLED: 'Đã huỷ',
+};
+
+export const ASSET_STOCKTAKE_STATUS_LABELS: Record<AssetStocktakeStatus, string> = {
+	OPEN: 'Đang kiểm kê',
+	CLOSED: 'Đã đóng',
+	CANCELLED: 'Đã huỷ',
+};
+
+export const ASSET_STOCKTAKE_RESULT_LABELS: Record<AssetStocktakeResult, string> = {
+	PENDING: 'Chưa kiểm',
+	OK: 'Đúng',
+	WRONG_LOCATION: 'Sai vị trí',
+	WRONG_HOLDER: 'Sai người giữ',
+	DAMAGED: 'Hỏng',
+	NOT_FOUND: 'Không tìm thấy',
+};
+
+export const ASSET_STOCKTAKE_RESOLUTION_LABELS: Record<AssetStocktakeResolution, string> = {
+	NONE: 'Chưa xử lý',
+	UPDATED: 'Đã cập nhật sổ',
+	REPAIR_OPENED: 'Đã tạo phiếu sửa',
+	MARKED_LOST: 'Đã xác nhận mất',
+	IGNORED: 'Giữ nguyên sổ',
 };
 
 /** Trạng thái nào thuộc họ nào — để dựng option lọc theo `kind` đang chọn. */

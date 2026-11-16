@@ -6,6 +6,8 @@
 	import {
 		downloadAssetBlob,
 		formatAssetMoney,
+		labelsFileName,
+		defaultStatusLabel,
 		maintenanceDaysLeft,
 		maintenanceDueClass,
 		ASSET_STATUS_CLASS,
@@ -35,6 +37,8 @@
 	const { departments } = storeToRefs(directoryStore);
 
 	const canManage = computed(() => canWrite('ASSET') && hasPermission('asset:manage'));
+	/** In tem chạy cả khi module chỉ xem (bridge doc lô 2b), nên chỉ cần quyền quản lý tài sản. */
+	const canPrintLabels = computed(() => hasPermission('asset:manage'));
 
 	/**
 	 * Trưởng phòng chỉ xem được tài sản của phòng mình (M3). Ô lọc phòng ban với đủ sáu phòng chỉ
@@ -277,7 +281,7 @@
 				: PHYSICAL_STATUSES
 			: [...PHYSICAL_STATUSES, ...SERVICE_STATUSES];
 		return [
-			{ value: '', label: 'Tất cả trạng thái' },
+			{ value: '', label: defaultStatusLabel(filterKind.value, search.value) },
 			...codes.map(code => ({ value: code, label: ASSET_STATUS_LABELS[code] })),
 		];
 	});
@@ -368,6 +372,74 @@
 		}
 	}
 
+	// ─── Chọn nhiều dòng và in tem ────────────────────────────────────────────────
+	//
+	// Lựa chọn giữ qua các trang và các lần lọc, để in tem cho vài máy nằm rải ở nhiều trang. Chọn
+	// được cả dịch vụ: BE trả câu lỗi nói rõ dịch vụ nào cần bỏ ra, thay vì web lặng lẽ bỏ qua.
+	const selectedIds = ref<number[]>([]);
+	const printing = ref(false);
+
+	const isSelected = (id: number) => selectedIds.value.includes(id);
+	function toggleSelected(id: number) {
+		selectedIds.value = isSelected(id) ? selectedIds.value.filter(x => x !== id) : [...selectedIds.value, id];
+	}
+	const allOnPageSelected = computed(() => assets.value.length > 0 && assets.value.every(a => isSelected(a.id)));
+	function toggleAllOnPage() {
+		const pageIds = assets.value.map(a => a.id);
+		selectedIds.value = allOnPageSelected.value
+			? selectedIds.value.filter(id => !pageIds.includes(id))
+			: [...new Set([...selectedIds.value, ...pageIds])];
+	}
+
+	/** Theo bộ lọc thì BE chỉ in thiết bị; đang lọc riêng dịch vụ mà bấm in thì kết quả không khớp cái đang nhìn. */
+	const printBlockedByKind = computed(() => !selectedIds.value.length && filterKind.value === 'SERVICE');
+	const printTitle = computed(() =>
+		printBlockedByKind.value
+			? 'Dịch vụ thuê bao không có tem. Bạn chọn loại hình Thiết bị hoặc chọn từng thiết bị để in tem.'
+			: selectedIds.value.length
+				? `In tem QR khổ A6 cho ${selectedIds.value.length} tài sản đã chọn`
+				: 'In tem QR khổ A6 cho mọi thiết bị khớp bộ lọc đang chọn',
+	);
+
+	/** Không chọn dòng nào thì in theo bộ lọc: hỏi lại trước, vì một cú bấm có thể ra hàng trăm tem. */
+	const confirmPrintByFilter = ref(false);
+
+	function handlePrintLabels() {
+		if (printing.value || printBlockedByKind.value) return;
+		if (!selectedIds.value.length) {
+			confirmPrintByFilter.value = true;
+			return;
+		}
+		printLabels();
+	}
+
+	async function printLabels() {
+		confirmPrintByFilter.value = false;
+		printing.value = true;
+		try {
+			const { kind: _kind, ...filter } = currentQuery();
+			const count = selectedIds.value.length;
+			const blob = await service.printLabels(count ? { assetIds: selectedIds.value } : filter);
+			// Tên file có ngày giờ để hai lần in không đè tên nhau trong thư mục tải về.
+			const fileName = labelsFileName();
+			downloadAssetBlob(blob, fileName);
+			toast.success(
+				count
+					? `Đã tải file ${fileName} gồm tem của ${count} thiết bị đã chọn, mỗi trang một tem khổ A6.`
+					: `Đã tải file ${fileName} gồm tem của các thiết bị khớp bộ lọc, mỗi trang một tem khổ A6.`,
+			);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa in được tem. Bạn thử lại sau ít phút.');
+		} finally {
+			printing.value = false;
+		}
+	}
+
+	useEscapeKey(
+		() => (confirmPrintByFilter.value = false),
+		() => confirmPrintByFilter.value,
+	);
+
 	async function onSaved() {
 		showFormModal.value = false;
 		page.value = 1;
@@ -391,6 +463,17 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
+				<CommonAppButton
+					v-if="canPrintLabels"
+					variant="outline"
+					:loading="printing"
+					:disabled="printBlockedByKind"
+					:title="printTitle"
+					:aria-label="printTitle"
+					@click="handlePrintLabels"
+				>
+					{{ selectedIds.length ? `In tem (${selectedIds.length})` : 'In tem' }}
+				</CommonAppButton>
 				<CommonAppButton
 					variant="outline"
 					:loading="exporting"
@@ -464,6 +547,16 @@
 					</button>
 				</span>
 			</div>
+
+			<div
+				v-if="canPrintLabels && selectedIds.length"
+				class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-200"
+			>
+				<span>Đã chọn {{ selectedIds.length }} tài sản. Bấm In tem để tải tem của các tài sản này.</span>
+				<button type="button" class="min-h-11 font-medium underline hover:no-underline sm:min-h-0" @click="selectedIds = []">
+					Bỏ chọn
+				</button>
+			</div>
 		</div>
 
 		<!-- Bảng -->
@@ -496,8 +589,20 @@
 
 			<!-- Thẻ trên điện thoại: bảng bảy cột bóp vào 390 px thì chữ bẻ vụn và phải vuốt ngang (M4). -->
 			<ul v-else class="divide-y divide-gray-100 sm:hidden dark:divide-gray-800">
-				<li v-for="asset in assets" :key="asset.id">
-					<NuxtLink :to="`/management/assets/${asset.id}`" class="block space-y-1.5 p-4 active:bg-gray-50 dark:active:bg-gray-800/40">
+				<li v-for="asset in assets" :key="asset.id" class="flex items-start">
+					<label
+						v-if="canPrintLabels"
+						class="flex min-h-11 min-w-11 flex-shrink-0 cursor-pointer items-start justify-center pl-3 pt-4"
+						:aria-label="`Chọn ${asset.code} để in tem`"
+					>
+						<input
+							type="checkbox"
+							class="h-5 w-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+							:checked="isSelected(asset.id)"
+							@change="toggleSelected(asset.id)"
+						/>
+					</label>
+					<NuxtLink :to="`/management/assets/${asset.id}`" class="block min-w-0 flex-1 space-y-1.5 p-4 active:bg-gray-50 dark:active:bg-gray-800/40">
 						<div class="flex items-start justify-between gap-2">
 							<div class="min-w-0">
 								<p class="font-medium text-gray-900 dark:text-white">{{ asset.name }}</p>
@@ -507,6 +612,12 @@
 								{{ asset.statusLabel }}
 							</span>
 						</div>
+						<span
+							v-if="asset.pendingDisposalId"
+							class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+						>
+							Chờ duyệt thanh lý
+						</span>
 						<p class="text-sm text-gray-600 dark:text-gray-400">{{ asset.category.groupName }} → {{ asset.category.name }}</p>
 						<p class="text-sm text-gray-700 dark:text-gray-300">Đang giữ: {{ holderLabel(asset) }}</p>
 						<p v-if="asset.openIncidents.length" class="text-sm text-amber-700 dark:text-amber-400">{{ incidentFlagTitle(asset) }}</p>
@@ -528,6 +639,15 @@
 				<table class="w-full text-sm">
 					<thead>
 						<tr class="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+							<th v-if="canPrintLabels" class="w-10 py-3 pl-4">
+								<input
+									type="checkbox"
+									class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+									:checked="allOnPageSelected"
+									aria-label="Chọn mọi tài sản trên trang này để in tem"
+									@change="toggleAllOnPage"
+								/>
+							</th>
 							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Mã tài sản</th>
 							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tên</th>
 							<th v-if="showMaintenanceColumn" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Hạn bảo dưỡng</th>
@@ -543,7 +663,17 @@
 							v-for="asset in assets"
 							:key="asset.id"
 							class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/40"
+							:class="isSelected(asset.id) ? 'bg-brand-50/60 dark:bg-brand-900/20' : ''"
 						>
+							<td v-if="canPrintLabels" class="py-3 pl-4">
+								<input
+									type="checkbox"
+									class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+									:checked="isSelected(asset.id)"
+									:aria-label="`Chọn ${asset.code} để in tem`"
+									@change="toggleSelected(asset.id)"
+								/>
+							</td>
 							<td class="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{{ asset.code }}</td>
 							<td class="px-4 py-3">
 								<div class="flex items-center gap-1.5">
@@ -615,6 +745,13 @@
 								>
 									{{ asset.statusLabel }}
 								</span>
+								<NuxtLink
+									v-if="asset.pendingDisposalId"
+									:to="`/management/assets/disposals/${asset.pendingDisposalId}`"
+									class="mt-1 inline-flex whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 hover:underline dark:bg-amber-900/30 dark:text-amber-400"
+								>
+									Chờ duyệt thanh lý
+								</NuxtLink>
 								<p v-if="asset.purchaseDate" class="mt-0.5 text-xs text-gray-400">
 									Mua {{ formatDate(asset.purchaseDate) }}
 								</p>
@@ -648,6 +785,27 @@
 		</div>
 
 		<AssetFormModal v-if="showFormModal" @saved="onSaved" @close="showFormModal = false" />
+
+		<Teleport to="body">
+			<div
+				v-if="confirmPrintByFilter"
+				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+				role="alertdialog"
+				aria-modal="true"
+				aria-label="In tem theo bộ lọc"
+			>
+				<div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+					<h2 class="text-base font-semibold text-gray-900 dark:text-white">In tem theo bộ lọc</h2>
+					<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+						In tem cho các thiết bị đang hiện theo bộ lọc? Dịch vụ và thiết bị đã mất không có tem.
+					</p>
+					<div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+						<CommonAppButton variant="secondary" class="min-h-11 sm:min-h-0" @click="confirmPrintByFilter = false">Quay lại</CommonAppButton>
+						<CommonAppButton variant="primary" class="min-h-11 sm:min-h-0" @click="printLabels">In tem</CommonAppButton>
+					</div>
+				</div>
+			</div>
+		</Teleport>
 		<AssetImportModal v-if="showImportModal" @imported="onImported" @close="showImportModal = false" />
 	</div>
 </template>

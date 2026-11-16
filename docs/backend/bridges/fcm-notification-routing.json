@@ -608,6 +608,32 @@
       "note": "Module ASSET"
     },
 
+    "ASSET_DISPOSAL_PENDING": {
+      "category": "REQUEST",
+      "refType": "asset_disposal",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/disposals/{refId}",
+      "trigger": "Người quản lý tài sản gửi hoặc gửi lại phiếu thanh lý; J-07 nhắc khi phiếu chờ duyệt quá 3 ngày (lô 2b, F-15)",
+      "recipients": ["người có asset:disposal:approve", "ADMIN", "trừ người lập phiếu"],
+      "frequency": "real-time + daily cron",
+      "note": "Module ASSET. refId là id phiếu thanh lý. NAVIGATE_ONLY: duyệt cần xem tài sản và đúng vòng, chỉ làm trên web"
+    },
+
+    "ASSET_DISPOSAL_DECIDED": {
+      "category": "REQUEST",
+      "refType": "asset_disposal",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/disposals/{refId}",
+      "trigger": "Phiếu thanh lý được duyệt hoặc bị từ chối (lô 2b, F-15)",
+      "recipients": ["người lập phiếu"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id phiếu thanh lý. Trang quản lý, chỉ có trên web"
+    },
+
     "RECRUIT_INTERVIEW_ASSIGNED": {
       "category": "EVENT",
       "refType": "recruitment_my_interviews",
