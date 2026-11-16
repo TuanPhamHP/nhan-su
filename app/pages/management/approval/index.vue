@@ -26,6 +26,20 @@
 	import { useBusinessTripService } from '~/services/business-trip.service';
 	import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
 	import ApprovalFilterBar from '~/components/modules/approval/ApprovalFilterBar.vue';
+	import { useAssetService } from '~/services/asset.service';
+	import {
+		DISPOSAL_STATUS_CLASS,
+		disposalCountText,
+		disposalItemsSummary,
+		disposalNumber,
+		disposalResubmitText,
+	} from '~/utils/asset.utils';
+	import { APPROVE_PERMISSIONS } from '~/utils/permission';
+	import {
+		ASSET_DISPOSAL_STATUS_LABELS,
+		type AssetDisposal,
+		type AssetDisposalStatus,
+	} from '~/types/asset.types';
 	import { VIOLATION_STATUS_OPTIONS } from '~/utils/violation.utils';
 	import { MAKEUP_STATUS_OPTIONS } from '~/utils/makeup-attendance.utils';
 	import type { ApprovalModuleKey, ApprovalFilterField, ApprovalFilterState } from '~/types/approval.types';
@@ -67,6 +81,8 @@
 	const overtimeService = useOvertimeRequestService();
 	const tripService = useBusinessTripService();
 	const onlineWorkService = useOnlineWorkRequestService();
+	const assetService = useAssetService();
+	const { hasPermission } = usePermissions();
 	const approvalStore = useApprovalStore();
 	const { counts } = storeToRefs(approvalStore);
 	const directoryStore = useDirectoryStore();
@@ -79,6 +95,8 @@
 		route: string;
 		/** Tab thuộc module bật tắt được: module không `ENABLED` thì không còn đơn để duyệt. */
 		module?: ModuleCode;
+		/** Tab chỉ hiện với người có quyền này (tài sản lô 2b: người duyệt thanh lý). */
+		permission?: string;
 	}
 
 	const tabs: TabConfig[] = [
@@ -88,14 +106,30 @@
 		{ key: 'violationRequests', label: 'Vi phạm chuyên cần', route: '/management/violations' },
 		{ key: 'makeupAttendance', label: 'Bù công', route: '/management/makeup-attendance' },
 		{ key: 'businessTrips', label: 'Công tác', route: '/management/business-trips', module: 'BUSINESS_TRIP' },
+		{
+			key: 'assetDisposals',
+			label: 'Thanh lý tài sản',
+			route: '/management/assets/disposals',
+			module: 'ASSET',
+			permission: APPROVE_PERMISSIONS.assetDisposal,
+		},
 	];
 
 	const { canWrite } = useModuleAccess();
-	const visibleTabs = computed(() => tabs.filter(tab => !tab.module || canWrite(tab.module)));
+	const visibleTabs = computed(() =>
+		tabs.filter(
+			tab => (!tab.module || canWrite(tab.module)) && (!tab.permission || hasPermission(tab.permission)),
+		),
+	);
 
 	// Chặn cả deep-link `?tab=overtimeRequests` khi module đó đang tắt: không gọi API của tab bị ẩn.
 	const requestedTab = route.query.tab as Tab | undefined;
-	const activeTab = ref<Tab>(visibleTabs.value.some(tab => tab.key === requestedTab) ? requestedTab! : 'leaveRequests');
+	const hasRequestedTab = visibleTabs.value.some(tab => tab.key === requestedTab);
+	/**
+	 * Không có `?tab=` thì lúc mở trang chưa biết tab nào có việc: tạm đứng ở tab đầu, tải xong số
+	 * đơn mới chuyển sang tab đầu tiên có số > 0 (xem `onMounted`).
+	 */
+	const activeTab = ref<Tab>(hasRequestedTab ? requestedTab! : (visibleTabs.value[0]?.key ?? 'leaveRequests'));
 
 	watch(activeTab, tab => {
 		router.replace({ query: { ...route.query, tab } });
@@ -116,6 +150,8 @@
 		violationRequests: ['status', 'department', 'monthYear'],
 		makeupAttendance: ['status', 'department', 'employee', 'dateRange'],
 		businessTrips: ['status', 'department', 'employee'],
+		// `GET /asset-disposals` chỉ nhận trạng thái (và tài sản), không lọc theo phòng ban hay nhân viên.
+		assetDisposals: ['status'],
 	};
 
 	const STATUS_OPTIONS: Record<Tab, SelectOption[]> = {
@@ -155,6 +191,10 @@
 			{ value: 'REJECTED', label: 'Bị từ chối' },
 			{ value: 'CANCELLED', label: 'Đã huỷ' },
 		],
+		assetDisposals: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			...Object.entries(ASSET_DISPOSAL_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+		],
 	};
 
 	const PAGE_SIZE = 15;
@@ -169,6 +209,7 @@
 		violationRequests: undefined,
 		makeupAttendance: 'PENDING',
 		businessTrips: 'PENDING',
+		assetDisposals: 'PENDING',
 	};
 
 	// Mặc định: trạng thái chờ duyệt + tháng hiện tại (tab violation dùng month/year)
@@ -196,6 +237,7 @@
 		violationRequests: createFilterState('violationRequests'),
 		makeupAttendance: createFilterState('makeupAttendance'),
 		businessTrips: createFilterState('businessTrips'),
+		assetDisposals: createFilterState('assetDisposals'),
 	};
 
 	const filters = reactive<Record<Tab, ApprovalFilterState>>({
@@ -205,6 +247,7 @@
 		violationRequests: { ...DEFAULT_FILTERS.violationRequests },
 		makeupAttendance: { ...DEFAULT_FILTERS.makeupAttendance },
 		businessTrips: { ...DEFAULT_FILTERS.businessTrips },
+		assetDisposals: { ...DEFAULT_FILTERS.assetDisposals },
 	});
 
 	const activeFilter = computed<ApprovalFilterState>(() => filters[activeTab.value]);
@@ -252,6 +295,11 @@
 	const onlineWorkLoading = ref(false);
 	const onlineWorkPage = ref(1);
 
+	const disposalList = ref<AssetDisposal[]>([]);
+	const disposalMeta = ref<PaginatedMeta | null>(null);
+	const disposalLoading = ref(false);
+	const disposalPage = ref(1);
+
 	const pageRefs: Record<Tab, Ref<number>> = {
 		leaveRequests: leavePage,
 		overtimeRequests: overtimePage,
@@ -259,6 +307,7 @@
 		violationRequests: violationPage,
 		makeupAttendance: makeupPage,
 		businessTrips: tripPage,
+		assetDisposals: disposalPage,
 	};
 
 	function setPage(tab: Tab, page: number) {
@@ -406,8 +455,35 @@
 		}
 	}
 
+	/**
+	 * Phiếu thanh lý: chỉ liệt kê, không duyệt nhanh ở đây. Người duyệt phải mở phiếu xem danh sách
+	 * thiết bị và lần gửi, giống thông báo N-10 chỉ dẫn sang trang phiếu.
+	 */
+	async function fetchDisposals() {
+		disposalLoading.value = true;
+		try {
+			const f = filters.assetDisposals;
+			const res = await assetService.findDisposals({
+				page: disposalPage.value,
+				limit: f.limit,
+				status: f.status as AssetDisposalStatus | undefined,
+			});
+			disposalList.value = res.data;
+			disposalMeta.value = res.meta;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được phiếu thanh lý. Bạn thử lại sau ít phút.');
+		} finally {
+			disposalLoading.value = false;
+		}
+	}
+
+	/** Dùng chung cách đếm với trang Thanh lý; người duyệt có phạm vi toàn công ty nên `hiddenItemCount` luôn 0. */
+	const disposalItemsText = (d: AssetDisposal) => disposalItemsSummary(d);
+
 	function loadCurrentTab() {
 		switch (activeTab.value) {
+			case 'assetDisposals':
+				return fetchDisposals();
 			case 'leaveRequests':
 				return fetchLeave();
 			case 'makeupAttendance':
@@ -633,8 +709,17 @@
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────────
 	onMounted(async () => {
-		approvalStore.fetchCounts();
-		loadCurrentTab();
+		if (hasRequestedTab) {
+			approvalStore.fetchCounts();
+			loadCurrentTab();
+		} else {
+			// Mở tab đầu tiên đang có đơn chờ, thay vì luôn mở Nghỉ phép rồi để người duyệt tự dò. Đổi
+			// tab thì watcher của `activeTab` tự tải danh sách và ghi `?tab=` lên URL.
+			await approvalStore.fetchCounts();
+			const first = visibleTabs.value.find(tab => tabCount(tab.key) > 0);
+			if (first && first.key !== activeTab.value) activeTab.value = first.key;
+			else loadCurrentTab();
+		}
 		try {
 			await directoryStore.load();
 		} catch (e) {
@@ -1146,6 +1231,96 @@
 					:current-page="tripPage"
 					:total-pages="tripMeta.totalPages"
 					@update:current-page="p => goToPage('businessTrips', p)"
+				/>
+			</div>
+		</template>
+
+		<!-- ══════════════════════════════ Thanh lý tài sản ══════════════════════════════ -->
+		<template v-else-if="activeTab === 'assetDisposals'">
+			<p class="text-sm text-gray-600 dark:text-gray-400">
+				Bạn mở từng phiếu để xem danh sách thiết bị và lịch sử xử lý phiếu, rồi bấm Duyệt hoặc Từ chối ngay trên trang phiếu.
+			</p>
+			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+				<div v-if="disposalLoading" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">Đang tải…</div>
+				<div v-else-if="disposalList.length === 0" class="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+					Không có phiếu thanh lý nào khớp bộ lọc.
+				</div>
+				<template v-else>
+					<!-- Thẻ trên điện thoại -->
+					<ul class="divide-y divide-gray-100 sm:hidden dark:divide-gray-800">
+						<li v-for="d in disposalList" :key="d.id">
+							<NuxtLink :to="`/management/assets/disposals/${d.id}`" class="block space-y-1 p-4 active:bg-gray-50 dark:active:bg-gray-800/40">
+								<div class="flex items-start justify-between gap-2">
+									<p class="font-medium text-gray-900 dark:text-white">Phiếu {{ disposalNumber(d.id) }} · {{ d.methodLabel }}</p>
+									<span class="inline-flex flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium" :class="DISPOSAL_STATUS_CLASS[d.status]">
+										{{ d.statusLabel }}
+									</span>
+								</div>
+								<p class="break-words text-sm text-gray-700 dark:text-gray-300">{{ disposalItemsText(d) }}</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">{{ d.createdBy.name }} gửi {{ fmtDate(d.submittedAt) }}<template v-if="disposalResubmitText(d.round)"> · {{ disposalResubmitText(d.round) }}</template></p>
+							</NuxtLink>
+						</li>
+					</ul>
+					<div class="hidden overflow-x-auto sm:block">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Phiếu</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thiết bị</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Người lập</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
+									<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thao tác</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+								<tr v-for="d in disposalList" :key="d.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+									<td class="px-4 py-3 whitespace-nowrap">
+										<p class="font-medium text-gray-900 dark:text-white">Phiếu {{ disposalNumber(d.id) }}</p>
+										<p class="text-xs text-gray-400 dark:text-gray-500">{{ d.methodLabel }} · ngày {{ fmtDate(d.disposalDate) }}</p>
+									</td>
+									<td class="px-4 py-3 max-w-[260px] text-gray-700 dark:text-gray-300">
+										{{ disposalItemsText(d) }}
+										<p class="text-xs text-gray-400 mt-0.5">{{ disposalCountText(d) }}</p>
+									</td>
+									<td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+										{{ d.createdBy.name }}
+										<p class="text-xs text-gray-400 mt-0.5">Gửi {{ fmtDate(d.submittedAt) }} {{ fmtTime(d.submittedAt) }}</p>
+									</td>
+									<td class="px-4 py-3">
+										<span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium" :class="DISPOSAL_STATUS_CLASS[d.status]">
+											{{ d.statusLabel }}
+										</span>
+										<p v-if="disposalResubmitText(d.round)" class="text-xs text-gray-400 mt-0.5">{{ disposalResubmitText(d.round) }}</p>
+									</td>
+									<td class="px-4 py-3 text-right">
+										<NuxtLink
+											:to="`/management/assets/disposals/${d.id}`"
+											class="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+											:class="
+												d.actions.canDecide
+													? 'btn-theme-primary text-white'
+													: 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800'
+											"
+										>
+											{{ d.actions.canDecide ? 'Mở phiếu để duyệt' : 'Xem phiếu' }}
+										</NuxtLink>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</template>
+			</div>
+			<div v-if="disposalMeta && disposalMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
+				<p class="text-sm text-gray-500 dark:text-gray-400">
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(disposalMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ disposalMeta.total }}</strong> phiếu
+				</p>
+				<CommonAppPagination
+					v-if="disposalMeta.totalPages > 1"
+					:current-page="disposalPage"
+					:total-pages="disposalMeta.totalPages"
+					@update:current-page="p => goToPage('assetDisposals', p)"
 				/>
 			</div>
 		</template>

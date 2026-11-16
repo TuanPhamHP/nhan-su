@@ -15,6 +15,13 @@ export interface NavItem {
 	permission?: string | string[];
 	/** Công ty chưa mở module thì ẩn mục này, kể cả với ADMIN. */
 	module?: ModuleCode;
+	/**
+	 * Lối vào thứ hai: không qua được `roles`/`management`/`permission` ở trên thì mục vẫn hiện
+	 * cho người thuộc `roles` này mà có `permission` này (vẫn phải qua `module`). Dùng khi một màn
+	 * hình có cả người làm và người chỉ xem, ví dụ Kiểm kê: người có `asset:manage`, hoặc lãnh đạo
+	 * có `asset:read` xem ở chế độ chỉ xem.
+	 */
+	alsoFor?: { roles: UserRole[]; permission: string };
 	dataTour?: string;
 	matchQuery?: Record<string, string>;
 	/**

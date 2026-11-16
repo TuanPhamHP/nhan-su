@@ -5,6 +5,11 @@ export interface ApprovalCountsResponseDto {
 	overtimeRequests: number;
 	businessTrips: number;
 	onlineWorkRequests: number;
+	/**
+	 * Tài sản lô 2b: phiếu thanh lý chờ duyệt mà người xem duyệt được (`asset:disposal:approve`),
+	 * đã cộng vào `total`. Về 0 khi module `ASSET` không dùng đầy đủ.
+	 */
+	assetDisposals: number;
 	total: number;
 }
 
@@ -14,7 +19,8 @@ export type ApprovalModuleKey =
 	| 'violationRequests'
 	| 'overtimeRequests'
 	| 'businessTrips'
-	| 'onlineWorkRequests';
+	| 'onlineWorkRequests'
+	| 'assetDisposals';
 
 // ─── Bộ lọc hộp thư phê duyệt ─────────────────────────────────────────────────
 // Mỗi tab chỉ bật những field mà endpoint tương ứng thực sự nhận (xem

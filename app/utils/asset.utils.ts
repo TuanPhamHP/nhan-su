@@ -3,21 +3,33 @@ import {
 	ASSET_ACCOUNTING_CLASS_LABELS,
 	ASSET_BILLING_CYCLE_LABELS,
 	ASSET_CONDITION_LABELS,
+	ASSET_DISPOSAL_METHOD_LABELS,
 	ASSET_KIND_LABELS,
 	ASSET_MAINTENANCE_STATUS_LABELS,
 	ASSET_MAINTENANCE_TYPE_LABELS,
 	ASSET_PRICING_UNIT_LABELS,
 	ASSET_STATUS_LABELS,
+	ASSET_STOCKTAKE_RESOLUTION_LABELS,
+	ASSET_STOCKTAKE_RESULT_LABELS,
+	type Asset,
 	type AssetAssignment,
 	type AssetAssignmentConfirmation,
 	type AssetCondition,
+	type AssetDisposalItemError,
+	type AssetDisposalMethod,
+	type AssetDisposalStatus,
 	type AssetIncidentStatus,
 	type AssetIncidentType,
 	type AssetMaintenanceStatus,
 	type AssetMaintenanceType,
 	type AssetStatus,
+	type AssetStocktakeResolution,
+	type AssetStocktakeResult,
+	type AssetStocktakeStatus,
 } from '~/types/asset.types';
+import { format } from 'date-fns';
 import { formatDate, todayYmd, vnCalendarDaysBetween } from '~/utils/date';
+import { ASSET_FULL_SCOPE_ROLES } from '~/utils/permission';
 
 /**
  * Tải blob về máy.
@@ -219,6 +231,243 @@ export function renewalDaysLabel(days: number | null): string {
 	if (days < 0) return `Quá hạn ${Math.abs(days)} ngày`;
 	if (days === 0) return 'Hết hạn hôm nay';
 	return `Còn ${days} ngày`;
+}
+
+// ─── Lô 2b: thanh lý, tem, kiểm kê ────────────────────────────────────────────
+
+export const DISPOSAL_STATUS_CLASS: Record<AssetDisposalStatus, string> = {
+	PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	APPROVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+	REJECTED: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+	CANCELLED: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+};
+
+export const STOCKTAKE_STATUS_CLASS: Record<AssetStocktakeStatus, string> = {
+	OPEN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+	CLOSED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+	CANCELLED: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+};
+
+/** Đúng là xanh, chưa kiểm là xám; các kết quả lệch đều nổi màu để người kiểm thấy ngay. */
+export const STOCKTAKE_RESULT_CLASS: Record<AssetStocktakeResult, string> = {
+	PENDING: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+	OK: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+	WRONG_LOCATION: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	WRONG_HOLDER: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+	DAMAGED: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+	NOT_FOUND: 'bg-rose-200 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300',
+};
+
+export const STOCKTAKE_RESOLUTION_CLASS: Record<AssetStocktakeResolution, string> = {
+	NONE: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
+	UPDATED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+	REPAIR_OPENED: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+	MARKED_LOST: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+	IGNORED: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+};
+
+/**
+ * Câu L13 cạnh nút "Mở đợt kiểm kê" và ở đầu trang chi tiết đợt. Theo thiết kế, sửa sau bài nhập
+ * vai đổi "hãy đóng" thành "bạn đóng" cho đúng giọng xưng "bạn" của cả app.
+ */
+export const STOCKTAKE_ONE_OPEN_HINT =
+	'Mỗi lúc chỉ mở được một đợt kiểm kê, để mỗi lần quét luôn ghi vào đúng một đợt. Muốn mở đợt mới, bạn đóng hoặc huỷ đợt đang mở.';
+
+/**
+ * Người dùng không thấy chữ "vòng": phiếu gửi lần đầu không ghi gì, gửi lại thì "Gửi lại lần {n}".
+ * Trả chuỗi rỗng cho lần đầu để nơi gọi bỏ qua.
+ */
+export function disposalResubmitText(round: number): string {
+	return round > 1 ? `Gửi lại lần ${round}` : '';
+}
+
+/** Tên file tem có ngày giờ, để hai lần in trong ngày không đè tên nhau: `tem-tai-san-20261115-0912.pdf`. */
+export function labelsFileName(now: Date = new Date()): string {
+	return `tem-tai-san-${format(now, 'yyyyMMdd-HHmm')}.pdf`;
+}
+
+/**
+ * Câu báo sau khi quét một tem vào đợt kiểm kê: mã, tên, serial và người giữ theo sổ, để người
+ * đi kiểm nhìn câu là biết đã quét đúng máy chưa.
+ */
+export function scanResultText(line: {
+	inScope: boolean;
+	resultLabel: string;
+	expectedHolderName: string | null;
+	expectedDepartmentName: string | null;
+	asset: { code: string; name: string; serialNumber: string | null };
+}): string {
+	const a = line.asset;
+	const what = `${a.code} · ${a.name}${a.serialNumber ? ` (serial ${a.serialNumber})` : ''}`;
+	if (!line.inScope) {
+		return `${what} nằm ngoài phạm vi đợt này, chỉ ghi tham khảo và không đổi gì trên sổ.`;
+	}
+	return `Đã ghi ${line.resultLabel} cho ${what}${holderClause(line)}.`;
+}
+
+/**
+ * Vế người giữ theo sổ. Cấp cho phòng ban thì BE ghi "Kho vận, Lan chịu trách nhiệm" (hoặc chỉ
+ * tên phòng), nên nói "đang giao cho …" thay vì "… đang giữ".
+ */
+function holderClause(line: { expectedHolderName: string | null; expectedDepartmentName: string | null }): string {
+	const name = line.expectedHolderName;
+	if (!name) return ', theo sổ chưa cấp phát cho ai';
+	const toDepartment = name.endsWith('chịu trách nhiệm') || name === line.expectedDepartmentName;
+	return toDepartment ? `, theo sổ đang giao cho ${name}` : `, ${name} đang giữ`;
+}
+
+/** Trạng thái thiết bị thanh lý được (BR-16). */
+export const DISPOSABLE_STATUSES: AssetStatus[] = ['AVAILABLE', 'BROKEN', 'LOST'];
+
+/**
+ * Hiện nút "Đề nghị thanh lý" ở trang tài sản: thiết bị Sẵn sàng, Hỏng hoặc Mất, không có người
+ * giữ và chưa nằm trong phiếu chờ duyệt nào. Đây chỉ là luật hiện nút theo bảng màn hình của
+ * bridge doc; BE vẫn kiểm lại và trả 409 kèm lý do khi không đủ điều kiện.
+ */
+export function canProposeDisposal(asset: Pick<Asset, 'kind' | 'status' | 'holders' | 'pendingDisposalId'>): boolean {
+	return (
+		asset.kind === 'PHYSICAL' &&
+		DISPOSABLE_STATUSES.includes(asset.status) &&
+		asset.holders.length === 0 &&
+		asset.pendingDisposalId == null
+	);
+}
+
+/**
+ * Ai xem được đợt kiểm kê (vòng 3): người có `asset:manage`, hoặc người có `asset:read` với phạm
+ * vi toàn công ty (ADMIN, HR, DIRECTOR, CHIEF), khớp BE. Trưởng phòng nhận 403 nên không thấy.
+ * `hasPermission` truyền vào để hàm thuần, test được.
+ */
+export function canViewStocktakes(role: string | null | undefined, hasPermission: (code: string) => boolean): boolean {
+	if (hasPermission('asset:manage')) return true;
+	return !!role && (ASSET_FULL_SCOPE_ROLES as string[]).includes(role) && hasPermission('asset:read');
+}
+
+/**
+ * Cách xử lý chọn sẵn trong hộp xử lý chênh lệch, người dùng vẫn đổi được. Dòng Không tìm thấy thì
+ * KHÔNG chọn sẵn (vòng 3): thiết bị thường chỉ đi vắng lúc kiểm, chọn sẵn Xác nhận mất dễ làm bấm
+ * nhầm một thao tác dừng khấu hao không hoàn tác được.
+ */
+export function suggestedResolution(
+	result: AssetStocktakeResult,
+): Exclude<AssetStocktakeResolution, 'NONE'> | undefined {
+	switch (result) {
+		case 'DAMAGED':
+			return 'REPAIR_OPENED';
+		case 'NOT_FOUND':
+			return undefined;
+		default:
+			return 'UPDATED';
+	}
+}
+
+/**
+ * Nhãn của lựa chọn "không lọc trạng thái" ở danh sách tài sản (vòng 3). Không gõ từ khoá thì BE
+ * ẩn thiết bị Đã thanh lý nên ghi rõ "trừ Đã thanh lý"; có từ khoá thì BE trả cả tài sản Đã thanh
+ * lý; lọc riêng dịch vụ thì không có trạng thái này.
+ */
+export function defaultStatusLabel(kind: string | null | undefined, search: string | null | undefined): string {
+	if (kind === 'SERVICE' || search?.trim()) return 'Tất cả trạng thái';
+	return 'Tất cả, trừ Đã thanh lý';
+}
+
+// ─── 16/11/2026: trưởng phòng chỉ thấy thiết bị của phòng mình trên phiếu thanh lý ──────────────
+
+interface DisposalCountLike {
+	items: { name: string }[];
+	hiddenItemCount: number;
+}
+
+/** Tổng số thiết bị trên phiếu, kể cả thiết bị trưởng phòng không được thấy. */
+export function disposalTotalItems(d: DisposalCountLike): number {
+	return d.items.length + (d.hiddenItemCount ?? 0);
+}
+
+/**
+ * Số thiết bị cho danh sách phiếu: "3 thiết bị", hoặc với trưởng phòng "3 thiết bị, 1 của phòng bạn"
+ * để không ai tưởng phiếu chỉ có đúng số máy mình nhìn thấy.
+ */
+export function disposalCountText(d: DisposalCountLike): string {
+	const total = disposalTotalItems(d);
+	return d.hiddenItemCount > 0 ? `${total} thiết bị, ${d.items.length} của phòng bạn` : `${total} thiết bị`;
+}
+
+/** Tên vài thiết bị đầu của phiếu; phần còn lại (tính cả thiết bị ẩn) gộp thành "và n thiết bị khác". */
+export function disposalItemsSummary(d: DisposalCountLike): string {
+	const names = d.items.slice(0, 2).map(i => i.name);
+	const more = disposalTotalItems(d) - names.length;
+	if (!names.length) return `${more} thiết bị không thuộc phòng bạn`;
+	return more > 0 ? `${names.join(', ')} và ${more} thiết bị khác` : names.join(', ');
+}
+
+/** Dòng dưới bảng thiết bị của trang phiếu; chuỗi rỗng khi không có thiết bị ẩn. */
+export function hiddenItemsText(hiddenItemCount: number): string {
+	return hiddenItemCount > 0 ? `và ${hiddenItemCount} thiết bị không thuộc phòng bạn` : '';
+}
+
+/**
+ * Dòng "đã đổi gì" của lần gửi lại (`history[].changes`, vòng 3). BE trả sẵn câu hoàn chỉnh, ví dụ
+ * "Bỏ CTA000011 khỏi phiếu. Sửa lý do." hoặc "Gửi lại, không đổi nội dung phiếu.", nên web hiện
+ * nguyên văn, không thêm tiền tố.
+ */
+export function disposalChangesText(changes: string | null | undefined): string {
+	return changes?.trim() ?? '';
+}
+
+/**
+ * Câu ngày dừng khấu hao cho hộp duyệt phiếu, lấy từ `items[].depreciationStopDate` (vòng 3).
+ * Mọi thiết bị cùng ngày thì nêu ngày đó. Khác ngày thì nêu ngày thanh lý cho phần còn lại và kể
+ * riêng thiết bị đã Mất giữ ngày ghi nhận mất.
+ */
+export function disposalStopDateText(d: {
+	disposalDate: string;
+	items: { code: string; depreciationStopDate: string }[];
+}): string {
+	const dates = [...new Set(d.items.map(i => i.depreciationStopDate))];
+	if (dates.length <= 1) return `dừng khấu hao từ ngày ${formatDate(dates[0] ?? d.disposalDate)}`;
+	const kept = d.items.filter(i => i.depreciationStopDate !== d.disposalDate);
+	const list = kept.map(i => `${i.code} từ ngày ${formatDate(i.depreciationStopDate)}`).join(', ');
+	return `dừng khấu hao từ ngày ${formatDate(d.disposalDate)}, riêng thiết bị đã Mất giữ ngày ghi nhận mất (${list})`;
+}
+
+/**
+ * Số phiếu ghép vào câu, VD "phiếu thanh lý số 12", không dùng dạng "#12". Đứng riêng một ô thì
+ * nơi gọi thêm chữ "Phiếu" phía trước.
+ */
+export function disposalNumber(id: number): string {
+	return `số ${id}`;
+}
+
+/** Mã lỗi `error.code` của BE trong lỗi `authFetch` ném ra, để rẽ nhánh theo mã chứ không dò câu. */
+export function apiErrorCode(e: unknown): string | undefined {
+	return (e as { data?: { error?: { code?: string } } } | null)?.data?.error?.code;
+}
+
+/** Danh sách tài sản lỗi kèm 409 `ASSET_DISPOSAL_NOT_ALLOWED`; mảng rỗng khi lỗi khác. */
+export function disposalItemErrors(e: unknown): AssetDisposalItemError[] {
+	const list = (e as { data?: { error?: { errors?: unknown } } } | null)?.data?.error?.errors;
+	if (!Array.isArray(list)) return [];
+	return list.filter(
+		(x): x is AssetDisposalItemError =>
+			!!x && typeof x === 'object' && typeof (x as AssetDisposalItemError).assetId === 'number',
+	);
+}
+
+const VND_INPUT = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+
+/** Số tiền nguyên VND → chữ trong ô nhập, VD `1500000` → `"1.500.000"`. */
+export function formatVndInput(value: number | string | null | undefined): string {
+	if (value == null || value === '') return '';
+	const n = typeof value === 'number' ? value : Number(String(value).replace(/\D/g, ''));
+	return Number.isFinite(n) ? VND_INPUT.format(n) : '';
+}
+
+/** Chữ người dùng gõ vào ô tiền nguyên VND → số; bỏ mọi ký tự không phải chữ số. Rỗng là `undefined`. */
+export function parseVndInput(text: string | null | undefined): number | undefined {
+	const digits = String(text ?? '').replace(/\D/g, '');
+	if (!digits) return undefined;
+	const n = Number(digits);
+	return Number.isSafeInteger(n) ? n : undefined;
 }
 
 /** Kích thước file cho bảng giấy tờ. */
@@ -534,6 +783,98 @@ export function describeAssetEvent(type: string, payload: Record<string, unknown
 			}
 			return lines;
 		}
+		// ─── Lô 2b: thanh lý ───
+		// Người dùng không thấy chữ "vòng": lần đầu là "Gửi phiếu", gửi lại thì "lần {n}".
+		case 'DISPOSAL_REQUESTED': {
+			const id = num('disposalId');
+			const round = num('round') ?? 1;
+			if (id !== null) {
+				lines.push(
+					p.resubmitted === true || round > 1
+						? `Sửa và gửi lại phiếu thanh lý ${disposalNumber(id)}, lần ${round}`
+						: `Gửi phiếu thanh lý ${disposalNumber(id)}`,
+				);
+			}
+			const method = str('method');
+			if (method) lines.push(`Hình thức: ${ASSET_DISPOSAL_METHOD_LABELS[method as AssetDisposalMethod] ?? method}`);
+			if (isDateString(p.disposalDate)) lines.push(`Ngày thanh lý: ${formatDate(p.disposalDate as string)}`);
+			if (str('reason')) lines.push(`Lý do: ${str('reason')}`);
+			return lines;
+		}
+		case 'DISPOSAL_REJECTED':
+		case 'DISPOSAL_CANCELLED': {
+			const id = num('disposalId');
+			const round = num('round') ?? 1;
+			if (id !== null) lines.push(`Phiếu thanh lý ${disposalNumber(id)}${round > 1 ? `, gửi lại lần ${round}` : ''}`);
+			if (str('note')) lines.push(`${type === 'DISPOSAL_REJECTED' ? 'Lý do từ chối' : 'Lý do huỷ'}: ${str('note')}`);
+			return lines;
+		}
+		case 'DISPOSED': {
+			const id = num('disposalId');
+			if (id !== null) lines.push(`Theo phiếu thanh lý ${disposalNumber(id)}`);
+			const method = str('method');
+			if (method) lines.push(`Hình thức: ${ASSET_DISPOSAL_METHOD_LABELS[method as AssetDisposalMethod] ?? method}`);
+			if (p.from || p.to) {
+				lines.push(`Từ "${fieldValue('from', p.from)}" sang "${fieldValue('to', p.to)}"`);
+			}
+			if (isDateString(p.disposalDate)) lines.push(`Ngày thanh lý: ${formatDate(p.disposalDate as string)}`);
+			if (isDateString(p.depreciationStopDate)) {
+				lines.push(`Dừng khấu hao từ ${formatDate(p.depreciationStopDate as string)}`);
+			}
+			if (str('note')) lines.push(`Ghi chú khi duyệt: ${str('note')}`);
+			return lines;
+		}
+		// ─── Lô 2b: kiểm kê ───
+		case 'STOCKTAKE_CHECKED': {
+			const result = str('result');
+			const resultLabel = result ? (ASSET_STOCKTAKE_RESULT_LABELS[result as AssetStocktakeResult] ?? result) : null;
+			if (str('stocktakeName')) {
+				lines.push(`Đợt "${str('stocktakeName')}"${resultLabel ? `, kết quả ${resultLabel}` : ''}`);
+			} else if (resultLabel) {
+				lines.push(`Kết quả ${resultLabel}`);
+			}
+			if (str('observedLocation')) lines.push(`Vị trí thực tế: ${str('observedLocation')}`);
+			if (str('note')) lines.push(`Ghi chú: ${str('note')}`);
+			if (p.byScan === true) lines.push('Ghi bằng cách quét tem');
+			return lines;
+		}
+		case 'STOCKTAKE_RESOLVED': {
+			const result = str('result');
+			const resolution = str('resolution');
+			const resultLabel = result ? (ASSET_STOCKTAKE_RESULT_LABELS[result as AssetStocktakeResult] ?? result) : null;
+			if (str('stocktakeName')) {
+				lines.push(`Đợt "${str('stocktakeName')}"${resultLabel ? `, kết quả ${resultLabel}` : ''}`);
+			}
+			if (resolution) {
+				lines.push(
+					`Cách xử lý: ${ASSET_STOCKTAKE_RESOLUTION_LABELS[resolution as AssetStocktakeResolution] ?? resolution}`,
+				);
+			}
+			const loc = p.location;
+			if (loc && typeof loc === 'object' && !Array.isArray(loc)) {
+				const l = loc as { from?: unknown; to?: unknown };
+				const to = fieldValue('location', l.to);
+				// Sổ chưa ghi vị trí thì "từ "để trống"" đọc rất gượng: nói là ghi vị trí mới.
+				lines.push(
+					l.from == null || l.from === ''
+						? `Vị trí: ghi mới "${to}"`
+						: `Vị trí: từ "${fieldValue('location', l.from)}" sang "${to}"`,
+				);
+			}
+			if (num('assignmentId') !== null) lines.push('Đổi người giữ theo kết quả kiểm kê');
+			if (isDateString(p.lostDate)) lines.push(`Ngày mất ${formatDate(p.lostDate as string)}`);
+			if (str('note')) lines.push(`Ghi chú: ${str('note')}`);
+			return lines;
+		}
+		// Vòng 3: giấy tờ đính vào phiếu thanh lý nói rõ phiếu nào.
+		case 'DOCUMENT_ADDED': {
+			const file = str('fileName');
+			if (!file) return [];
+			const id = num('disposalId');
+			return [id !== null ? `Thêm giấy tờ vào phiếu thanh lý ${disposalNumber(id)}: ${file}` : `Thêm giấy tờ: ${file}`];
+		}
+		case 'DOCUMENT_REMOVED':
+			return str('fileName') ? [`Gỡ giấy tờ: ${str('fileName')}`] : [];
 		case 'MAINTENANCE_SCHEDULED':
 		case 'UPDATED':
 		case 'VALUE_CHANGED':

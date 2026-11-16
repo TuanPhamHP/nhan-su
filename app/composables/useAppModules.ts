@@ -1,5 +1,6 @@
 import { APP_MODULES } from '~/config/app-modules';
 import type { AppGroup, AppModuleDef, NavItem } from '~/types/navigation.types';
+import type { UserRole } from '~/types/auth.types';
 import { isManagementRole } from '~/utils/role';
 
 const RECENT_KEY = 'app.recent-modules';
@@ -30,10 +31,16 @@ export function useAppModules() {
 	function canSeeItem(item: NavItem): boolean {
 		const u = user.value;
 		if (!u) return false;
-		if (item.roles && !item.roles.includes(u.role)) return false;
-		if (item.management && !item.roles && !isManagementRole(u.role)) return false;
-		if (item.permission && !hasPermission(item.permission)) return false;
 		if (item.module && !canUse(item.module)) return false;
+		if (passesMainRule(item, u.role)) return true;
+		// Lối vào thứ hai, cho người chỉ xem (xem `NavItem.alsoFor`).
+		return !!item.alsoFor && item.alsoFor.roles.includes(u.role) && hasPermission(item.alsoFor.permission);
+	}
+
+	function passesMainRule(item: NavItem, role: UserRole): boolean {
+		if (item.roles && !item.roles.includes(role)) return false;
+		if (item.management && !item.roles && !isManagementRole(role)) return false;
+		if (item.permission && !hasPermission(item.permission)) return false;
 		return true;
 	}
 

@@ -1,3 +1,5 @@
+import type { UserRole } from '~/types/auth.types';
+
 /**
  * Permission code duyệt đơn theo từng module.
  *
@@ -13,7 +15,15 @@ export const APPROVE_PERMISSIONS = {
 	onlineWork: 'online-work:approve',
 	businessTrip: 'business-trip:approve',
 	generalRequest: 'general-request:approve',
+	/** Tài sản lô 2b: duyệt, từ chối phiếu thanh lý (tab "Thanh lý tài sản" của hộp thư duyệt). */
+	assetDisposal: 'asset:disposal:approve',
 } as const;
+
+/**
+ * Vai trò có phạm vi tài sản toàn công ty khi có `asset:read` (khớp `FULL_SCOPE_ROLES` ở BE,
+ * `asset-scope.util.ts`). Trưởng phòng chỉ xem tài sản của phòng mình nên không có ở đây.
+ */
+export const ASSET_FULL_SCOPE_ROLES: UserRole[] = ['ADMIN', 'HR', 'DIRECTOR', 'CHIEF'];
 
 /** Dùng cho menu "Duyệt đơn" — hiện khi user duyệt được ít nhất 1 loại đơn. */
 export const ALL_APPROVE_PERMISSIONS: string[] = Object.values(APPROVE_PERMISSIONS);

@@ -59,6 +59,9 @@ export type NotificationType =
 	| 'ASSET_DISPUTE_RESOLVED'
 	| 'ASSET_RENEWED'
 	| 'ASSET_REPAIR_OPENED'
+	// Lô 2b: phiếu thanh lý chờ duyệt (người duyệt) và kết quả duyệt (người lập), refType `asset_disposal`.
+	| 'ASSET_DISPOSAL_PENDING'
+	| 'ASSET_DISPOSAL_DECIDED'
 	| 'TEST';
 
 export interface NotificationActionPayload {

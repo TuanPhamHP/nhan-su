@@ -29,6 +29,7 @@ import { isManagementRole } from '~/utils/role';
  * | employee_assets   | /management/employees/:id?tab=assets           |
  * | asset_incident    | /management/assets/incidents?open_id=:id       |
  * | asset_my_incident | /assets/my?incident_id=:id (refId là id BÁO CÁO, không phải id tài sản) |
+ * | asset_disposal    | /management/assets/disposals/:id (lô 2b, refId là id phiếu thanh lý) |
  *
  * Loại thông báo thêm sau bài nhập vai (14/11) đi theo các refType trên, không cần nhánh riêng:
  * `ASSET_LOST` (asset_holding cho người giữ, asset cho quản lý trực tiếp),
@@ -135,6 +136,11 @@ export function resolveNotificationRoute(
 			return id
 				? `/management/assets/incidents?open_id=${id}`
 				: '/management/assets/incidents';
+
+		// N-10 (lô 2b): người duyệt nhận "phiếu chờ duyệt", người lập nhận kết quả; cả hai đều là
+		// vai trò quản lý và đều mở trang phiếu, vì duyệt phải xem danh sách tài sản và đúng vòng gửi.
+		case 'asset_disposal':
+			return id ? `/management/assets/disposals/${id}` : '/management/assets/disposals';
 
 		// Tám refType của module tuyển dụng. Giống module tài sản, BE đã chọn refType theo
 		// từng người nhận nên ở đây KHÔNG rẽ theo vai trò: thành viên hội đồng thường là
