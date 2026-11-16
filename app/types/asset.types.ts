@@ -498,10 +498,30 @@ export interface AssetExpiringRow {
 	ownerName: string | null;
 }
 
+/**
+ * Dòng đã nhập được nhưng không xác định được người ghi trong file, từ 16/11/2026.
+ *
+ * Thiết bị vào kho ở trạng thái Sẵn sàng và chưa cấp phát cho ai, dịch vụ thì người nhập
+ * file thành người phụ trách. Tài sản đã có trong hệ thống nên người dùng cấp phát ở
+ * `/management/assets/{assetId}` chứ không sửa file rồi nhập lại dòng đó.
+ */
+export interface AssetImportRowWarning {
+	sheet: 'Tài sản' | 'Dịch vụ';
+	/** Số dòng trong Excel, dòng 1 là tiêu đề. */
+	row: number;
+	/** Câu đầy đủ cho người dùng, hiện nguyên văn. */
+	messages: string[];
+	assetId: number;
+	/** VD `"CTYSTH000012"`. */
+	assetCode: string;
+}
+
 export interface AssetImportResult {
+	/** Đã tính cả các dòng trong `warnings`. */
 	created: { physical: number; service: number };
 	autoCreated: { categories: string[]; vendors: string[] };
 	errors: { sheet: 'Tài sản' | 'Dịch vụ'; row: number; messages: string[] }[];
+	warnings: AssetImportRowWarning[];
 	/** VD `["Dịch vụ: Password"]`. Báo người dùng các cột mật khẩu đã bị bỏ qua. */
 	ignoredColumns: string[];
 }

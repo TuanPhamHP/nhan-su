@@ -428,6 +428,9 @@ export interface ImportResult {
   created: { physical: number; service: number };
   autoCreated: { categories: string[]; vendors: string[] };
   errors: { sheet: 'Tài sản' | 'Dịch vụ'; row: number; messages: string[] }[];
+  // Dòng ĐÃ nhập nhưng không gán được người ghi trong file (16/11/2026): thiết bị vào kho, dịch vụ do người nhập
+  // phụ trách. `created` đã tính các dòng này.
+  warnings: { sheet: 'Tài sản' | 'Dịch vụ'; row: number; messages: string[]; assetId: number; assetCode: string }[];
   ignoredColumns: string[];            // VD ["Dịch vụ: Password"]. Báo người dùng các cột mật khẩu đã bỏ qua
 }
 
@@ -1235,10 +1238,37 @@ Trả `mau-nhap-tai-san.xlsx` gồm sheet "Tài sản", "Dịch vụ" và "Hư�
 {
   "success": true,
   "data": {
-    "created": { "physical": 8, "service": 0 },
+    "created": { "physical": 8, "service": 1 },
     "autoCreated": { "categories": ["Thiết bị mạng → Switch"], "vendors": ["Huy Phùng PC"] },
     "errors": [
-      { "sheet": "Tài sản", "row": 14, "messages": ["Không tìm thấy nhân viên \"Nguyễn Văn X\""] }
+      {
+        "sheet": "Tài sản",
+        "row": 14,
+        "messages": [
+          "Ngày mua không phải ngày hợp lệ",
+          "Không tìm thấy nhân viên Người Lạ. Bạn kiểm tra lại tên hoặc ghi mã nhân viên."
+        ]
+      }
+    ],
+    "warnings": [
+      {
+        "sheet": "Tài sản",
+        "row": 6,
+        "messages": [
+          "Không tìm thấy nhân viên Trieu Thai Nguyen, có phải Triệu Thái Nguyên (EMP054)? Tài sản CTYSTH000012 đã vào kho, chưa cấp phát cho ai. Bạn cấp phát trên trang tài sản, đừng nhập lại dòng này."
+        ],
+        "assetId": 12,
+        "assetCode": "CTYSTH000012"
+      },
+      {
+        "sheet": "Dịch vụ",
+        "row": 2,
+        "messages": [
+          "Không tìm thấy nhân viên Không Có Ai. Bạn đang là người phụ trách dịch vụ CTYSTH000013. Bạn đổi người phụ trách trên trang dịch vụ, đừng nhập lại dòng này."
+        ],
+        "assetId": 13,
+        "assetCode": "CTYSTH000013"
+      }
     ],
     "ignoredColumns": ["Dịch vụ: Password"]
   }
@@ -1251,8 +1281,15 @@ Trả `mau-nhap-tai-san.xlsx` gồm sheet "Tài sản", "Dịch vụ" và "Hư�
   dùng biết mật khẩu không được nhập.
 - Mọi dòng thuộc công ty đang đăng nhập; file cũ còn cột "Tài sản thuộc đơn vị" hay "Công ty sử dụng" thì cột đó bị
   bỏ qua. Chú thích ô cũng bị bỏ qua, kể cả chú thích do công cụ ngoài Excel ghi (openpyxl).
-- Cột "Người sử dụng" phải khớp mã hoặc họ tên nhân viên **của chính công ty đang nhập**; không khớp hoặc trùng tên
-  nhiều người thì cả dòng bị trả lỗi.
+- Cột "Người sử dụng" khớp mã hoặc họ tên nhân viên **của chính công ty đang nhập**, sau khi chuẩn hoá Unicode, bỏ ký
+  tự ẩn và khoảng trắng thừa. **Từ 16/11/2026, không xác định được người** (không tìm thấy, trùng tên nhiều người, người
+  không còn làm việc) **thì dòng vẫn được nhập**: thiết bị vào kho ở trạng thái Sẵn sàng, không có cấp phát; ghi chú tài
+  sản thêm "Người sử dụng ghi trong file nhập: …"; dòng nằm ở `warnings` kèm `assetId`, `assetCode`. Cột "Người phụ
+  trách" của sheet Dịch vụ tương tự: người nhập file thành người phụ trách.
+- **Hiện `warnings` riêng với `errors`**: dòng cảnh báo đã có trong hệ thống, người dùng cấp phát trên trang tài sản
+  (link `/management/assets/{assetId}`), **không** sửa file rồi nhập lại dòng đó, vì file không ghi Mã QLTS thì sẽ tạo
+  trùng tài sản. Dòng lỗi thì vẫn sửa file rồi nhập lại như trước.
+- Dòng có lỗi khác (ngày sai, thiếu loại...) vẫn là lỗi dòng; khi đó `messages` có thêm câu về người để sửa một lần.
 - Nhập file **không gửi thông báo bàn giao nào**; cấp phát từ file không cần xác nhận.
 
 Lỗi cả file (400): `ASSET_IMPORT_INVALID_FILE` (không đọc được file; message hướng dẫn mở bằng Excel hay LibreOffice
@@ -1547,7 +1584,8 @@ Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 | `PATCH` gửi `note: null` để xoá ghi chú | 200 | Ghi chú **giữ nguyên** (hạn chế hiện tại) |
 | Nhập Excel có cột Password | 201 | Cột bị bỏ qua, liệt kê ở `ignoredColumns` |
 | Nhập Excel có chú thích ô do openpyxl ghi | 201 | Chú thích bị bỏ qua, dữ liệu nhập bình thường |
-| Nhập Excel, "Người sử dụng" không khớp nhân viên của công ty | 201 | Dòng đó vào `errors`, các dòng khác vẫn nhập |
+| Nhập Excel, "Người sử dụng" không khớp nhân viên của công ty | 201 | Tài sản vẫn được tạo ở trạng thái Sẵn sàng, không cấp phát; dòng vào `warnings` kèm `assetId`, `assetCode` (từ 16/11/2026; trước đó vào `errors`) |
+| Nhập Excel, "Người sử dụng" không khớp và dòng còn lỗi khác | 201 | Dòng vào `errors`, `messages` có cả câu về người |
 | Mở presigned URL sau khi hết hạn | 403 từ S3 | Gọi lại `.../documents/:id/url` |
 
 ---
