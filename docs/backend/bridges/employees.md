@@ -2,6 +2,10 @@
 
 > Đọc [api-response-envelope.md](./api-response-envelope.md) trước nếu chưa rõ cách response được bọc trong `{ success, data }`.
 
+> **Lô 3a (16/11/2026):** `GET /:id` thu hẹp phạm vi trưởng phòng; thêm `genderCode`, `terminationReason`; `PATCH /:id` nhận
+> `effectiveDate`, `historyNote` và ghi lịch sử công tác; `terminate` bắt buộc `terminationReason`. Hồ sơ mở rộng, thân nhân, kinh
+> nghiệm, lịch sử công tác, yêu cầu thay đổi thông tin ở [hr-profile.md](./hr-profile.md).
+
 ---
 
 ## Endpoints
@@ -13,7 +17,7 @@
 | POST | `/v1/employees` | `ADMIN`, `HR` | Tạo nhân viên mới |
 | GET | `/v1/employees/me` | Mọi user đã đăng nhập | Thông tin bản thân |
 | GET | `/v1/employees/me/documents` | Mọi user đã đăng nhập | Tài liệu của bản thân |
-| GET | `/v1/employees/:id` | Bản thân, hoặc `ADMIN`/`HR`/`MANAGER`/`CHIEF` | Chi tiết một nhân viên |
+| GET | `/v1/employees/:id` | Bản thân; `ADMIN`/`HR`/`DIRECTOR`/`CHIEF` mọi người; `MANAGER` chỉ phòng mình (lô 3a) | Chi tiết một nhân viên. Ngoài phạm vi: 403 `EMPLOYEE_SCOPE_FORBIDDEN` |
 | PATCH | `/v1/employees/:id` | `ADMIN`, `HR` | Cập nhật thông tin |
 | DELETE | `/v1/employees/:id` | `ADMIN`, `HR` | **Khóa tài khoản** (soft delete) + ghi ngày nghỉ việc |
 | POST | `/v1/employees/:id/terminate` | quyền `employee:terminate` (không giới hạn role) | **Xác nhận nghỉ việc** — ngày + lý do bắt buộc |
@@ -36,6 +40,17 @@ import type { SystemRole } from './auth.types';
 
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
 export type Gender = 'Nam' | 'Nữ' | 'Khác';
+export type GenderCode = 'MALE' | 'FEMALE' | 'OTHER'; // lô 3a
+export type TerminationReason =
+  | 'RESIGNATION'         // Người lao động xin nghỉ
+  | 'CONTRACT_EXPIRED'    // Hết hạn hợp đồng
+  | 'MUTUAL_AGREEMENT'    // Hai bên thoả thuận
+  | 'PROBATION_FAILED'    // Không đạt thử việc
+  | 'DISMISSAL'           // Sa thải
+  | 'EMPLOYER_UNILATERAL' // Công ty đơn phương chấm dứt
+  | 'RETIREMENT'          // Nghỉ hưu
+  | 'DEATH'               // Qua đời
+  | 'OTHER';              // Lý do khác
 export type EmploymentType =
   | 'FULL_TIME'     // Nhân viên chính thức
   | 'PROBATION'     // Thử việc
@@ -78,8 +93,11 @@ export interface EmployeeDetail {
   joinDate: string;               // "YYYY-MM-DD"
   terminationDate: string | null; // "YYYY-MM-DD" — ngày nghỉ việc, chỉ khác null khi status = INACTIVE
   terminationNote: string | null; // lý do nghỉ việc; chỉ có khi nghỉ qua POST /:id/terminate
+  terminationReason: TerminationReason | null; // lô 3a; null với người nghỉ trước lô 3a
+  terminationReasonLabel: string | null;       // "Người lao động xin nghỉ"
   dateOfBirth: string | null;     // "YYYY-MM-DD"
-  gender: Gender | null;
+  gender: Gender | null;          // nhãn như trước lô 3a, để app cũ không vỡ
+  genderCode: GenderCode | null;  // lô 3a: mã, dùng cho ô chọn
   address: string | null;
   avatarUrl: string | null;       // presigned URL
   department: DepartmentSummaryDto | null;
@@ -136,13 +154,19 @@ export interface CreateEmployeeDto {
   defaultShiftId?: number;        // ca làm việc mặc định
   phone?: string;                 // định dạng số điện thoại Việt Nam
   dateOfBirth?: string;           // "YYYY-MM-DD"
-  gender?: Gender;
+  gender?: Gender | GenderCode;   // lô 3a nhận cả nhãn và mã; chữ khác → 400
   address?: string;
 }
 
 // UpdateEmployeeDto — tất cả optional, trừ email (không thể đổi qua endpoint này).
 // `employmentType` được inherit → gửi để chuyển ví dụ PROBATION → FULL_TIME khi hết thử việc.
-export type UpdateEmployeeDto = Partial<Omit<CreateEmployeeDto, 'email'>>;
+export type UpdateEmployeeDto = Partial<Omit<CreateEmployeeDto, 'email'>> & {
+  // Lô 3a: ngày hiệu lực khi đổi phòng ban, chức vụ, quản lý, loại lao động. Bỏ trống là hôm nay.
+  // Không sau hôm nay, không trước joinDate, không trước ngày bắt đầu giai đoạn công tác đang mở
+  // → 400 EMPLOYMENT_EFFECTIVE_DATE_INVALID. Xem hr-profile.md mục 9.
+  effectiveDate?: string;
+  historyNote?: string;           // ≤ 500, ghi chú cho mốc lịch sử công tác
+};
 
 export interface QueryEmployeeParams {
   departmentId?: number;
@@ -291,14 +315,15 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 ## GET /v1/employees/:id — Chi tiết một nhân viên
 
 - Bản thân (`id == user.id`) → luôn được phép
-- `ADMIN`, `HR`, `MANAGER`, `CHIEF` → được phép xem bất kỳ nhân viên nào
+- `ADMIN`, `HR`, `DIRECTOR`, `CHIEF` → xem mọi nhân viên
+- `MANAGER` → **chỉ nhân viên phòng mình** (lô 3a, Q-04; trước đây xem mọi phòng). Chưa gán phòng ban thì chỉ chính mình
 - `EMPLOYEE` xem người khác → **403**
 
 **Response:** `ApiSuccess<EmployeeDetail>` — shape giống `/me`
 
-**403:**
+**403** ngoài phạm vi:
 ```json
-{ "success": false, "error": { "code": "FORBIDDEN", "message": "Không có quyền xem thông tin nhân viên này" } }
+{ "success": false, "error": { "code": "EMPLOYEE_SCOPE_FORBIDDEN", "message": "Bạn chỉ xem được hồ sơ của nhân viên trong phòng mình. Cần xem người khác thì liên hệ phòng nhân sự." } }
 ```
 
 **404:**
@@ -407,6 +432,12 @@ Tất cả fields optional. **Không thể đổi `email` hay `password`** qua e
 
 > **Chú ý về `employmentType`:** HR **manual** chuyển nhân viên từ `PROBATION` sang `FULL_TIME` khi hết thử việc — không auto. Field này cũng dùng để chuyển đổi mọi loại khác (ví dụ `INTERN` chuyển sang `FULL_TIME` khi được nhận). Không suy ra `employmentType` từ `contract.contractType` — 2 khái niệm độc lập.
 
+**Lịch sử công tác (lô 3a, BR-02).** Đổi `departmentId`, `positionId`, `managerId` hoặc `employmentType` thì server ghi một
+giai đoạn mới bắt đầu từ `effectiveDate` (mặc định hôm nay) và kết thúc giai đoạn đang mở vào ngày trước đó. Chuyển phòng hiệu
+lực 01/12/2026 → giai đoạn cũ kết thúc 30/11/2026. `effectiveDate` trùng ngày bắt đầu giai đoạn đang mở thì sửa ngay giai đoạn đó
+(đính chính, không thêm dòng). Đổi `joinDate` thì giai đoạn đầu tiên dời theo. Nhân viên đã nghỉ việc không ghi giai đoạn mới.
+Form nên hiện ô **Ngày hiệu lực** và **Ghi chú** khi một trong bốn trường trên thay đổi.
+
 **Response 200:** `ApiSuccess<EmployeeDetail>` (shape đầy đủ)
 
 ---
@@ -471,17 +502,19 @@ Thủ tục nghỉ việc thật, **khác** `DELETE /:id` (khóa tài khoản):
 interface TerminateEmployeeDto {
   terminationDate: string;  // "YYYY-MM-DD", bắt buộc, phải >= joinDate
   terminationNote: string;  // bắt buộc, server tự trim; chuỗi rỗng / toàn dấu cách → 400; tối đa 1000 ký tự
+  terminationReason: TerminationReason; // lô 3a, bắt buộc: ô chọn lý do nghỉ việc
 }
 ```
 
 **Response 200:** `ApiSuccess<EmployeeDetail>` — bản ghi sau khi cập nhật (`status = 'INACTIVE'`,
-`terminationDate`, `terminationNote`).
+`terminationDate`, `terminationNote`, `terminationReason`). Lô 3a: giai đoạn công tác cuối kết thúc ở `terminationDate`.
 
 | Tình huống | Kết quả |
 |---|---|
 | Nhân sự đang làm | 200 — chuyển sang `INACTIVE`, lưu ngày + lý do |
 | Nhân sự **đã** nghỉ việc | 200 — **cập nhật** ngày + lý do (đường duy nhất để sửa ngày nghỉ sai) |
 | Thiếu `terminationNote`, hoặc toàn dấu cách | 400 |
+| Thiếu `terminationReason` (lô 3a) | 400 — "Bạn chọn lý do nghỉ việc" |
 | Thiếu `terminationDate`, hoặc sai định dạng (`"18/09/2026"`) | 400 |
 | `terminationDate` < `joinDate` | 400 — `"Ngày nghỉ việc (01/02/2026) không được trước ngày vào làm (01/03/2026)"` |
 | Chưa được tick quyền `employee:terminate` | 403 |
@@ -543,6 +576,11 @@ Template Excel vẫn có cột F "Mật khẩu" để file cũ import được, 
 import nhận email kích hoạt (hạn 3 giờ) hoặc lời mời (hạn 7 ngày) như khi tạo từng người. Lỗi
 theo dòng sẽ không còn `field: "password"`; có thể có lỗi `field: "email"` với message "Email
 này đã gắn với một hồ sơ nhân sự khác trong công ty".
+
+**Lô 3a:**
+- Ba cột tuỳ chọn 25 Ngân hàng, 26 Số tài khoản, 27 Chủ tài khoản (xem [hr-profile.md](./hr-profile.md) mục 9).
+- **Cột mã quản lý (K) nhận người đã có trong hệ thống**, trước đây chỉ nhận người nằm trong cùng file (lỗi cũ, đã sửa 16/11).
+  Quản lý đã nghỉ việc thì lỗi `field: "managerCode"`, message `Quản lý "<mã>" (<tên>) đã nghỉ việc, bạn chọn người quản lý khác`.
 
 ---
 
@@ -612,6 +650,7 @@ export function useEmployees() {
 | `role` | ✓ | ✓ | ✓ |
 | `phone` | ❌ | `string \| null` | `string \| null` |
 | `gender` | ❌ | `'Nam' \| 'Nữ' \| 'Khác' \| null` | ❌ |
+| `genderCode` (lô 3a) | ❌ | `'MALE' \| 'FEMALE' \| 'OTHER' \| null` | ❌ |
 | `address` | ❌ | `string \| null` | ❌ |
 | `dateOfBirth` | ❌ | `string \| null` | ❌ |
 | `joinDate` | ❌ | `string` | ❌ |
@@ -643,7 +682,10 @@ Khi gửi lên (`POST`/`PATCH`), `joinDate` và `dateOfBirth` phải dùng `"YYY
 | `GET /employees?pagination=false&status=INACTIVE` | 200 — `status` bị override, vẫn chỉ trả ACTIVE |
 | `EMPLOYEE` gọi `GET /employees/:id` với id của chính mình | 200 OK |
 | `EMPLOYEE` gọi `GET /employees/:id` với id người khác | 403 Forbidden |
-| `MANAGER`/`CHIEF` gọi `GET /employees/:id` | 200 OK (xem được mọi nhân viên) |
+| `CHIEF` gọi `GET /employees/:id` | 200 OK (xem được mọi nhân viên) |
+| `MANAGER` gọi `GET /employees/:id` nhân viên phòng khác (lô 3a) | 403 `EMPLOYEE_SCOPE_FORBIDDEN` |
+| `PATCH` đổi phòng ban với `effectiveDate` sau hôm nay (lô 3a) | 400 `EMPLOYMENT_EFFECTIVE_DATE_INVALID` |
+| `POST`/`PATCH` với `gender: "trai"` (lô 3a) | 400 "Giới tính phải là Nam, Nữ hoặc Khác" |
 | Tạo employee với email đã tồn tại | 409 Conflict |
 | Deactivate employee đã INACTIVE | 400 Bad Request |
 | `search=nguyen` | Tìm trong `fullName`, `email`, `employeeCode` |

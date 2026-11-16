@@ -1,5 +1,5 @@
 import { useEmployeeDocumentService } from '~/services/employee-document.service';
-import type { DocumentType, EmployeeDocumentResponse } from '~/types/employee.types';
+import type { EmployeeDocumentResponse, UploadDocumentPayload } from '~/types/employee-document.types';
 
 export function useEmployeeDocuments() {
 	const service = useEmployeeDocumentService();
@@ -17,10 +17,13 @@ export function useEmployeeDocuments() {
 		}
 	}
 
-	async function uploadDocument(employeeId: number, file: File, type: DocumentType): Promise<EmployeeDocumentResponse> {
+	async function uploadDocument(
+		employeeId: number,
+		payload: UploadDocumentPayload,
+	): Promise<EmployeeDocumentResponse> {
 		uploading.value = true;
 		try {
-			const created = await service.upload(employeeId, file, type);
+			const created = await service.upload(employeeId, payload);
 			documents.value = [created, ...documents.value];
 			return created;
 		} finally {

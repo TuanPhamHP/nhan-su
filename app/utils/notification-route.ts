@@ -47,6 +47,11 @@ import { isManagementRole } from '~/utils/role';
  * | recruitment_my_application| /recruitment/applications/:id            |
  * | recruitment_my_interviews | /recruitment/my-interviews               |
  * | employee                  | /management/employees/:id                |
+ *
+ * Lô 3a hồ sơ nhân sự cũng không rẽ theo vai trò, vì BE chọn refType theo người nhận:
+ * | profile_change_request    | /management/approval?tab=profileChanges&id=:id |
+ * | my_profile_change_request | /profile?tab=requests&id=:id                   |
+ * | my_profile                | /profile (không có refId)                      |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -174,6 +179,21 @@ export function resolveNotificationRoute(
 		// N-08 "có nhân viên mới" gửi cho trưởng phòng và HR, nên luôn là trang quản lý.
 		case 'employee':
 			return id ? `/management/employees/${id}` : '/management/employees';
+
+		// Lô 3a hồ sơ nhân sự. BE chọn refType theo từng người nhận nên ở đây không rẽ theo vai
+		// trò: người gửi yêu cầu thường là EMPLOYEE và chỉ vào được trang cá nhân, còn người
+		// duyệt phải so ba cột giá trị nên luôn mở trang Phê duyệt.
+		case 'profile_change_request':
+			return id
+				? `/management/approval?tab=profileChanges&id=${id}`
+				: '/management/approval?tab=profileChanges';
+
+		case 'my_profile_change_request':
+			return id ? `/profile?tab=requests&id=${id}` : '/profile?tab=requests';
+
+		// N-03 không mang refId: người nhận chỉ cần mở hồ sơ của mình để xem chỗ vừa bị sửa.
+		case 'my_profile':
+			return '/profile';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

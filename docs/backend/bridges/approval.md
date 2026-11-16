@@ -103,9 +103,15 @@ export interface ApprovalCountsResponseDto {
   overtimeRequests: number;
   businessTrips: number;
   onlineWorkRequests: number;
+  assetDisposals: number;
+  profileChanges: number; // lô 3a: yêu cầu thay đổi thông tin nhân sự chờ duyệt
   total: number;
 }
 ```
+
+> `profileChanges` (lô 3a): số yêu cầu thay đổi thông tin đang chờ của **người khác**, khi người gọi có
+> `employee:profile-change:approve` (ADMIN luôn có); không có quyền thì 0. Hồ sơ nhân viên thuộc lõi nên không phụ thuộc module.
+> Tab trên trang Phê duyệt dùng key `profileChanges`, chi tiết ở [hr-profile.md](./hr-profile.md) mục 7.2.
 
 Ví dụ:
 
@@ -119,7 +125,9 @@ Ví dụ:
     "overtimeRequests": 2,
     "businessTrips": 1,
     "onlineWorkRequests": 4,
-    "total": 11
+    "assetDisposals": 0,
+    "profileChanges": 2,
+    "total": 13
   }
 }
 ```

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useForm } from 'vee-validate';
-import type { CreateEmployeeDto, EmployeeGender, EmploymentType } from '~/types/employee.types';
+import { GENDER_LABELS, type CreateEmployeeDto, type EmploymentType, type GenderCode } from '~/types/employee.types';
 import type { UserRole } from '~/types/auth.types';
 import { usePositionService } from '~/services/position.service';
 import { useWorkShiftService } from '~/services/work-shift.service';
@@ -67,7 +67,7 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 	departmentId: number | undefined;
 	positionId: number | undefined;
 	defaultShiftId: number | undefined;
-	gender: EmployeeGender | '';
+	gender: GenderCode | '';
 	dateOfBirth: string;
 	address: string;
 }>({
@@ -83,7 +83,7 @@ const { handleSubmit, defineField, errors, isSubmitting } = useForm<{
 		departmentId: number | undefined;
 		positionId: number | undefined;
 		defaultShiftId: number | undefined;
-		gender: EmployeeGender | '';
+		gender: GenderCode | '';
 		dateOfBirth: string;
 		address: string;
 	}>,
@@ -130,7 +130,7 @@ const onSubmit = handleSubmit(async values => {
 		departmentId: values.departmentId ? Number(values.departmentId) : undefined,
 		positionId: values.positionId ? Number(values.positionId) : undefined,
 		defaultShiftId: values.defaultShiftId ? Number(values.defaultShiftId) : undefined,
-		gender: (values.gender as EmployeeGender) || undefined,
+		gender: (values.gender as GenderCode) || undefined,
 		dateOfBirth: values.dateOfBirth || undefined,
 		address: values.address || undefined,
 	};
@@ -158,11 +158,10 @@ const metaDataStore = useMetaDataStore();
 metaDataStore.load().catch(() => { /* metadata not critical */ });
 const { roles: roleOptions, employmentTypes: employmentTypeOptions } = storeToRefs(metaDataStore);
 
+// Lô 3a: ô chọn gửi mã giới tính, nhãn vẫn là chữ người dùng đọc.
 const genderOptions = [
-	{ value: undefined, label: '-- Không rõ --' },
-	{ value: 'Nam', label: 'Nam' },
-	{ value: 'Nữ', label: 'Nữ' },
-	{ value: 'Khác', label: 'Khác' },
+	{ value: '', label: '-- Không rõ --' },
+	...Object.entries(GENDER_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
 const departmentOptions = computed(() => [

@@ -62,6 +62,11 @@ export type NotificationType =
 	// Lô 2b: phiếu thanh lý chờ duyệt (người duyệt) và kết quả duyệt (người lập), refType `asset_disposal`.
 	| 'ASSET_DISPOSAL_PENDING'
 	| 'ASSET_DISPOSAL_DECIDED'
+	// Lô 3a hồ sơ nhân sự: yêu cầu thay đổi thông tin (người duyệt), kết quả duyệt (người gửi)
+	// và thông báo khi người khác sửa hồ sơ của mình. Định tuyến theo `refType`.
+	| 'PROFILE_CHANGE_REQUESTED'
+	| 'PROFILE_CHANGE_DECIDED'
+	| 'PROFILE_UPDATED_BY_HR'
 	| 'TEST';
 
 export interface NotificationActionPayload {

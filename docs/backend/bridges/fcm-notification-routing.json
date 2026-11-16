@@ -634,6 +634,45 @@
       "note": "Module ASSET. refId là id phiếu thanh lý. Trang quản lý, chỉ có trên web"
     },
 
+    "PROFILE_CHANGE_REQUESTED": {
+      "category": "REQUEST",
+      "refType": "profile_change_request",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/approval?tab=profileChanges&id={refId}",
+      "trigger": "Nhân viên gửi yêu cầu thay đổi thông tin nhạy cảm; J-01 nhắc khi chờ quá 2 ngày làm việc (lô 3a, F-05)",
+      "recipients": ["người có employee:profile-change:approve", "ADMIN", "trừ người gửi"],
+      "frequency": "real-time + daily cron",
+      "note": "Hồ sơ nhân sự (lõi). refId là id yêu cầu. NAVIGATE_ONLY: duyệt cần so giá trị cũ, mới, hiện tại, chỉ làm trên web. Không chứa giá trị nhạy cảm"
+    },
+
+    "PROFILE_CHANGE_DECIDED": {
+      "category": "REQUEST",
+      "refType": "my_profile_change_request",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/profile?tab=requests&id={refId}",
+      "trigger": "Yêu cầu thay đổi thông tin được duyệt hoặc bị từ chối (lô 3a, F-05)",
+      "recipients": ["người gửi yêu cầu"],
+      "frequency": "real-time",
+      "note": "Hồ sơ nhân sự (lõi). refId là id yêu cầu. Mobile chưa có màn hình yêu cầu thay đổi: mở trang cá nhân nếu có, không thì toast. Kèm email"
+    },
+
+    "PROFILE_UPDATED_BY_HR": {
+      "category": "EVENT",
+      "refType": "my_profile",
+      "hasEntityId": false,
+      "screen": null,
+      "params": {},
+      "webUrl": "/profile",
+      "trigger": "Người khác sửa ngân hàng, MST, người phụ thuộc hoặc CCCD trong hồ sơ của nhân viên (lô 3a, N-03)",
+      "recipients": ["nhân viên có hồ sơ bị sửa", "trừ khi tự sửa"],
+      "frequency": "real-time",
+      "note": "Hồ sơ nhân sự (lõi). Không có refId. Mở trang cá nhân. Không chứa giá trị nhạy cảm. Kèm email"
+    },
+
     "RECRUIT_INTERVIEW_ASSIGNED": {
       "category": "EVENT",
       "refType": "recruitment_my_interviews",

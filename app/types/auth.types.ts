@@ -11,16 +11,29 @@ export interface ProfileResponse {
 	phone: string | null;
 	dateOfBirth: string | null;
 	gender: Gender | null;
+	/** Lô 3a: mã giới tính. */
+	genderCode: 'MALE' | 'FEMALE' | 'OTHER' | null;
 	address: string | null;
 	avatarUrl: string | null;
+	/**
+	 * Lô 3a, chỉ có ở `PATCH /v1/auth/profile`: id yêu cầu thay đổi vừa được tạo cho họ tên,
+	 * email công việc, ngày sinh hoặc giới tính. Null nghĩa là không có gì cần duyệt.
+	 */
+	pendingChangeRequestId?: number | null;
 }
 
+/**
+ * Body `PATCH /v1/auth/profile`.
+ *
+ * Lô 3a chỉ còn số điện thoại và địa chỉ được ghi ngay; họ tên, email công việc, ngày sinh và
+ * giới tính khác giá trị hiện tại thì server tạo yêu cầu cho phòng nhân sự duyệt.
+ */
 export interface UpdateProfilePayload {
 	fullName?: string;
 	email?: string;
 	phone?: string;
 	dateOfBirth?: string;
-	gender?: Gender;
+	gender?: Gender | 'MALE' | 'FEMALE' | 'OTHER';
 	address?: string;
 }
 

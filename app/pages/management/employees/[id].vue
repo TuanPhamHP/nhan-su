@@ -1,7 +1,15 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
 	import { formatDate, formatDateTime, todayYmd } from '~/utils/date';
-	import type { UpdateEmployeeDto, EmployeeGender, EmployeeSummary, EmploymentType } from '~/types/employee.types';
+	import {
+		GENDER_LABELS,
+		TERMINATION_REASON_LABELS,
+		type EmployeeSummary,
+		type EmploymentType,
+		type GenderCode,
+		type TerminationReason,
+		type UpdateEmployeeDto,
+	} from '~/types/employee.types';
 	import type { UserRole } from '~/types/auth.types';
 	import { usePositionService } from '~/services/position.service';
 	import { useEmployeeService } from '~/services/employee.service';
@@ -13,6 +21,11 @@
 	import EmployeePassport from '~/components/modules/employee/EmployeePassport.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 	import EmployeeAssets from '~/components/modules/asset/EmployeeAssets.vue';
+	import EmployeeExtraProfile from '~/components/modules/employee/EmployeeExtraProfile.vue';
+	import EmployeeBankTax from '~/components/modules/employee/EmployeeBankTax.vue';
+	import EmployeeWorkExperiences from '~/components/modules/employee/EmployeeWorkExperiences.vue';
+	import EmployeeRelatives from '~/components/modules/employee/EmployeeRelatives.vue';
+	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
 	import { useAssetService } from '~/services/asset.service';
 	import type { AssetAssignment } from '~/types/asset.types';
 
@@ -38,6 +51,10 @@
 	// Thủ tục nghỉ việc tách khỏi khóa tài khoản: quyền riêng `employee:terminate`, BE KHÔNG
 	// tick sẵn cho vai trò nào (chỉ ADMIN bypass) → không có quyền thì ẩn hẳn nút.
 	const canTerminate = computed(() => hasPermission('employee:terminate'));
+	// Lô 3a: ngân hàng, mã số thuế, thân nhân và giấy tờ nhạy cảm của người khác nằm sau quyền
+	// riêng, và mỗi lần xem được ghi vào nhật ký. Không có quyền thì ẩn hẳn nút Xem và tab Thân
+	// nhân, thay vì để người dùng bấm rồi nhận 403.
+	const canReadPrivate = computed(() => hasPermission('employee:private:read'));
 	// Tab Hợp đồng lộ cả lương cơ bản → phải theo đúng quyền, không chỉ theo vai trò.
 	// BE đã chặn (contract:read), đây là để không hiện tab rồi mới báo lỗi.
 	// Hai tab này thuộc module CONTRACT_INSURANCE: công ty chưa mở thì ẩn, kể cả với ADMIN.
@@ -76,7 +93,15 @@
 		}
 	}
 
-	const validTabs = ['info', 'contracts', 'social-insurance', 'identity', 'assets'] as const;
+	const validTabs = [
+		'info',
+		'relatives',
+		'documents',
+		'contracts',
+		'social-insurance',
+		'identity',
+		'assets',
+	] as const;
 	type TabId = (typeof validTabs)[number];
 	function initialTab(): TabId {
 		const requested = route.query.tab as TabId;
@@ -85,19 +110,24 @@
 		if (requested === 'contracts' && !canReadContracts.value) return 'info';
 		if (requested === 'social-insurance' && !canReadSocialInsurance.value) return 'info';
 		if (requested === 'assets' && !canReadAssets.value) return 'info';
+		if (requested === 'relatives' && !canReadPrivate.value) return 'info';
 		return requested;
 	}
 	const activeTab = ref<TabId>(initialTab());
 	// Module bị tắt ngay lúc đang mở tab của nó (biết được khi API trả `MODULE_*`): về tab Thông tin.
-	watch([canReadContracts, canReadSocialInsurance, canReadAssets], ([contracts, socialInsurance, assets]) => {
-		if (
-			(activeTab.value === 'contracts' && !contracts) ||
-			(activeTab.value === 'social-insurance' && !socialInsurance) ||
-			(activeTab.value === 'assets' && !assets)
-		) {
-			activeTab.value = 'info';
-		}
-	});
+	watch(
+		[canReadContracts, canReadSocialInsurance, canReadAssets, canReadPrivate],
+		([contracts, socialInsurance, assets, priv]) => {
+			if (
+				(activeTab.value === 'contracts' && !contracts) ||
+				(activeTab.value === 'social-insurance' && !socialInsurance) ||
+				(activeTab.value === 'assets' && !assets) ||
+				(activeTab.value === 'relatives' && !priv)
+			) {
+				activeTab.value = 'info';
+			}
+		},
+	);
 	// Không auto-enter edit mode khi user không có employee:update.
 	const isEditing = ref(route.query.edit === 'true' && canUpdate.value);
 	const confirmDeactivate = ref(false);
@@ -114,12 +144,23 @@
 	// ─── Form xác nhận nghỉ việc ─────────────────────────────────────────────────
 	const showTerminateModal = ref(false);
 	const terminating = ref(false);
-	const terminateForm = reactive({ date: '' as string | undefined, note: '' });
+	const terminateForm = reactive({
+		date: '' as string | undefined,
+		note: '',
+		// Lô 3a bắt buộc lý do nghỉ việc; để trống thì nút gửi bị chặn ngay ở đây.
+		reason: '' as TerminationReason | '',
+	});
 	const TERMINATION_NOTE_MAX = 1000;
+	const terminationReasonOptions = Object.entries(TERMINATION_REASON_LABELS).map(([value, label]) => ({
+		value,
+		label,
+	}));
 	// Nhân sự đã nghỉ → cùng form này dùng để SỬA ngày/lý do (BE trả 200, không phải 400).
 	const isTerminated = computed(() => currentEmployee.value?.status === 'INACTIVE');
 	const terminateLabel = computed(() => (isTerminated.value ? 'Sửa thông tin nghỉ việc' : 'Xác nhận nghỉ việc'));
-	const canSubmitTerminate = computed(() => !!terminateForm.date && terminateForm.note.trim().length > 0);
+	const canSubmitTerminate = computed(
+		() => !!terminateForm.date && !!terminateForm.reason && terminateForm.note.trim().length > 0,
+	);
 
 	// ─── Cảnh báo tài sản khi cho nghỉ việc ───────────────────────────────────────
 	//
@@ -175,12 +216,13 @@
 	function openTerminateModal() {
 		terminateForm.date = currentEmployee.value?.terminationDate ?? todayYmd();
 		terminateForm.note = currentEmployee.value?.terminationNote ?? '';
+		terminateForm.reason = currentEmployee.value?.terminationReason ?? '';
 		showTerminateModal.value = true;
 		loadOpenAssets();
 	}
 
 	async function handleTerminate() {
-		if (!canSubmitTerminate.value || !terminateForm.date) return;
+		if (!canSubmitTerminate.value || !terminateForm.date || !terminateForm.reason) return;
 		// Chốt trước khi gọi: sau khi thành công `currentEmployee` đã là INACTIVE nên
 		// `isTerminated` luôn true, đọc sau sẽ ra nhầm thông báo.
 		const wasTerminated = isTerminated.value;
@@ -189,6 +231,7 @@
 			await terminate(id, {
 				terminationDate: terminateForm.date,
 				terminationNote: terminateForm.note.trim(),
+				terminationReason: terminateForm.reason,
 			});
 			toast.success(wasTerminated ? 'Đã cập nhật thông tin nghỉ việc' : 'Đã xác nhận nghỉ việc');
 			showTerminateModal.value = false;
@@ -200,11 +243,21 @@
 		}
 	}
 
+	/**
+	 * Câu BE trả khi hồ sơ ngoài phạm vi xem (lô 3a thu hẹp phạm vi trưởng phòng về phòng mình).
+	 *
+	 * Giữ lại để màn hình nói đúng chuyện thay vì "Không tìm thấy nhân viên": người xem không
+	 * làm gì sai, chỉ là hồ sơ này không thuộc phòng mình.
+	 */
+	const loadError = ref<string | null>(null);
+
 	onMounted(async () => {
 		await Promise.all([
-			fetchOne(id).catch((e: unknown) =>
-				toast.error(e instanceof Error ? e.message : 'Không tải được thông tin nhân viên'),
-			),
+			fetchOne(id).catch((e: unknown) => {
+				const message = e instanceof Error ? e.message : 'Không tải được thông tin nhân viên';
+				loadError.value = message;
+				toast.error(message);
+			}),
 			fetchDepartments(),
 			loadPositions(),
 			loadAllEmployees(),
@@ -223,9 +276,11 @@
 		departmentId: number | undefined;
 		positionId: number | undefined;
 		managerId: number | undefined;
-		gender: EmployeeGender | '';
+		gender: GenderCode | '';
 		dateOfBirth: string;
 		address: string;
+		effectiveDate: string;
+		historyNote: string;
 	}>({
 		validationSchema: {
 			fullName: (v: string) => (v && v.trim().length >= 2 ? true : 'Tối thiểu 2 ký tự'),
@@ -249,6 +304,8 @@
 	});
 	const [dateOfBirth] = defineField('dateOfBirth');
 	const [address, addressAttrs] = defineField('address');
+	const [effectiveDate] = defineField('effectiveDate');
+	const [historyNote, historyNoteAttrs] = defineField('historyNote');
 
 	function resetFormFromEmployee() {
 		const emp = currentEmployee.value;
@@ -264,13 +321,41 @@
 				departmentId: deptId,
 				positionId: emp.position?.id ?? undefined,
 				managerId: emp.manager?.id ?? undefined,
-				gender: emp.gender ?? '',
+				gender: emp.genderCode ?? '',
 				dateOfBirth: emp.dateOfBirth ?? '',
 				address: emp.address ?? '',
+				effectiveDate: todayYmd(),
+				historyNote: '',
 			},
 		});
 		loadPositions(deptId);
 	}
+
+	/**
+	 * Bốn trường tạo nên một mốc lịch sử công tác.
+	 *
+	 * Đổi một trong bốn trường này thì BE kết thúc giai đoạn đang mở và mở giai đoạn mới từ
+	 * ngày hiệu lực, nên ô Ngày hiệu lực và Ghi chú chỉ hiện đúng lúc đó. Người dùng chỉ sửa số
+	 * điện thoại thì không phải đọc thêm hai ô không liên quan.
+	 *
+	 * Ô để trống được coi là không đổi, vì payload cũng không gửi trường đó và BE giữ nguyên giá
+	 * trị cũ. Điều này cần thiết: watcher của phòng ban xoá chức vụ mỗi lần phòng ban đổi, kể cả
+	 * lần nạp form đầu tiên, nên so sánh thô sẽ bật hai ô kia ngay khi vừa mở form.
+	 */
+	const employmentChanged = computed(() => {
+		const emp = currentEmployee.value;
+		if (!emp) return false;
+		const changedId = (value: unknown, current: number | undefined) => {
+			const next = value ? Number(value) : undefined;
+			return next !== undefined && next !== current;
+		};
+		return (
+			changedId(departmentId.value, emp.department?.id) ||
+			changedId(positionId.value, emp.position?.id) ||
+			changedId(managerId.value, emp.manager?.id) ||
+			(!!employmentType.value && employmentType.value !== emp.employmentType)
+		);
+	});
 
 	function startEditing() {
 		if (!canUpdate.value) {
@@ -312,10 +397,16 @@
 			departmentId: values.departmentId ? Number(values.departmentId) : undefined,
 			positionId: values.positionId ? Number(values.positionId) : undefined,
 			managerId: values.managerId ? Number(values.managerId) : undefined,
-			gender: (values.gender as EmployeeGender) || undefined,
+			gender: (values.gender as GenderCode) || undefined,
 			dateOfBirth: values.dateOfBirth || undefined,
 			address: values.address || undefined,
 		};
+		// Chỉ gửi ngày hiệu lực và ghi chú khi thật sự có mốc công tác mới, để lần sửa số điện
+		// thoại không vô tình ghi thêm một dòng lịch sử.
+		if (employmentChanged.value) {
+			payload.effectiveDate = values.effectiveDate || undefined;
+			payload.historyNote = values.historyNote || undefined;
+		}
 		try {
 			await update(id, payload);
 			toast.success('Cập nhật thông tin thành công');
@@ -365,11 +456,10 @@
 	metaDataStore.load().catch(() => { /* metadata not critical */ });
 	const { roles: roleOptions } = storeToRefs(metaDataStore);
 
+	// Ô chọn gửi mã giới tính; nhãn vẫn là chữ người dùng đọc (lô 3a).
 	const genderOptions = [
-		{ value: undefined, label: '-- Không rõ --' },
-		{ value: 'Nam', label: 'Nam' },
-		{ value: 'Nữ', label: 'Nữ' },
-		{ value: 'Khác', label: 'Khác' },
+		{ value: '', label: '-- Không rõ --' },
+		...Object.entries(GENDER_LABELS).map(([value, label]) => ({ value, label })),
 	];
 
 	const { employmentTypes: employmentTypeOptions } = storeToRefs(metaDataStore);
@@ -490,9 +580,11 @@
 			</div>
 		</div>
 
-		<!-- Not found -->
-		<div v-else-if="!currentEmployee && !detailLoading" class="flex flex-col items-center justify-center py-20">
-			<p class="text-gray-500 dark:text-gray-400">Không tìm thấy nhân viên</p>
+		<!-- Không mở được hồ sơ: ngoài phạm vi xem, không tồn tại, hoặc lỗi tải -->
+		<div v-else-if="!currentEmployee && !detailLoading" class="flex flex-col items-center justify-center py-20 px-6">
+			<p class="max-w-xl text-center text-gray-600 dark:text-gray-300">
+				{{ loadError ?? 'Không tìm thấy nhân viên.' }}
+			</p>
 			<NuxtLink to="/management/employees" class="mt-3">
 				<CommonAppButton variant="outline" size="sm">Quay lại danh sách</CommonAppButton>
 			</NuxtLink>
@@ -531,7 +623,8 @@
 
 			<!-- Tab bar -->
 			<div class="border-b border-gray-200 dark:border-gray-700">
-				<nav class="-mb-px flex gap-1">
+				<!-- Lô 3a thêm hai tab nữa nên hàng tab phải cuộn ngang được trên điện thoại. -->
+				<nav class="-mb-px flex gap-1 overflow-x-auto whitespace-nowrap">
 					<button
 						type="button"
 						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
@@ -543,6 +636,37 @@
 						@click="activeTab = 'info'"
 					>
 						Thông tin
+					</button>
+					<button
+						v-if="canReadPrivate"
+						type="button"
+						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+						:class="
+							activeTab === 'relatives'
+								? 'border-brand-500 text-brand-600 dark:text-brand-400'
+								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+						"
+						@click="
+							activeTab = 'relatives';
+							isEditing = false;
+						"
+					>
+						Thân nhân
+					</button>
+					<button
+						type="button"
+						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+						:class="
+							activeTab === 'documents'
+								? 'border-brand-500 text-brand-600 dark:text-brand-400'
+								: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
+						"
+						@click="
+							activeTab = 'documents';
+							isEditing = false;
+						"
+					>
+						Tài liệu
 					</button>
 					<button
 						v-if="canReadContracts"
@@ -674,6 +798,10 @@
 								{{ formatDate(currentEmployee.terminationDate) }}
 							</p>
 						</div>
+						<div v-if="currentEmployee.status === 'INACTIVE'">
+							<p :class="labelCls">Trường hợp nghỉ việc</p>
+							<p :class="valueCls">{{ currentEmployee.terminationReasonLabel ?? '—' }}</p>
+						</div>
 						<div v-if="currentEmployee.status === 'INACTIVE'" class="sm:col-span-2">
 							<p :class="labelCls">Lý do nghỉ việc</p>
 							<p :class="[valueCls, 'whitespace-pre-line']">
@@ -793,6 +921,28 @@
 							<label :class="labelCls">Địa chỉ</label>
 							<input v-model="address" v-bind="addressAttrs" :class="inputCls" placeholder="Nhập địa chỉ" />
 						</div>
+
+						<!-- Mốc lịch sử công tác (lô 3a): chỉ hiện khi phòng ban, chức vụ, quản lý hoặc
+						     loại lao động thay đổi, vì chỉ lúc đó hệ thống mới ghi một giai đoạn mới. -->
+						<div
+							v-if="employmentChanged"
+							class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-5 rounded-lg border border-brand-200 bg-brand-50/60 p-4 dark:border-brand-800 dark:bg-brand-900/20"
+						>
+							<p class="sm:col-span-2 text-xs text-brand-800 dark:text-brand-200">
+								Bạn vừa đổi phòng ban, chức vụ, quản lý hoặc loại lao động, nên hệ thống sẽ ghi một mốc công tác
+								mới. Ngày hiệu lực không được sau hôm nay và không trước ngày bắt đầu của giai đoạn đang mở.
+							</p>
+							<UiDatePicker v-model="effectiveDate" label="Ngày hiệu lực" :max="todayYmd()" />
+							<div>
+								<label :class="labelCls">Ghi chú mốc công tác</label>
+								<input
+									v-model="historyNote"
+									v-bind="historyNoteAttrs"
+									:class="inputCls"
+									placeholder="Ví dụ Điều động theo quyết định số 12"
+								/>
+							</div>
+						</div>
 					</div>
 
 					<div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
@@ -800,7 +950,35 @@
 						<CommonAppButton type="submit" :loading="isSubmitting">Lưu thay đổi</CommonAppButton>
 					</div>
 				</form>
+
+				<!-- Hồ sơ mở rộng (lô 3a). Khối nhạy cảm đóng sẵn, mở ra là một dòng nhật ký. -->
+				<template v-if="!isEditing">
+					<EmployeeExtraProfile :employee-id="id" :can-update="canUpdate" />
+					<EmployeeBankTax
+						v-if="canReadPrivate"
+						:employee-id="id"
+						:employee-name="currentEmployee.fullName"
+						:can-update="canUpdate"
+					/>
+					<EmployeeWorkExperiences :employee-id="id" :can-update="canUpdate" />
+				</template>
 			</template>
+
+			<!-- Tab: Thân nhân (lô 3a) -->
+			<EmployeeRelatives
+				v-else-if="activeTab === 'relatives' && canReadPrivate"
+				:employee-id="id"
+				:employee-name="currentEmployee.fullName"
+				:can-update="canUpdate"
+			/>
+
+			<!-- Tab: Tài liệu -->
+			<EmployeeDocuments
+				v-else-if="activeTab === 'documents'"
+				:employee-id="id"
+				:readonly="!canUpdate"
+				:can-view-relatives="canReadPrivate"
+			/>
 
 			<!-- Tab: Hợp đồng -->
 			<div
@@ -1061,8 +1239,19 @@
 						<div class="mt-5 space-y-4">
 							<UiDatePicker v-model="terminateForm.date" label="Ngày nghỉ việc *" />
 							<div class="flex flex-col gap-1">
+								<label class="text-sm font-medium text-gray-700 dark:text-gray-300">Lý do nghỉ việc *</label>
+								<UiSelect
+									v-model="terminateForm.reason"
+									:options="terminationReasonOptions"
+									placeholder="-- Chọn trường hợp nghỉ việc --"
+								/>
+								<p class="text-xs text-gray-500 dark:text-gray-400">
+									Trường hợp nghỉ việc theo Bộ luật Lao động, dùng cho báo cáo lao động định kỳ.
+								</p>
+							</div>
+							<div class="flex flex-col gap-1">
 								<label for="termination-note" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-									Lý do nghỉ việc *
+									Diễn giải *
 								</label>
 								<textarea
 									id="termination-note"

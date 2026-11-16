@@ -13,6 +13,12 @@
 
 > Hai endpoint này chỉ tác động lên **chính người đang đăng nhập** — lấy identity từ JWT, không nhận `id` từ URL.
 
+> **Lô 3a (16/11/2026) đổi hành vi `PATCH /v1/auth/profile`:** chỉ **số điện thoại** và **địa chỉ** còn ghi ngay. **Họ tên,
+> email công việc, ngày sinh, giới tính** khác giá trị hiện tại thì server **tạo yêu cầu thay đổi** mục `BASIC` cho HR duyệt; hồ sơ
+> trả về vẫn là giá trị cũ và response có `pendingChangeRequestId`. Giá trị giống hiện tại thì bỏ qua, nên app gửi cả form vẫn
+> đúng. Endpoint giữ nguyên để app cũ không vỡ; màn hình mới nên dùng `/v1/me/profile/contact` và
+> `/v1/me/profile-change-requests` ([hr-profile.md](./hr-profile.md) mục 6, 7).
+
 ---
 
 ## TypeScript Types
@@ -21,6 +27,7 @@
 // types/auth.types.ts
 
 export type Gender = 'Nam' | 'Nữ' | 'Khác';
+export type GenderCode = 'MALE' | 'FEMALE' | 'OTHER';
 
 // Response của cả PATCH /profile và POST /avatar
 export interface ProfileResponse {
@@ -31,19 +38,21 @@ export interface ProfileResponse {
   role: string;               // read-only, không thể thay đổi qua endpoint này
   phone: string | null;
   dateOfBirth: string | null; // "YYYY-MM-DD" — chỉ ngày, không có giờ
-  gender: Gender | null;
+  gender: Gender | null;      // nhãn như trước lô 3a
+  genderCode: GenderCode | null; // lô 3a
   address: string | null;
   avatarUrl: string | null;   // Presigned S3 URL, hiệu lực 1 giờ — dùng trực tiếp trong <img>
+  pendingChangeRequestId?: number | null; // chỉ ở PATCH /profile: id yêu cầu BASIC vừa tạo, null nếu không tạo
 }
 
 // Body của PATCH /profile — tất cả fields đều optional
 export interface UpdateProfilePayload {
-  fullName?: string;    // min 2, max 100 ký tự
-  email?: string;       // phải là email hợp lệ, unique trong hệ thống
-  phone?: string;
-  dateOfBirth?: string; // "YYYY-MM-DD"
-  gender?: Gender;      // 'Nam' | 'Nữ' | 'Khác'
-  address?: string;
+  fullName?: string;    // min 2, max 100 ký tự → tạo yêu cầu thay đổi
+  email?: string;       // email công việc → tạo yêu cầu thay đổi
+  phone?: string;       // ghi ngay
+  dateOfBirth?: string; // "YYYY-MM-DD" → tạo yêu cầu thay đổi
+  gender?: Gender | GenderCode; // nhận cả nhãn và mã → tạo yêu cầu thay đổi
+  address?: string;     // ghi ngay
 }
 ```
 
@@ -51,7 +60,9 @@ export interface UpdateProfilePayload {
 
 ## PATCH /v1/auth/profile — Cập nhật thông tin cá nhân
 
-Tất cả fields đều **optional** — chỉ gửi những field muốn thay đổi. Server chỉ update các field có trong request body.
+Tất cả fields đều **optional**. `phone`, `address` ghi ngay. `fullName`, `email`, `dateOfBirth`, `gender` khác giá trị hiện tại
+thì gom thành **một** yêu cầu thay đổi mục `BASIC` (yêu cầu BASIC đang chờ trước đó tự huỷ); response vẫn trả giá trị cũ cho các
+trường này kèm `pendingChangeRequestId`. FE hiện thông báo "Đã gửi yêu cầu thay đổi, chờ phòng nhân sự duyệt" khi có id này.
 
 **Request body:**
 
@@ -73,18 +84,22 @@ Tất cả fields đều **optional** — chỉ gửi những field muốn thay 
   "success": true,
   "data": {
     "id": 4,
-    "fullName": "Nguyễn Văn B",
-    "email": "nguyen.b@company.com",
+    "fullName": "Nguyễn Văn A",
+    "email": "nguyen.a@company.com",
     "employeeCode": "EMP004",
     "role": "EMPLOYEE",
     "phone": "0901234567",
     "dateOfBirth": "1990-05-20",
     "gender": "Nam",
+    "genderCode": "MALE",
     "address": "123 Lê Lợi, Quận 1, TP.HCM",
-    "avatarUrl": null
+    "avatarUrl": null,
+    "pendingChangeRequestId": 15
   }
 }
 ```
+
+Ví dụ trên: họ tên và email trong response vẫn là giá trị cũ vì đang chờ duyệt (yêu cầu số 15); số điện thoại, địa chỉ đã đổi.
 
 **Ví dụ — chỉ đổi số điện thoại:**
 
@@ -102,7 +117,7 @@ await $fetch('/v1/auth/profile', {
   method: 'PATCH',
   body: { email: 'new.email@company.com' },
 });
-// Không cần verify — server lưu ngay sau khi check unique
+// Lô 3a: không lưu ngay, tạo yêu cầu thay đổi (data.pendingChangeRequestId). Email đã dùng cho người khác → 409 ngay lúc gửi.
 ```
 
 ---
@@ -190,8 +205,10 @@ export function useProfile() {
 
 | Tình huống | HTTP | `error.code` | Ghi chú |
 |-----------|------|-------------|---------|
-| `email` đổi sang email đã tồn tại | 409 | `EMPLOYEE_EMAIL_EXISTS` | Kiểm tra trước khi lưu |
-| `gender` không thuộc `['Nam', 'Nữ', 'Khác']` | 400 | — | Validation ở DTO |
+| `email` đổi sang email đã tồn tại | 409 | `EMPLOYEE_EMAIL_EXISTS` | Kiểm tra lúc tạo yêu cầu, và lại lúc HR duyệt |
+| `gender` không phải `Nam`, `Nữ`, `Khác`, `MALE`, `FEMALE`, `OTHER` | 400 | — | "Giới tính phải là Nam, Nữ hoặc Khác" |
+| Đổi họ tên (lô 3a) | 200 | — | Họ tên chưa đổi, có `pendingChangeRequestId`; HR duyệt thì người gửi nhận N-02 |
+| Gửi cả form với họ tên, ngày sinh, giới tính như cũ | 200 | — | `pendingChangeRequestId: null`, không tạo yêu cầu |
 | `dateOfBirth` sai format (không phải ISO 8601) | 400 | — | Phải là `"YYYY-MM-DD"` |
 | `fullName` < 2 hoặc > 100 ký tự | 400 | — | Validation ở DTO |
 | Upload file không phải JPG/PNG | 400 | — | `"Chỉ chấp nhận ảnh JPG hoặc PNG"` |

@@ -74,11 +74,15 @@
 				.optional()
 				.or(z.literal('')),
 			issuedDate: z.string().min(1, 'Vui lòng chọn ngày cấp'),
+			// Lô 3a: ngày hết hạn in trên thẻ; thẻ cũ không có nên để trống được.
+			expiryDate: z.string().optional().or(z.literal('')),
 			issuedPlace: z
 				.string()
 				.optional()
 				.refine(v => !v || (v.length >= 10 && v.length <= 255), 'Nơi cấp phải có 10–255 ký tự'),
 			hometown: z.string().max(255, 'Tối đa 255 ký tự').optional().or(z.literal('')),
+			// Lô 3a: thẻ căn cước mới in nơi đăng ký khai sinh thay cho quê quán.
+			birthRegistrationPlace: z.string().max(255, 'Tối đa 255 ký tự').optional().or(z.literal('')),
 			permanentAddress: z.string().optional().or(z.literal('')),
 			temporaryAddress: z.string().optional().or(z.literal('')),
 			currentAddress: z.string().optional().or(z.literal('')),
@@ -89,8 +93,10 @@
 		citizenIdNumber: string;
 		fullNameOnCard: string;
 		issuedDate: string;
+		expiryDate: string;
 		issuedPlace: string;
 		hometown: string;
+		birthRegistrationPlace: string;
 		permanentAddress: string;
 		temporaryAddress: string;
 		currentAddress: string;
@@ -100,8 +106,10 @@
 			citizenIdNumber: '',
 			fullNameOnCard: '',
 			issuedDate: '',
+			expiryDate: '',
 			issuedPlace: '',
 			hometown: '',
+			birthRegistrationPlace: '',
 			permanentAddress: '',
 			temporaryAddress: '',
 			currentAddress: '',
@@ -111,8 +119,10 @@
 	const [citizenIdNumber, citizenIdNumberAttrs] = defineField('citizenIdNumber');
 	const [fullNameOnCard, fullNameAttrs] = defineField('fullNameOnCard');
 	const [issuedDate] = defineField('issuedDate');
+	const [expiryDate] = defineField('expiryDate');
 	const [issuedPlace, issuedPlaceAttrs] = defineField('issuedPlace');
 	const [hometown, hometownAttrs] = defineField('hometown');
+	const [birthRegistrationPlace, birthPlaceAttrs] = defineField('birthRegistrationPlace');
 	const [permanentAddress, permAddrAttrs] = defineField('permanentAddress');
 	const [temporaryAddress, tempAddrAttrs] = defineField('temporaryAddress');
 	const [currentAddress, currAddrAttrs] = defineField('currentAddress');
@@ -132,8 +142,10 @@
 				citizenIdNumber: c.citizenIdNumber,
 				fullNameOnCard: c.fullNameOnCard ?? '',
 				issuedDate: c.issuedDate,
+				expiryDate: c.expiryDate ?? '',
 				issuedPlace: c.issuedPlace ?? '',
 				hometown: c.hometown ?? '',
+				birthRegistrationPlace: c.birthRegistrationPlace ?? '',
 				permanentAddress: c.permanentAddress ?? '',
 				temporaryAddress: c.temporaryAddress ?? '',
 				currentAddress: c.currentAddress ?? '',
@@ -178,9 +190,11 @@
 		const payload: CreateCitizenIdPayload = {
 			citizenIdNumber: values.citizenIdNumber,
 			issuedDate: values.issuedDate,
+			expiryDate: values.expiryDate || undefined,
 			fullNameOnCard: values.fullNameOnCard || undefined,
 			issuedPlace: values.issuedPlace || undefined,
 			hometown: values.hometown || undefined,
+			birthRegistrationPlace: values.birthRegistrationPlace || undefined,
 			permanentAddress: values.permanentAddress || undefined,
 			temporaryAddress: values.temporaryAddress || undefined,
 			currentAddress: values.currentAddress || undefined,
@@ -337,6 +351,15 @@
 			</div>
 
 			<div>
+				<UiDatePicker
+					v-model="expiryDate"
+					label="Ngày hết hạn"
+					:error="errors.expiryDate"
+					hint="Ngày in trên thẻ; thẻ không ghi thì để trống."
+				/>
+			</div>
+
+			<div>
 				<label :class="labelCls">Nơi cấp</label>
 				<input
 					v-model="issuedPlace"
@@ -356,6 +379,19 @@
 					placeholder="Xã X, Huyện Y, Tỉnh Z"
 				/>
 				<p v-if="errors.hometown" class="mt-1 text-xs text-red-500">{{ errors.hometown }}</p>
+			</div>
+
+			<div>
+				<label :class="labelCls">Nơi đăng ký khai sinh</label>
+				<input
+					v-model="birthRegistrationPlace"
+					v-bind="birthPlaceAttrs"
+					:class="[inputCls, errors.birthRegistrationPlace ? 'border-red-400' : '']"
+					placeholder="Thẻ căn cước mới in dòng này thay cho quê quán"
+				/>
+				<p v-if="errors.birthRegistrationPlace" class="mt-1 text-xs text-red-500">
+					{{ errors.birthRegistrationPlace }}
+				</p>
 			</div>
 
 			<div class="sm:col-span-2">
@@ -409,6 +445,10 @@
 					<p :class="labelCls">Ngày cấp</p>
 					<p :class="valueCls">{{ formatDate(citizenId.issuedDate) }}</p>
 				</div>
+				<div>
+					<p :class="labelCls">Ngày hết hạn</p>
+					<p :class="valueCls">{{ citizenId.expiryDate ? formatDate(citizenId.expiryDate) : '—' }}</p>
+				</div>
 				<div class="sm:col-span-2">
 					<p :class="labelCls">Nơi cấp</p>
 					<p :class="valueCls">{{ citizenId.issuedPlace ?? '—' }}</p>
@@ -416,6 +456,10 @@
 				<div>
 					<p :class="labelCls">Quê quán</p>
 					<p :class="valueCls">{{ citizenId.hometown ?? '—' }}</p>
+				</div>
+				<div>
+					<p :class="labelCls">Nơi đăng ký khai sinh</p>
+					<p :class="valueCls">{{ citizenId.birthRegistrationPlace ?? '—' }}</p>
 				</div>
 				<div class="sm:col-span-3">
 					<p :class="labelCls">Địa chỉ thường trú</p>

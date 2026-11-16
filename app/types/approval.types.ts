@@ -10,6 +10,11 @@ export interface ApprovalCountsResponseDto {
 	 * đã cộng vào `total`. Về 0 khi module `ASSET` không dùng đầy đủ.
 	 */
 	assetDisposals: number;
+	/**
+	 * Lô 3a: yêu cầu thay đổi thông tin nhân sự của người khác đang chờ, khi người xem có
+	 * `employee:profile-change:approve`. Không có quyền thì BE trả 0.
+	 */
+	profileChanges: number;
 	total: number;
 }
 
@@ -20,7 +25,8 @@ export type ApprovalModuleKey =
 	| 'overtimeRequests'
 	| 'businessTrips'
 	| 'onlineWorkRequests'
-	| 'assetDisposals';
+	| 'assetDisposals'
+	| 'profileChanges';
 
 // ─── Bộ lọc hộp thư phê duyệt ─────────────────────────────────────────────────
 // Mỗi tab chỉ bật những field mà endpoint tương ứng thực sự nhận (xem

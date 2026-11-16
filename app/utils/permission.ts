@@ -17,6 +17,8 @@ export const APPROVE_PERMISSIONS = {
 	generalRequest: 'general-request:approve',
 	/** Tài sản lô 2b: duyệt, từ chối phiếu thanh lý (tab "Thanh lý tài sản" của hộp thư duyệt). */
 	assetDisposal: 'asset:disposal:approve',
+	/** Hồ sơ nhân sự lô 3a: duyệt, từ chối yêu cầu thay đổi thông tin của nhân viên. */
+	profileChange: 'employee:profile-change:approve',
 } as const;
 
 /**

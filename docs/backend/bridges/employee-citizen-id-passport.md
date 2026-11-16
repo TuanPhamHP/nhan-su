@@ -135,8 +135,10 @@ export interface CitizenIdResponse {
   citizenIdNumber: string;              // đúng 12 chữ số
   fullNameOnCard: string | null;
   issuedDate: string;                    // 'YYYY-MM-DD' (date-only, không có time)
+  expiryDate: string | null;             // lô 3a: ngày hết hạn in trên thẻ; null với thẻ nhập trước lô 3a
   issuedPlace: string | null;
   hometown: string | null;
+  birthRegistrationPlace: string | null; // lô 3a: nơi đăng ký khai sinh, trên thẻ căn cước mới thay quê quán
   permanentAddress: string | null;
   temporaryAddress: string | null;
   currentAddress: string | null;
@@ -150,8 +152,10 @@ export interface CreateCitizenIdPayload {
   citizenIdNumber: string;              // BẮT BUỘC — đúng 12 chữ số, chỉ 0-9
   fullNameOnCard?: string;              // ≤ 100 ký tự
   issuedDate: string;                    // BẮT BUỘC — 'YYYY-MM-DD'
+  expiryDate?: string;                   // lô 3a — 'YYYY-MM-DD'
   issuedPlace?: string;                  // nếu có → 10–255 ký tự
   hometown?: string;                     // ≤ 255
+  birthRegistrationPlace?: string;       // lô 3a — ≤ 255
   permanentAddress?: string;
   temporaryAddress?: string;
   currentAddress?: string;
@@ -316,6 +320,9 @@ Cho phép update **tất cả field**, bao gồm `citizenIdNumber`. Mỗi lần 
 
 **404** nếu chưa có CCCD → `"Nhân viên chưa có thông tin CCCD"`.
 **409** nếu đổi `citizenIdNumber` trùng nhân viên khác.
+
+**Lô 3a:** tạo hoặc sửa CCCD của **người khác** thì nhân viên đó nhận thông báo N-03 ("Thông tin trong hồ sơ của bạn vừa được
+cập nhật", không chứa số CCCD). Nhân viên tự đề nghị sửa CCCD qua yêu cầu thay đổi mục `CITIZEN_ID` ([hr-profile.md](./hr-profile.md)).
 
 ---
 

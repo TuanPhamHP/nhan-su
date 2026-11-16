@@ -1,7 +1,13 @@
 <script setup lang="ts">
 	import { useForm } from 'vee-validate';
 	import type { SelectOption } from '~/components/ui/Select.vue';
-	import type { CreatePositionDto, UpdatePositionDto, PositionSummary } from '~/types/position.types';
+	import {
+		JOB_GROUP_LABELS,
+		type CreatePositionDto,
+		type JobGroup,
+		type PositionSummary,
+		type UpdatePositionDto,
+	} from '~/types/position.types';
 
 	definePageMeta({ title: 'Chức vụ' });
 
@@ -72,6 +78,7 @@
 	const { handleSubmit, defineField, errors, isSubmitting, resetForm } = useForm<{
 		name: string;
 		departmentId: number | undefined;
+		jobGroup: JobGroup | '';
 	}>({
 		validationSchema: {
 			name: (v: string) => (v && v.trim().length >= 2 ? true : 'Tối thiểu 2 ký tự'),
@@ -81,17 +88,24 @@
 
 	const [name, nameAttrs] = defineField('name');
 	const [departmentId] = defineField('departmentId');
+	const [jobGroup] = defineField('jobGroup');
+
+	// Nhóm vị trí việc làm của Mẫu 01/PLI (lô 3a); để trống nghĩa là chưa phân nhóm.
+	const jobGroupOptions = [
+		{ value: '', label: '-- Chưa phân nhóm --' },
+		...Object.entries(JOB_GROUP_LABELS).map(([value, label]) => ({ value, label })),
+	];
 
 	function openCreate() {
 		editTarget.value = null;
-		resetForm({ values: { name: '', departmentId: undefined } });
+		resetForm({ values: { name: '', departmentId: undefined, jobGroup: '' } });
 		showModal.value = true;
 	}
 
 	function openEdit(pos: PositionSummary) {
 		editTarget.value = pos;
 		const deptMatch = departments.value.find(d => d.name === pos.department);
-		resetForm({ values: { name: pos.name, departmentId: deptMatch?.id } });
+		resetForm({ values: { name: pos.name, departmentId: deptMatch?.id, jobGroup: pos.jobGroup ?? '' } });
 		showModal.value = true;
 	}
 
@@ -106,12 +120,16 @@
 				if (values.name !== editTarget.value.name) dto.name = values.name;
 				const deptMatch = departments.value.find(d => d.name === editTarget.value!.department);
 				if (values.departmentId !== deptMatch?.id) dto.departmentId = Number(values.departmentId);
+				// Bỏ chọn nhóm thì gửi `null`, vì không gửi trường nào là giữ nguyên giá trị cũ.
+				const nextJobGroup = (values.jobGroup as JobGroup) || null;
+				if (nextJobGroup !== (editTarget.value.jobGroup ?? null)) dto.jobGroup = nextJobGroup;
 				await update(editTarget.value.id, dto);
 				toast.success('Đã cập nhật chức vụ');
 			} else {
 				const dto: CreatePositionDto = {
 					name: values.name,
 					departmentId: Number(values.departmentId),
+					jobGroup: (values.jobGroup as JobGroup) || null,
 				};
 				const created = await create(dto);
 				positions.value.unshift({
@@ -119,6 +137,8 @@
 					name: created.name,
 					department: created.department.name,
 					isActive: created.isActive,
+					jobGroup: created.jobGroup,
+					jobGroupLabel: created.jobGroupLabel,
 					employeeCount: created.employeeCount,
 				});
 				toast.success('Đã thêm chức vụ mới');
@@ -239,6 +259,11 @@
 								Phòng ban
 							</th>
 							<th
+								class="text-left px-5 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+							>
+								Nhóm vị trí
+							</th>
+							<th
 								class="text-right px-5 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
 							>
 								Số nhân viên
@@ -265,6 +290,9 @@
 								<td class="px-5 py-3.5">
 									<div class="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
 								</td>
+								<td class="px-5 py-3.5">
+									<div class="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+								</td>
 								<td class="px-5 py-3.5 text-right">
 									<div class="h-4 w-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse ml-auto" />
 								</td>
@@ -277,7 +305,7 @@
 
 						<!-- Empty -->
 						<tr v-else-if="positions.length === 0">
-							<td colspan="5" class="px-5 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
+							<td colspan="6" class="px-5 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
 								Không có chức vụ nào
 							</td>
 						</tr>
@@ -293,6 +321,9 @@
 							</td>
 							<td class="px-5 py-3.5 text-gray-600 dark:text-gray-400 whitespace-nowrap">
 								{{ pos.department }}
+							</td>
+							<td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">
+								{{ pos.jobGroupLabel ?? '—' }}
 							</td>
 							<td class="px-5 py-3.5 text-right">
 								<span
@@ -424,6 +455,14 @@
 							<label :class="labelCls">Phòng ban <span class="text-red-500">*</span></label>
 							<UiSelect v-model="departmentId" :options="departmentOptions" />
 							<p v-if="errors.departmentId" class="mt-1 text-xs text-red-500">{{ errors.departmentId }}</p>
+						</div>
+
+						<div>
+							<label :class="labelCls">Nhóm vị trí việc làm</label>
+							<UiSelect v-model="jobGroup" :options="jobGroupOptions" placeholder="-- Chưa phân nhóm --" />
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+								Nhóm theo Mẫu 01/PLI, dùng khi xuất báo cáo tình hình sử dụng lao động.
+							</p>
 						</div>
 
 						<div class="flex justify-end gap-3 pt-1">
