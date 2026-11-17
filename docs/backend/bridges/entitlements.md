@@ -58,6 +58,7 @@ export interface ModuleEntitlement {
 
 export interface EntitlementsResponse {
   modules: ModuleEntitlement[];
+  businessHotline: string | null; // hotline nhà cung cấp (env BUSINESS_HOTLINE của BE). null khi chưa cấu hình
 }
 ```
 
@@ -75,10 +76,15 @@ export interface EntitlementsResponse {
       { "code": "CORE", "label": "Lõi nhân sự", "state": "ENABLED", "reason": null, "expiresAt": null, "graceEndsAt": null },
       { "code": "OVERTIME", "label": "Làm thêm giờ", "state": "READ_ONLY", "reason": "EXPIRED", "expiresAt": "2026-10-31T16:59:59.999Z", "graceEndsAt": "2026-11-14T16:59:59.999Z" },
       { "code": "REPORTS", "label": "Báo cáo", "state": "DISABLED", "reason": "SUSPENDED", "expiresAt": null, "graceEndsAt": null }
-    ]
+    ],
+    "businessHotline": "0888888888"
   }
 }
 ```
+
+`businessHotline` là hotline của nhà cung cấp phần mềm, lấy từ biến môi trường `BUSINESS_HOTLINE` của BE (bỏ khoảng
+trắng hai đầu; trống thì `null`). Mọi người đã đăng nhập đều nhận cùng một giá trị. FE ghi số này trong hộp thoại
+phân hệ chưa đăng ký cho ADMIN; `null` thì không ghi số. Đổi số chỉ cần sửa env rồi khởi động lại API.
 
 | Status | Mã | Khi nào |
 |---|---|---|
@@ -98,9 +104,13 @@ Gọi lại endpoint này sau khi đăng nhập, chọn hoặc chuyển công ty
 | `ENABLED` | `null` | Bình thường | Bình thường |
 | `READ_ONLY` | `READ_ONLY` | GET được, ghi trả 403 `MODULE_READ_ONLY` | Vẫn hiện menu, ẩn nút tạo, sửa, duyệt |
 | `READ_ONLY` | `EXPIRED` | GET được, ghi trả 403 `MODULE_EXPIRED` | Như trên, kèm dòng báo đã hết hạn và ngày cuối xem được (`graceEndsAt`) |
-| `DISABLED` | `LAPSED` | Mọi route trả 403 `MODULE_LAPSED` | Ẩn menu, chặn màn hình, báo đã hết hạn nên tạm tắt |
-| `DISABLED` | `SUSPENDED` | Mọi route trả 403 `MODULE_SUSPENDED` | Ẩn menu, chặn màn hình |
-| `DISABLED` | `NOT_SUBSCRIBED` | Mọi route trả 403 `MODULE_NOT_SUBSCRIBED` | Ẩn menu, chặn màn hình |
+| `DISABLED` | `LAPSED` | Mọi route trả 403 `MODULE_LAPSED` | Phân hệ bán riêng hiện khoá trong lưới, bấm mở hộp thoại báo đã hết hạn; mục lẻ trong phân hệ khác thì ẩn; chặn màn hình |
+| `DISABLED` | `SUSPENDED` | Mọi route trả 403 `MODULE_SUSPENDED` | Phân hệ bán riêng hiện khoá, hộp thoại báo tạm ngưng; mục lẻ thì ẩn; chặn màn hình |
+| `DISABLED` | `NOT_SUBSCRIBED` | Mọi route trả 403 `MODULE_NOT_SUBSCRIBED` | Phân hệ bán riêng hiện khoá, hộp thoại báo chưa đăng ký; mục lẻ thì ẩn; chặn màn hình |
+
+**Hộp thoại phân hệ khoá:** với cả ba lý do trên, vai trò hiệu lực `ADMIN` (`previewRole ?? user.role`) đọc câu
+"liên hệ nhà cung cấp", kèm `businessHotline` khi có. Vai trò khác, kể cả ADMIN đang xem giao diện nhân viên, đọc câu
+"liên hệ quản trị viên của công ty" và không thấy số.
 
 Hạn dùng tính hết ngày giờ Việt Nam. Quá hạn thì chỉ xem thêm 14 ngày, từ ngày thứ 15 thì tắt. Đặt hạn mới
 là dùng lại ngay, dữ liệu không mất ở giai đoạn nào. Đừng tự cộng 14 ngày ở FE, đọc `graceEndsAt`.
