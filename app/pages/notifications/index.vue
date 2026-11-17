@@ -152,7 +152,7 @@
 		if (!notif.refType || !user.value) return;
 		// Respect "view as" preview — điều hướng theo giao diện đang hiển thị.
 		const effectiveRole = uiStore.previewRole ?? user.value.role;
-		const route = resolveNotificationRoute(notif.refType, notif.refId, effectiveRole);
+		const route = resolveNotificationRoute(notif.refType, notif.refId, effectiveRole, notif.type);
 		if (route) router.push(route);
 	}
 

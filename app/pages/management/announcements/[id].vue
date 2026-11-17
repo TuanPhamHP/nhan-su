@@ -16,6 +16,7 @@
 	const route = useRoute();
 	const toast = useToast();
 	const { fetchById, recall } = useCompanyAnnouncements();
+	const { canWrite } = useModuleAccess();
 
 	const id = computed(() => Number(route.params.id));
 	const announcement = ref<CompanyAnnouncementResponse | null>(null);
@@ -165,6 +166,8 @@
 			Quay lại danh sách
 		</NuxtLink>
 
+		<CommonAppModuleNotice module="ANNOUNCEMENT" />
+
 		<!-- Loading -->
 		<div
 			v-if="loading"
@@ -269,7 +272,7 @@
 
 						<!-- Recall Button -->
 						<button
-							v-if="!isRecalled"
+							v-if="!isRecalled && canWrite('ANNOUNCEMENT')"
 							type="button"
 							:disabled="recalling"
 							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"

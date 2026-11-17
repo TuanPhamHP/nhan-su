@@ -19,6 +19,7 @@
 	const { user } = useAuth();
 	const { getComments, addComment, deleteComment, getMentionableEmployees } = useCompanyAnnouncements();
 	const { subscribe: subscribeRealtime } = useAnnouncementRealtime();
+	const { canWrite } = useModuleAccess();
 	const toast = useToast();
 
 	const PAGE_SIZE = 10;
@@ -210,7 +211,7 @@
 	<div class="announcement-comments">
 		<h4 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-3">Bình luận ({{ comments.length }})</h4>
 
-		<div class="flex gap-2 mt-4 items-start">
+		<div v-if="canWrite('ANNOUNCEMENT')" class="flex gap-2 mt-4 items-start">
 			<CommonAppAvatar :src="user?.avatarUrl" :name="user?.fullName" size="sm" />
 			<div class="flex-1">
 				<MentionInput
@@ -255,7 +256,7 @@
 					@deleted="handleDeleted"
 				/>
 				<div v-if="!comments.length" class="text-sm text-gray-400 dark:text-gray-500 text-center py-4">
-					Chưa có bình luận nào. Hãy là người đầu tiên!
+					{{ canWrite('ANNOUNCEMENT') ? 'Chưa có bình luận nào. Hãy là người đầu tiên!' : 'Chưa có bình luận nào.' }}
 				</div>
 				<div v-if="hasMore" class="pt-3">
 					<button

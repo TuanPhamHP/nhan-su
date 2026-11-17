@@ -10,6 +10,7 @@ definePageMeta({ title: 'Tạo đơn làm online' });
 const router = useRouter();
 const toast = useToast();
 const service = useOnlineWorkRequestService();
+const { canWrite } = useModuleAccess();
 
 const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -92,6 +93,8 @@ const onSubmit = handleSubmit(async vals => {
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Đăng ký làm việc tại nhà để quản lý phê duyệt</p>
 			</div>
 		</div>
+
+		<CommonAppModuleNotice module="ONLINE_WORK" />
 
 		<div class="flex flex-col lg:flex-row gap-6 items-start">
 			<!-- ── Left: Form ──────────────────────────────────────────────────── -->
@@ -211,7 +214,7 @@ const onSubmit = handleSubmit(async vals => {
 							type="submit"
 							class="w-full justify-center"
 							:loading="isSubmitting"
-							:disabled="workingDaysPreview === 0"
+							:disabled="workingDaysPreview === 0 || !canWrite('ONLINE_WORK')"
 						>
 							<svg v-if="!isSubmitting" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />

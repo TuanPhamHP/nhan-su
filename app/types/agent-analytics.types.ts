@@ -200,6 +200,16 @@ export const PLAYBOOK_LABELS: Record<string, string> = {
 	'business-trip-request': 'Đăng ký đi công tác',
 	'business-trip-overview': 'Xem chuyến công tác',
 	'approval-queue': 'Duyệt đơn',
+	'request-history': 'Tra đơn từ',
+	'request-history-denied': 'Hỏi đơn của người khác',
+	navigation: 'Chỉ đường màn hình',
+	// Hai module bán riêng. Công ty chưa bật module thì router vẫn có thể vào các chủ đề này
+	// (trợ lý trả lời là công ty chưa dùng), nên nhãn vẫn cần có để thống kê không hiện id thô.
+	'asset-my': 'Tài sản của tôi',
+	'asset-lookup': 'Tra cứu tài sản',
+	'asset-value': 'Giá trị, chi phí tài sản',
+	'recruit-my': 'Phỏng vấn của tôi',
+	'recruit-overview': 'Tổng quan tuyển dụng',
 	capabilities: 'Hỏi trợ lý làm được gì',
 	unsupported: 'Ngoài phạm vi chat',
 	fallback: 'Không xác định được',

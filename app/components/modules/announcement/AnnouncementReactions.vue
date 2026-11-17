@@ -16,6 +16,7 @@
 	const { react, getReactions } = useCompanyAnnouncements();
 	const { subscribe: subscribeRealtime } = useAnnouncementRealtime();
 	const { user } = useAuth();
+	const { canWrite } = useModuleAccess();
 	const toast = useToast();
 
 	const reactions = ref<ReactionResponse | null>(props.initialReactions ?? null);
@@ -171,7 +172,7 @@
 		</button>
 
 		<!-- Divider row: main react button (with hover picker) -->
-		<div class="flex items-center border-t border-gray-100 dark:border-gray-800 pt-2">
+		<div v-if="canWrite('ANNOUNCEMENT')" class="flex items-center border-t border-gray-100 dark:border-gray-800 pt-2">
 			<div class="relative inline-block" @mouseenter="onHoverEnter" @mouseleave="onHoverLeave">
 				<!-- Main button: heart by default, or my current reaction -->
 				<button

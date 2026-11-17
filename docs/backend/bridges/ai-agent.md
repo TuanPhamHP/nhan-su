@@ -920,9 +920,22 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `hr-directory` | Danh bạ, phòng ban | mọi role |
 | `hr-org-overview` | Dashboard tổ chức | `MANAGER` `HR` `ADMIN` `DIRECTOR` |
 | `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm | mọi role |
+| `request-history` | Tra đơn từ đã tạo (của mình; ADMIN, HR xem được của người khác) — chỉ đọc | mọi role |
+| `request-history-denied` | Hỏi đơn của người khác mà không có thẩm quyền — server trả câu từ chối cố định | mọi role trừ `ADMIN` `HR` |
+| `navigation` | Chỉ đường tới màn hình web làm được một việc | mọi role |
+| `asset-my` | Tài sản tôi đang giữ, dịch vụ tôi phụ trách; chỉ nút Báo hỏng, Đã nhận trên web — chỉ đọc, thêm 16/11/2026 | mọi role |
+| `asset-lookup` | Tra tài sản: ai giữ gì, chi tiết, lịch sử sửa, sắp hết hạn, số ghế — chỉ đọc | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
+| `asset-value` | Giá trị còn lại, khấu hao, chi phí dịch vụ — chỉ đọc, cần quyền xem giá | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
+| `recruit-my` | Lịch phỏng vấn, phiếu đánh giá của tôi — chỉ đọc, thêm 16/11/2026 | mọi role |
+| `recruit-overview` | Tin đang tuyển, hồ sơ theo vòng, định biên, ứng viên, offer chờ duyệt, nguồn — chỉ đọc | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
 | `capabilities` | "Trợ lý làm được gì?" — trả lời về chính năng lực hệ thống, không gọi tool | mọi role |
 | `unsupported` | Việc có trên web nhưng trợ lý không làm trong chat (lương, BHXH, đổi mật khẩu, CCCD, **báo cáo/chi phí công tác**) | mọi role |
 | `fallback` | Không khớp chủ đề nào | mọi role |
+
+> Năm playbook `asset-*`, `recruit-*` thuộc hai module bán riêng (`ASSET`, `RECRUIT`). Công ty chưa bật module
+> thì router vẫn có thể vào playbook đó, nhưng không có tool `asset_*`/`recruit_*` nào, và trợ lý trả lời rằng
+> công ty chưa dùng module. Client không cần xử lý gì riêng; chỉ cần nhãn chủ đề cho các `playbookId` mới ở
+> màn thống kê, đánh giá.
 
 > ⚠️ `unsupported` **không còn** bao gồm việc ĐĂNG KÝ đi công tác — việc đó chuyển sang
 > `business-trip-request` ngày 29/09/2026. Client nào đang hiện chữ "vào /business-trips/create"
@@ -976,6 +989,31 @@ Client **không phải sửa gì**: không có endpoint hay loại sự kiện S
 `table` như các tool khác. Từ ngày này `leave_listTeam` chỉ nhận `employeeId` của người khác từ `ADMIN`
 và `HR`. Vai trò khác hỏi về đơn của một người cụ thể sẽ nhận câu trả lời từ chối dạng văn bản bình
 thường, không phải mã lỗi HTTP.
+
+### Tool đọc thêm ngày 16/11/2026 — module Quản lý tài sản và Tuyển dụng
+
+Mười bốn tool chỉ đọc, tên bắt đầu bằng `asset_` hoặc `recruit_`. Công ty chưa bật module thì tool đó không tồn
+tại với trợ lý (không xuất hiện trong `toolsCalled`).
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `asset_listMine` | `asset-my` | Tài sản đang giữ, đã trả, dịch vụ mình phụ trách | mọi role |
+| `asset_listServices` | `asset-my`, `asset-lookup` | Dịch vụ thuê bao: số ghế, ngày gia hạn, người phụ trách | mọi role (EMPLOYEE, hoặc thiếu `asset:read`, thì chỉ dịch vụ mình phụ trách) |
+| `asset_listByEmployee` | `asset-lookup` | Tài sản một nhân viên đang giữ | vai trò quản lý + `asset:read`, theo phạm vi |
+| `asset_getDetail` | `asset-lookup` | Chi tiết một tài sản: người giữ, người dùng trước, lịch sử sửa | như trên |
+| `asset_listExpiring` | `asset-lookup` | Dịch vụ sắp gia hạn, thiết bị sắp hết bảo hành | như trên |
+| `asset_getBookValue` | `asset-value` | Nguyên giá, khấu hao, giá trị còn lại tại một ngày | vai trò quản lý + `asset:value:read` |
+| `asset_getServiceCosts` | `asset-value` | Chi phí dịch vụ theo tháng | như trên |
+| `recruit_myInterviews` | `recruit-my` | Lịch phỏng vấn mình tham gia | mọi role |
+| `recruit_myPendingScorecards` | `recruit-my` | Phiếu đánh giá mình chưa nộp | mọi role |
+| `recruit_jobPipeline` | `recruit-my`, `recruit-overview` | Tin tuyển dụng và số hồ sơ đang xét theo vòng | mọi role (EMPLOYEE, hoặc thiếu `recruitment:read`, thì chỉ tin mình ngồi hội đồng) |
+| `recruit_headcountAvailable` | `recruit-overview` | Định biên còn trống theo phòng ban, vị trí | vai trò quản lý + `recruitment:read` |
+| `recruit_candidateHistory` | `recruit-overview` | Các lần ứng tuyển của một ứng viên (không có liên hệ, lương mong muốn) | như trên |
+| `recruit_pendingApprovals` | `recruit-overview` | Yêu cầu tuyển, offer, định biên chờ chính mình duyệt (chỉ liệt kê) | như trên |
+| `recruit_sourceReport` | `recruit-overview` | Hiệu quả nguồn ứng viên | vai trò quản lý + `recruitment:report:read` |
+
+Client **không phải sửa gì** ngoài nhãn chủ đề cho năm `playbookId` mới: bảng kết quả đi qua sự kiện `table`
+như các tool khác, không có endpoint hay sự kiện SSE mới.
 
 ⚠️ **Về số lượt giải trình — đừng hiển thị như hạn mức.** Ngưỡng 5 KHÔNG chặn nộp phiếu;
 nó chỉ quyết phiếu tiếp theo cần 1 hay 2 cấp duyệt. Response có `hasHardLimit: false` và

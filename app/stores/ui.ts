@@ -14,6 +14,17 @@ export const useUiStore = defineStore('ui', () => {
 		previewRole.value = role;
 	}
 
+	/** Lưới chọn phân hệ — mở từ header, đóng khi chọn xong hoặc bấm ra ngoài. */
+	const launcherOpen = ref(false);
+
+	function toggleLauncher() {
+		launcherOpen.value = !launcherOpen.value;
+	}
+
+	function closeLauncher() {
+		launcherOpen.value = false;
+	}
+
 	const themeId = ref<string>(DEFAULT_THEME_ID);
 	const previewThemeId = ref<string | null>(null);
 
@@ -52,6 +63,9 @@ export const useUiStore = defineStore('ui', () => {
 	return {
 		previewRole,
 		previewAs,
+		launcherOpen,
+		toggleLauncher,
+		closeLauncher,
 		themeId,
 		previewThemeId,
 		activeThemeId,

@@ -11,6 +11,7 @@ definePageMeta({ title: 'Đơn công tác của tôi' });
 const toast = useToast();
 const router = useRouter();
 const service = useBusinessTripService();
+const { canWrite } = useModuleAccess();
 const metaDataStore = useMetaDataStore();
 const { businessTripStatuses } = storeToRefs(metaDataStore);
 
@@ -83,7 +84,7 @@ onMounted(() => {
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn công tác của tôi</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách các đơn công tác bạn đã tạo</p>
 			</div>
-			<div class="hidden sm:block">
+			<div v-if="canWrite('BUSINESS_TRIP')" class="hidden sm:block">
 				<NuxtLink to="/business-trips/create">
 					<CommonAppButton>
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -94,6 +95,8 @@ onMounted(() => {
 				</NuxtLink>
 			</div>
 		</div>
+
+		<CommonAppModuleNotice module="BUSINESS_TRIP" />
 
 		<!-- Filters -->
 		<div class="flex flex-wrap items-end gap-3">
@@ -177,7 +180,7 @@ onMounted(() => {
 						Xem chi tiết
 					</NuxtLink>
 					<button
-						v-if="trip.canCancel"
+						v-if="trip.canCancel && canWrite('BUSINESS_TRIP')"
 						class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
 						@click="handleCancel(trip)"
 					>
@@ -200,6 +203,7 @@ onMounted(() => {
 		<Teleport to="body">
 			<!-- FAB mobile -->
 			<NuxtLink
+				v-if="canWrite('BUSINESS_TRIP')"
 				to="/business-trips/create"
 				class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
 				aria-label="Tạo đơn công tác"

@@ -11,6 +11,7 @@ definePageMeta({ title: 'Đơn làm online của tôi' });
 
 const service = useOnlineWorkRequestService();
 const toast = useToast();
+const { canWrite } = useModuleAccess();
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const requests = ref<OnlineWorkRequestResponse[]>([]);
@@ -118,7 +119,7 @@ onMounted(fetchRequests);
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn làm online của tôi</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và quản lý các đơn đăng ký làm việc tại nhà</p>
 			</div>
-			<div class="hidden sm:block">
+			<div v-if="canWrite('ONLINE_WORK')" class="hidden sm:block">
 				<NuxtLink to="/online-work/create">
 					<CommonAppButton>
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -129,6 +130,8 @@ onMounted(fetchRequests);
 				</NuxtLink>
 			</div>
 		</div>
+
+		<CommonAppModuleNotice module="ONLINE_WORK" />
 
 		<!-- Summary cards -->
 		<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -235,7 +238,7 @@ onMounted(fetchRequests);
 										<path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
 									</svg>
 									<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có đơn làm online nào trong tháng này</p>
-									<NuxtLink to="/online-work/create">
+									<NuxtLink v-if="canWrite('ONLINE_WORK')" to="/online-work/create">
 										<CommonAppButton size="sm">Tạo đơn đầu tiên</CommonAppButton>
 									</NuxtLink>
 								</div>
@@ -304,7 +307,7 @@ onMounted(fetchRequests);
 								<div class="flex items-center justify-end gap-1.5">
 									<!-- Huỷ — chỉ khi canBeCancelled (PENDING_L1) -->
 									<CommonAppButton
-										v-if="req.canBeCancelled"
+										v-if="req.canBeCancelled && canWrite('ONLINE_WORK')"
 										size="sm"
 										variant="outline"
 										:loading="cancellingId === req.id"
@@ -351,6 +354,7 @@ onMounted(fetchRequests);
 
 		<!-- FAB mobile -->
 		<NuxtLink
+			v-if="canWrite('ONLINE_WORK')"
 			to="/online-work/create"
 			class="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 text-white flex items-center justify-center shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
 			aria-label="Tạo đơn làm online"

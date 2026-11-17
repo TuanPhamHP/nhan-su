@@ -1,4 +1,4 @@
-import { format, parseISO, isValid, formatDistanceToNow } from 'date-fns';
+import { differenceInCalendarDays, format, parseISO, isValid, formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
 /** Hôm nay dạng "YYYY-MM-DD" (giờ máy) — dùng cho các input ngày gửi lên BE. */
@@ -15,6 +15,30 @@ export function formatDate(date: string | null | undefined, pattern = 'dd/MM/yyy
 
 export function formatDateTime(date: string | null | undefined): string {
 	return formatDate(date, 'dd/MM/yyyy HH:mm');
+}
+
+const VN_CALENDAR = new Intl.DateTimeFormat('en-CA', {
+	timeZone: 'Asia/Ho_Chi_Minh',
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+});
+
+/** Ngày theo lịch Việt Nam của một thời điểm, dạng "YYYY-MM-DD", dù máy đặt múi giờ nào. */
+export function vnCalendarDate(at: string | Date): string {
+	const parts = VN_CALENDAR.formatToParts(new Date(at));
+	const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value;
+	return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+/** Từ `from` tới `at` cách nhau bao nhiêu ngày theo lịch Việt Nam: 0 là cùng ngày, số âm là đã qua. */
+export function vnCalendarDaysBetween(from: string | Date, at: string | Date): number {
+	return differenceInCalendarDays(parseISO(vnCalendarDate(at)), parseISO(vnCalendarDate(from)));
+}
+
+/** Hiện ngày theo lịch Việt Nam, dùng cho mốc tính hết ngày giờ Việt Nam như hạn dùng module. */
+export function formatVnDate(at: string | Date): string {
+	return formatDate(vnCalendarDate(at));
 }
 
 export function formatRelativeTime(date: string | null | undefined): string {

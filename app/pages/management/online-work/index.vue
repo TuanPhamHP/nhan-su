@@ -28,12 +28,18 @@ const router = useRouter();
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
 const { canApprove: canApproveWith } = usePermissions();
-const canApprove = computed(() => canApproveWith(null, APPROVE_PERMISSIONS.onlineWork));
+const { canWrite } = useModuleAccess();
+// Module chỉ xem thì không còn đơn để duyệt, nên ẩn luôn tab "Chờ tôi duyệt".
+const canApprove = computed(() => canWrite('ONLINE_WORK') && canApproveWith(null, APPROVE_PERMISSIONS.onlineWork));
 const canViewAll = computed(() => isManagementRole(user.value?.role));
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 type Tab = 'pending' | 'all' | 'report';
 const activeTab = ref<Tab>(canApprove.value ? 'pending' : 'all');
+
+watch(canApprove, allowed => {
+	if (!allowed && activeTab.value === 'pending') activeTab.value = 'all';
+});
 
 // ─── Departments ──────────────────────────────────────────────────────────────
 const departments = ref<DepartmentSummary[]>([]);
@@ -112,8 +118,16 @@ function handleRejectFromDetail() {
 
 function onRejected() {
 	rejectTarget.value = null;
-	fetchPendingForMe();
+	loadPending();
 	useApprovalStore().fetchCounts();
+}
+
+async function loadPending() {
+	try {
+		await fetchPendingForMe();
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Lỗi tải đơn chờ duyệt');
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,7 +152,11 @@ async function fetchAllRequests() {
 		page: allFilter.page,
 		limit: 20,
 	};
-	await fetchAll(params);
+	try {
+		await fetchAll(params);
+	} catch (e) {
+		toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách đơn làm online');
+	}
 }
 
 function applyAllFilter() {
@@ -220,7 +238,7 @@ async function openByQueryId() {
 
 onMounted(async () => {
 	await loadDepartments();
-	if (canApprove.value) fetchPendingForMe();
+	if (canApprove.value) loadPending();
 	if (canViewAll.value) fetchAllRequests();
 	openByQueryId();
 });
@@ -237,6 +255,8 @@ watch(activeTab, tab => {
 			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Làm việc online</h1>
 			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Duyệt và theo dõi đơn đăng ký làm việc từ xa</p>
 		</div>
+
+		<CommonAppModuleNotice module="ONLINE_WORK" />
 
 		<!-- Tabs -->
 		<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">

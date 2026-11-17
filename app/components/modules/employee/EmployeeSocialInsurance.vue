@@ -2,8 +2,8 @@
 	import { useForm } from 'vee-validate';
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
-	import { formatDate, formatDateTime } from '~/utils/date';
-	import type { DependentDetail } from '~/types/social-insurance.types';
+	import { formatDateTime } from '~/utils/date';
+	import { formatMonth } from '~/utils/hr-profile.utils';
 
 	const props = defineProps<{ employeeId: number }>();
 
@@ -11,41 +11,22 @@
 	const authStore = useAuthStore();
 	const { record, loadError, loading, saving, fetchByEmployee, save } = useSocialInsurance();
 
-	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
+	const { canWrite } = useModuleAccess();
+	const canEdit = computed(
+		() => canWrite('CONTRACT_INSURANCE') && (authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN'),
+	);
 
 	onMounted(() => fetchByEmployee(props.employeeId));
 
-	// ─── Dependent details (managed separately from vee-validate) ────────────────
-	const dependentList = ref<DependentDetail[]>([]);
-
-	const relationshipOptions = [
-		{ value: '', label: '-- Quan hệ --' },
-		{ value: 'CON', label: 'Con' },
-		{ value: 'VỢ', label: 'Vợ' },
-		{ value: 'CHỒNG', label: 'Chồng' },
-		{ value: 'BỐ', label: 'Bố' },
-		{ value: 'MẸ', label: 'Mẹ' },
-	];
-
-	function addDependent() {
-		dependentList.value.push({ name: '', relationship: '', idNumber: '', effectiveDate: '' });
-	}
-
-	function removeDependent(idx: number) {
-		dependentList.value.splice(idx, 1);
-	}
-
 	/**
-	 * Bỏ các field chuỗi rỗng trước khi gửi.
+	 * Lô 3a: mã số thuế và người phụ thuộc chuyển lên hồ sơ nhân viên.
 	 *
-	 * Hàng người phụ thuộc mới thêm có `relationship`/`effectiveDate` = '' nếu người dùng
-	 * không chọn. BE validate `@IsOptional() @IsISO8601()` — `@IsOptional()` chỉ bỏ qua
-	 * `undefined`/`null`, chuỗi rỗng vẫn bị đem đi validate rồi trả 400
-	 * "dependentDetails.0.effectiveDate must be a valid ISO 8601 date string".
+	 * `PUT /v1/social-insurance/:id` bỏ qua ba trường `taxCode`, `dependents`,
+	 * `dependentDetails`, nên form này không còn ô nhập; phần thuế chỉ hiện lại những gì hồ sơ
+	 * đang có, kèm đường dẫn sang tab Thân nhân để sửa đúng chỗ.
 	 */
-	function stripEmpty(d: DependentDetail): DependentDetail {
-		return Object.fromEntries(Object.entries(d).filter(([, v]) => v !== '' && v != null));
-	}
+	const dependents = computed(() => record.value?.taxInfo.dependentDetails ?? []);
+	const relativesTabUrl = computed(() => `/management/employees/${props.employeeId}?tab=relatives`);
 
 	// ─── File upload ──────────────────────────────────────────────────────────────
 	const selectedFile = ref<File | null>(null);
@@ -77,8 +58,6 @@
 			healthInsuranceExpiry: z.string().optional(),
 			registeredHospital: z.string().optional(),
 			effectiveDate: z.string().optional(),
-			taxCode: z.string().optional(),
-			dependentsCount: z.coerce.number().min(0, 'Tối thiểu 0').optional(),
 			note: z.string().optional(),
 		}),
 	);
@@ -89,7 +68,6 @@
 			socialInsuranceNumber: '',
 			insuranceSalary: '' as unknown as number,
 			hasSocialInsuranceBook: false,
-			dependentsCount: 0,
 		},
 	});
 
@@ -100,8 +78,6 @@
 	const [healthInsuranceExpiry] = defineField('healthInsuranceExpiry');
 	const [registeredHospital, hospitalAttrs] = defineField('registeredHospital');
 	const [effectiveDate] = defineField('effectiveDate');
-	const [taxCode, taxCodeAttrs] = defineField('taxCode');
-	const [dependentsCount, dependentsCountAttrs] = defineField('dependentsCount');
 	const [note, noteAttrs] = defineField('note');
 
 	// ─── Mức lương: gõ số thuần, hiển thị có dấu nghìn ───────────────────────────
@@ -146,12 +122,9 @@
 				healthInsuranceExpiry: r.healthInsuranceExpiry ?? '',
 				registeredHospital: r.registeredHospital ?? '',
 				effectiveDate: r.effectiveDate ?? '',
-				taxCode: r.taxInfo.taxCode ?? '',
-				dependentsCount: r.taxInfo.dependents,
 				note: r.note ?? '',
 			});
 			salaryDisplay.value = formatSalary(r.insuranceSalary);
-			dependentList.value = r.taxInfo.dependentDetails.map(d => ({ ...d }));
 		},
 		{ immediate: false },
 	);
@@ -170,9 +143,6 @@
 					healthInsuranceExpiry: values.healthInsuranceExpiry || undefined,
 					registeredHospital: values.registeredHospital || undefined,
 					effectiveDate: values.effectiveDate || undefined,
-					taxCode: values.taxCode || undefined,
-					dependents: values.dependentsCount,
-					dependentDetails: dependentList.value.filter(d => d.name || d.idNumber).map(stripEmpty),
 					note: values.note || undefined,
 				},
 				selectedFile.value ?? undefined,
@@ -192,6 +162,8 @@
 
 <template>
 	<div>
+		<CommonAppModuleNotice module="CONTRACT_INSURANCE" class="mb-4" />
+
 		<!-- Loading -->
 		<div v-if="loading" class="space-y-4">
 			<div v-for="i in 3" :key="i" class="h-32 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
@@ -315,103 +287,66 @@
 				</div>
 			</div>
 
-			<!-- ─── Section 2: Tax ────────────────────────────────────────────── -->
+			<!-- ─── Section 2: Thuế, chỉ đọc từ hồ sơ nhân viên (lô 3a) ──────── -->
 			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-				<div class="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700">
-					<p :class="sectionTitleCls">Thuế thu nhập cá nhân</p>
+				<div class="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+					<p :class="sectionTitleCls" class="!mb-0">Thuế thu nhập cá nhân</p>
+					<NuxtLink
+						:to="relativesTabUrl"
+						class="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+					>
+						Mở tab Thân nhân để sửa
+					</NuxtLink>
 				</div>
 				<div class="p-5 space-y-5">
+					<p class="text-xs text-gray-500 dark:text-gray-400">
+						Mã số thuế và người phụ thuộc nay nằm trong hồ sơ nhân viên, nên ở đây chỉ xem. Mã số thuế sửa ở khối
+						Ngân hàng và thuế của tab Thông tin, người phụ thuộc sửa ở tab Thân nhân.
+					</p>
+
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						<div>
-							<label :class="labelCls">Mã số thuế TNCN</label>
-							<input
-								v-model="taxCode"
-								v-bind="taxCodeAttrs"
-								:class="inputCls"
-								:disabled="!canEdit"
-								placeholder="VD: 8123456789"
-							/>
+							<p :class="labelCls">Mã số thuế đang dùng</p>
+							<p class="text-sm font-mono tabular-nums text-gray-900 dark:text-white">
+								{{ record?.taxInfo.taxCode ?? '—' }}
+							</p>
 						</div>
 						<div>
-							<label :class="labelCls">Số người phụ thuộc</label>
-							<input
-								v-model="dependentsCount"
-								v-bind="dependentsCountAttrs"
-								type="number"
-								min="0"
-								:class="[inputCls, errors.dependentsCount ? 'border-red-400' : '']"
-								:disabled="!canEdit"
-							/>
-							<p v-if="errors.dependentsCount" class="mt-1 text-xs text-red-500">{{ errors.dependentsCount }}</p>
+							<p :class="labelCls">Người phụ thuộc giảm trừ tháng này</p>
+							<p class="text-sm text-gray-900 dark:text-white">{{ record?.taxInfo.dependents ?? 0 }}</p>
 						</div>
 					</div>
 
-					<!-- Dependent details editor -->
 					<div>
-						<div class="flex items-center justify-between mb-3">
-							<p class="text-xs font-medium text-gray-600 dark:text-gray-400">Chi tiết người phụ thuộc</p>
-							<button
-								v-if="canEdit"
-								type="button"
-								class="inline-flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-medium"
-								@click="addDependent"
-							>
-								<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-								</svg>
-								Thêm người phụ thuộc
-							</button>
-						</div>
-
-						<div v-if="dependentList.length === 0" class="text-xs text-gray-400 dark:text-gray-500 py-3">
-							Chưa có người phụ thuộc
-						</div>
-
-						<div v-else class="space-y-3">
-							<div
-								v-for="(dep, idx) in dependentList"
-								:key="idx"
-								class="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
-							>
-								<div>
-									<label class="block text-xs text-gray-500 mb-1">Họ tên</label>
-									<input
-										v-model="dep.name"
-										:class="inputCls"
-										:disabled="!canEdit"
-										placeholder="Nguyễn Văn A"
-									/>
-								</div>
-								<div>
-									<label class="block text-xs text-gray-500 mb-1">Quan hệ</label>
-									<UiSelect v-model="dep.relationship" :options="relationshipOptions" :disabled="!canEdit" />
-								</div>
-								<div>
-									<label class="block text-xs text-gray-500 mb-1">Số CMND/CCCD</label>
-									<input
-										v-model="dep.idNumber"
-										:class="inputCls"
-										:disabled="!canEdit"
-										placeholder="CMND/CCCD"
-									/>
-								</div>
-								<div class="flex items-end gap-2">
-									<div class="flex-1">
-										<label class="block text-xs text-gray-500 mb-1">Ngày hiệu lực</label>
-										<UiDatePicker v-model="dep.effectiveDate" :disabled="!canEdit" />
-									</div>
-									<button
-										v-if="canEdit"
-										type="button"
-										class="mb-0.5 p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-										@click="removeDependent(idx)"
-									>
-										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-										</svg>
-									</button>
-								</div>
-							</div>
+						<p class="mb-3 text-xs font-medium text-gray-600 dark:text-gray-400">Chi tiết người phụ thuộc</p>
+						<p v-if="!dependents.length" class="py-3 text-xs text-gray-400 dark:text-gray-500">
+							Hồ sơ chưa có người phụ thuộc nào.
+						</p>
+						<div v-else class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+										<th class="py-2 pr-4 text-left font-medium">Họ tên</th>
+										<th class="py-2 pr-4 text-left font-medium">Quan hệ</th>
+										<th class="py-2 pr-4 text-left font-medium">Số định danh</th>
+										<th class="py-2 text-left font-medium">Giảm trừ</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+									<tr v-for="dep in dependents" :key="dep.relativeId">
+										<td class="py-2 pr-4 text-gray-900 dark:text-white">{{ dep.name }}</td>
+										<td class="py-2 pr-4 text-gray-700 dark:text-gray-300">{{ dep.relationship }}</td>
+										<td class="py-2 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">
+											{{ dep.idNumber || '—' }}
+										</td>
+										<td class="py-2 whitespace-nowrap tabular-nums text-gray-700 dark:text-gray-300">
+											{{ dep.effectiveDate ? formatMonth(dep.effectiveDate) : '—' }}
+											<template v-if="dep.endDate"> → {{ formatMonth(dep.endDate) }}</template>
+											<template v-else-if="dep.effectiveDate"> → nay</template>
+										</td>
+									</tr>
+								</tbody>
+							</table>
 						</div>
 					</div>
 				</div>

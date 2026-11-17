@@ -39,6 +39,8 @@ export function usePositions() {
 				name: updated.name,
 				department: updated.department.name,
 				isActive: updated.isActive,
+				jobGroup: updated.jobGroup,
+				jobGroupLabel: updated.jobGroupLabel,
 				employeeCount: updated.employeeCount,
 			};
 		}

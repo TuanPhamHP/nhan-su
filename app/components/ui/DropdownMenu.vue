@@ -9,6 +9,11 @@ export interface DropdownMenuItem {
 
 const props = defineProps<{
 	items: DropdownMenuItem[];
+	/**
+	 * Có nhãn thì trigger là nút có viền, chữ + dấu "…"; bỏ trống thì vẫn là nút kebab
+	 * ba chấm dọc như cũ, để mấy chỗ đang dùng không đổi hình.
+	 */
+	label?: string;
 }>();
 
 const isOpen = ref(false);
@@ -73,9 +78,34 @@ onUnmounted(() => {
 
 <template>
 	<div ref="triggerRef" class="relative inline-block">
-		<!-- Kebab trigger -->
+		<!-- Trigger có nhãn -->
 		<button
+			v-if="label"
 			type="button"
+			:aria-expanded="isOpen"
+			aria-haspopup="menu"
+			:class="[
+				'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+				isOpen
+					? 'border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-900/20 dark:text-brand-300'
+					: 'border-gray-300 text-gray-700 hover:border-brand-400 hover:text-brand-600 dark:border-gray-600 dark:text-gray-200 dark:hover:text-brand-400',
+			]"
+			@click="toggle"
+		>
+			{{ label }}
+			<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+				<circle cx="5" cy="12" r="1.5" />
+				<circle cx="12" cy="12" r="1.5" />
+				<circle cx="19" cy="12" r="1.5" />
+			</svg>
+		</button>
+
+		<!-- Kebab trigger (mặc định) -->
+		<button
+			v-else
+			type="button"
+			:aria-expanded="isOpen"
+			aria-haspopup="menu"
 			:class="[
 				'p-1.5 rounded-lg transition-colors',
 				isOpen

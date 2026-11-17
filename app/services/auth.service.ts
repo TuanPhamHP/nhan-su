@@ -1,5 +1,21 @@
-import type { AuthResponse, LoginDto, RefreshTokenDto, ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto, ProfileResponse, UpdateProfilePayload } from '~/types/auth.types';
+import type {
+	AuthResponse,
+	LoginDto,
+	LoginResponse,
+	MeResponse,
+	SelectCompanyDto,
+	SwitchCompanyDto,
+	AcceptInviteDto,
+	AcceptInviteResponse,
+	RefreshTokenDto,
+	ChangePasswordDto,
+	ForgotPasswordDto,
+	ResetPasswordDto,
+	ProfileResponse,
+	UpdateProfilePayload,
+} from '~/types/auth.types';
 import type { Employee } from '~/types/employee.types';
+import type { EntitlementsResponse } from '~/types/entitlement.types';
 import type { ApiResponse } from '~/types/api.types';
 import { useAuthFetch } from './http/auth.fetch';
 import { usePublicFetch } from './http/public.fetch';
@@ -9,8 +25,34 @@ export const useAuthService = () => {
 	const authFetch = useAuthFetch();
 
 	return {
-		async login(payload: LoginDto): Promise<AuthResponse> {
-			const res = await publicFetch<ApiResponse<AuthResponse>>('/v1/auth/login', {
+		/** Thuộc một công ty thì trả token; thuộc nhiều công ty thì trả `selectionToken` để chọn. */
+		async login(payload: LoginDto): Promise<LoginResponse> {
+			const res = await publicFetch<ApiResponse<LoginResponse>>('/v1/auth/login', {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		async selectCompany(payload: SelectCompanyDto): Promise<AuthResponse> {
+			const res = await publicFetch<ApiResponse<AuthResponse>>('/v1/auth/select-company', {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		/** Phiên ở công ty cũ bị hủy ngay khi gọi thành công, phải lưu cả hai token mới. */
+		async switchCompany(payload: SwitchCompanyDto): Promise<AuthResponse> {
+			const res = await authFetch<ApiResponse<AuthResponse>>('/v1/auth/switch', {
+				method: 'POST',
+				body: payload,
+			});
+			return res.data;
+		},
+
+		async acceptInvite(payload: AcceptInviteDto): Promise<AcceptInviteResponse> {
+			const res = await publicFetch<ApiResponse<AcceptInviteResponse>>('/v1/auth/accept-invite', {
 				method: 'POST',
 				body: payload,
 			});
@@ -41,9 +83,16 @@ export const useAuthService = () => {
 			return res.data;
 		},
 
-		async myPermissions(): Promise<string[]> {
-			const res = await authFetch<ApiResponse<{ permissions: string[] }>>('/v1/auth/me');
-			return res.data.permissions ?? [];
+		/** Quyền ở công ty hiện tại, kèm công ty hiện tại và danh sách công ty của tài khoản. */
+		async authMe(): Promise<MeResponse> {
+			const res = await authFetch<ApiResponse<MeResponse>>('/v1/auth/me');
+			return res.data;
+		},
+
+		/** Trạng thái mọi module của công ty trong phiên hiện tại. */
+		async getEntitlements(): Promise<EntitlementsResponse> {
+			const res = await authFetch<ApiResponse<EntitlementsResponse>>('/v1/me/entitlements');
+			return res.data;
 		},
 
 		async updateProfile(payload: UpdateProfilePayload): Promise<ProfileResponse> {

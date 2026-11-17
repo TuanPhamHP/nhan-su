@@ -32,6 +32,7 @@
 	const departmentService = useDepartmentService();
 
 	const { canApprove } = usePermissions();
+	const { canUse } = useModuleAccess();
 	const canManage = computed(() => isManagementRole(user.value?.role));
 
 	// ─── Options ──────────────────────────────────────────────────────────────────
@@ -243,7 +244,8 @@
 				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý vi phạm chuyên cần</h1>
 				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem xét và duyệt phiếu giải trình vi phạm chấm công</p>
 			</div>
-			<CommonAppButton variant="secondary" :loading="exportingReport" @click="handleExport">
+			<!-- API xuất file nằm ở `/v1/reports`, thuộc module Báo cáo -->
+			<CommonAppButton v-if="canUse('REPORTS')" variant="secondary" :loading="exportingReport" @click="handleExport">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path
 						stroke-linecap="round"

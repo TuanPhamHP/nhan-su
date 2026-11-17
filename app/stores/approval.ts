@@ -9,6 +9,8 @@ const EMPTY_COUNTS: ApprovalCountsResponseDto = {
 	overtimeRequests: 0,
 	businessTrips: 0,
 	onlineWorkRequests: 0,
+	assetDisposals: 0,
+	profileChanges: 0,
 	total: 0,
 };
 

@@ -16,6 +16,7 @@ const router = useRouter();
 const service = useBusinessTripService();
 const employeeService = useEmployeeService();
 const { user } = useAuth();
+const { canWrite } = useModuleAccess();
 const metaDataStore = useMetaDataStore();
 
 const isHrOrAdmin = computed(() => !!user.value && ['HR', 'ADMIN'].includes(user.value.role));
@@ -334,6 +335,8 @@ onMounted(() => {
 			</div>
 		</div>
 
+		<CommonAppModuleNotice module="BUSINESS_TRIP" />
+
 		<!-- Stepper -->
 		<div class="flex items-center gap-2">
 			<template v-for="(s, idx) in stepMeta" :key="s.index">
@@ -629,11 +632,23 @@ onMounted(() => {
 				<div v-else />
 
 				<div class="flex gap-3">
-					<CommonAppButton variant="secondary" type="button" :loading="isSubmitting" @click="saveDraft">
+					<CommonAppButton
+						variant="secondary"
+						type="button"
+						:loading="isSubmitting"
+						:disabled="!canWrite('BUSINESS_TRIP')"
+						@click="saveDraft"
+					>
 						Lưu nháp
 					</CommonAppButton>
 					<CommonAppButton v-if="step < 3" type="button" @click="goNext">Tiếp tục</CommonAppButton>
-					<CommonAppButton v-else type="button" :loading="isSubmitting" @click="submitForApproval">
+					<CommonAppButton
+						v-else
+						type="button"
+						:loading="isSubmitting"
+						:disabled="!canWrite('BUSINESS_TRIP')"
+						@click="submitForApproval"
+					>
 						{{ selfApprove ? 'Gửi & tự duyệt' : 'Gửi duyệt' }}
 					</CommonAppButton>
 				</div>

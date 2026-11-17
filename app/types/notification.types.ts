@@ -33,6 +33,7 @@ export type NotificationType =
 	| 'MAKEUP_REJECTED'
 	| 'MAKEUP_CANCELLED'
 	| 'CONTRACT_EXPIRY_WARNING'
+	| 'MODULE_EXPIRY_WARNING'
 	| 'BUSINESS_TRIP_PENDING'
 	| 'BUSINESS_TRIP_APPROVED'
 	| 'BUSINESS_TRIP_REJECTED'
@@ -40,6 +41,32 @@ export type NotificationType =
 	| 'GENERAL_REQUEST_APPROVED'
 	| 'GENERAL_REQUEST_REJECTED'
 	| 'GENERAL_REQUEST_CANCELLED'
+	// Module tài sản; năm loại cuối thêm sau bài nhập vai (14/11). Định tuyến theo `refType`.
+	| 'ASSET_ASSIGNED'
+	| 'ASSET_RETURNED'
+	| 'ASSET_CONFIRMATION_REMINDER'
+	| 'ASSET_ASSIGNMENT_DISPUTED'
+	| 'ASSET_REPAIR_DONE'
+	| 'ASSET_RENEWAL_DUE'
+	| 'ASSET_RENEWAL_OVERDUE'
+	| 'ASSET_SERVICE_EXPIRED'
+	| 'ASSET_WARRANTY_EXPIRING'
+	| 'ASSET_OFFBOARDING_OPEN'
+	| 'ASSET_INCIDENT_REPORTED'
+	| 'ASSET_MAINTENANCE_DUE'
+	| 'ASSET_LOST'
+	| 'ASSET_INCIDENT_HANDLED'
+	| 'ASSET_DISPUTE_RESOLVED'
+	| 'ASSET_RENEWED'
+	| 'ASSET_REPAIR_OPENED'
+	// Lô 2b: phiếu thanh lý chờ duyệt (người duyệt) và kết quả duyệt (người lập), refType `asset_disposal`.
+	| 'ASSET_DISPOSAL_PENDING'
+	| 'ASSET_DISPOSAL_DECIDED'
+	// Lô 3a hồ sơ nhân sự: yêu cầu thay đổi thông tin (người duyệt), kết quả duyệt (người gửi)
+	// và thông báo khi người khác sửa hồ sơ của mình. Định tuyến theo `refType`.
+	| 'PROFILE_CHANGE_REQUESTED'
+	| 'PROFILE_CHANGE_DECIDED'
+	| 'PROFILE_UPDATED_BY_HR'
 	| 'TEST';
 
 export interface NotificationActionPayload {

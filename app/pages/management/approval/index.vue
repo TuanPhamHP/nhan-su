@@ -26,9 +26,35 @@
 	import { useBusinessTripService } from '~/services/business-trip.service';
 	import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
 	import ApprovalFilterBar from '~/components/modules/approval/ApprovalFilterBar.vue';
+	import ProfileChangeDetailModal from '~/components/modules/approval/ProfileChangeDetailModal.vue';
+	import { useProfileChangeService } from '~/services/profile-change.service';
+	import {
+		PROFILE_CHANGE_STATUS_CLASS,
+		PROFILE_CHANGE_STATUS_LABELS,
+		PROFILE_FIELD_LABELS,
+		type ProfileChange,
+		type ProfileChangeDetail,
+		type ProfileChangeQueryParams,
+		type ProfileChangeStatus,
+	} from '~/types/hr-profile.types';
+	import { useAssetService } from '~/services/asset.service';
+	import {
+		DISPOSAL_STATUS_CLASS,
+		disposalCountText,
+		disposalItemsSummary,
+		disposalNumber,
+		disposalResubmitText,
+	} from '~/utils/asset.utils';
+	import { APPROVE_PERMISSIONS } from '~/utils/permission';
+	import {
+		ASSET_DISPOSAL_STATUS_LABELS,
+		type AssetDisposal,
+		type AssetDisposalStatus,
+	} from '~/types/asset.types';
 	import { VIOLATION_STATUS_OPTIONS } from '~/utils/violation.utils';
 	import { MAKEUP_STATUS_OPTIONS } from '~/utils/makeup-attendance.utils';
 	import type { ApprovalModuleKey, ApprovalFilterField, ApprovalFilterState } from '~/types/approval.types';
+	import type { ModuleCode } from '~/types/entitlement.types';
 	import type { LeaveRequest, LeaveStatus, QueryLeaveRequestParams } from '~/types/leave.types';
 	import type {
 		MakeupRequestResponse,
@@ -66,6 +92,9 @@
 	const overtimeService = useOvertimeRequestService();
 	const tripService = useBusinessTripService();
 	const onlineWorkService = useOnlineWorkRequestService();
+	const assetService = useAssetService();
+	const profileChangeService = useProfileChangeService();
+	const { hasPermission } = usePermissions();
 	const approvalStore = useApprovalStore();
 	const { counts } = storeToRefs(approvalStore);
 	const directoryStore = useDirectoryStore();
@@ -76,22 +105,59 @@
 		key: Tab;
 		label: string;
 		route: string;
+		/** Tab thuộc module bật tắt được: module không `ENABLED` thì không còn đơn để duyệt. */
+		module?: ModuleCode;
+		/** Tab chỉ hiện với người có quyền này (tài sản lô 2b: người duyệt thanh lý). */
+		permission?: string;
 	}
 
 	const tabs: TabConfig[] = [
 		{ key: 'leaveRequests', label: 'Nghỉ phép', route: '/management/leave' },
-		{ key: 'overtimeRequests', label: 'Làm thêm giờ', route: '/management/overtime' },
-		{ key: 'onlineWorkRequests', label: 'Làm online', route: '/management/online-work' },
+		{ key: 'overtimeRequests', label: 'Làm thêm giờ', route: '/management/overtime', module: 'OVERTIME' },
+		{ key: 'onlineWorkRequests', label: 'Làm online', route: '/management/online-work', module: 'ONLINE_WORK' },
 		{ key: 'violationRequests', label: 'Vi phạm chuyên cần', route: '/management/violations' },
 		{ key: 'makeupAttendance', label: 'Bù công', route: '/management/makeup-attendance' },
-		{ key: 'businessTrips', label: 'Công tác', route: '/management/business-trips' },
+		{ key: 'businessTrips', label: 'Công tác', route: '/management/business-trips', module: 'BUSINESS_TRIP' },
+		{
+			key: 'assetDisposals',
+			label: 'Thanh lý tài sản',
+			route: '/management/assets/disposals',
+			module: 'ASSET',
+			permission: APPROVE_PERMISSIONS.assetDisposal,
+		},
+		// Hồ sơ nhân sự thuộc lõi nên tab này không phụ thuộc module nào, chỉ cần quyền duyệt.
+		{
+			key: 'profileChanges',
+			label: 'Thông tin nhân sự',
+			route: '/management/approval?tab=profileChanges',
+			permission: APPROVE_PERMISSIONS.profileChange,
+		},
 	];
 
-	const activeTab = ref<Tab>((route.query.tab as Tab) || 'leaveRequests');
+	const { canWrite } = useModuleAccess();
+	const visibleTabs = computed(() =>
+		tabs.filter(
+			tab => (!tab.module || canWrite(tab.module)) && (!tab.permission || hasPermission(tab.permission)),
+		),
+	);
+
+	// Chặn cả deep-link `?tab=overtimeRequests` khi module đó đang tắt: không gọi API của tab bị ẩn.
+	const requestedTab = route.query.tab as Tab | undefined;
+	const hasRequestedTab = visibleTabs.value.some(tab => tab.key === requestedTab);
+	/**
+	 * Không có `?tab=` thì lúc mở trang chưa biết tab nào có việc: tạm đứng ở tab đầu, tải xong số
+	 * đơn mới chuyển sang tab đầu tiên có số > 0 (xem `onMounted`).
+	 */
+	const activeTab = ref<Tab>(hasRequestedTab ? requestedTab! : (visibleTabs.value[0]?.key ?? 'leaveRequests'));
 
 	watch(activeTab, tab => {
 		router.replace({ query: { ...route.query, tab } });
 		loadCurrentTab();
+	});
+
+	// Module bị tắt ngay lúc đang mở tab của nó (biết được khi API trả `MODULE_*`).
+	watch(visibleTabs, list => {
+		if (!list.some(tab => tab.key === activeTab.value)) activeTab.value = 'leaveRequests';
 	});
 
 	// ─── Filters ──────────────────────────────────────────────────────────────────
@@ -103,6 +169,10 @@
 		violationRequests: ['status', 'department', 'monthYear'],
 		makeupAttendance: ['status', 'department', 'employee', 'dateRange'],
 		businessTrips: ['status', 'department', 'employee'],
+		// `GET /asset-disposals` chỉ nhận trạng thái (và tài sản), không lọc theo phòng ban hay nhân viên.
+		assetDisposals: ['status'],
+		// `GET /profile-change-requests` nhận trạng thái, mục và nhân viên; mục chưa có ô lọc dùng chung.
+		profileChanges: ['status', 'employee'],
 	};
 
 	const STATUS_OPTIONS: Record<Tab, SelectOption[]> = {
@@ -142,6 +212,14 @@
 			{ value: 'REJECTED', label: 'Bị từ chối' },
 			{ value: 'CANCELLED', label: 'Đã huỷ' },
 		],
+		assetDisposals: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			...Object.entries(ASSET_DISPOSAL_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+		],
+		profileChanges: [
+			{ value: undefined, label: 'Tất cả trạng thái' },
+			...Object.entries(PROFILE_CHANGE_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+		],
 	};
 
 	const PAGE_SIZE = 15;
@@ -156,6 +234,8 @@
 		violationRequests: undefined,
 		makeupAttendance: 'PENDING',
 		businessTrips: 'PENDING',
+		assetDisposals: 'PENDING',
+		profileChanges: 'PENDING',
 	};
 
 	// Mặc định: trạng thái chờ duyệt + tháng hiện tại (tab violation dùng month/year)
@@ -183,6 +263,8 @@
 		violationRequests: createFilterState('violationRequests'),
 		makeupAttendance: createFilterState('makeupAttendance'),
 		businessTrips: createFilterState('businessTrips'),
+		assetDisposals: createFilterState('assetDisposals'),
+		profileChanges: createFilterState('profileChanges'),
 	};
 
 	const filters = reactive<Record<Tab, ApprovalFilterState>>({
@@ -192,6 +274,8 @@
 		violationRequests: { ...DEFAULT_FILTERS.violationRequests },
 		makeupAttendance: { ...DEFAULT_FILTERS.makeupAttendance },
 		businessTrips: { ...DEFAULT_FILTERS.businessTrips },
+		assetDisposals: { ...DEFAULT_FILTERS.assetDisposals },
+		profileChanges: { ...DEFAULT_FILTERS.profileChanges },
 	});
 
 	const activeFilter = computed<ApprovalFilterState>(() => filters[activeTab.value]);
@@ -239,6 +323,19 @@
 	const onlineWorkLoading = ref(false);
 	const onlineWorkPage = ref(1);
 
+	const disposalList = ref<AssetDisposal[]>([]);
+	const disposalMeta = ref<PaginatedMeta | null>(null);
+	const disposalLoading = ref(false);
+	const disposalPage = ref(1);
+
+	const profileChangeList = ref<ProfileChange[]>([]);
+	const profileChangeMeta = ref<PaginatedMeta | null>(null);
+	const profileChangeLoading = ref(false);
+	const profileChangePage = ref(1);
+	/** Yêu cầu đang mở ở hộp thoại chi tiết; chỉ chi tiết mới có giá trị cũ, mới, hiện tại. */
+	const profileChangeDetail = ref<ProfileChangeDetail | null>(null);
+	const openingProfileChangeId = ref<number | null>(null);
+
 	const pageRefs: Record<Tab, Ref<number>> = {
 		leaveRequests: leavePage,
 		overtimeRequests: overtimePage,
@@ -246,6 +343,8 @@
 		violationRequests: violationPage,
 		makeupAttendance: makeupPage,
 		businessTrips: tripPage,
+		assetDisposals: disposalPage,
+		profileChanges: profileChangePage,
 	};
 
 	function setPage(tab: Tab, page: number) {
@@ -393,8 +492,80 @@
 		}
 	}
 
+	/**
+	 * Phiếu thanh lý: chỉ liệt kê, không duyệt nhanh ở đây. Người duyệt phải mở phiếu xem danh sách
+	 * thiết bị và lần gửi, giống thông báo N-10 chỉ dẫn sang trang phiếu.
+	 */
+	async function fetchDisposals() {
+		disposalLoading.value = true;
+		try {
+			const f = filters.assetDisposals;
+			const res = await assetService.findDisposals({
+				page: disposalPage.value,
+				limit: f.limit,
+				status: f.status as AssetDisposalStatus | undefined,
+			});
+			disposalList.value = res.data;
+			disposalMeta.value = res.meta;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được phiếu thanh lý. Bạn thử lại sau ít phút.');
+		} finally {
+			disposalLoading.value = false;
+		}
+	}
+
+	/** Dùng chung cách đếm với trang Thanh lý; người duyệt có phạm vi toàn công ty nên `hiddenItemCount` luôn 0. */
+	const disposalItemsText = (d: AssetDisposal) => disposalItemsSummary(d);
+
+	async function fetchProfileChanges() {
+		profileChangeLoading.value = true;
+		try {
+			const f = filters.profileChanges;
+			const params: ProfileChangeQueryParams = {
+				page: profileChangePage.value,
+				limit: f.limit,
+				status: f.status as ProfileChangeStatus | undefined,
+				employeeId: f.employeeId,
+			};
+			const res = await profileChangeService.findAll(params);
+			profileChangeList.value = res.data;
+			profileChangeMeta.value = res.meta;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được yêu cầu thay đổi thông tin.');
+		} finally {
+			profileChangeLoading.value = false;
+		}
+	}
+
+	/**
+	 * Mở chi tiết một yêu cầu.
+	 *
+	 * Danh sách cố ý không mang giá trị cũ mới, nên phải gọi riêng chi tiết; mỗi lần gọi là một
+	 * dòng nhật ký `employee.private_view`.
+	 */
+	async function openProfileChange(id: number) {
+		openingProfileChangeId.value = id;
+		try {
+			profileChangeDetail.value = await profileChangeService.findOne(id);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa mở được yêu cầu này.');
+		} finally {
+			openingProfileChangeId.value = null;
+		}
+	}
+
+	function onProfileChangeDecided() {
+		profileChangeDetail.value = null;
+		fetchProfileChanges();
+		refreshBadge();
+	}
+
 	function loadCurrentTab() {
 		switch (activeTab.value) {
+			case 'profileChanges':
+				return fetchProfileChanges();
+			case 'assetDisposals':
+				return fetchDisposals();
 			case 'leaveRequests':
 				return fetchLeave();
 			case 'makeupAttendance':
@@ -607,6 +778,12 @@
 		return text.length > len ? text.slice(0, len) + '…' : text;
 	}
 
+	/** Mã trường đổi thành chữ cho bảng danh sách; danh sách chỉ trả mã, không trả nhãn. */
+	function changedFieldsText(fields: string[]): string {
+		if (!fields.length) return '—';
+		return fields.map(f => PROFILE_FIELD_LABELS[f] ?? f).join(', ');
+	}
+
 	function tabCount(key: Tab): number {
 		return counts.value[key] ?? 0;
 	}
@@ -620,14 +797,39 @@
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────────
 	onMounted(async () => {
-		approvalStore.fetchCounts();
-		loadCurrentTab();
+		if (hasRequestedTab) {
+			approvalStore.fetchCounts();
+			loadCurrentTab();
+		} else {
+			// Mở tab đầu tiên đang có đơn chờ, thay vì luôn mở Nghỉ phép rồi để người duyệt tự dò. Đổi
+			// tab thì watcher của `activeTab` tự tải danh sách và ghi `?tab=` lên URL.
+			await approvalStore.fetchCounts();
+			const first = visibleTabs.value.find(tab => tabCount(tab.key) > 0);
+			if (first && first.key !== activeTab.value) activeTab.value = first.key;
+			else loadCurrentTab();
+		}
+		openProfileChangeFromQuery();
 		try {
 			await directoryStore.load();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Lỗi tải danh sách nhân viên / phòng ban');
 		}
 	});
+
+	/**
+	 * Thông báo N-01 dẫn tới `?tab=profileChanges&id=…`, nên mở sẵn đúng yêu cầu đó.
+	 *
+	 * Xoá `id` khỏi địa chỉ trước khi gọi API: tải lại trang sau đó không mở lại hộp thoại, và
+	 * nếu gọi API lỗi thì địa chỉ cũng đã sạch.
+	 */
+	function openProfileChangeFromQuery() {
+		const raw = route.query.id;
+		if (!raw || activeTab.value !== 'profileChanges') return;
+		const id = Number(raw);
+		if (!id || Number.isNaN(id)) return;
+		router.replace({ query: { ...route.query, id: undefined } });
+		openProfileChange(id);
+	}
 </script>
 
 <template>
@@ -644,7 +846,7 @@
 		<!-- Tabs -->
 		<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit overflow-x-auto max-w-full">
 			<button
-				v-for="tab in tabs"
+				v-for="tab in visibleTabs"
 				:key="tab.key"
 				class="flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap"
 				:class="
@@ -1136,6 +1338,218 @@
 				/>
 			</div>
 		</template>
+
+		<!-- ══════════════════════════════ Thông tin nhân sự ══════════════════════════════ -->
+		<template v-else-if="activeTab === 'profileChanges'">
+			<p class="text-sm text-gray-600 dark:text-gray-400">
+				Nhân viên gửi yêu cầu khi muốn đổi thông tin nhạy cảm trong hồ sơ. Bạn mở từng yêu cầu để so giá trị lúc
+				gửi với giá trị đang có trong hồ sơ trước khi duyệt.
+			</p>
+			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+				<p v-if="profileChangeLoading" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+					Đang tải…
+				</p>
+				<p
+					v-else-if="!profileChangeList.length"
+					class="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500"
+				>
+					Không có yêu cầu thay đổi thông tin nào ở trạng thái này.
+				</p>
+				<template v-else>
+					<!-- Điện thoại: mỗi yêu cầu một thẻ, bảng bốn cột không vừa khung hẹp -->
+					<ul class="divide-y divide-gray-100 dark:divide-gray-800 sm:hidden">
+						<li v-for="req in profileChangeList" :key="req.id">
+							<button
+								type="button"
+								class="w-full space-y-1 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50"
+								@click="openProfileChange(req.id)"
+							>
+								<div class="flex items-start justify-between gap-2">
+									<p class="font-medium text-gray-900 dark:text-white">{{ req.employee.fullName }}</p>
+									<span
+										class="inline-flex flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+										:class="PROFILE_CHANGE_STATUS_CLASS[req.status]"
+									>
+										{{ req.statusLabel }}
+									</span>
+								</div>
+								<p class="text-sm text-gray-700 dark:text-gray-300">
+									{{ req.sectionLabel }} · {{ req.actionLabel }}
+								</p>
+								<p class="break-words text-xs text-gray-500 dark:text-gray-400">
+									{{ changedFieldsText(req.changedFields) }}
+								</p>
+								<p class="text-xs text-gray-400 dark:text-gray-500">
+									Gửi {{ fmtDate(req.createdAt) }} {{ fmtTime(req.createdAt) }}
+									<template v-if="req.documentCount"> · {{ req.documentCount }} giấy tờ kèm theo</template>
+								</p>
+							</button>
+						</li>
+					</ul>
+
+					<div class="hidden overflow-x-auto sm:block">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nhân viên</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mục</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thông tin đề nghị đổi</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
+									<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thao tác</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+								<tr
+									v-for="req in profileChangeList"
+									:key="req.id"
+									class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+								>
+									<td class="px-4 py-3">
+										<p class="font-medium text-gray-900 dark:text-white">{{ req.employee.fullName }}</p>
+										<p class="text-xs text-gray-400 dark:text-gray-500">
+											{{ req.employee.employeeCode }}
+											<template v-if="req.employee.departmentName"> · {{ req.employee.departmentName }}</template>
+										</p>
+									</td>
+									<td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+										{{ req.sectionLabel }}
+										<p class="text-xs text-gray-400 mt-0.5">{{ req.actionLabel }}</p>
+									</td>
+									<td class="px-4 py-3 max-w-[260px] text-gray-700 dark:text-gray-300">
+										{{ changedFieldsText(req.changedFields) }}
+										<p class="text-xs text-gray-400 mt-0.5">
+											Gửi {{ fmtDate(req.createdAt) }} {{ fmtTime(req.createdAt) }}
+											<template v-if="req.documentCount"> · {{ req.documentCount }} giấy tờ</template>
+										</p>
+									</td>
+									<td class="px-4 py-3">
+										<span
+											class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
+											:class="PROFILE_CHANGE_STATUS_CLASS[req.status]"
+										>
+											{{ req.statusLabel }}
+										</span>
+										<p v-if="req.cancelReason" class="text-xs text-gray-400 mt-0.5">{{ req.cancelReason }}</p>
+									</td>
+									<td class="px-4 py-3 text-right">
+										<CommonAppButton
+											size="sm"
+											:variant="req.status === 'PENDING' ? 'primary' : 'outline'"
+											:loading="openingProfileChangeId === req.id"
+											@click="openProfileChange(req.id)"
+										>
+											{{ req.status === 'PENDING' ? 'Mở để duyệt' : 'Xem' }}
+										</CommonAppButton>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</template>
+			</div>
+			<div v-if="profileChangeMeta && profileChangeMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
+				<p class="text-sm text-gray-500 dark:text-gray-400">
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(profileChangeMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ profileChangeMeta.total }}</strong> yêu cầu
+				</p>
+				<CommonAppPagination
+					v-if="profileChangeMeta.totalPages > 1"
+					:current-page="profileChangePage"
+					:total-pages="profileChangeMeta.totalPages"
+					@update:current-page="p => goToPage('profileChanges', p)"
+				/>
+			</div>
+		</template>
+
+		<!-- ══════════════════════════════ Thanh lý tài sản ══════════════════════════════ -->
+		<template v-else-if="activeTab === 'assetDisposals'">
+			<p class="text-sm text-gray-600 dark:text-gray-400">
+				Bạn mở từng phiếu để xem danh sách thiết bị và lịch sử xử lý phiếu, rồi bấm Duyệt hoặc Từ chối ngay trên trang phiếu.
+			</p>
+			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+				<div v-if="disposalLoading" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">Đang tải…</div>
+				<div v-else-if="disposalList.length === 0" class="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+					Không có phiếu thanh lý nào khớp bộ lọc.
+				</div>
+				<template v-else>
+					<!-- Thẻ trên điện thoại -->
+					<ul class="divide-y divide-gray-100 sm:hidden dark:divide-gray-800">
+						<li v-for="d in disposalList" :key="d.id">
+							<NuxtLink :to="`/management/assets/disposals/${d.id}`" class="block space-y-1 p-4 active:bg-gray-50 dark:active:bg-gray-800/40">
+								<div class="flex items-start justify-between gap-2">
+									<p class="font-medium text-gray-900 dark:text-white">Phiếu {{ disposalNumber(d.id) }} · {{ d.methodLabel }}</p>
+									<span class="inline-flex flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium" :class="DISPOSAL_STATUS_CLASS[d.status]">
+										{{ d.statusLabel }}
+									</span>
+								</div>
+								<p class="break-words text-sm text-gray-700 dark:text-gray-300">{{ disposalItemsText(d) }}</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400">{{ d.createdBy.name }} gửi {{ fmtDate(d.submittedAt) }}<template v-if="disposalResubmitText(d.round)"> · {{ disposalResubmitText(d.round) }}</template></p>
+							</NuxtLink>
+						</li>
+					</ul>
+					<div class="hidden overflow-x-auto sm:block">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Phiếu</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thiết bị</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Người lập</th>
+									<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trạng thái</th>
+									<th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Thao tác</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+								<tr v-for="d in disposalList" :key="d.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+									<td class="px-4 py-3 whitespace-nowrap">
+										<p class="font-medium text-gray-900 dark:text-white">Phiếu {{ disposalNumber(d.id) }}</p>
+										<p class="text-xs text-gray-400 dark:text-gray-500">{{ d.methodLabel }} · ngày {{ fmtDate(d.disposalDate) }}</p>
+									</td>
+									<td class="px-4 py-3 max-w-[260px] text-gray-700 dark:text-gray-300">
+										{{ disposalItemsText(d) }}
+										<p class="text-xs text-gray-400 mt-0.5">{{ disposalCountText(d) }}</p>
+									</td>
+									<td class="px-4 py-3 text-gray-700 dark:text-gray-300">
+										{{ d.createdBy.name }}
+										<p class="text-xs text-gray-400 mt-0.5">Gửi {{ fmtDate(d.submittedAt) }} {{ fmtTime(d.submittedAt) }}</p>
+									</td>
+									<td class="px-4 py-3">
+										<span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium" :class="DISPOSAL_STATUS_CLASS[d.status]">
+											{{ d.statusLabel }}
+										</span>
+										<p v-if="disposalResubmitText(d.round)" class="text-xs text-gray-400 mt-0.5">{{ disposalResubmitText(d.round) }}</p>
+									</td>
+									<td class="px-4 py-3 text-right">
+										<NuxtLink
+											:to="`/management/assets/disposals/${d.id}`"
+											class="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+											:class="
+												d.actions.canDecide
+													? 'btn-theme-primary text-white'
+													: 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800'
+											"
+										>
+											{{ d.actions.canDecide ? 'Mở phiếu để duyệt' : 'Xem phiếu' }}
+										</NuxtLink>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</template>
+			</div>
+			<div v-if="disposalMeta && disposalMeta.total > 0" class="flex flex-wrap items-center justify-between gap-3 pt-1">
+				<p class="text-sm text-gray-500 dark:text-gray-400">
+					Hiển thị <strong class="text-gray-700 dark:text-gray-300">{{ rangeText(disposalMeta) }}</strong> trên tổng
+					<strong class="text-gray-700 dark:text-gray-300">{{ disposalMeta.total }}</strong> phiếu
+				</p>
+				<CommonAppPagination
+					v-if="disposalMeta.totalPages > 1"
+					:current-page="disposalPage"
+					:total-pages="disposalMeta.totalPages"
+					@update:current-page="p => goToPage('assetDisposals', p)"
+				/>
+			</div>
+		</template>
 	</div>
 
 	<!-- ─── Modals ───────────────────────────────────────────────────────────── -->
@@ -1220,6 +1634,14 @@
 			:request="onlineWorkReject"
 			@rejected="onOnlineWorkRejected"
 			@close="onlineWorkReject = null"
+		/>
+
+		<!-- Yêu cầu thay đổi thông tin nhân sự (lô 3a) -->
+		<ProfileChangeDetailModal
+			v-if="profileChangeDetail"
+			:request="profileChangeDetail"
+			@decided="onProfileChangeDecided"
+			@close="profileChangeDetail = null"
 		/>
 	</Teleport>
 </template>

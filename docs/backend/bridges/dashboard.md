@@ -13,6 +13,7 @@
 
 > `GET /v1/dashboard` — một endpoint duy nhất, server đọc role từ JWT và trả về 3 kiểu response khác nhau.  
 > **Không truyền query params.** Toàn bộ số liệu được tính theo `ngày hôm nay` (server time) và identity người gọi.
+> Số liệu của module công ty không được dùng sẽ về 0 hoặc bị bỏ, xem [entitlements.md](./entitlements.md), mục "Số liệu ở route không bị chặn".
 
 ---
 
@@ -258,12 +259,15 @@ Dùng `ageDataCoverage` để biết có bao nhiêu % đã điền đủ data.
 
 ```typescript
 genderBreakdown: {
-  gender: string;
+  gender: string;            // nhãn: "Nam" | "Nữ" | "Khác"
+  genderCode: string | null; // lô 3a: "MALE" | "FEMALE" | "OTHER"
   count: number;
 }
 [];
-// gender: giá trị string tự do — thường là "MALE" / "FEMALE" / "OTHER"
 ```
+
+Lô 3a đổi cột giới tính sang mã. `gender` vẫn trả nhãn như dữ liệu cũ ("Nam", "Nữ") để biểu đồ không đổi; màu theo nhóm nên
+dựa vào `genderCode`.
 
 ### `ageGroups` và `averageAge`
 
@@ -366,8 +370,8 @@ Số hợp đồng ACTIVE có `endDate` trong **30 ngày tới**. Hợp đồng 
         { "departmentId": 3, "departmentName": "Kinh doanh", "count": 8 }
       ],
       "genderBreakdown": [
-        { "gender": "MALE", "count": 28 },
-        { "gender": "FEMALE", "count": 18 }
+        { "gender": "Nam", "genderCode": "MALE", "count": 28 },
+        { "gender": "Nữ", "genderCode": "FEMALE", "count": 18 }
       ],
       "ageGroups": [
         { "range": "Dưới 25", "count": 4 },
@@ -422,8 +426,8 @@ Số hợp đồng ACTIVE có `endDate` trong **30 ngày tới**. Hợp đồng 
         { "departmentId": 1, "departmentName": "Kỹ thuật", "count": 10 }
       ],
       "genderBreakdown": [
-        { "gender": "MALE", "count": 7 },
-        { "gender": "FEMALE", "count": 3 }
+        { "gender": "Nam", "genderCode": "MALE", "count": 7 },
+        { "gender": "Nữ", "genderCode": "FEMALE", "count": 3 }
       ],
       "ageGroups": [
         { "range": "Dưới 25", "count": 1 },

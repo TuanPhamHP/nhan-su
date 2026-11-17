@@ -45,6 +45,7 @@
 			props.notification.refType,
 			props.notification.refId,
 			effectiveRole,
+			props.notification.type,
 		);
 		if (route) {
 			router.push(route);

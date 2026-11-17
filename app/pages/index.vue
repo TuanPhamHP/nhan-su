@@ -12,8 +12,14 @@
 	const metaDataStore = useMetaDataStore();
 	const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
 	const { dashboard, loading, error, fetchDashboard } = useDashboard();
+	const { canUse, canWrite, moduleOfPath } = useModuleAccess();
 
 	const effectiveRole = computed(() => previewRole.value ?? user.value?.role);
+
+	/** Dòng phụ của thẻ đơn chờ: bỏ phần của module đã tắt, nối lại để không thừa dấu `·`. */
+	function pendingSub(parts: Array<string | false>): string {
+		return parts.filter(Boolean).join(' · ');
+	}
 
 	// ─── Greeting ────────────────────────────────────────────────────────────────
 
@@ -173,7 +179,7 @@
 				{
 					label: 'Đơn đang chờ',
 					value: s.pendingLeaveRequests + s.pendingOT,
-					sub: `${s.pendingLeaveRequests} nghỉ phép · ${s.pendingOT} tăng ca`,
+					sub: pendingSub([`${s.pendingLeaveRequests} nghỉ phép`, canUse('OVERTIME') && `${s.pendingOT} tăng ca`]),
 					iconPath: ICONS.clock,
 					iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
 				},
@@ -208,7 +214,11 @@
 				{
 					label: 'Đơn chờ tôi duyệt',
 					value: pendingTotal,
-					sub: `${s.pendingLeave} phép · ${s.pendingOT} OT · ${s.pendingViolation} vi phạm`,
+					sub: pendingSub([
+						`${s.pendingLeave} phép`,
+						canUse('OVERTIME') && `${s.pendingOT} OT`,
+						`${s.pendingViolation} vi phạm`,
+					]),
 					iconPath: ICONS.calendar,
 					iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
 				},
@@ -243,7 +253,11 @@
 			{
 				label: 'Đơn chờ duyệt',
 				value: pendingTotal,
-				sub: `${s.pendingLeave} phép · ${s.pendingOT} OT · ${s.pendingViolation} vi phạm`,
+				sub: pendingSub([
+					`${s.pendingLeave} phép`,
+					canUse('OVERTIME') && `${s.pendingOT} OT`,
+					`${s.pendingViolation} vi phạm`,
+				]),
 				iconPath: ICONS.calendar,
 				iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
 			},
@@ -265,7 +279,16 @@
 		iconPath: string;
 	}
 
-	const quickActions = computed((): QuickAction[] => {
+	// Lối tắt tới module chưa mở thì ẩn; lối tắt "tạo mới" thì cần module dùng đầy đủ.
+	function isActionAvailable(action: QuickAction): boolean {
+		const code = moduleOfPath(action.route);
+		if (!code) return true;
+		return action.route.endsWith('/create') ? canWrite(code) : canUse(code);
+	}
+
+	const quickActions = computed((): QuickAction[] => allQuickActions().filter(isActionAvailable));
+
+	function allQuickActions(): QuickAction[] {
 		const role = effectiveRole.value;
 		if (!role) return [];
 
@@ -294,7 +317,7 @@
 			{ label: 'Đơn nghỉ phép', route: '/management/leave', iconPath: ICONS.calendar },
 			{ label: 'Xem báo cáo', route: '/management/reports', iconPath: ICONS.reports },
 		];
-	});
+	}
 
 	// ─── Activity helpers ─────────────────────────────────────────────────────────
 

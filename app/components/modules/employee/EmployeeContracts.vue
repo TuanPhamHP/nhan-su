@@ -13,12 +13,15 @@
 	const { contracts, loadError, loading, fetchByEmployee, create, update, activate, terminate } =
 		useContracts();
 
+	const { canWrite } = useModuleAccess();
+	// Module chỉ xem thì ẩn mọi thao tác ghi, kể cả với ADMIN.
+	const writable = computed(() => canWrite('CONTRACT_INSURANCE'));
 	// Create + edit form vẫn giới hạn ADMIN/HR vì POST /v1/contracts còn role-based.
-	const canCreate = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
+	const canCreate = computed(() => writable.value && (authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN'));
 	// 3 mutation còn lại đã chuyển sang permission-based ở backend (contract:update/activate/terminate).
-	const canUpdate = computed(() => hasPermission('contract:update'));
-	const canActivate = computed(() => hasPermission('contract:activate'));
-	const canTerminate = computed(() => hasPermission('contract:terminate'));
+	const canUpdate = computed(() => writable.value && hasPermission('contract:update'));
+	const canActivate = computed(() => writable.value && hasPermission('contract:activate'));
+	const canTerminate = computed(() => writable.value && hasPermission('contract:terminate'));
 	const canManage = computed(() => canUpdate.value || canActivate.value || canTerminate.value);
 
 	// ─── Modal state ──────────────────────────────────────────────────────────────
@@ -250,6 +253,8 @@
 				Thêm hợp đồng
 			</CommonAppButton>
 		</div>
+
+		<CommonAppModuleNotice module="CONTRACT_INSURANCE" />
 
 		<!-- Loading -->
 		<div v-if="loading" class="space-y-3">

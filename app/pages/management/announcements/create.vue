@@ -20,6 +20,7 @@
 	const toast = useToast();
 	const router = useRouter();
 	const { create, uploadInlineMedia } = useCompanyAnnouncements();
+	const { canWrite } = useModuleAccess();
 	const directoryStore = useDirectoryStore();
 	const { departments, employees: directoryEmployees, loading: directoryLoading } = storeToRefs(directoryStore);
 
@@ -286,6 +287,8 @@
 			</div>
 		</div>
 
+		<CommonAppModuleNotice module="ANNOUNCEMENT" />
+
 		<!-- 2-column layout: main form + sticky recipients on the right -->
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
 			<!-- ─── Left: form content ─── -->
@@ -444,7 +447,12 @@
 					<CommonAppButton type="button" @click="showPreview = true"> Xem trước </CommonAppButton>
 					<div class="flex items-center gap-3">
 						<CommonAppButton variant="secondary" type="button" @click="handleCancel"> Huỷ </CommonAppButton>
-						<CommonAppButton type="button" :loading="submitting" :disabled="!canSubmit" @click="handleSubmit">
+						<CommonAppButton
+							type="button"
+							:loading="submitting"
+							:disabled="!canSubmit || !canWrite('ANNOUNCEMENT')"
+							@click="handleSubmit"
+						>
 							Gửi thông báo
 						</CommonAppButton>
 					</div>

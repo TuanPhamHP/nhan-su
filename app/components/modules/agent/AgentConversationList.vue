@@ -7,6 +7,8 @@
 		conversations: AgentConversation[];
 		activeId?: number;
 		disabled?: boolean;
+		/** Module chỉ xem: vẫn đọc lại hội thoại cũ, không tạo mới hay lưu trữ. */
+		readOnly?: boolean;
 	}>();
 
 	const emit = defineEmits<{
@@ -29,7 +31,7 @@
 	<aside
 		class="flex h-full w-64 shrink-0 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-700/60 dark:bg-gray-900/40"
 	>
-		<div class="p-3">
+		<div v-if="!readOnly" class="p-3">
 			<button
 				type="button"
 				:disabled="disabled"
@@ -93,6 +95,7 @@
 				</div>
 
 				<button
+					v-if="!readOnly"
 					type="button"
 					title="Lưu trữ hội thoại"
 					class="mt-0.5 shrink-0 rounded-lg p-1.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 focus:opacity-100 dark:hover:bg-red-500/10 dark:hover:text-red-400"

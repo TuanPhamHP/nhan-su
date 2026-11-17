@@ -43,9 +43,12 @@
 			await navigateTo('/login');
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : '';
-			if (msg.includes('AUTH_RESET_TOKEN_EXPIRED')) {
-				errorMessage.value = 'Link đặt lại mật khẩu đã hết hạn (1 giờ). Vui lòng yêu cầu link mới.';
-			} else if (msg.includes('AUTH_INVALID_RESET_TOKEN')) {
+			// Lỗi từ publicFetch mang `data.error.code` (fetch.factory.ts); message chỉ là câu tiếng Việt.
+			const code = (e as { data?: { error?: { code?: string } } } | null)?.data?.error?.code;
+			if (code === 'AUTH_RESET_TOKEN_EXPIRED') {
+				// Không ghi số giờ: link tự yêu cầu hạn 1 giờ, link HR phát hạn 3 giờ.
+				errorMessage.value = 'Link đã hết hạn. Vui lòng yêu cầu link mới hoặc liên hệ bộ phận nhân sự.';
+			} else if (code === 'AUTH_INVALID_RESET_TOKEN') {
 				errorMessage.value = 'Link đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng.';
 			} else {
 				errorMessage.value = msg || 'Đã có lỗi xảy ra. Vui lòng thử lại.';

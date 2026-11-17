@@ -30,7 +30,8 @@ export interface CompanyStats {
 export interface HRAnalyticsData {
 	statusBreakdown: { status: 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE'; count: number }[];
 	byDepartment: { departmentId: number; departmentName: string; count: number }[];
-	genderBreakdown: { gender: string; count: number }[];
+	/** `gender` là nhãn ("Nam", "Nữ"); lô 3a thêm `genderCode` để chọn màu theo nhóm. */
+	genderBreakdown: { gender: string; genderCode: string | null; count: number }[];
 	ageGroups: { range: string; count: number }[];
 	averageAge: number | null;
 	ageDataCoverage: number;

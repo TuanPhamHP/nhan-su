@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema",
-  "version": "1.0.0",
-  "lastUpdated": "2026-06-29",
+  "version": "1.1.0",
+  "lastUpdated": "2026-11-13",
   "description": "Mapping NotificationType → mobile navigation route. App mobile dùng JSON này khi user tap vào notification để biết cần mở screen nào với param gì.",
 
   "fcmPayloadShape": {
@@ -344,8 +344,9 @@
       "screen": "BusinessTripDetail",
       "params": { "tripId": "{refId}" },
       "webUrl": "/business-trips?id={id}",
-      "trigger": "Approver duyệt",
-      "recipients": ["owner"],
+      "trigger": "Approver duyệt (hoặc HR nộp hộ không chọn người duyệt → auto-approve)",
+      "recipients": ["owner", "hr"],
+      "note": "HR/ADMIN đang làm việc nhận bản riêng tiêu đề '📌 Đơn công tác cần xử lý' để kịp đặt xe/vé — in-app + FCM, KHÔNG có email. Chủ đơn nếu chính là HR thì chỉ nhận bản owner.",
       "frequency": "real-time"
     },
 
@@ -372,6 +373,551 @@
       "recipients": ["owner", "hr"],
       "frequency": "daily cron",
       "note": "id ở đây là employeeId, không phải contractId"
+    },
+
+    "MODULE_EXPIRY_WARNING": {
+      "category": "EVENT",
+      "refType": "module",
+      "hasEntityId": false,
+      "screen": null,
+      "params": {},
+      "trigger": "Cron 08:00 — module còn 30/14/7/1 ngày đến hạn, ngày đầu chỉ xem, hôm trước ngày chỉ xem cuối",
+      "recipients": ["admin"],
+      "frequency": "daily cron",
+      "note": "Không có màn hình gia hạn trong app nên chỉ hiện thông báo, không điều hướng"
+    },
+
+    "ASSET_ASSIGNED": {
+      "category": "EVENT",
+      "refType": "asset_holding",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my",
+      "trigger": "HR cấp phát tài sản cho nhân viên",
+      "recipients": ["owner"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id tài sản, không phải id lần cấp phát. Xem docs/mobile/assets.md"
+    },
+
+    "ASSET_RETURNED": {
+      "category": "EVENT",
+      "refType": "asset_holding",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my",
+      "trigger": "HR thu hồi tài sản",
+      "recipients": ["owner"],
+      "frequency": "real-time",
+      "note": "Module ASSET. Tài sản đã chuyển sang phần lịch sử. Cũng dùng khi tài sản được điều chuyển cho người khác (title 'Tài sản đã được điều chuyển')"
+    },
+
+    "ASSET_CONFIRMATION_REMINDER": {
+      "category": "EVENT",
+      "refType": "asset_holding",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my",
+      "trigger": "Cron — bàn giao chưa được người nhận xác nhận",
+      "recipients": ["owner"],
+      "frequency": "daily cron",
+      "note": "Module ASSET"
+    },
+
+    "ASSET_REPAIR_DONE": {
+      "category": "EVENT",
+      "refType": "asset_holding",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my",
+      "trigger": "Đóng phiếu sửa chữa tài sản người này đang giữ",
+      "recipients": ["owner"],
+      "frequency": "real-time",
+      "note": "Module ASSET. Quản lý trực tiếp của người giữ nhận bản chỉ đọc refType asset → /management/assets/{refId}"
+    },
+
+    "ASSET_RENEWAL_DUE": {
+      "category": "EVENT",
+      "refType": "asset_service | asset",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/assets/my?tab=services&open_id={refId} (người phụ trách) | /management/assets/{refId} (admin)",
+      "trigger": "Cron — dịch vụ sắp đến ngày gia hạn",
+      "recipients": ["người phụ trách dịch vụ", "admin"],
+      "frequency": "daily cron",
+      "note": "Module ASSET. Dịch vụ phụ trách chỉ có trên web: mở trung tâm thông báo"
+    },
+
+    "ASSET_RENEWAL_OVERDUE": {
+      "category": "EVENT",
+      "refType": "asset_service | asset",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/assets/my?tab=services&open_id={refId} (người phụ trách) | /management/assets/{refId} (admin)",
+      "trigger": "Cron — dịch vụ quá ngày gia hạn mà chưa ghi nhận",
+      "recipients": ["người phụ trách dịch vụ", "admin"],
+      "frequency": "daily cron",
+      "note": "Module ASSET. Chỉ có trên web: mở trung tâm thông báo"
+    },
+
+    "ASSET_SERVICE_EXPIRED": {
+      "category": "EVENT",
+      "refType": "asset_service | asset",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/assets/my?tab=services&open_id={refId} (người phụ trách) | /management/assets/{refId} (admin)",
+      "trigger": "Cron — dịch vụ chuyển sang Hết hạn",
+      "recipients": ["người phụ trách dịch vụ", "admin"],
+      "frequency": "daily cron",
+      "note": "Module ASSET. Chỉ có trên web: mở trung tâm thông báo"
+    },
+
+    "ASSET_ASSIGNMENT_DISPUTED": {
+      "category": "EVENT",
+      "refType": "asset",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/{refId}",
+      "trigger": "Người nhận báo cấp phát chưa đúng",
+      "recipients": ["người cấp phát"],
+      "frequency": "real-time",
+      "note": "Module ASSET. Trang quản lý, chỉ có trên web"
+    },
+
+    "ASSET_WARRANTY_EXPIRING": {
+      "category": "EVENT",
+      "refType": "asset",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/{refId}",
+      "trigger": "Cron — thiết bị sắp hết bảo hành",
+      "recipients": ["người quản lý tài sản"],
+      "frequency": "daily cron",
+      "note": "Module ASSET. Trang quản lý, chỉ có trên web"
+    },
+
+    "ASSET_OFFBOARDING_OPEN": {
+      "category": "EVENT",
+      "refType": "employee_assets",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/employees/{refId}?tab=assets",
+      "trigger": "Nhân viên nghỉ việc còn giữ tài sản",
+      "recipients": ["người quản lý tài sản"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id nhân viên. Trang quản lý, chỉ có trên web"
+    },
+
+    "ASSET_INCIDENT_REPORTED": {
+      "category": "EVENT",
+      "refType": "asset_incident",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/incidents?open_id={refId}",
+      "trigger": "Nhân viên báo hỏng hoặc báo mất tài sản đang giữ (đợt 2, F-12)",
+      "recipients": ["người quản lý tài sản", "quản lý trực tiếp của người báo"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id báo cáo. Xử lý trên web; app mở trung tâm thông báo"
+    },
+
+    "ASSET_MAINTENANCE_DUE": {
+      "category": "EVENT",
+      "refType": "asset",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/{refId}",
+      "trigger": "Việc định kỳ J-03 mở phiếu bảo dưỡng theo lịch (đợt 2, F-11)",
+      "recipients": ["người quản lý tài sản"],
+      "frequency": "daily cron",
+      "note": "Module ASSET. Chỉ trong app, không push. Trang quản lý, chỉ có trên web"
+    },
+
+    "ASSET_LOST": {
+      "category": "EVENT",
+      "refType": "asset_holding | asset",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my (người giữ, refType asset_holding) | /management/assets/{refId} (quản lý trực tiếp, refType asset)",
+      "trigger": "Tài sản được xác nhận mất (từ báo mất hoặc đánh dấu thẳng), thay cho ASSET_RETURNED",
+      "recipients": ["người đang giữ (trừ người đã báo mất)", "quản lý trực tiếp của người giữ"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id tài sản. Bản cho quản lý trực tiếp chỉ có trên web"
+    },
+
+    "ASSET_INCIDENT_HANDLED": {
+      "category": "EVENT",
+      "refType": "asset_my_incident",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "incidentId": "{refId}" },
+      "webUrl": "/assets/my?incident_id={refId}",
+      "trigger": "Báo hỏng, báo mất của người nhận được xử lý: tạo phiếu sửa, xác nhận mất, tìm thấy, đóng; hoặc phiếu sửa từ báo cáo đóng",
+      "recipients": ["người gửi báo cáo"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id báo cáo (không phải id tài sản)"
+    },
+
+    "ASSET_DISPUTE_RESOLVED": {
+      "category": "EVENT",
+      "refType": "asset_holding",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my",
+      "trigger": "Người quản lý tài sản trả lời khi người nhận báo cấp phát chưa đúng",
+      "recipients": ["người nhận của lần cấp phát"],
+      "frequency": "real-time",
+      "note": "Module ASSET. Cấp phát về chờ xác nhận, người nhận bấm Đã nhận"
+    },
+
+    "ASSET_RENEWED": {
+      "category": "EVENT",
+      "refType": "asset_service",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/assets/my?tab=services&open_id={refId}",
+      "trigger": "Người khác ghi nhận gia hạn dịch vụ người nhận phụ trách",
+      "recipients": ["người phụ trách dịch vụ"],
+      "frequency": "real-time",
+      "note": "Module ASSET. Dịch vụ phụ trách chỉ có trên web: mở trung tâm thông báo"
+    },
+
+    "ASSET_REPAIR_OPENED": {
+      "category": "EVENT",
+      "refType": "asset_holding",
+      "hasEntityId": true,
+      "screen": "MyAssets",
+      "params": { "assetId": "{refId}" },
+      "webUrl": "/assets/my",
+      "trigger": "Người quản lý tài sản mở phiếu sửa hoặc bảo dưỡng cho tài sản người nhận đang giữ",
+      "recipients": ["người đang giữ (trừ người báo hỏng đã nhận ASSET_INCIDENT_HANDLED)"],
+      "frequency": "real-time",
+      "note": "Module ASSET"
+    },
+
+    "ASSET_DISPOSAL_PENDING": {
+      "category": "REQUEST",
+      "refType": "asset_disposal",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/disposals/{refId}",
+      "trigger": "Người quản lý tài sản gửi hoặc gửi lại phiếu thanh lý; J-07 nhắc khi phiếu chờ duyệt quá 3 ngày (lô 2b, F-15)",
+      "recipients": ["người có asset:disposal:approve", "ADMIN", "trừ người lập phiếu"],
+      "frequency": "real-time + daily cron",
+      "note": "Module ASSET. refId là id phiếu thanh lý. NAVIGATE_ONLY: duyệt cần xem tài sản và đúng vòng, chỉ làm trên web"
+    },
+
+    "ASSET_DISPOSAL_DECIDED": {
+      "category": "REQUEST",
+      "refType": "asset_disposal",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/assets/disposals/{refId}",
+      "trigger": "Phiếu thanh lý được duyệt hoặc bị từ chối (lô 2b, F-15)",
+      "recipients": ["người lập phiếu"],
+      "frequency": "real-time",
+      "note": "Module ASSET. refId là id phiếu thanh lý. Trang quản lý, chỉ có trên web"
+    },
+
+    "PROFILE_CHANGE_REQUESTED": {
+      "category": "REQUEST",
+      "refType": "profile_change_request",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/approval?tab=profileChanges&id={refId}",
+      "trigger": "Nhân viên gửi yêu cầu thay đổi thông tin nhạy cảm; J-01 nhắc khi chờ quá 2 ngày làm việc (lô 3a, F-05)",
+      "recipients": ["người có employee:profile-change:approve", "ADMIN", "trừ người gửi"],
+      "frequency": "real-time + daily cron",
+      "note": "Hồ sơ nhân sự (lõi). refId là id yêu cầu. NAVIGATE_ONLY: duyệt cần so giá trị cũ, mới, hiện tại, chỉ làm trên web. Không chứa giá trị nhạy cảm"
+    },
+
+    "PROFILE_CHANGE_DECIDED": {
+      "category": "REQUEST",
+      "refType": "my_profile_change_request",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/profile?tab=requests&id={refId}",
+      "trigger": "Yêu cầu thay đổi thông tin được duyệt hoặc bị từ chối (lô 3a, F-05)",
+      "recipients": ["người gửi yêu cầu"],
+      "frequency": "real-time",
+      "note": "Hồ sơ nhân sự (lõi). refId là id yêu cầu. Mobile chưa có màn hình yêu cầu thay đổi: mở trang cá nhân nếu có, không thì toast. Kèm email"
+    },
+
+    "PROFILE_UPDATED_BY_HR": {
+      "category": "EVENT",
+      "refType": "my_profile",
+      "hasEntityId": false,
+      "screen": null,
+      "params": {},
+      "webUrl": "/profile",
+      "trigger": "Người khác sửa ngân hàng, MST, người phụ thuộc hoặc CCCD trong hồ sơ của nhân viên (lô 3a, N-03)",
+      "recipients": ["nhân viên có hồ sơ bị sửa", "trừ khi tự sửa"],
+      "frequency": "real-time",
+      "note": "Hồ sơ nhân sự (lõi). Không có refId. Mở trang cá nhân. Không chứa giá trị nhạy cảm. Kèm email"
+    },
+
+    "RECRUIT_INTERVIEW_ASSIGNED": {
+      "category": "EVENT",
+      "refType": "recruitment_my_interviews",
+      "hasEntityId": true,
+      "screen": "InterviewDetail",
+      "params": { "interviewId": "{refId}" },
+      "webUrl": "/recruitment/my-interviews",
+      "trigger": "HR giao người này phỏng vấn",
+      "recipients": ["người phỏng vấn"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Xem docs/mobile/recruitment.md"
+    },
+
+    "RECRUIT_INTERVIEW_UPDATED": {
+      "category": "EVENT",
+      "refType": "recruitment_my_interviews",
+      "hasEntityId": true,
+      "screen": "InterviewDetail",
+      "params": { "interviewId": "{refId}" },
+      "webUrl": "/recruitment/my-interviews",
+      "trigger": "HR đổi giờ, đổi người hoặc huỷ buổi phỏng vấn",
+      "recipients": ["người phỏng vấn"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Buổi bị huỷ cũng dùng type này, màn chi tiết hiện trạng thái Huỷ"
+    },
+
+    "RECRUIT_INTERVIEW_TODAY": {
+      "category": "EVENT",
+      "refType": "recruitment_my_interviews",
+      "hasEntityId": false,
+      "screen": "MyInterviews",
+      "params": { "tab": "upcoming" },
+      "webUrl": "/recruitment/my-interviews",
+      "trigger": "Cron 07:30 — hôm nay có buổi phỏng vấn",
+      "recipients": ["người phỏng vấn"],
+      "frequency": "daily cron",
+      "note": "Module RECRUIT"
+    },
+
+    "RECRUIT_SCORECARD_DUE": {
+      "category": "EVENT",
+      "refType": "recruitment_my_interviews",
+      "hasEntityId": true,
+      "screen": "ScorecardForm",
+      "params": { "scorecardId": "{refId}" },
+      "webUrl": "/recruitment/my-interviews",
+      "trigger": "HR yêu cầu đánh giá, hoặc cron khi phiếu quá 24 giờ sau buổi mà chưa nộp",
+      "recipients": ["người đánh giá"],
+      "frequency": "real-time + cron",
+      "note": "Module RECRUIT. refId là id phiếu; không thấy phiếu trong tab Phiếu chờ chấm thì mở tab đó"
+    },
+
+    "RECRUIT_MENTIONED": {
+      "category": "EVENT",
+      "refType": "recruitment_my_application | recruitment_candidate",
+      "hasEntityId": true,
+      "screen": "TeamApplicationDetail",
+      "params": { "applicationId": "{refId}" },
+      "webUrl": "/recruitment/applications/{refId} | /management/recruitment/candidates/{refId}",
+      "trigger": "Được nhắc tên trong bình luận hồ sơ ứng viên",
+      "recipients": ["người được nhắc"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ mở màn trong app khi refType là recruitment_my_application; recruitment_candidate là trang quản lý, mở trung tâm thông báo"
+    },
+
+    "RECRUIT_NEW_APPLICATIONS": {
+      "category": "EVENT",
+      "refType": "recruitment_my_job | recruitment_job",
+      "hasEntityId": true,
+      "screen": "MyRecruitmentJob",
+      "params": { "jobId": "{refId}" },
+      "webUrl": "/recruitment/jobs/{refId} | /management/recruitment/jobs/{refId}",
+      "trigger": "Cron gom hồ sơ mới của tin",
+      "recipients": ["người phụ trách tin", "hội đồng"],
+      "frequency": "cron",
+      "note": "Module RECRUIT. Chỉ mở màn trong app khi refType là recruitment_my_job và app có màn tin; không thì mở MyInterviews"
+    },
+
+    "RECRUIT_REQUISITION_APPROVAL_NEEDED": {
+      "category": "REQUEST",
+      "refType": "recruitment_requisition",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/requisitions/{refId}",
+      "trigger": "Yêu cầu tuyển dụng tới bước của người duyệt",
+      "recipients": ["người duyệt"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. actionType APPROVE_REJECT, nhưng app chưa nên hiện nút duyệt nhanh: duyệt cần xem nội dung trên web"
+    },
+
+    "RECRUIT_OFFER_APPROVAL_NEEDED": {
+      "category": "REQUEST",
+      "refType": "recruitment_offer",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/offers/{refId}",
+      "trigger": "Offer tới bước của người duyệt",
+      "recipients": ["người duyệt"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. actionType APPROVE_REJECT, nhưng app chưa nên hiện nút duyệt nhanh: duyệt cần xem offer trên web"
+    },
+
+    "RECRUIT_HEADCOUNT_CONFIRM_NEEDED": {
+      "category": "REQUEST",
+      "refType": "recruitment_headcount",
+      "hasEntityId": false,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/headcount?year={năm}",
+      "trigger": "Có đề xuất định biên chờ chốt",
+      "recipients": ["người có quyền chốt định biên"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_REQUISITION_DECIDED": {
+      "category": "EVENT",
+      "refType": "recruitment_requisition",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/requisitions/{refId}",
+      "trigger": "Yêu cầu tuyển dụng được duyệt hoặc bị từ chối",
+      "recipients": ["người tạo yêu cầu"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_REQUISITION_FILLED": {
+      "category": "EVENT",
+      "refType": "recruitment_requisition",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/requisitions/{refId}",
+      "trigger": "Yêu cầu tuyển dụng đã tuyển đủ",
+      "recipients": ["người tạo yêu cầu"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_HEADCOUNT_DECIDED": {
+      "category": "EVENT",
+      "refType": "recruitment_headcount",
+      "hasEntityId": false,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/headcount?year={năm}",
+      "trigger": "Đề xuất định biên được chốt hoặc bị từ chối",
+      "recipients": ["người đề xuất"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_OFFER_DECIDED": {
+      "category": "EVENT",
+      "refType": "recruitment_offer",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/offers/{refId}",
+      "trigger": "Offer được duyệt hoặc bị từ chối",
+      "recipients": ["người tạo offer"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_OFFER_RESPONDED": {
+      "category": "EVENT",
+      "refType": "recruitment_offer",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/offers/{refId}",
+      "trigger": "Ứng viên đồng ý hoặc từ chối offer",
+      "recipients": ["HR phụ trách"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_NEW_HIRE": {
+      "category": "EVENT",
+      "refType": "employee",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/employees/{refId}",
+      "trigger": "Ứng viên được tạo hồ sơ nhân viên",
+      "recipients": ["trưởng phòng"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. refId là id nhân viên. Chỉ có trên web"
+    },
+
+    "RECRUIT_SUGGESTION": {
+      "category": "EVENT",
+      "refType": "recruitment_candidate",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/candidates/{refId}",
+      "trigger": "Trưởng phòng gửi đề xuất cho hồ sơ",
+      "recipients": ["HR phụ trách tin"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_EMAIL_FAILED": {
+      "category": "EVENT",
+      "refType": "recruitment_candidate",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/candidates/{refId}",
+      "trigger": "Email gửi ứng viên lỗi sau 3 lần thử",
+      "recipients": ["người gửi"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_BLACKLISTED_REAPPLIED": {
+      "category": "EVENT",
+      "refType": "recruitment_candidate",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/candidates/{refId}",
+      "trigger": "Ứng viên trong danh sách đen nộp lại",
+      "recipients": ["HR"],
+      "frequency": "real-time",
+      "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "RECRUIT_JOB_AUTO_CLOSED": {
+      "category": "EVENT",
+      "refType": "recruitment_job",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/recruitment/jobs/{refId}",
+      "trigger": "Cron — tin quá hạn nộp tự đóng",
+      "recipients": ["người phụ trách tin"],
+      "frequency": "daily cron",
+      "note": "Module RECRUIT. Chỉ có trên web"
     },
 
     "TEST": {

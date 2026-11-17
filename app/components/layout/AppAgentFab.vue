@@ -2,9 +2,10 @@
 	import agentAvatar from '~/assets/icons/ONGO_AI_BOT.png';
 
 	const route = useRoute();
+	const { canUse } = useModuleAccess();
 
-	/** Đang ở ngay trang chat rồi thì nút nổi chỉ che mất ô nhập — ẩn đi. */
-	const hidden = computed(() => route.path.startsWith('/assistant'));
+	/** Đang ở ngay trang chat rồi thì nút nổi chỉ che mất ô nhập — ẩn đi. Công ty chưa mở trợ lý cũng ẩn. */
+	const hidden = computed(() => route.path.startsWith('/assistant') || !canUse('AI_AGENT'));
 
 	// Vị trí: mobile nâng lên trên (bottom-24) vì một số trang đã có FAB "tạo đơn"
 	// riêng ở góc `bottom-6 right-6` (chỉ hiện dưới sm) — để nguyên góc sẽ chồng nút.

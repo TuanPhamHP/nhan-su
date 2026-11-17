@@ -1,41 +1,71 @@
 <script setup lang="ts">
 	import { formatDate } from '~/utils/date';
-	import type { DocumentType, EmployeeDocumentResponse } from '~/types/employee.types';
+	import { DOCUMENT_EXPIRY_CLASS, documentExpiryNote, documentExpiryTone } from '~/utils/hr-profile.utils';
+	import { useMeProfileService } from '~/services/me-profile.service';
 	import UploadDocumentModal from '~/components/modules/employee/UploadDocumentModal.vue';
+	import type { EmployeeDocumentResponse } from '~/types/employee-document.types';
 
+	/**
+	 * Hồ sơ giấy tờ của một nhân viên (UI-03, lô 3a).
+	 *
+	 * Loại giấy tờ nay là danh mục cấu hình được, nên danh sách tự nhóm theo loại server trả về
+	 * thay vì ba nhóm cố định như trước. Loại nhạy cảm chỉ có trong danh sách khi người xem có
+	 * `employee:private:read`; server lọc sẵn nên ở đây không phải đoán.
+	 */
 	const props = withDefaults(
 		defineProps<{
 			employeeId: number;
+			/** Không hiện nút tải lên và nút xoá. */
 			readonly?: boolean;
+			/** Nhân viên xem giấy tờ của chính mình: đọc qua `/employees/me/documents`. */
+			self?: boolean;
+			/** Cho phép chọn thân nhân liên quan trong form tải lên. */
+			canViewRelatives?: boolean;
 		}>(),
-		{ readonly: false },
+		{ readonly: false, self: false, canViewRelatives: false },
 	);
 
 	const toast = useToast();
 	const { documents, loading, fetchDocuments, deleteDocument, getDocumentUrl } = useEmployeeDocuments();
+	const meService = useMeProfileService();
 
 	const showUploadModal = ref(false);
 	const deletingId = ref<number | null>(null);
-	const confirmDeleteId = ref<number | null>(null);
+	const confirmDeleteTarget = ref<EmployeeDocumentResponse | null>(null);
+	const loadingSelf = ref(false);
 
-	onMounted(() => fetchDocuments(props.employeeId));
-
-	const groups: { type: DocumentType; label: string }[] = [
-		{ type: 'ID_CARD', label: 'CCCD / Hộ chiếu' },
-		{ type: 'CONTRACT', label: 'Hợp đồng lao động' },
-		{ type: 'OTHER', label: 'Tài liệu khác' },
-	];
-
-	const documentsByType = computed(() => {
-		const map: Record<DocumentType, EmployeeDocumentResponse[]> = {
-			ID_CARD: [],
-			CONTRACT: [],
-			OTHER: [],
-		};
-		for (const doc of documents.value) {
-			map[doc.type].push(doc);
+	async function load() {
+		if (!props.self) {
+			try {
+				await fetchDocuments(props.employeeId);
+			} catch (e) {
+				toast.error(e instanceof Error ? e.message : 'Chưa tải được danh sách tài liệu.');
+			}
+			return;
 		}
-		return map;
+		loadingSelf.value = true;
+		try {
+			documents.value = await meService.findDocuments();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được danh sách tài liệu.');
+		} finally {
+			loadingSelf.value = false;
+		}
+	}
+
+	onMounted(load);
+
+	const isLoading = computed(() => loading.value || loadingSelf.value);
+
+	/** Nhóm theo loại, giữ nguyên thứ tự server trả về trong mỗi nhóm. */
+	const groups = computed(() => {
+		const map = new Map<number, { label: string; isSensitive: boolean; items: EmployeeDocumentResponse[] }>();
+		for (const doc of documents.value) {
+			const group = map.get(doc.documentTypeId);
+			if (group) group.items.push(doc);
+			else map.set(doc.documentTypeId, { label: doc.typeLabel, isSensitive: doc.isSensitive, items: [doc] });
+		}
+		return [...map.entries()].map(([documentTypeId, group]) => ({ documentTypeId, ...group }));
 	});
 
 	function truncate(str: string, max = 40) {
@@ -47,7 +77,7 @@
 			const url = await getDocumentUrl(props.employeeId, doc.id);
 			window.open(url, '_blank');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không lấy được URL tài liệu');
+			toast.error(e instanceof Error ? e.message : 'Chưa mở được tài liệu này.');
 		}
 	}
 
@@ -60,18 +90,18 @@
 			a.download = doc.fileName;
 			a.click();
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Không tải được tài liệu');
+			toast.error(e instanceof Error ? e.message : 'Chưa tải được tài liệu này.');
 		}
 	}
 
 	async function handleDelete(doc: EmployeeDocumentResponse) {
-		confirmDeleteId.value = null;
+		confirmDeleteTarget.value = null;
 		deletingId.value = doc.id;
 		try {
 			await deleteDocument(props.employeeId, doc.id);
-			toast.success('Đã xóa tài liệu');
+			toast.success('Đã xoá tài liệu.');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Xóa tài liệu thất bại');
+			toast.error(e instanceof Error ? e.message : 'Chưa xoá được tài liệu. Bạn thử lại sau ít phút.');
 		} finally {
 			deletingId.value = null;
 		}
@@ -79,15 +109,19 @@
 
 	function onUploaded() {
 		showUploadModal.value = false;
-		fetchDocuments(props.employeeId);
+		load();
 	}
 </script>
 
 <template>
 	<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-		<!-- Header -->
-		<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Hồ sơ &amp; Tài liệu</h3>
+		<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+			<div class="min-w-0">
+				<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Hồ sơ và giấy tờ</h3>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+					Giấy tờ nhạy cảm như căn cước hay giấy khám sức khoẻ chỉ hiện với người được xem thông tin riêng.
+				</p>
+			</div>
 			<CommonAppButton v-if="!readonly" size="sm" @click="showUploadModal = true">
 				<svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path
@@ -100,34 +134,35 @@
 			</CommonAppButton>
 		</div>
 
-		<!-- Loading skeleton -->
-		<div v-if="loading" class="p-6 space-y-6">
-			<div v-for="i in 3" :key="i" class="space-y-3">
+		<!-- Đang tải -->
+		<div v-if="isLoading" class="p-6 space-y-6">
+			<div v-for="i in 2" :key="i" class="space-y-3">
 				<div class="h-4 w-32 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
 				<div class="h-14 w-full bg-gray-50 dark:bg-gray-800 rounded-lg animate-pulse" />
 			</div>
 		</div>
 
-		<!-- Content -->
+		<p v-else-if="!groups.length" class="px-6 py-8 text-sm text-gray-500 dark:text-gray-400">
+			Chưa có giấy tờ nào trong hồ sơ.
+		</p>
+
 		<div v-else class="p-6 space-y-6">
-			<div v-for="group in groups" :key="group.type">
+			<div v-for="group in groups" :key="group.documentTypeId">
 				<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
 					{{ group.label }}
+					<span v-if="group.isSensitive" class="ml-1 normal-case font-medium text-amber-600 dark:text-amber-400">
+						· thông tin riêng
+					</span>
 				</p>
 
-				<div v-if="documentsByType[group.type].length === 0" class="text-sm text-gray-400 dark:text-gray-600 italic">
-					Chưa có tài liệu
-				</div>
-
-				<div v-else class="space-y-2">
+				<div class="space-y-2">
 					<div
-						v-for="doc in documentsByType[group.type]"
+						v-for="doc in group.items"
 						:key="doc.id"
-						class="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+						class="flex flex-wrap items-center gap-3 px-4 py-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
 					>
-						<!-- File icon -->
+						<!-- Loại file -->
 						<div class="flex-shrink-0">
-							<!-- PDF -->
 							<svg
 								v-if="doc.fileType === 'pdf'"
 								class="w-8 h-8 text-red-500"
@@ -142,7 +177,6 @@
 									d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
 								/>
 							</svg>
-							<!-- DOCX -->
 							<svg
 								v-else-if="doc.fileType === 'docx'"
 								class="w-8 h-8 text-blue-500"
@@ -157,7 +191,6 @@
 									d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
 								/>
 							</svg>
-							<!-- Image -->
 							<svg
 								v-else
 								class="w-8 h-8 text-green-500"
@@ -174,17 +207,33 @@
 							</svg>
 						</div>
 
-						<!-- Info -->
-						<div class="flex-1 min-w-0">
+						<!-- Thông tin -->
+						<div class="flex-1 min-w-[12rem]">
 							<p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate" :title="doc.fileName">
 								{{ truncate(doc.fileName) }}
 							</p>
-							<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-								{{ formatDate(doc.uploadedAt) }}
+							<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+								<span v-if="doc.issuedDate">Ngày cấp {{ formatDate(doc.issuedDate) }}</span>
+								<span v-else>Không ghi ngày cấp</span>
+								<template v-if="doc.expiryDate">
+									<span class="mx-1">·</span>
+									<span :class="DOCUMENT_EXPIRY_CLASS[documentExpiryTone(doc.expiryDate) ?? 'ok']">
+										Hết hạn {{ formatDate(doc.expiryDate) }}
+										<template v-if="documentExpiryNote(doc.expiryDate)">
+											({{ documentExpiryNote(doc.expiryDate) }})
+										</template>
+									</span>
+								</template>
 							</p>
+							<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+								Tải lên {{ formatDate(doc.uploadedAt) }}
+								<template v-if="doc.uploadedBy"> bởi {{ doc.uploadedBy.name }}</template>
+								<template v-if="doc.relativeName"> · thuộc {{ doc.relativeName }}</template>
+							</p>
+							<p v-if="doc.note" class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ doc.note }}</p>
 						</div>
 
-						<!-- Actions -->
+						<!-- Thao tác -->
 						<div class="flex items-center gap-1 flex-shrink-0">
 							<button
 								type="button"
@@ -205,7 +254,7 @@
 								type="button"
 								:disabled="deletingId === doc.id"
 								class="px-2.5 py-1 text-xs font-medium text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors disabled:opacity-50"
-								@click="confirmDeleteId = doc.id"
+								@click="confirmDeleteTarget = doc"
 							>
 								{{ deletingId === doc.id ? '...' : 'Xóa' }}
 							</button>
@@ -216,76 +265,39 @@
 		</div>
 	</div>
 
-	<!-- Confirm delete dialog -->
+	<!-- Hỏi lại trước khi xoá -->
 	<Teleport to="body">
-		<Transition
-			enter-active-class="transition ease-out duration-150"
-			enter-from-class="opacity-0"
-			enter-to-class="opacity-100"
-			leave-active-class="transition ease-in duration-100"
-			leave-from-class="opacity-100"
-			leave-to-class="opacity-0"
+		<div
+			v-if="confirmDeleteTarget"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+			@click.self="confirmDeleteTarget = null"
 		>
 			<div
-				v-if="confirmDeleteId !== null"
-				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-				@click.self="confirmDeleteId = null"
+				class="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
 			>
-				<div
-					class="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl border border-gray-200 dark:border-gray-700"
-				>
-					<div class="flex items-start gap-4">
-						<div
-							class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0"
-						>
-							<svg
-								class="w-5 h-5 text-red-600 dark:text-red-400"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-								/>
-							</svg>
-						</div>
-						<div>
-							<h3 class="font-semibold text-gray-900 dark:text-white">Xóa tài liệu</h3>
-							<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-								Bạn có chắc muốn xóa tài liệu này? Hành động này không thể hoàn tác.
-							</p>
-						</div>
-					</div>
-					<div class="flex justify-end gap-3 mt-6">
-						<CommonAppButton variant="outline" @click="confirmDeleteId = null">Hủy</CommonAppButton>
-						<CommonAppButton
-							variant="danger"
-							:loading="deletingId !== null"
-							@click="
-								() => {
-									const id = confirmDeleteId;
-									if (id !== null) {
-										const doc = documents.find(d => d.id === id);
-										if (doc) handleDelete(doc);
-									}
-								}
-							"
-						>
-							Xóa
-						</CommonAppButton>
-					</div>
+				<h3 class="font-semibold text-gray-900 dark:text-white">Xoá tài liệu</h3>
+				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+					Hệ thống sẽ xoá {{ confirmDeleteTarget.fileName }} khỏi hồ sơ. Việc này không hoàn lại được.
+				</p>
+				<div class="mt-6 flex justify-end gap-3">
+					<CommonAppButton variant="outline" @click="confirmDeleteTarget = null">Giữ lại</CommonAppButton>
+					<CommonAppButton
+						variant="danger"
+						:loading="deletingId !== null"
+						@click="confirmDeleteTarget && handleDelete(confirmDeleteTarget)"
+					>
+						Xoá
+					</CommonAppButton>
 				</div>
 			</div>
-		</Transition>
+		</div>
 	</Teleport>
 
-	<!-- Upload modal -->
+	<!-- Form tải lên -->
 	<UploadDocumentModal
 		v-if="showUploadModal"
 		:employee-id="employeeId"
+		:can-view-relatives="canViewRelatives"
 		@uploaded="onUploaded"
 		@close="showUploadModal = false"
 	/>

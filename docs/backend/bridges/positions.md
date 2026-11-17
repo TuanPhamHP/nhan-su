@@ -35,10 +35,14 @@ export interface PositionResponse {
   name: string;             // "Software Engineer"
   isActive: boolean;        // false = đã vô hiệu hóa
   department: PositionDepartment;
+  jobGroup: JobGroup | null;     // lô 3a: nhóm vị trí việc làm (Mẫu 01/PLI)
+  jobGroupLabel: string | null;  // 'Nhà quản lý' | 'Chuyên môn kỹ thuật bậc cao' | 'Chuyên môn kỹ thuật bậc trung' | 'Khác'
   employeeCount: number;    // số nhân viên đang giữ chức vụ này
   createdAt: string;        // ISO 8601
   updatedAt: string;        // ISO 8601
 }
+
+export type JobGroup = 'MANAGER' | 'HIGH_SKILL' | 'MID_SKILL' | 'OTHER';
 
 // Trả về từ GET /positions (danh sách — gọn hơn)
 export interface PositionSummaryResponse {
@@ -46,6 +50,8 @@ export interface PositionSummaryResponse {
   name: string;
   department: string;       // tên phòng ban — string thuần, không phải object
   isActive: boolean;
+  jobGroup: JobGroup | null;     // lô 3a
+  jobGroupLabel: string | null;
   employeeCount: number;
 }
 
@@ -62,12 +68,14 @@ export interface QueryPositionParams {
 export interface CreatePositionBody {
   name: string;        // 2–100 ký tự, bắt buộc
   departmentId: number; // bắt buộc, >= 1
+  jobGroup?: JobGroup | null; // lô 3a, tuỳ chọn
 }
 
 // Body cho PATCH /v1/positions/:id  (mọi field đều optional)
 export interface UpdatePositionBody {
   name?: string;
   departmentId?: number;
+  jobGroup?: JobGroup | null; // null là bỏ
 }
 ```
 

@@ -28,16 +28,26 @@ const rejectTarget = ref<BusinessTripResponse | null>(null);
 const reportOpen = ref(false);
 const transportRoute = ref<TripRouteResponse | null>(null);
 
-const isHrOrAdmin = computed(() => !!user.value && ['HR', 'ADMIN'].includes(user.value.role));
 const { canApprove, isAdmin } = usePermissions();
+const { canWrite } = useModuleAccess();
+// Module chỉ xem thì ẩn mọi nút ghi của trang này.
+const writable = computed(() => canWrite('BUSINESS_TRIP'));
+const canManageTransport = computed(() => writable.value && !!user.value && ['HR', 'ADMIN'].includes(user.value.role));
 
 const canApproveNow = computed(
 	() =>
+		writable.value &&
 		!!trip.value &&
 		trip.value.status === 'PENDING' &&
 		(trip.value.canApprove || canApprove(trip.value.approver?.id ?? null, APPROVE_PERMISSIONS.businessTrip)),
 );
-const canCancelNow = computed(() => !!trip.value && (trip.value.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(trip.value.status))));
+const canCancelNow = computed(
+	() =>
+		writable.value &&
+		!!trip.value &&
+		(trip.value.canCancel || (isAdmin.value && ['DRAFT', 'PENDING'].includes(trip.value.status))),
+);
+const canAddReportNow = computed(() => writable.value && !!trip.value?.canAddReport);
 
 const allTicketImageUrls = computed<string[]>(() => {
 	if (!trip.value) return [];
@@ -168,6 +178,8 @@ watch(tripId, loadTrip);
 			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Chi tiết đơn công tác</h1>
 		</div>
 
+		<CommonAppModuleNotice module="BUSINESS_TRIP" />
+
 		<!-- Loading skeleton -->
 		<div v-if="loading" class="space-y-4">
 			<div class="h-32 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
@@ -196,7 +208,7 @@ watch(tripId, loadTrip);
 					<div class="flex flex-wrap gap-2">
 						<CommonAppButton v-if="canApproveNow" variant="primary" @click="handleApprove">Duyệt</CommonAppButton>
 						<CommonAppButton v-if="canApproveNow" variant="danger" @click="openReject">Từ chối</CommonAppButton>
-						<CommonAppButton v-if="trip.canAddReport" @click="reportOpen = true">
+						<CommonAppButton v-if="canAddReportNow" @click="reportOpen = true">
 							{{ trip.report ? 'Cập nhật báo cáo' : 'Nộp báo cáo kết quả' }}
 						</CommonAppButton>
 						<CommonAppButton v-if="canCancelNow" variant="danger" @click="handleCancel">Huỷ đơn</CommonAppButton>
@@ -297,7 +309,7 @@ watch(tripId, loadTrip);
 							<div class="flex items-center justify-between mb-2">
 								<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Phương tiện</p>
 								<button
-									v-if="isHrOrAdmin && trip.status === 'APPROVED'"
+									v-if="canManageTransport && trip.status === 'APPROVED'"
 									type="button"
 									class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
 									@click="transportRoute = route"
@@ -307,7 +319,7 @@ watch(tripId, loadTrip);
 							</div>
 
 							<div v-if="route.transports.length === 0" class="text-xs text-gray-400 italic">
-								{{ isHrOrAdmin && trip.status === 'APPROVED' ? 'Chưa cập nhật — bấm "Cập nhật phương tiện"' : 'HR chưa cập nhật phương tiện' }}
+								{{ canManageTransport && trip.status === 'APPROVED' ? 'Chưa cập nhật — bấm "Cập nhật phương tiện"' : 'HR chưa cập nhật phương tiện' }}
 							</div>
 
 							<div v-else class="space-y-2">
@@ -361,7 +373,7 @@ watch(tripId, loadTrip);
 							</div>
 						</div>
 
-						<div v-else-if="isHrOrAdmin && trip.status === 'APPROVED'" class="pt-3 border-t border-gray-100 dark:border-gray-800">
+						<div v-else-if="canManageTransport && trip.status === 'APPROVED'" class="pt-3 border-t border-gray-100 dark:border-gray-800">
 							<button type="button" class="text-xs text-brand-600 dark:text-brand-400 hover:underline" @click="transportRoute = route">
 								Đổi sang có phương tiện
 							</button>
@@ -387,7 +399,7 @@ watch(tripId, loadTrip);
 					</span>
 				</div>
 
-				<div v-if="!trip.report && trip.canAddReport" class="py-8 flex flex-col items-center text-center gap-2">
+				<div v-if="!trip.report && canAddReportNow" class="py-8 flex flex-col items-center text-center gap-2">
 					<p class="text-sm text-gray-500 dark:text-gray-400">Chưa có báo cáo. Hoàn tất chuyến đi và nộp báo cáo kết quả.</p>
 					<CommonAppButton @click="reportOpen = true">Nộp báo cáo</CommonAppButton>
 				</div>

@@ -25,6 +25,8 @@
 		deleted: [commentId: number];
 	}>();
 
+	const { canWrite } = useModuleAccess();
+
 	const showReplyInput = ref(false);
 	const showReplies = ref(false);
 	const replyContent = ref('');
@@ -102,7 +104,7 @@
 				</span>
 
 				<button
-					v-if="isTopLevel && !comment.isDeleted"
+					v-if="isTopLevel && !comment.isDeleted && canWrite('ANNOUNCEMENT')"
 					type="button"
 					class="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
 					@click="toggleReply"
@@ -111,7 +113,7 @@
 				</button>
 
 				<button
-					v-if="canDelete && !comment.isDeleted"
+					v-if="canDelete && !comment.isDeleted && canWrite('ANNOUNCEMENT')"
 					type="button"
 					class="text-xs font-medium text-gray-400 dark:text-gray-500 hover:text-red-500"
 					@click="handleDelete"

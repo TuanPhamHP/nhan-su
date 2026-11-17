@@ -11,7 +11,11 @@
 	} from '~/types/agent.types';
 	import { renderAgentMarkdown } from '~/utils/agent-markdown';
 
-	const props = defineProps<{ message: ChatMsg }>();
+	const props = defineProps<{
+		message: ChatMsg;
+		/** Module chỉ xem: không xác nhận form hay chấm điểm được nữa. */
+		readOnly?: boolean;
+	}>();
 
 	const emit = defineEmits<{
 		confirm: [pendingActionId: number, payload: Record<string, unknown>];
@@ -153,7 +157,7 @@
 			/>
 
 			<AgentActionForm
-				v-if="message.pending"
+				v-if="message.pending && !readOnly"
 				:pending="message.pending"
 				@confirm="emit('confirm', message.pending!.pendingActionId, $event)"
 				@cancel="emit('cancel', message.pending!.pendingActionId)"
@@ -187,7 +191,7 @@
 				lượt đó chưa được chấm.
 			-->
 			<AgentFeedbackBar
-				v-if="!isUser && !message.streaming"
+				v-if="!isUser && !message.streaming && !readOnly"
 				:message="message"
 				@rate="(id, rating, comment) => emit('rate', id, rating, comment)"
 			/>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import { formatDate } from '~/utils/date';
+	import { formatMonth } from '~/utils/hr-profile.utils';
 
 	const { record, unlocking, viewOwn } = useSocialInsurance();
 
@@ -95,6 +96,9 @@
 	<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
 		<h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-5">BHXH &amp; Thuế TNCN</h3>
 
+		<!-- Chỉ xem hay hết hạn vẫn mở được bằng mật khẩu (BE cho phép), dòng này chỉ báo không sửa được. -->
+		<CommonAppModuleNotice module="CONTRACT_INSURANCE" class="mb-4" />
+
 		<!-- ── Chưa mở khoá ── -->
 		<template v-if="!unlocked">
 			<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -147,7 +151,7 @@
 					<p :class="valueCls">{{ text(record.taxInfo.taxCode) }}</p>
 				</div>
 				<div>
-					<p :class="labelCls">Số người phụ thuộc</p>
+					<p :class="labelCls">Người phụ thuộc giảm trừ tháng này</p>
 					<p :class="valueCls">{{ record.taxInfo.dependents }}</p>
 				</div>
 				<div>
@@ -179,17 +183,27 @@
 
 				<ul v-else class="mt-2 space-y-2">
 					<li
-						v-for="(dep, idx) in dependents"
-						:key="idx"
+						v-for="dep in dependents"
+						:key="dep.relativeId"
 						class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-2 text-sm text-gray-900 dark:text-white"
 					>
 						<span class="font-medium">{{ text(dep.name) }}</span>
 						<span class="text-gray-300 dark:text-gray-600">·</span>
 						<span class="text-gray-600 dark:text-gray-300">{{ text(dep.relationship) }}</span>
 						<span class="text-gray-300 dark:text-gray-600">·</span>
-						<span class="text-gray-500 dark:text-gray-400">từ {{ day(dep.effectiveDate) }}</span>
+						<span class="text-gray-500 dark:text-gray-400">
+							giảm trừ {{ dep.effectiveDate ? formatMonth(dep.effectiveDate) : '—' }}
+							<template v-if="dep.endDate"> → {{ formatMonth(dep.endDate) }}</template>
+							<template v-else-if="dep.effectiveDate"> → nay</template>
+						</span>
 					</li>
 				</ul>
+
+				<!-- Lô 3a: mã số thuế và người phụ thuộc nay thuộc hồ sơ nhân viên, không nhập ở form BHXH. -->
+				<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+					Mã số thuế và người phụ thuộc lấy từ hồ sơ nhân sự của bạn. Thông tin chưa đúng thì bạn gửi đề nghị thay
+					đổi ở khối ngân hàng và thuế, hoặc nhờ phòng nhân sự cập nhật người phụ thuộc.
+				</p>
 			</div>
 		</template>
 	</div>

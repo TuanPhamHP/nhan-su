@@ -13,6 +13,17 @@
 | GET | `/v1/social-insurance/:employeeId` | Permission `social-insurance:read` | Dành cho HR. **Nhân viên gọi id của chính mình cũng bị `403`** — phải dùng `POST /me` |
 | PUT | `/v1/social-insurance/:employeeId` | Permission `social-insurance:update` | Upsert — tạo mới hoặc cập nhật (multipart/form-data) |
 
+> ⚠️ **Lô 3a (16/11/2026, roadmap Q-11):** MST và người phụ thuộc **chuyển lên hồ sơ nhân viên**. `PUT` **bỏ qua**
+> `taxCode`, `dependents`, `dependentDetails` (vẫn nhận để form cũ không vỡ). Response `taxInfo` đọc từ hồ sơ: `taxCode` là MST
+> riêng nếu có, không thì số CCCD; `dependents` là số người phụ thuộc đang được giảm trừ trong **tháng hiện tại** (BR-01);
+> `dependentDetails` là mọi thân nhân là người phụ thuộc. Sửa MST ở `PATCH /v1/employees/:id/profile`, người phụ thuộc ở
+> `/v1/employees/:id/relatives` ([hr-profile.md](./hr-profile.md)). FE bỏ ba ô này khỏi form BHXH, thay bằng dòng chỉ đọc kèm
+> link sang hồ sơ nhân viên.
+>
+> Người đọc có `social-insurance:read` nhưng **không có** `employee:private:read` (vai trò tuỳ biến; HR mặc định có cả hai)
+> nhận `taxCode: null` và `idNumber: ""` ở mọi người phụ thuộc: hai giá trị này lấy từ hồ sơ mở rộng, nơi chúng cần quyền đó.
+> Số người phụ thuộc, họ tên, tháng giảm trừ vẫn trả.
+
 > ⚠️ **Thay đổi breaking:** `GET /:employeeId` trước đây cho chính chủ đọc, **nay không còn**.
 
 > ⚠️ **Thay đổi breaking (2026-10-05):** cả module nay gác bằng **permission**, không còn gác
@@ -125,17 +136,21 @@ export interface SIEmployeeSummary {
   fullName: string;
 }
 
+// Lô 3a: đọc từ thân nhân trong hồ sơ nhân viên.
 export interface DependentDetail {
-  name?: string;
-  relationship?: string;      // VD: "CON", "VỢ", "CHỒNG", "BỐ", "MẸ"
-  idNumber?: string;
-  effectiveDate?: string;     // "YYYY-MM-DD"
+  name: string;
+  relationship: string;       // nhãn: "Con", "Vợ hoặc chồng", "Bố", "Mẹ", ...
+  relationshipCode: string;   // CHILD | SPOUSE | FATHER | MOTHER | FATHER_IN_LAW | MOTHER_IN_LAW | SIBLING | OTHER
+  idNumber: string;           // số định danh; "" khi chưa có hoặc người đọc không có employee:private:read
+  effectiveDate: string;      // ngày 1 của tháng bắt đầu giảm trừ; "" khi chưa có
+  endDate: string | null;     // tháng cuối được giảm trừ; null là đang giảm trừ
+  relativeId: number;         // id thân nhân, để mở hồ sơ
 }
 
 export interface TaxInfo {
-  taxCode: string | null;
-  dependents: number;                    // số người phụ thuộc
-  dependentDetails: DependentDetail[];   // chi tiết từng người phụ thuộc
+  taxCode: string | null;                // MST riêng, không có thì số CCCD; null nếu người đọc không có employee:private:read
+  dependents: number;                    // số người phụ thuộc giảm trừ trong tháng hiện tại
+  dependentDetails: DependentDetail[];   // mọi người phụ thuộc, kể cả người đã thôi
   taxExemptionDocUrl: string | null;     // presigned URL chứng từ miễn giảm
 }
 
@@ -166,9 +181,9 @@ export interface UpsertSocialInsuranceDto {
   healthInsuranceExpiry?: string;        // "YYYY-MM-DD"
   registeredHospital?: string;
   effectiveDate?: string;                // "YYYY-MM-DD" — ngày tham gia BHXH
-  taxCode?: string;
-  dependents?: number;                   // min 0
-  dependentDetails?: DependentDetail[];  // gửi dưới dạng JSON string khi multipart
+  /** @deprecated lô 3a: bỏ qua */ taxCode?: string;
+  /** @deprecated lô 3a: bỏ qua */ dependents?: number;
+  /** @deprecated lô 3a: bỏ qua */ dependentDetails?: unknown[];
   note?: string;
 }
 

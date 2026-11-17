@@ -14,7 +14,6 @@
 	const toast = useToast();
 	const service = useContractService();
 
-	const isDragging = ref(false);
 	const selectedFile = ref<File | null>(null);
 	const fileError = ref<string | null>(null);
 	const downloading = ref(false);
@@ -23,9 +22,7 @@
 	const generalErrorMessage = ref<string | null>(null);
 	const lastImportedFileUrl = ref<string | null>(null);
 
-	const ACCEPTED_EXT = ['.xlsx'];
 	const MAX_SIZE_MB = 10;
-	const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
 	const FIELD_LABEL: Record<ImportContractsRowErrorField, string> = {
 		employeeCode: 'Mã nhân viên',
@@ -40,52 +37,11 @@
 		return field ? FIELD_LABEL[field] : '—';
 	}
 
-	function formatSize(bytes: number) {
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
-
-	function validateFile(file: File): string | null {
-		const name = file.name.toLowerCase();
-		if (!ACCEPTED_EXT.some(ext => name.endsWith(ext))) {
-			return 'Chỉ chấp nhận file .xlsx';
-		}
-		if (file.size > MAX_SIZE_BYTES) {
-			return `File không được vượt quá ${MAX_SIZE_MB}MB`;
-		}
-		return null;
-	}
-
-	function setFile(file: File) {
-		const err = validateFile(file);
-		if (err) {
-			fileError.value = err;
-			selectedFile.value = null;
-		} else {
-			fileError.value = null;
-			selectedFile.value = file;
-			// Reset previous run when user picks a new file
-			rowErrors.value = [];
-			generalErrorMessage.value = null;
-		}
-	}
-
-	function onFileInput(e: Event) {
-		const input = e.target as HTMLInputElement;
-		if (input.files?.[0]) setFile(input.files[0]);
-		input.value = '';
-	}
-
-	function onDrop(e: DragEvent) {
-		isDragging.value = false;
-		const file = e.dataTransfer?.files?.[0];
-		if (file) setFile(file);
-	}
-
-	function clearFile() {
-		selectedFile.value = null;
+	/** Đổi file thì bỏ kết quả kiểm của lần nhập trước, tránh đọc nhầm lỗi cũ. */
+	function onPickFile() {
 		fileError.value = null;
+		rowErrors.value = [];
+		generalErrorMessage.value = null;
 	}
 
 	async function downloadTemplate() {
@@ -215,53 +171,14 @@
 										Sau khi điền dữ liệu, upload lại file. Hệ thống chỉ tạo khi TẤT CẢ dòng đều hợp lệ.
 									</p>
 
-									<!-- Selected file preview -->
-									<div
-										v-if="selectedFile"
-										class="mt-3 flex items-center gap-3 px-4 py-3 rounded-lg border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-900/20"
-									>
-										<svg class="w-8 h-8 text-brand-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-										</svg>
-										<div class="flex-1 min-w-0">
-											<p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{{ selectedFile.name }}</p>
-											<p class="text-xs text-gray-500 dark:text-gray-400">{{ formatSize(selectedFile.size) }}</p>
-										</div>
-										<button
-											type="button"
-											class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
-											:disabled="importing"
-											@click="clearFile"
-										>
-											<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
-									</div>
-
-									<!-- Drop zone -->
-									<label
-										v-else
-										class="mt-3 flex flex-col items-center justify-center gap-2 px-4 py-8 rounded-lg border-2 border-dashed transition-colors cursor-pointer"
-										:class="isDragging
-											? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20'
-											: 'border-gray-300 dark:border-gray-600 hover:border-brand-400 hover:bg-white dark:hover:bg-gray-800'"
-										@dragover.prevent="isDragging = true"
-										@dragleave="isDragging = false"
-										@drop.prevent="onDrop"
-									>
-										<svg class="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-										</svg>
-										<p class="text-sm text-gray-600 dark:text-gray-300 font-medium">Kéo thả hoặc nhấn để chọn file</p>
-										<p class="text-xs text-gray-400 dark:text-gray-500">Chỉ chấp nhận .xlsx, tối đa 10MB</p>
-										<input
-											type="file"
-											class="sr-only"
-											accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-											@change="onFileInput"
-										/>
-									</label>
+									<UiFileDropzone
+										v-model="selectedFile"
+										class="mt-3"
+										accept=".xlsx"
+										:max-size-mb="MAX_SIZE_MB"
+										:disabled="importing"
+										@update:model-value="onPickFile"
+									/>
 
 									<p v-if="fileError" class="mt-2 text-xs text-red-500">{{ fileError }}</p>
 								</div>

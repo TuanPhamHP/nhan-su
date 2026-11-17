@@ -177,12 +177,20 @@
 								<p :class="valueCls">{{ day(citizenId.issuedDate) }}</p>
 							</div>
 							<div>
+								<p :class="labelCls">Ngày hết hạn</p>
+								<p :class="valueCls">{{ day(citizenId.expiryDate) }}</p>
+							</div>
+							<div>
 								<p :class="labelCls">Nơi cấp</p>
 								<p :class="valueCls">{{ text(citizenId.issuedPlace) }}</p>
 							</div>
 							<div>
 								<p :class="labelCls">Quê quán</p>
 								<p :class="valueCls">{{ text(citizenId.hometown) }}</p>
+							</div>
+							<div>
+								<p :class="labelCls">Nơi đăng ký khai sinh</p>
+								<p :class="valueCls">{{ text(citizenId.birthRegistrationPlace) }}</p>
 							</div>
 							<div>
 								<p :class="labelCls">Thường trú</p>
