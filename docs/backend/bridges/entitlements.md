@@ -17,7 +17,7 @@ theo `state`, không viết riêng cho từng mã.
 
 | Method | Path | Auth | Ghi chú |
 |--------|------|------|---------|
-| GET | `/v1/me/entitlements` | JWT | Trạng thái mọi module của công ty trong phiên hiện tại |
+| GET | `/v1/me/entitlements` | JWT | Trạng thái mọi module của công ty trong phiên hiện tại, kèm danh mục phân hệ cho lưới chọn phân hệ |
 
 ---
 
@@ -56,9 +56,28 @@ export interface ModuleEntitlement {
   graceEndsAt: string | null; // ISO 8601. Qua thời điểm này thì module quá hạn tắt hẳn. null khi không có hạn
 }
 
+export interface AppGroup {
+  code: string;   // 'HR' | 'TALENT' | 'OPERATIONS' | 'ANALYTICS' | 'SYSTEM', có thể thêm nhóm mới
+  label: string;  // tên nhóm tiếng Việt, hiển thị được ngay
+}
+
+export interface AppTile {
+  code: string;               // mã phân hệ, ổn định: 'chr' | 'tal' | 'pay' | 'rec' | 'ast' | 'apv' | 'eng' | 'ana' | 'sys'
+  label: string;              // tên phân hệ
+  description: string;        // một câu ngắn dưới tên
+  group: string;              // mã nhóm trong `groups`
+  color: string;              // màu nền ô icon, dạng '#rrggbb'
+  icon: string;               // thuộc tính `d` của một <path>, xem mục "Danh mục phân hệ"
+  module: ModuleCode | null;  // module bán riêng chứa mọi màn hình của phân hệ; null khi gộp nhiều module
+  locked: boolean;            // công ty không dùng được `module` (state DISABLED)
+  lockReason: ModuleStateReason; // cùng `reason` của module khi locked, null khi không khoá
+}
+
 export interface EntitlementsResponse {
   modules: ModuleEntitlement[];
   businessHotline: string | null; // hotline nhà cung cấp (env BUSINESS_HOTLINE của BE). null khi chưa cấu hình
+  groups: AppGroup[];             // nhóm của lưới chọn phân hệ, đúng thứ tự hiện
+  apps: AppTile[];                // ô của lưới, xếp theo nhóm rồi theo thứ tự trong nhóm
 }
 ```
 
@@ -75,12 +94,43 @@ export interface EntitlementsResponse {
     "modules": [
       { "code": "CORE", "label": "Lõi nhân sự", "state": "ENABLED", "reason": null, "expiresAt": null, "graceEndsAt": null },
       { "code": "OVERTIME", "label": "Làm thêm giờ", "state": "READ_ONLY", "reason": "EXPIRED", "expiresAt": "2026-10-31T16:59:59.999Z", "graceEndsAt": "2026-11-14T16:59:59.999Z" },
-      { "code": "REPORTS", "label": "Báo cáo", "state": "DISABLED", "reason": "SUSPENDED", "expiresAt": null, "graceEndsAt": null }
+      { "code": "REPORTS", "label": "Báo cáo", "state": "DISABLED", "reason": "SUSPENDED", "expiresAt": null, "graceEndsAt": null },
+      { "code": "RECRUIT", "label": "Tuyển dụng", "state": "DISABLED", "reason": "NOT_SUBSCRIBED", "expiresAt": null, "graceEndsAt": null }
     ],
-    "businessHotline": "0888888888"
+    "businessHotline": "0888888888",
+    "groups": [
+      { "code": "HR", "label": "Quản trị nhân sự" },
+      { "code": "TALENT", "label": "Thu hút & Phát triển" }
+    ],
+    "apps": [
+      {
+        "code": "chr",
+        "label": "Hồ sơ & Hợp đồng",
+        "description": "Vòng đời nhân viên: hồ sơ, phòng ban, chức vụ, hợp đồng lao động.",
+        "group": "HR",
+        "color": "#0ea5e9",
+        "icon": "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
+        "module": null,
+        "locked": false,
+        "lockReason": null
+      },
+      {
+        "code": "rec",
+        "label": "Tuyển dụng",
+        "description": "Định biên, yêu cầu tuyển, tin tuyển dụng, kho ứng viên, phỏng vấn, offer.",
+        "group": "TALENT",
+        "color": "#f59e0b",
+        "icon": "M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z",
+        "module": "RECRUIT",
+        "locked": true,
+        "lockReason": "NOT_SUBSCRIBED"
+      }
+    ]
   }
 }
 ```
+
+Ví dụ trên rút gọn. Thực tế `groups` có đủ 5 nhóm và `apps` có đủ 9 ô, xem mục "Danh mục phân hệ".
 
 `businessHotline` là hotline của nhà cung cấp phần mềm, lấy từ biến môi trường `BUSINESS_HOTLINE` của BE (bỏ khoảng
 trắng hai đầu; trống thì `null`). Mọi người đã đăng nhập đều nhận cùng một giá trị. FE ghi số này trong hộp thoại
@@ -124,6 +174,46 @@ ngày đầu chỉ xem và hôm trước ngày chỉ xem cuối.
 
 **Gọi endpoint này lỗi thì đừng khoá người dùng:** coi mọi module đang dùng được, API vẫn chặn ở phía
 sau. Đây cũng là cách chạy với BE bản cũ chưa có endpoint (404).
+
+---
+
+## Danh mục phân hệ (lưới chọn phân hệ)
+
+Từ 17/11/2026, tên, mô tả, nhóm, màu, icon và thứ tự của các ô trong lưới chọn phân hệ do server trả trong `groups` và
+`apps`. Client không viết cứng mấy thứ này nữa, nên đổi tên hay icon chỉ cần phát hành BE, web và mobile đổi theo.
+Nguồn ở BE: `src/tenancy/app-catalog.ts`.
+
+**Server giữ phần ô, client giữ phần "ô mở vào đâu".** Mỗi client tự giữ bảng `code` → màn hình của mình (web là
+route và các mục menu con, mobile là màn hình Flutter), vì hai bên có bộ màn hình khác nhau. Luật ghép:
+
+| Tình huống | Client làm gì |
+|---|---|
+| `code` có trong bảng màn hình của client | Hiện ô với `label`, `description`, `icon`, `color` của server |
+| `code` lạ (server thêm phân hệ mà client chưa có màn hình) | Bỏ qua ô đó, không lỗi |
+| Client có màn hình cho `code` mà server không trả | Không hiện ô |
+| Người dùng không vào được màn hình nào của ô (theo vai trò, quyền của client) | Ẩn ô. Server trả cùng danh mục cho mọi vai trò |
+| `locked: true` | Hiện ô mờ có ổ khoá, bấm vào mở hộp thoại theo `lockReason` (xem mục trên), không chuyển màn hình |
+| Nhóm không còn ô nào sau khi lọc | Ẩn tên nhóm |
+
+Thứ tự hiện: nhóm theo thứ tự trong `groups`, ô theo thứ tự trong `apps`. Trong một nhóm, ô dùng được đứng trước ô khoá.
+
+**Vẽ icon:** `icon` là thuộc tính `d` của một thẻ `<path>` (bộ Heroicons outline). Vẽ trong khung `viewBox="0 0 24 24"`
+bằng nét, không tô: `fill="none"`, `stroke="currentColor"`, `stroke-width="1.5"`, `stroke-linecap="round"`,
+`stroke-linejoin="round"`. Trên ô, nét màu trắng đặt trên nền `color`. Mobile dựng chuỗi SVG rồi vẽ bằng `flutter_svg`:
+
+```dart
+final svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" '
+    'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${app.icon}"/></svg>';
+SvgPicture.string(svg, width: 20, height: 20);
+```
+
+Web gắn thẳng vào `<path :d="app.icon">`, không dùng `v-html`.
+
+`locked` và `lockReason` suy ra từ `modules`: ô khoá khi module của nó `DISABLED`; chỉ xem (`READ_ONLY`) thì không khoá.
+Client nào đã tự tính từ `modules` thì kết quả phải trùng.
+
+**Không có `apps` (lỗi mạng, BE cũ chưa có trường này):** đừng khoá điều hướng. Web vẫn điều hướng bằng các mục menu con
+của mình và báo lưới chọn phân hệ chưa tải được, kèm nút thử lại.
 
 ---
 
@@ -199,6 +289,8 @@ Các route này thuộc lõi nên vẫn trả 200, chỉ bỏ phần của modul
 | Tình huống | Kết quả |
 |---|---|
 | Không có token | 401, không lộ trạng thái module |
+| Nhân viên thường gọi | Cùng `groups`, `apps` như ADMIN; client tự ẩn ô người đó không vào được |
+| `RECRUIT` đang chỉ xem (`READ_ONLY`, `EXPIRED`) | Ô `rec` không khoá, vào xem được |
 | Công ty khác cùng hệ thống bị tắt module | Không ảnh hưởng |
 | Mã luôn bật (mọi mã trừ `AI_AGENT`, `ASSET`, `RECRUIT`) | Luôn `ENABLED`, không tắt được |
 | Công ty chưa được cấp `ASSET` | `DISABLED`, `NOT_SUBSCRIBED`; mọi route tài sản 403 `MODULE_NOT_SUBSCRIBED` |

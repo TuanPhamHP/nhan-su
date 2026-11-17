@@ -14,13 +14,14 @@ import { documentTitle, faviconHref, pageTitle } from '~/utils/company-branding'
  */
 export default defineNuxtPlugin(() => {
 	const router = useRouter();
-	const { company } = storeToRefs(useAuthStore());
+	const { company, apps } = storeToRefs(useAuthStore());
 
 	useHead(() => {
 		// Đọc `currentRoute` của router thay vì `useRoute()`: ngoài setup của component thì đây là
 		// nguồn chắc chắn có, và nó vẫn reactive nên đổi trang là tiêu đề đổi theo.
 		const route = router.currentRoute.value;
-		const fallback = pageTitle(route.path, route.meta.title);
+		// Tên phân hệ là lớp dự phòng cuối, lấy từ danh mục máy chủ trả.
+		const fallback = pageTitle(route.path, route.meta.title, apps.value);
 
 		return {
 			title: fallback,

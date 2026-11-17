@@ -43,43 +43,17 @@ export interface NavItem {
 }
 
 /**
- * Nhóm phân hệ, theo đúng bức tranh tổng thể hệ thống quản trị nội bộ (A–D).
- * "Hệ thống" là nhóm thứ năm, không có trong bức tranh vì đó là quản trị kỹ thuật
- * (phân quyền, cấu hình, nhật ký) chứ không phải module nghiệp vụ.
- */
-export type AppGroup =
-	| 'Quản trị nhân sự'
-	| 'Thu hút & Phát triển'
-	| 'Hành chính & Vận hành'
-	| 'Quản trị & Phân tích'
-	| 'Hệ thống';
-
-/**
- * Một "app" trong hệ thống — tương đương một ô trong lưới chọn app.
+ * Bảng màn hình của web cho một phân hệ: "ô này mở vào đâu".
  *
- * KHÁC với `ModuleCode`: `ModuleCode` là đơn vị BÁN HÀNG (công ty mua gói nào, còn hạn
- * không), còn app ở đây là đơn vị ĐIỀU HƯỚNG. Một app có thể gồm nhiều module bán hàng
- * (app Đơn từ chứa OVERTIME, ONLINE_WORK, BUSINESS_TRIP), và phần lớn màn hình nằm trong
- * `CORE` nên không thể lấy thẳng `ModuleCode` làm nhóm điều hướng.
+ * Từ 17/11/2026 máy chủ giữ phần ô (tên, mô tả, nhóm, màu, icon, thứ tự) còn mỗi client giữ
+ * bảng này, vì web và mobile có bộ màn hình khác nhau. Ở đây KHÔNG còn chữ nào để hiển thị:
+ * thấy mình sắp thêm `label` hay `icon` cấp phân hệ vào đây thì chỗ cần sửa là
+ * `src/tenancy/app-catalog.ts` của BE.
  */
-export interface AppModuleDef {
-	/** Mã nội bộ, dùng cho localStorage "gần đây" và `data-app`. */
+export interface AppScreensDef {
+	/** Ghép với `AppTile.code` của máy chủ; cũng dùng cho localStorage "gần đây" và `data-app`. */
 	code: string;
-	label: string;
-	/** Một câu ngắn hiện dưới tên app trong lưới chọn app. */
-	description: string;
-	icon: string;
-	group: AppGroup;
-	/** Màu nền ô icon trong lưới chọn app (class Tailwind). */
-	tone: string;
-	/**
-	 * Module bán riêng mà TOÀN BỘ màn hình của app này thuộc vào (`rec` → `RECRUIT`,
-	 * `ast` → `ASSET`). Công ty chưa dùng được module đó thì ô app hiện ở trạng thái khoá chứ
-	 * không biến mất. App gộp nhiều module (`chr`, `tal`) bỏ trống chỗ này và vẫn lọc từng mục
-	 * bằng `NavItem.module`.
-	 */
-	module?: ModuleCode;
-	/** Bấm vào ô app thì đi đâu. Phải nằm trong `routes`. */
+	/** Bấm vào ô phân hệ thì đi đâu. Phải nằm trong `routes`. */
 	home: string;
 	/**
 	 * Các tiền tố route thuộc app này — dùng để biết đang đứng ở app nào.
@@ -87,4 +61,34 @@ export interface AppModuleDef {
 	 */
 	routes: string[];
 	items: NavItem[];
+}
+
+/**
+ * Một "app" đã ghép: bảng màn hình của web cộng với phần hiển thị máy chủ trả.
+ *
+ * KHÁC với `ModuleCode`: `ModuleCode` là đơn vị BÁN HÀNG (công ty mua gói nào, còn hạn
+ * không), còn app ở đây là đơn vị ĐIỀU HƯỚNG. Một app có thể gồm nhiều module bán hàng
+ * (app Đơn từ chứa OVERTIME, ONLINE_WORK, BUSINESS_TRIP), và phần lớn màn hình nằm trong
+ * `CORE` nên không thể lấy thẳng `ModuleCode` làm nhóm điều hướng.
+ *
+ * Chưa nạp được danh mục thì phần hiển thị rỗng mà `routes`, `items` vẫn đủ, nên điều hướng
+ * không chết theo một lần gọi API hỏng.
+ */
+export interface AppModuleDef extends AppScreensDef {
+	label: string;
+	/** Một câu ngắn hiện dưới tên app trong lưới chọn app. */
+	description: string;
+	/** `d` của một `<path>` heroicons outline. */
+	icon: string;
+	/** Màu nền ô icon, dạng `#rrggbb`. Rỗng khi chưa nạp được danh mục. */
+	color: string;
+	/** Mã nhóm của máy chủ; chữ hiện lên tra trong `groups`. */
+	group: string;
+	/**
+	 * Module bán riêng mà TOÀN BỘ màn hình của app này thuộc vào (`rec` → `RECRUIT`,
+	 * `ast` → `ASSET`). Công ty chưa dùng được module đó thì ô app hiện ở trạng thái khoá chứ
+	 * không biến mất. App gộp nhiều module (`chr`, `tal`) để `null` và vẫn lọc từng mục
+	 * bằng `NavItem.module`.
+	 */
+	module: ModuleCode | null;
 }

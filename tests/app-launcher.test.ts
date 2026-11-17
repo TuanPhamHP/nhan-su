@@ -7,26 +7,52 @@
  */
 import { describe, expect, it } from 'vitest';
 import { APP_MODULES } from '~/config/app-modules';
-import { hotlineTelHref, lockBadgeText, lockHint, lockMessage, splitLauncherApps } from '~/utils/app-launcher';
-import type { AppModuleDef, NavItem } from '~/types/navigation.types';
+import {
+	appsWithoutCatalog,
+	hotlineTelHref,
+	lockBadgeText,
+	lockHint,
+	lockMessage,
+	mergeAppCatalog,
+	splitLauncherApps,
+} from '~/utils/app-launcher';
+import type { AppModuleDef, AppScreensDef, NavItem } from '~/types/navigation.types';
+import type { AppTile } from '~/types/entitlement.types';
 
 function item(label: string, route: string, extra: Partial<NavItem> = {}): NavItem {
 	return { label, route, icon: 'M0 0', ...extra };
 }
 
-function app(code: string, extra: Partial<AppModuleDef> = {}): AppModuleDef {
+/** Bảng màn hình của web: từ 17/11/2026 ở đây không còn chữ nào để hiển thị. */
+function screens(code: string, extra: Partial<AppScreensDef> = {}): AppScreensDef {
 	return {
 		code,
-		label: code.toUpperCase(),
-		description: `Phân hệ ${code}`,
-		icon: 'M0 0',
-		group: 'Hành chính & Vận hành',
-		tone: 'bg-gray-500',
 		home: `/${code}`,
 		routes: [`/${code}`],
 		items: [item('Mục đầu', `/${code}`)],
 		...extra,
 	};
+}
+
+/** Một ô máy chủ trả. */
+function tile(code: string, extra: Partial<AppTile> = {}): AppTile {
+	return {
+		code,
+		label: code.toUpperCase(),
+		description: `Phân hệ ${code}`,
+		group: 'OPERATIONS',
+		color: '#8b5cf6',
+		icon: 'M0 0',
+		module: null,
+		locked: false,
+		lockReason: null,
+		...extra,
+	};
+}
+
+/** Phân hệ đã ghép, dùng cho các bài kiểm chỉ quan tâm phần chia ô khoá. */
+function app(code: string, extra: Partial<AppModuleDef> = {}): AppModuleDef {
+	return { ...mergeAppCatalog([screens(code)], [tile(code)])[0]!, ...extra };
 }
 
 const SEE_ALL = {
@@ -98,13 +124,12 @@ describe('splitLauncherApps', () => {
 	it('phân hệ gộp nhiều module vẫn lọc từng mục như cũ, và mất đi khi không còn mục nào', () => {
 		const defs = [
 			app('tal', {
-				module: undefined,
 				items: [
 					item('Làm thêm giờ', '/management/overtime', { module: 'OVERTIME' }),
 					item('Chấm công', '/management/attendance'),
 				],
 			}),
-			app('eng', { module: undefined, items: [item('Thông báo', '/announcements', { module: 'ANNOUNCEMENT' })] }),
+			app('eng', { items: [item('Thông báo', '/announcements', { module: 'ANNOUNCEMENT' })] }),
 		];
 
 		const { visible, locked } = splitLauncherApps(defs, {
@@ -140,27 +165,90 @@ describe('splitLauncherApps', () => {
 	});
 
 	it('phân hệ khoá giữ nguyên nhóm để ô nằm đúng chỗ trong lưới', () => {
-		const { locked } = splitLauncherApps([app('rec', { module: 'RECRUIT', group: 'Thu hút & Phát triển' })], {
+		const { locked } = splitLauncherApps([app('rec', { module: 'RECRUIT', group: 'TALENT' })], {
 			...SEE_ALL,
 			moduleLock: () => ({ reason: 'NOT_SUBSCRIBED' }),
 		});
 
-		expect(locked[0]?.group).toBe('Thu hút & Phát triển');
+		expect(locked[0]?.group).toBe('TALENT');
 	});
 });
 
-describe('cấu hình phân hệ', () => {
-	it('chỉ Tuyển dụng và Quản lý tài sản khai module cho cả phân hệ', () => {
-		const withModule = APP_MODULES.filter(a => a.module).map(a => [a.code, a.module]);
-		expect(withModule).toEqual([
-			['rec', 'RECRUIT'],
-			['ast', 'ASSET'],
-		]);
+/**
+ * Ghép danh mục máy chủ với bảng màn hình của web.
+ *
+ * Hai nửa phát hành độc lập nên điều đáng kiểm là lúc chúng lệch nhau: máy chủ thêm phân hệ
+ * mà web chưa có màn hình, hoặc web có màn hình mà máy chủ không trả, hoặc không có danh mục.
+ */
+describe('mergeAppCatalog', () => {
+	it('lấy chữ và hình của máy chủ, giữ route và mục menu của web', () => {
+		const merged = mergeAppCatalog(
+			[screens('rec', { home: '/management/recruitment', routes: ['/management/recruitment', '/recruitment'] })],
+			[tile('rec', { label: 'Tuyển dụng', color: '#f59e0b', group: 'TALENT', module: 'RECRUIT' })],
+		);
+
+		expect(merged).toHaveLength(1);
+		expect(merged[0]).toMatchObject({
+			code: 'rec',
+			label: 'Tuyển dụng',
+			color: '#f59e0b',
+			group: 'TALENT',
+			module: 'RECRUIT',
+			home: '/management/recruitment',
+			routes: ['/management/recruitment', '/recruitment'],
+		});
+		expect(merged[0]?.items).toHaveLength(1);
 	});
 
-	it('phân hệ khai module thì mọi mục của nó cũng thuộc module đó', () => {
-		for (const a of APP_MODULES.filter(x => x.module)) {
-			expect(a.items.every(i => i.module === a.module)).toBe(true);
+	it('thứ tự lưới lấy theo máy chủ, không theo thứ tự khai trong web', () => {
+		const merged = mergeAppCatalog(
+			[screens('chr'), screens('tal'), screens('pay')],
+			[tile('pay'), tile('chr'), tile('tal')],
+		);
+
+		expect(merged.map(a => a.code)).toEqual(['pay', 'chr', 'tal']);
+	});
+
+	it('mã lạ của máy chủ thì bỏ qua, không lỗi', () => {
+		const merged = mergeAppCatalog([screens('chr')], [tile('xyz'), tile('chr')]);
+
+		expect(merged.map(a => a.code)).toEqual(['chr']);
+	});
+
+	it('web có màn hình mà máy chủ không trả thì không hiện ô', () => {
+		const merged = mergeAppCatalog([screens('chr'), screens('sys')], [tile('chr')]);
+
+		expect(merged.map(a => a.code)).toEqual(['chr']);
+	});
+
+	it('chưa có danh mục thì vẫn còn route và mục menu để điều hướng, chỉ thiếu chữ và hình', () => {
+		const fallback = appsWithoutCatalog([screens('chr', { home: '/management/employees' })]);
+
+		expect(fallback[0]?.home).toBe('/management/employees');
+		expect(fallback[0]?.items).toHaveLength(1);
+		expect(fallback[0]?.label).toBe('');
+		expect(fallback[0]?.icon).toBe('');
+		expect(fallback[0]?.module).toBeNull();
+	});
+});
+
+describe('bảng màn hình của web', () => {
+	it('không còn chữ hay hình cấp phân hệ, vì phần đó máy chủ trả', () => {
+		// Thêm `label` hay `icon` vào đây là quay lại viết cứng: chỗ cần sửa là app-catalog.ts của BE.
+		for (const a of APP_MODULES) {
+			expect(Object.keys(a).sort()).toEqual(['code', 'home', 'items', 'routes']);
+		}
+	});
+
+	it('mọi mục của Tuyển dụng và Quản lý tài sản đều thuộc module bán riêng của phân hệ', () => {
+		// Máy chủ khoá cả ô theo `AppTile.module`; mục bên trong cũng phải khai đúng module đó, nếu
+		// không thì ô khoá vẫn hiện mục mà người dùng bấm vào sẽ ăn 403.
+		for (const [code, module] of [
+			['rec', 'RECRUIT'],
+			['ast', 'ASSET'],
+		] as const) {
+			const a = APP_MODULES.find(x => x.code === code);
+			expect(a?.items.every(i => i.module === module)).toBe(true);
 		}
 	});
 });

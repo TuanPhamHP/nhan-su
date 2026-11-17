@@ -1,6 +1,55 @@
 import { moduleLapsedMessage } from '~/utils/module-expiry';
-import type { ModuleCode, ModuleStateReason } from '~/types/entitlement.types';
-import type { AppModuleDef, NavItem } from '~/types/navigation.types';
+import type { AppTile, ModuleCode, ModuleStateReason } from '~/types/entitlement.types';
+import type { AppModuleDef, AppScreensDef, NavItem } from '~/types/navigation.types';
+
+/**
+ * Ghép danh mục phân hệ của máy chủ với bảng màn hình của web.
+ *
+ * Máy chủ giữ phần ô, web giữ phần "ô mở vào đâu" (`docs/backend/bridges/entitlements.md`
+ * mục "Danh mục phân hệ"). Thứ tự lấy theo `tiles` để đổi thứ tự lưới chỉ cần phát hành BE.
+ *
+ * Hai hướng lệch nhau đều im lặng bỏ qua, vì hai bên phát hành độc lập: máy chủ trả mã web
+ * chưa có màn hình thì bỏ ô đó, còn web có màn hình mà máy chủ không trả thì không hiện ô.
+ */
+export function mergeAppCatalog(screens: AppScreensDef[], tiles: AppTile[]): AppModuleDef[] {
+	const byCode = new Map(screens.map(s => [s.code, s]));
+	const merged: AppModuleDef[] = [];
+
+	for (const tile of tiles) {
+		const screen = byCode.get(tile.code);
+		if (!screen) continue;
+		merged.push({
+			...screen,
+			label: tile.label,
+			description: tile.description,
+			icon: tile.icon,
+			color: tile.color,
+			group: tile.group,
+			module: tile.module,
+		});
+	}
+
+	return merged;
+}
+
+/**
+ * Bản dựng khi CHƯA CÓ danh mục (gọi API hỏng, hoặc BE cũ không trả `apps`).
+ *
+ * Giữ nguyên route và mục menu để người dùng còn đi lại được trong phân hệ đang mở; chỉ phần
+ * chữ và hình là rỗng, và lưới chọn phân hệ báo chưa tải được kèm nút thử lại. Khoá điều hướng
+ * vì một lần gọi API hỏng thì thiệt hại lớn hơn hẳn việc thiếu cái tên.
+ */
+export function appsWithoutCatalog(screens: AppScreensDef[]): AppModuleDef[] {
+	return screens.map(screen => ({
+		...screen,
+		label: '',
+		description: '',
+		icon: '',
+		color: '',
+		group: '',
+		module: null,
+	}));
+}
 
 /**
  * Một phân hệ công ty chưa dùng được.

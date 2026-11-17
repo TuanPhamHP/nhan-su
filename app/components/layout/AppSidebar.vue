@@ -19,6 +19,15 @@
 	const { hasPermission } = usePermissions();
 	const { modules, canUse } = useModuleAccess();
 	const { visibleApps, lockedApps, currentApp } = useAppModules();
+	/**
+	 * Danh sách phân hệ ở trang chủ chỉ nhận ô CÓ TÊN.
+	 *
+	 * Chưa tải được danh mục của máy chủ thì phân hệ không còn tên lẫn icon, mà một danh sách
+	 * toàn dòng trống thì vô dụng. Lúc đó lưới chọn phân hệ báo lỗi kèm nút thử lại, còn mục menu
+	 * của phân hệ đang mở vẫn hiện bình thường.
+	 */
+	const namedApps = computed(() => visibleApps.value.filter(a => a.label));
+	const namedLockedApps = computed(() => lockedApps.value.filter(a => a.label));
 	const route = useRoute();
 	/** Phân hệ khoá người dùng vừa bấm trong danh sách phân hệ ở trang chủ. */
 	const lockedTarget = ref<LockedApp | null>(null);
@@ -278,15 +287,21 @@
 
 			<!-- Phân hệ đang mở -->
 			<div v-if="currentApp">
+				<!--
+					Chưa tải được danh mục thì phân hệ không có tên lẫn icon, nên ẩn hẳn dòng tiêu đề:
+					một dòng chữ rỗng với ô màu trống trông như lỗi hiển thị. Danh sách mục bên dưới
+					vẫn còn nên người dùng đi lại bình thường.
+				-->
 				<button
-					v-if="isOpen"
+					v-if="isOpen && currentApp.label"
 					type="button"
 					class="w-full flex items-center gap-2 px-2 mb-1 py-1 rounded-lg text-left hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 					title="Đổi phân hệ"
 					@click="uiStore.toggleLauncher()"
 				>
 					<span
-						:class="['flex h-5 w-5 items-center justify-center rounded text-white flex-shrink-0', currentApp.tone]"
+						class="flex h-5 w-5 items-center justify-center rounded text-white flex-shrink-0"
+						:style="{ backgroundColor: currentApp.color }"
 					>
 						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" :d="currentApp.icon" />
@@ -397,7 +412,7 @@
 			</div>
 
 			<!-- Đang ở trang chủ: liệt kê phân hệ ngay tại sidebar, khỏi phải mở lưới -->
-			<div v-else-if="visibleApps.length || lockedApps.length">
+			<div v-else-if="namedApps.length || namedLockedApps.length">
 				<p
 					v-if="isOpen"
 					class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 whitespace-nowrap"
@@ -407,7 +422,7 @@
 				<div v-else class="mx-2 h-px mb-1" :style="{ backgroundColor: 'var(--color-border-theme)' }" />
 				<div class="space-y-0.5">
 					<NuxtLink
-						v-for="app in visibleApps"
+						v-for="app in namedApps"
 						:key="app.code"
 						:to="app.home"
 						:class="[
@@ -434,7 +449,7 @@
 						chỉ mở hộp thoại giải thích, không chuyển trang.
 					-->
 					<button
-						v-for="app in lockedApps"
+						v-for="app in namedLockedApps"
 						:key="app.code"
 						type="button"
 						:data-locked-sidebar-app="app.code"
