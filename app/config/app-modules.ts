@@ -403,6 +403,47 @@ export const APP_MODULES: AppModuleDef[] = [
 		],
 	},
 	{
+		/**
+		 * APV — Phê duyệt điện tử (lô 4a). Khác mục "Duyệt đơn" trong TAL: "Duyệt đơn" là đơn
+		 * nhân sự ảnh hưởng bảng công (nghỉ phép, OT, công tác), còn đây là phiếu đề xuất, tờ
+		 * trình, đề nghị mua sắm với luồng duyệt nhiều cấp do nhân sự cấu hình theo từng loại.
+		 *
+		 * "Phiếu đề xuất" là mục `personal` vì trang nằm ở root và mọi vai trò đều gửi được phiếu,
+		 * nhờ vậy nhân viên cũng thấy ô phân hệ này. Cấu hình loại phiếu thì nằm trong khu quản
+		 * trị và cần quyền `request-type:manage`.
+		 */
+		code: 'apv',
+		label: 'Phê duyệt điện tử',
+		description: 'Phiếu đề xuất, tờ trình, đề nghị mua sắm và luồng duyệt nhiều cấp theo từng loại phiếu.',
+		group: 'Hành chính & Vận hành',
+		tone: 'bg-violet-500',
+		icon: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z',
+		home: '/general-requests',
+		routes: ['/general-requests', '/management/settings/request-types'],
+		items: [
+			{
+				label: 'Phiếu đề xuất',
+				route: '/general-requests',
+				icon: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z',
+				scope: 'personal',
+			},
+			{
+				label: 'Chờ tôi duyệt',
+				route: '/general-requests?tab=pending',
+				icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+				matchQuery: { tab: 'pending' },
+				scope: 'personal',
+			},
+			{
+				label: 'Loại phiếu & luồng duyệt',
+				route: '/management/settings/request-types',
+				icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+				management: true,
+				permission: 'request-type:manage',
+			},
+		],
+	},
+	{
 		/** ENG — Truyền thông & Gắn kết nội bộ. Mới có bảng tin; khảo sát, vinh danh, góp ý chưa làm. */
 		code: 'eng',
 		label: 'Truyền thông nội bộ',
@@ -529,9 +570,10 @@ export const APP_MODULES: AppModuleDef[] = [
  * người dùng bấm hụt. Giữ ở đây để bản đồ trong code khớp với bản đồ nghiệp vụ — khi xây
  * xong màn hình đầu tiên của một mã thì chuyển mục tương ứng sang `APP_MODULES`.
  *
- * Lưu ý về `APV`: khác với mục "Duyệt đơn" đang nằm trong TAL. "Duyệt đơn" là duyệt đơn
- * nhân sự (nghỉ phép, OT, công tác); còn APV là phê duyệt điện tử nói chung — tờ trình,
- * đề nghị thanh toán, tạm ứng, mua sắm. Đừng gộp hai thứ này vì trùng chữ "duyệt".
+ * `APV` đã chuyển sang `APP_MODULES` ở lô 4a (phiếu đề xuất và luồng duyệt). Nó khác mục
+ * "Duyệt đơn" đang nằm trong TAL: "Duyệt đơn" là duyệt đơn nhân sự (nghỉ phép, OT, công
+ * tác); còn APV là phê duyệt điện tử nói chung — tờ trình, đề nghị thanh toán, tạm ứng,
+ * mua sắm. Đừng gộp hai thứ này vì trùng chữ "duyệt".
  *
  * `BEN` đã có một phần: màn hình BHXH hiện là một tab trong hồ sơ nhân viên
  * (`EmployeeSocialInsurance.vue`) và một thẻ ở trang hồ sơ cá nhân, chưa có trang quản lý
@@ -542,7 +584,6 @@ export const PLANNED_MODULES: Array<{ code: string; label: string; group: AppGro
 	{ code: 'ONB', label: 'Hội nhập & Thử việc', group: 'Thu hút & Phát triển', scope: 'Checklist đón nhân viên mới, cấp phát tài khoản/thiết bị, đánh giá thử việc' },
 	{ code: 'PER', label: 'Đánh giá hiệu suất (KPI/OKR)', group: 'Thu hút & Phát triển', scope: 'Giao mục tiêu, kỳ đánh giá, xếp loại, gắn kết quả với thưởng/lương' },
 	{ code: 'LND', label: 'Đào tạo & Phát triển', group: 'Thu hút & Phát triển', scope: 'Khung năng lực, kế hoạch đào tạo, LMS, cam kết đào tạo, lộ trình & kế nhiệm' },
-	{ code: 'APV', label: 'Phê duyệt điện tử', group: 'Hành chính & Vận hành', scope: 'Tờ trình, đề xuất, đề nghị thanh toán/tạm ứng/mua sắm, quy trình duyệt nhiều cấp' },
 	{ code: 'ADM', label: 'Hành chính văn phòng', group: 'Hành chính & Vận hành', scope: 'Văn phòng phẩm/vật tư, phòng họp, xe, văn thư công văn, con dấu' },
 	{ code: 'TSK', label: 'Quản lý công việc & Dự án', group: 'Hành chính & Vận hành', scope: 'Giao việc, dự án, kanban/gantt, việc định kỳ, timesheet, báo cáo tiến độ' },
 ];

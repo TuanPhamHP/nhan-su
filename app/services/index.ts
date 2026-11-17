@@ -35,6 +35,7 @@ export * from './contract.service';
 export * from './social-insurance.service';
 export * from './business-trip.service';
 export * from './general-request.service';
+export * from './approval-delegation.service';
 export * from './meta-data.service';
 export * from './approval.service';
 export * from './announcement.service';

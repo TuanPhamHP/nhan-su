@@ -64,7 +64,7 @@
 			description: m?.description ?? '',
 			vendorId: m?.vendor?.id,
 			underWarranty: m?.underWarranty ?? false,
-			cost: m?.cost != null ? String(m.cost) : '',
+			cost: m?.cost ?? undefined,
 			sentAt: m?.sentAt ?? '',
 			expectedDoneAt: m?.expectedDoneAt ?? '',
 			workDone: m?.workDone ?? '',
@@ -196,7 +196,7 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Chi phí dự kiến</label>
-							<input v-model="cost" v-bind="costAttrs" type="number" min="0" step="any" :class="inputCls" />
+							<UiNumberInput v-model="cost" v-bind="costAttrs" :decimals="2" :min="0" :input-class="inputCls" />
 							<p class="text-xs text-gray-500 dark:text-gray-400">Chi phí này không cộng vào nguyên giá.</p>
 						</div>
 						<label class="flex items-center gap-2 pt-6">

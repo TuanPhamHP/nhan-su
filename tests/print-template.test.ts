@@ -128,51 +128,75 @@ describe('buildPrintHtml', () => {
 	});
 });
 
-describe('usePrint — đi qua đúng đường mở cửa sổ in', () => {
-	let written = '';
-	const openSpy = vi.fn();
-
+/**
+ * In phiếu đi qua iframe sandbox, không còn mở cửa sổ `about:blank` rồi `document.write`.
+ *
+ * Mẫu in do người cấu hình loại phiếu soạn, còn người bấm in là người duyệt, nên cửa sổ cùng
+ * origin là chỗ để mã trong mẫu chạy bằng phiên của người in. Hai bài dưới đây giữ cho đường đi
+ * đó không quay lại.
+ */
+describe('usePrint — in bằng iframe sandbox', () => {
 	beforeEach(() => {
-		written = '';
 		mockPrint.mockReset();
-		openSpy.mockReset();
-		openSpy.mockImplementation(() => ({
-			document: {
-				write: (s: string) => {
-					written += s;
-				},
-				close: () => {},
-			},
-			focus: () => {},
-		}));
-		vi.stubGlobal('open', openSpy);
+		document.body.innerHTML = '';
 	});
 
 	afterEach(() => {
-		vi.unstubAllGlobals();
+		document.body.innerHTML = '';
 	});
 
-	it('printRequest: payload trong fieldValues không thành thẻ trong cửa sổ in', async () => {
-		mockPrint.mockResolvedValue({ printTemplate: TEMPLATE, fieldValues: { recipient: 'HR', content: XSS } });
+	function printFrame(): HTMLIFrameElement {
+		const frame = document.querySelector('iframe');
+		expect(frame).not.toBeNull();
+		return frame as HTMLIFrameElement;
+	}
+
+	it('printRequest: dựng iframe sandbox không cho chạy script, giá trị vẫn được escape', async () => {
+		mockPrint.mockResolvedValue({
+			printTemplate: TEMPLATE,
+			fieldValues: { recipient: 'HR', content: XSS },
+			code: 'TT-0012/2026',
+			submittedAt: '2026-11-16T03:00:00.000Z',
+		});
 		await usePrint().printRequest(7);
 
 		expect(mockPrint).toHaveBeenCalledWith(7);
-		expect(openSpy).toHaveBeenCalledWith('', '_blank');
-		const doc = parse(written);
+		const frame = printFrame();
+		const sandbox = frame.getAttribute('sandbox') ?? '';
+		expect(sandbox).toContain('allow-same-origin');
+		expect(sandbox).not.toContain('allow-scripts');
+
+		const doc = parse(frame.srcdoc);
 		expect(doc.querySelector('img')).toBeNull();
+		expect(doc.querySelector('script')).toBeNull();
 		expect(doc.querySelector('[onerror]')).toBeNull();
 		expect(doc.body.textContent).toContain(XSS);
-		// Khung của cửa sổ in (nút In ngay / Đóng) và mẫu của HR vẫn còn.
+		// Mẫu của người soạn và dòng số hiệu vẫn còn.
 		expect(doc.querySelector('h1')?.textContent).toBe('TỜ TRÌNH');
-		expect(doc.querySelectorAll('.no-print button')).toHaveLength(2);
+		expect(doc.body.textContent).toContain('TT-0012/2026');
 	});
 
 	it('previewRequest: cùng luật escape với mẫu truyền vào', () => {
-		const req = { fieldValues: { content: XSS }, printTemplate: null } as unknown as GeneralRequestResponse;
+		const req = { fieldValues: { content: XSS }, printTemplate: null, code: null, submittedAt: null } as unknown as GeneralRequestResponse;
 		usePrint().previewRequest(req, '<div>{{content}}</div>');
 
-		const doc = parse(written);
+		const doc = parse(printFrame().srcdoc);
 		expect(doc.querySelector('img')).toBeNull();
 		expect(doc.querySelector('body > div')?.textContent).toBe(XSS);
+	});
+
+	it('printRequest: thẻ script và onerror của chính mẫu in cũng bị bỏ', async () => {
+		mockPrint.mockResolvedValue({
+			printTemplate: '<div><script>alert(1)</script><img src=x onerror="alert(2)"><p>{{content}}</p></div>',
+			fieldValues: { content: 'nội dung' },
+			code: null,
+			submittedAt: null,
+		});
+		await usePrint().printRequest(9);
+
+		const doc = parse(printFrame().srcdoc);
+		expect(doc.querySelector('script')).toBeNull();
+		expect(doc.querySelector('[onerror]')).toBeNull();
+		expect(doc.querySelector('p')?.textContent).toBe('nội dung');
 	});
 });

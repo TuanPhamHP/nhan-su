@@ -961,7 +961,7 @@ hiện "Đang tra dữ liệu…".
 | `violation_createExplanation` | `L1_CREATE` | Phiếu giải trình chuyên cần |
 | `onlineWork_createRequest` | `L1_CREATE` | Đơn làm việc online |
 | `businessTrip_createRequest` | `L1_CREATE` | Đơn đi công tác — form dài hơn các đơn khác: bắt buộc có ít nhất một chặng di chuyển và người duyệt |
-| `approval_decide` | `L2_DECIDE` | Duyệt / từ chối một đơn đang chờ chính người hỏi — phủ đủ **6 loại đơn**, gồm cả đơn công tác |
+| `approval_decide` | `L2_DECIDE` | Duyệt / từ chối một đơn đang chờ chính người hỏi — phủ **7 loại**: 6 loại đơn và phiếu đề xuất (`requestKind: GENERAL`, từ lô 4a, chỉ người đang giữ lượt ở bước hiện tại). `approval_listPending` cũng trả phiếu đề xuất, `afterApprove` nói phiếu sẽ sang bước nào |
 
 Render form **tổng quát theo `AgentForm`**, đừng hardcode riêng cho từng loại đơn.
 

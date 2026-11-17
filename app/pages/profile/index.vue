@@ -18,6 +18,7 @@
 	import ProfileWorkExperiences from '~/components/modules/profile/ProfileWorkExperiences.vue';
 	import ProfileMyRequests from '~/components/modules/profile/ProfileMyRequests.vue';
 	import ProfilePendingDocuments from '~/components/modules/profile/ProfilePendingDocuments.vue';
+	import ProfileApprovalDelegations from '~/components/modules/profile/ProfileApprovalDelegations.vue';
 	import EmployeeDocuments from '~/components/modules/employee/EmployeeDocuments.vue';
 
 	definePageMeta({ title: 'Hồ sơ cá nhân' });
@@ -72,12 +73,15 @@
 
 	// ─── Tab ─────────────────────────────────────────────────────────────────────
 
-	const validTabs = ['profile', 'requests', 'settings'] as const;
+	const validTabs = ['profile', 'requests', 'delegations', 'settings'] as const;
 	type TabId = (typeof validTabs)[number];
 
 	const tabs: { key: TabId; label: string }[] = [
 		{ key: 'profile', label: 'Hồ sơ' },
 		{ key: 'requests', label: 'Yêu cầu của tôi' },
+		// Lô 4a: uỷ quyền duyệt phiếu đề xuất. Đứng riêng một tab vì đây là việc của người duyệt,
+		// không phải thông tin hồ sơ, và người dùng tìm nó theo việc "tôi đi công tác tuần sau".
+		{ key: 'delegations', label: 'Uỷ quyền duyệt' },
 		{ key: 'settings', label: 'Giao diện và mật khẩu' },
 	];
 
@@ -386,6 +390,9 @@
 				:highlight-id="highlightRequestId"
 				@cancelled="loadRequests"
 			/>
+
+			<!-- Tab: Uỷ quyền duyệt (lô 4a) -->
+			<ProfileApprovalDelegations v-else-if="activeTab === 'delegations'" />
 
 			<!-- Tab: Giao diện và mật khẩu -->
 			<template v-else>

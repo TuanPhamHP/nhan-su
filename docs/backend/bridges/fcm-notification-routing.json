@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema",
-  "version": "1.1.0",
-  "lastUpdated": "2026-11-13",
+  "version": "1.2.0",
+  "lastUpdated": "2026-11-16",
   "description": "Mapping NotificationType → mobile navigation route. App mobile dùng JSON này khi user tap vào notification để biết cần mở screen nào với param gì.",
 
   "fcmPayloadShape": {
@@ -634,6 +634,136 @@
       "note": "Module ASSET. refId là id phiếu thanh lý. Trang quản lý, chỉ có trên web"
     },
 
+    "GENERAL_REQUEST_PENDING": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Tới lượt duyệt (gửi, qua bước, được chuyển, duyệt thay theo uỷ quyền, được đổi người duyệt); người theo dõi khi phiếu được gửi lần đầu (lô 4a)",
+      "recipients": ["người đang giữ lượt duyệt", "người theo dõi (bản 📌 Thông tin)"],
+      "frequency": "real-time",
+      "note": "Bản cho người duyệt có actionType APPROVE_REJECT: approveEndpoint PATCH /v1/general-requests/{id}/approve, rejectEndpoint PATCH .../reject body { rejectNote }. Bản 📌 cho người theo dõi là NAVIGATE_ONLY"
+    },
+
+    "GENERAL_REQUEST_APPROVED": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Phiếu đề xuất duyệt xong bước cuối",
+      "recipients": ["người gửi", "người theo dõi"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY"
+    },
+
+    "GENERAL_REQUEST_REJECTED": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Một người duyệt từ chối phiếu",
+      "recipients": ["người gửi", "người theo dõi"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY; lý do trong body"
+    },
+
+    "GENERAL_REQUEST_RETURNED": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Người duyệt trả lại phiếu để bổ sung (lô 4a)",
+      "recipients": ["người gửi"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY; mở phiếu ở chế độ sửa rồi nộp lại"
+    },
+
+    "GENERAL_REQUEST_CANCELLED": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Người gửi thu hồi phiếu đang chờ",
+      "recipients": ["người đang giữ lượt duyệt"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY"
+    },
+
+    "GENERAL_REQUEST_COMMENTED": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId", "tab": "comments" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Được nhắc tên trong bình luận (lô 4a)",
+      "recipients": ["người được nhắc"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY"
+    },
+
+    "GENERAL_REQUEST_CONSULT": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId", "tab": "comments" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "Được mời cho ý kiến (lô 4a)",
+      "recipients": ["người được mời"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY; người được mời chỉ bình luận, không duyệt"
+    },
+
+    "GENERAL_REQUEST_DUE_SOON": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "J-01: bước tới 75% hạn xử lý (mỗi 30 phút trong giờ làm việc)",
+      "recipients": ["người đang giữ lượt duyệt"],
+      "frequency": "cron, mỗi bước một lần",
+      "note": "NAVIGATE_ONLY"
+    },
+
+    "GENERAL_REQUEST_OVERDUE": {
+      "category": "REQUEST",
+      "refType": "general_request",
+      "hasEntityId": true,
+      "screen": "/general-requests/{refId}",
+      "params": { "id": "refId" },
+      "webUrl": "/general-requests?id={refId}",
+      "trigger": "J-01: bước quá hạn xử lý",
+      "recipients": ["người đang giữ lượt duyệt"],
+      "frequency": "cron, mỗi bước một lần",
+      "note": "NAVIGATE_ONLY; kèm email"
+    },
+
+    "APPROVER_REASSIGNED": {
+      "category": "REQUEST",
+      "refType": "",
+      "hasEntityId": false,
+      "screen": "/general-requests?tab=pending",
+      "params": {},
+      "webUrl": "/general-requests?tab=pending",
+      "trigger": "Được uỷ quyền duyệt phiếu đề xuất theo khoảng ngày (lô 4a); trước đó dùng khi đổi quản lý trực tiếp chuyển đơn đang chờ",
+      "recipients": ["người được uỷ quyền", "quản lý cũ và mới khi đổi quản lý"],
+      "frequency": "real-time",
+      "note": "NAVIGATE_ONLY. Thông báo đổi quản lý có targetUrl rỗng: mở Notification Center"
+    },
+
     "PROFILE_CHANGE_REQUESTED": {
       "category": "REQUEST",
       "refType": "profile_change_request",
@@ -933,9 +1063,7 @@
     }
   },
 
-  "exclusions": {
-    "general_request": "Các type GENERAL_REQUEST_* đã được bỏ qua theo yêu cầu — sẽ thêm sau"
-  },
+  "exclusions": {},
 
   "implementationGuide": {
     "flutter": "Switch trên `data['type']`, gọi `Navigator.pushNamed(context, screen, arguments: {...params with id substituted})`. Sau push thì gọi API mark-read nếu notificationId !== '0'.",

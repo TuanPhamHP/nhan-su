@@ -15,6 +15,24 @@
 	const uiStore = useUiStore();
 	const router = useRouter();
 	const toast = useToast();
+	const generalRequestStore = useGeneralRequestStore();
+
+	/**
+	 * Nút duyệt nhanh, từ chối nhanh ngay trong chuông thông báo.
+	 *
+	 * Chỉ mở cho phiếu đề xuất (lô 4a): máy chủ gắn `approveEndpoint`, `rejectEndpoint` vào
+	 * `actionPayload` của loại `GENERAL_REQUEST_PENDING` gửi cho người đang giữ lượt, và từ chối
+	 * đi kèm lý do bắt buộc nên ô lý do ở đây là đủ. Các loại đơn khác vẫn chỉ có nút "Xem":
+	 * đơn nghỉ, OT, công tác cần xem ngày và số giờ trước khi quyết định, nên duyệt một nhát từ
+	 * chuông là sai chỗ, và đó là lý do hai nút này từng bị tắt cho mọi loại.
+	 */
+	const canQuickAct = computed(
+		() =>
+			props.notification.actionType === 'APPROVE_REJECT' &&
+			props.notification.refType === 'general_request' &&
+			!!props.notification.actionPayload?.approveEndpoint &&
+			!!props.notification.actionPayload?.rejectEndpoint,
+	);
 
 	const showRejectInput = ref(false);
 	const rejectNote = ref('');
@@ -50,6 +68,15 @@
 		if (route) {
 			router.push(route);
 			emit('close-panel');
+			return;
+		}
+		// Loại thông báo chưa có nhánh trong bảng định tuyến vẫn mở được nếu máy chủ đã dựng sẵn
+		// địa chỉ. Chỉ nhận đường dẫn tương đối trong app, để một `targetUrl` lạ không đẩy người
+		// dùng ra ngoài.
+		const target = props.notification.targetUrl;
+		if (target && target.startsWith('/') && !target.startsWith('//')) {
+			router.push(target);
+			emit('close-panel');
 		}
 	};
 
@@ -59,6 +86,8 @@
 			await quickApprove(props.notification);
 			isActioned.value = true;
 			actionedMessage.value = 'Đã duyệt thành công';
+			// Trang phiếu đề xuất đang mở ở phía sau cũng phải đổi theo cú bấm này.
+			generalRequestStore.triggerRefresh(props.notification.refId ?? undefined);
 			emit('actioned', props.notification.id);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Không thể duyệt. Vui lòng thử lại.');
@@ -75,6 +104,7 @@
 			isActioned.value = true;
 			actionedMessage.value = 'Đã từ chối';
 			showRejectInput.value = false;
+			generalRequestStore.triggerRefresh(props.notification.refId ?? undefined);
 			emit('actioned', props.notification.id);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Không thể từ chối. Vui lòng thử lại.');
@@ -125,7 +155,7 @@
 				<!-- Quick actions (chỉ hiện APPROVE_REJECT) -->
 				<div v-if="notification.actionType === 'APPROVE_REJECT' && !isActioned" class="flex gap-2 mt-2" @click.stop>
 					<button
-						v-if="false"
+						v-if="canQuickAct"
 						:disabled="isLoading"
 						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 disabled:opacity-50 transition-colors"
 						@click="handleQuickApprove"
@@ -134,7 +164,7 @@
 					</button>
 
 					<button
-						v-if="false"
+						v-if="canQuickAct"
 						:disabled="isLoading"
 						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
 						@click="showRejectInput = true"

@@ -34,11 +34,11 @@
 	const { handleSubmit, defineField, errors, isSubmitting } = useForm({
 		validationSchema: schema,
 		initialValues: {
-			amount: '',
+			amount: undefined,
 			currency: props.asset.currency || 'VND',
-			exchangeRate: '',
+			exchangeRate: undefined,
 			paidAt: todayYmd(),
-			seatCount: props.asset.service?.seatCount != null ? String(props.asset.service.seatCount) : '',
+			seatCount: props.asset.service?.seatCount ?? undefined,
 			nextRenewalDate: '',
 			note: '',
 		},
@@ -107,7 +107,7 @@
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<div class="space-y-1">
 							<label :class="labelCls">Số tiền đã trả <span class="text-red-500">*</span></label>
-							<input v-model="amount" v-bind="amountAttrs" type="number" min="0" step="any" :class="inputCls" />
+							<UiNumberInput v-model="amount" v-bind="amountAttrs" :decimals="2" :min="0" :input-class="inputCls" />
 							<p v-if="errors.amount" class="text-xs text-red-500">{{ errors.amount }}</p>
 						</div>
 						<div class="grid grid-cols-2 gap-3">
@@ -117,7 +117,7 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Tỷ giá</label>
-								<input v-model="exchangeRate" v-bind="exchangeRateAttrs" type="number" min="0" step="any" :class="inputCls" />
+								<UiNumberInput v-model="exchangeRate" v-bind="exchangeRateAttrs" :decimals="4" :min="0" :input-class="inputCls" />
 							</div>
 						</div>
 						<div class="space-y-1">
@@ -127,7 +127,7 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Số ghế</label>
-							<input v-model="seatCount" v-bind="seatCountAttrs" type="number" min="1" :class="inputCls" />
+							<UiNumberInput v-model="seatCount" v-bind="seatCountAttrs" :min="1" :input-class="inputCls" />
 							<p class="text-xs text-gray-500 dark:text-gray-400">Khác hiện tại thì cập nhật luôn cho dịch vụ.</p>
 						</div>
 						<div class="space-y-1 sm:col-span-2">

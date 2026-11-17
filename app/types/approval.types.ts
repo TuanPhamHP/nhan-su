@@ -15,6 +15,11 @@ export interface ApprovalCountsResponseDto {
 	 * `employee:profile-change:approve`. Không có quyền thì BE trả 0.
 	 */
 	profileChanges: number;
+	/**
+	 * Lô 4a: phiếu đề xuất đang chờ chính người xem duyệt ở bước hiện tại, kể cả lượt nhận theo
+	 * uỷ quyền. Không phụ thuộc quyền nào: mọi vai trò đều có thể được giao duyệt một bước.
+	 */
+	generalRequests: number;
 	total: number;
 }
 
@@ -26,7 +31,8 @@ export type ApprovalModuleKey =
 	| 'businessTrips'
 	| 'onlineWorkRequests'
 	| 'assetDisposals'
-	| 'profileChanges';
+	| 'profileChanges'
+	| 'generalRequests';
 
 // ─── Bộ lọc hộp thư phê duyệt ─────────────────────────────────────────────────
 // Mỗi tab chỉ bật những field mà endpoint tương ứng thực sự nhận (xem

@@ -121,34 +121,30 @@
 			vendorId: a?.vendor?.id,
 			code: a?.code ?? '',
 			purchaseDate: a?.purchaseDate ?? '',
-			cost: a?.cost != null ? String(a.cost) : '',
+			cost: a?.cost ?? undefined,
 			currency: a?.currency ?? 'VND',
-			exchangeRate: a?.exchangeRate != null ? String(a.exchangeRate) : '',
+			exchangeRate: a?.exchangeRate ?? undefined,
 			note: a?.note ?? '',
 			manufacturer: a?.physical?.manufacturer ?? '',
 			model: a?.physical?.model ?? '',
 			serialNumber: a?.physical?.serialNumber ?? '',
 			location: a?.physical?.location ?? '',
 			condition: a?.physical?.condition ?? '',
-			warrantyMonths: a?.physical?.warrantyMonths != null ? String(a.physical.warrantyMonths) : '',
+			warrantyMonths: a?.physical?.warrantyMonths ?? undefined,
 			warrantyEndDate: a?.physical?.warrantyEndDate ?? '',
 			depreciationStartDate: a?.physical?.depreciationStartDate ?? '',
-			depreciationMonths:
-				a?.physical?.depreciationMonths != null ? String(a.physical.depreciationMonths) : '',
-			salvageValue: a?.physical?.salvageValue != null ? String(a.physical.salvageValue) : '',
+			depreciationMonths: a?.physical?.depreciationMonths ?? undefined,
+			salvageValue: a?.physical?.salvageValue ?? undefined,
 			accountingClass: a?.physical?.accountingClass ?? '',
-			maintenanceIntervalMonths:
-				a?.physical?.maintenanceIntervalMonths != null
-					? String(a.physical.maintenanceIntervalMonths)
-					: '',
+			maintenanceIntervalMonths: a?.physical?.maintenanceIntervalMonths ?? undefined,
 			nextMaintenanceDate: a?.physical?.nextMaintenanceDate ?? '',
 			billingCycle: a?.service?.billingCycle ?? 'MONTHLY',
 			ownerId: a?.service?.owner.id,
 			nextRenewalDate: a?.service?.nextRenewalDate ?? '',
-			anchorDay: a?.service?.anchorDay != null ? String(a.service.anchorDay) : '',
+			anchorDay: a?.service?.anchorDay ?? undefined,
 			plan: a?.service?.plan ?? '',
-			seatCount: a?.service?.seatCount != null ? String(a.service.seatCount) : '',
-			unitPrice: a?.service?.unitPrice != null ? String(a.service.unitPrice) : '',
+			seatCount: a?.service?.seatCount ?? undefined,
+			unitPrice: a?.service?.unitPrice ?? undefined,
 			pricingUnit: a?.service?.pricingUnit ?? 'PER_SEAT',
 			autoRenew: a?.service?.autoRenew ?? false,
 			adminAccount: a?.service?.adminAccount ?? '',
@@ -265,40 +261,6 @@
 		}
 		return 'Bạn nhập chu kỳ bảo dưỡng trước rồi mới chọn được hạn.';
 	});
-
-	// ─── Ô tiền có dấu chấm phân cách khi gõ (H10) ────────────────────────────────
-
-	const MONEY_INPUT = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 6 });
-
-	/** Giá trị đang lưu (`"12500000.5"`) → chữ hiện trong ô (`"12.500.000,5"`). */
-	function moneyText(v: string | number | null | undefined): string {
-		if (v == null || v === '') return '';
-		const s = String(v);
-		const [int, frac] = s.split('.');
-		const intText = int ? MONEY_INPUT.format(Number(int)) : '0';
-		return frac !== undefined ? `${intText},${frac}` : intText;
-	}
-
-	/** Chữ người dùng gõ → giá trị lưu: bỏ dấu chấm phân cách, dấu phẩy là phần thập phân. */
-	function moneyValue(text: string): string {
-		const cleaned = text.replace(/[^\d,]/g, '');
-		const [int = '', ...rest] = cleaned.split(',');
-		const digits = int.replace(/^0+(?=\d)/, '');
-		return rest.length ? `${digits || '0'}.${rest.join('').slice(0, 6)}` : digits;
-	}
-
-	/**
-	 * Gõ vào ô tiền: lưu giá trị số, rồi ghi lại chữ đã định dạng vào ô. Ghi thẳng vào ô vì nếu
-	 * người dùng gõ một chữ cái thì giá trị không đổi, Vue không vẽ lại và chữ cái sẽ nằm lì đó.
-	 */
-	const MONEY_FIELDS = { cost, salvageValue, unitPrice };
-
-	function onMoneyInput(e: Event, key: keyof typeof MONEY_FIELDS) {
-		const el = e.target as HTMLInputElement;
-		const field = MONEY_FIELDS[key];
-		field.value = moneyValue(el.value);
-		el.value = moneyText(field.value);
-	}
 
 	/** Mã tiền tệ luôn viết hoa, gõ "usd" thì thành "USD". */
 	watch(currency, v => {
@@ -507,14 +469,13 @@
 
 						<div class="space-y-1">
 							<label :class="labelCls">Nguyên giá</label>
-							<input
-								:value="moneyText(cost)"
+							<UiNumberInput
+								v-model="cost"
 								v-bind="costAttrs"
-								type="text"
-								inputmode="decimal"
-								:class="inputCls"
+								:decimals="2"
+								:min="0"
+								:input-class="inputCls"
 								placeholder="VD: 18.500.000"
-								@input="onMoneyInput($event, 'cost')"
 							/>
 						</div>
 
@@ -525,7 +486,7 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Tỷ giá</label>
-								<input v-model="exchangeRate" v-bind="exchangeRateAttrs" type="number" min="0" step="any" :class="inputCls" />
+								<UiNumberInput v-model="exchangeRate" v-bind="exchangeRateAttrs" :decimals="4" :min="0" :input-class="inputCls" />
 								<p class="text-xs text-gray-500 dark:text-gray-400">Bắt buộc khi tiền tệ không phải VND.</p>
 							</div>
 						</div>
@@ -568,7 +529,7 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Bảo hành (tháng)</label>
-								<input v-model="warrantyMonths" v-bind="warrantyMonthsAttrs" type="number" min="0" :class="inputCls" />
+								<UiNumberInput v-model="warrantyMonths" v-bind="warrantyMonthsAttrs" :min="0" :input-class="inputCls" />
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Hết hạn bảo hành</label>
@@ -580,28 +541,26 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Số tháng khấu hao</label>
-								<input v-model="depreciationMonths" v-bind="depreciationMonthsAttrs" type="number" min="1" :class="inputCls" placeholder="Mặc định theo loại" />
-							</div>
-							<div class="space-y-1">
-								<label :class="labelCls">Giá trị thanh lý ước tính</label>
-								<input
-									:value="moneyText(salvageValue)"
-									v-bind="salvageValueAttrs"
-									type="text"
-									inputmode="decimal"
-									:class="inputCls"
-									@input="onMoneyInput($event, 'salvageValue')"
+								<UiNumberInput
+									v-model="depreciationMonths"
+									v-bind="depreciationMonthsAttrs"
+									:min="1"
+									:input-class="inputCls"
+									placeholder="Mặc định theo loại"
 								/>
 							</div>
 							<div class="space-y-1">
+								<label :class="labelCls">Giá trị thanh lý ước tính</label>
+								<UiNumberInput v-model="salvageValue" v-bind="salvageValueAttrs" :decimals="2" :min="0" :input-class="inputCls" />
+							</div>
+							<div class="space-y-1">
 								<label :class="labelCls">Chu kỳ bảo dưỡng (tháng)</label>
-								<input
+								<UiNumberInput
 									v-model="maintenanceIntervalMonths"
 									v-bind="maintenanceIntervalMonthsAttrs"
-									type="number"
-									min="0"
-									max="120"
-									:class="inputCls"
+									:min="0"
+									:max="120"
+									:input-class="inputCls"
 									:placeholder="
 										isEdit
 											? 'Nhập 0 để bỏ lịch bảo dưỡng'
@@ -655,7 +614,14 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Ngày neo trong tháng</label>
-								<input v-model="anchorDay" v-bind="anchorDayAttrs" type="number" min="1" max="31" :class="inputCls" placeholder="Mặc định theo ngày gia hạn" />
+								<UiNumberInput
+									v-model="anchorDay"
+									v-bind="anchorDayAttrs"
+									:min="1"
+									:max="31"
+									:input-class="inputCls"
+									placeholder="Mặc định theo ngày gia hạn"
+								/>
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Gói</label>
@@ -663,18 +629,17 @@
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Số ghế</label>
-								<input v-model="seatCount" v-bind="seatCountAttrs" type="number" min="1" :class="inputCls" placeholder="Bỏ trống nếu không tính theo ghế" />
+								<UiNumberInput
+									v-model="seatCount"
+									v-bind="seatCountAttrs"
+									:min="1"
+									:input-class="inputCls"
+									placeholder="Bỏ trống nếu không tính theo ghế"
+								/>
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Đơn giá</label>
-								<input
-									:value="moneyText(unitPrice)"
-									v-bind="unitPriceAttrs"
-									type="text"
-									inputmode="decimal"
-									:class="inputCls"
-									@input="onMoneyInput($event, 'unitPrice')"
-								/>
+								<UiNumberInput v-model="unitPrice" v-bind="unitPriceAttrs" :decimals="2" :min="0" :input-class="inputCls" />
 							</div>
 							<div class="space-y-1">
 								<label :class="labelCls">Tính giá theo</label>

@@ -11,6 +11,7 @@ const EMPTY_COUNTS: ApprovalCountsResponseDto = {
 	onlineWorkRequests: 0,
 	assetDisposals: 0,
 	profileChanges: 0,
+	generalRequests: 0,
 	total: 0,
 };
 

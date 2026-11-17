@@ -14,11 +14,27 @@ export const APPROVE_PERMISSIONS = {
 	makeup: 'makeup:approve',
 	onlineWork: 'online-work:approve',
 	businessTrip: 'business-trip:approve',
-	generalRequest: 'general-request:approve',
 	/** Tài sản lô 2b: duyệt, từ chối phiếu thanh lý (tab "Thanh lý tài sản" của hộp thư duyệt). */
 	assetDisposal: 'asset:disposal:approve',
 	/** Hồ sơ nhân sự lô 3a: duyệt, từ chối yêu cầu thay đổi thông tin của nhân viên. */
 	profileChange: 'employee:profile-change:approve',
+} as const;
+
+/**
+ * Quyền của phiếu đề xuất (lô 4a).
+ *
+ * `general-request:approve` đã thôi dùng: từ lô 4a chỉ người đang giữ lượt ở bước hiện tại mới
+ * duyệt được, và màn hình hiện nút theo mười lăm cờ `can*` của phiếu chứ không tự suy từ quyền.
+ * Ba quyền còn lại gác những việc nằm ngoài một phiếu cụ thể, nên FE vẫn dùng để ẩn menu và
+ * ẩn nút: cấu hình loại phiếu, tra cứu toàn công ty, đổi người duyệt.
+ */
+export const REQUEST_PERMISSIONS = {
+	/** Tạo, sửa loại phiếu và lưu luồng duyệt. */
+	typeManage: 'request-type:manage',
+	/** Tra cứu phiếu của mọi người, không chỉ phiếu liên quan tới mình. */
+	readAll: 'request:read:all',
+	/** Đổi người duyệt của phiếu đang chờ (nhân sự). */
+	reassign: 'request:reassign',
 } as const;
 
 /**
