@@ -1,13 +1,19 @@
 import { ALL_APPROVE_PERMISSIONS, ASSET_FULL_SCOPE_ROLES } from '~/utils/permission';
-import type { AppGroup, AppModuleDef } from '~/types/navigation.types';
+import type { AppScreensDef } from '~/types/navigation.types';
 
 /**
- * Bản đồ APP của khu quản trị — nguồn sự thật duy nhất cho lưới chọn app và sidebar.
+ * Bản đồ APP của khu quản trị: mỗi phân hệ mở vào những màn hình nào.
  *
  * Vì sao tách khỏi `ModuleCode`: `ModuleCode` là đơn vị BÁN HÀNG (công ty mua gói nào),
  * còn app ở đây là đơn vị ĐIỀU HƯỚNG. Phần lớn màn hình nằm trong `CORE` nên lấy
  * `ModuleCode` làm nhóm menu sẽ ra một nhóm khổng lồ. Từng mục vẫn khai `module` để ẩn
  * khi công ty chưa mở gói — hai thứ bù nhau chứ không thay nhau.
+ *
+ * Từ 17/11/2026, TÊN, MÔ TẢ, NHÓM, MÀU, ICON VÀ THỨ TỰ của các ô do máy chủ trả trong
+ * `GET /v1/me/entitlements` (`groups`, `apps`), không viết ở đây nữa: web và mobile dùng
+ * chung một danh mục, nên đổi tên hay icon chỉ cần phát hành BE. Nguồn ở BE là
+ * `src/tenancy/app-catalog.ts`; ghép hai nửa ở `mergeAppCatalog`. Mục menu con (`items`)
+ * vẫn ở đây, vì đó là màn hình của riêng web.
  *
  * KHÔNG nằm trong app nào, có chủ đích:
  * - `/management` (Tổng quan) và `/` — trang chủ, sidebar luôn ghim ở trên cùng.
@@ -17,15 +23,10 @@ import type { AppGroup, AppModuleDef } from '~/types/navigation.types';
  *
  * File này được sinh lần đầu từ `navSections` cũ trong AppSidebar.vue; sửa tiếp bằng tay.
  */
-export const APP_MODULES: AppModuleDef[] = [
+export const APP_MODULES: AppScreensDef[] = [
 	{
 		/** CHR — Hồ sơ nhân sự & Hợp đồng. */
 		code: 'chr',
-		label: 'Hồ sơ & Hợp đồng',
-		description: 'Vòng đời nhân viên: hồ sơ, phòng ban, chức vụ, hợp đồng lao động.',
-		group: 'Quản trị nhân sự',
-		tone: 'bg-sky-500',
-		icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
 		home: '/management/employees',
 		routes: ['/management/employees', '/management/departments', '/management/positions', '/management/contracts'],
 		items: [
@@ -71,11 +72,6 @@ export const APP_MODULES: AppModuleDef[] = [
 		 */
 		/** TAL — Chấm công & Đơn từ. */
 		code: 'tal',
-		label: 'Chấm công & Đơn từ',
-		description: 'Ca làm việc, dữ liệu chấm công, đơn nghỉ/OT/công tác, quỹ phép, bảng công.',
-		group: 'Quản trị nhân sự',
-		tone: 'bg-emerald-500',
-		icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
 		home: '/management/attendance',
 		routes: ['/management/attendance', '/management/approval', '/management/leave', '/management/overtime',
 			'/management/online-work', '/management/violations', '/management/makeup-attendance',
@@ -205,13 +201,6 @@ export const APP_MODULES: AppModuleDef[] = [
 		 * hệ này — họ dùng nhóm route `/recruitment/**`, không vào được `/management/**`.
 		 */
 		code: 'rec',
-		label: 'Tuyển dụng',
-		description: 'Định biên, yêu cầu tuyển, tin tuyển dụng, kho ứng viên, phỏng vấn, offer.',
-		group: 'Thu hút & Phát triển',
-		// Mọi màn hình của phân hệ này đều thuộc `RECRUIT`, nên công ty chưa mua thì khoá cả ô.
-		module: 'RECRUIT',
-		tone: 'bg-amber-500',
-		icon: 'M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z',
 		home: '/management/recruitment',
 		routes: ['/management/recruitment', '/recruitment'],
 		items: [
@@ -308,15 +297,8 @@ export const APP_MODULES: AppModuleDef[] = [
 		],
 	},
 	{
-		/** AST — Quản lý tài sản. */
+		/** AST — Quản lý tài sản. Cả phân hệ nằm trong một module bán riêng, như Tuyển dụng. */
 		code: 'ast',
-		label: 'Quản lý tài sản',
-		description: 'Thiết bị và dịch vụ thuê bao: cấp phát, bảo dưỡng, báo hỏng và khấu hao.',
-		group: 'Hành chính & Vận hành',
-		// Xem ghi chú ở phân hệ Tuyển dụng: cả phân hệ nằm trong một module bán riêng.
-		module: 'ASSET',
-		tone: 'bg-violet-500',
-		icon: 'M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z',
 		home: '/management/assets',
 		routes: ['/management/assets', '/assets'],
 		items: [
@@ -417,11 +399,6 @@ export const APP_MODULES: AppModuleDef[] = [
 		 * trị và cần quyền `request-type:manage`.
 		 */
 		code: 'apv',
-		label: 'Phê duyệt điện tử',
-		description: 'Phiếu đề xuất, tờ trình, đề nghị mua sắm và luồng duyệt nhiều cấp theo từng loại phiếu.',
-		group: 'Hành chính & Vận hành',
-		tone: 'bg-violet-500',
-		icon: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z',
 		home: '/general-requests',
 		routes: ['/general-requests', '/management/settings/request-types'],
 		items: [
@@ -450,11 +427,6 @@ export const APP_MODULES: AppModuleDef[] = [
 	{
 		/** ENG — Truyền thông & Gắn kết nội bộ. Mới có bảng tin; khảo sát, vinh danh, góp ý chưa làm. */
 		code: 'eng',
-		label: 'Truyền thông nội bộ',
-		description: 'Bảng tin, quy chế và thông báo gửi tới toàn công ty.',
-		group: 'Quản trị & Phân tích',
-		tone: 'bg-rose-500',
-		icon: 'M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46',
 		home: '/management/announcements',
 		routes: ['/management/announcements', '/announcements'],
 		items: [
@@ -485,11 +457,6 @@ export const APP_MODULES: AppModuleDef[] = [
 		 * tích: bảng lương là nghiệp vụ chi trả, không phải báo cáo để đọc.
 		 */
 		code: 'pay',
-		label: 'Tính lương & Thuế TNCN',
-		description: 'Công thức lương, phụ cấp, thưởng, khấu trừ, thuế TNCN, phiếu lương, chi trả.',
-		group: 'Quản trị nhân sự',
-		tone: 'bg-teal-500',
-		icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
 		home: '/management/payroll',
 		routes: ['/management/payroll'],
 		items: [
@@ -504,11 +471,6 @@ export const APP_MODULES: AppModuleDef[] = [
 	{
 		/** ANA — Báo cáo & Phân tích nhân sự. */
 		code: 'ana',
-		label: 'Báo cáo & Phân tích',
-		description: 'Dashboard điều hành, báo cáo biến động, chi phí nhân sự, báo cáo nhà nước.',
-		group: 'Quản trị & Phân tích',
-		tone: 'bg-indigo-500',
-		icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
 		home: '/management/reports',
 		routes: ['/management/reports'],
 		items: [
@@ -525,11 +487,6 @@ export const APP_MODULES: AppModuleDef[] = [
 	{
 		/** Không có trong bức tranh nghiệp vụ: đây là quản trị kỹ thuật của chính phần mềm. */
 		code: 'sys',
-		label: 'Quản trị hệ thống',
-		description: 'Phân quyền, cấu hình, nhật ký và công cụ nội bộ.',
-		group: 'Hệ thống',
-		tone: 'bg-slate-500',
-		icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
 		home: '/management/settings',
 		routes: ['/management/roles', '/management/settings', '/management/tools', '/management/system-logs', '/management/notifications'],
 		items: [
@@ -583,7 +540,7 @@ export const APP_MODULES: AppModuleDef[] = [
  * (`EmployeeSocialInsurance.vue`) và một thẻ ở trang hồ sơ cá nhân, chưa có trang quản lý
  * bảo hiểm & phúc lợi cho toàn công ty.
  */
-export const PLANNED_MODULES: Array<{ code: string; label: string; group: AppGroup; scope: string }> = [
+export const PLANNED_MODULES: Array<{ code: string; label: string; group: string; scope: string }> = [
 	{ code: 'BEN', label: 'Bảo hiểm & Phúc lợi', group: 'Quản trị nhân sự', scope: 'BHXH/BHYT/BHTN, ốm đau – thai sản, phúc lợi sinh nhật, hiếu hỉ, lễ tết, khám sức khỏe' },
 	{ code: 'ONB', label: 'Hội nhập & Thử việc', group: 'Thu hút & Phát triển', scope: 'Checklist đón nhân viên mới, cấp phát tài khoản/thiết bị, đánh giá thử việc' },
 	{ code: 'PER', label: 'Đánh giá hiệu suất (KPI/OKR)', group: 'Thu hút & Phát triển', scope: 'Giao mục tiêu, kỳ đánh giá, xếp loại, gắn kết quả với thưởng/lương' },

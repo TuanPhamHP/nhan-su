@@ -5,6 +5,8 @@
 	const emit = defineEmits<{ close: [] }>();
 
 	const { appsByGroup, recentApps, currentApp } = useAppModules();
+	const authStore = useAuthStore();
+	const { catalogFailed, catalogLoading } = storeToRefs(authStore);
 	const router = useRouter();
 
 	const keyword = ref('');
@@ -38,6 +40,11 @@
 	/** Ô khoá không dẫn đi đâu: giữ nguyên lưới và nói vì sao chưa vào được. */
 	function openLocked(app: LockedApp): void {
 		lockedTarget.value = app;
+	}
+
+	/** Nút "Thử lại" gọi lại đúng endpoint đã hỏng; store tự dựng lại danh mục khi có dữ liệu. */
+	function retryCatalog(): void {
+		void authStore.loadEntitlements();
 	}
 
 	onMounted(() => {
@@ -94,8 +101,38 @@
 				</div>
 
 				<div class="flex-1 overflow-y-auto px-4 py-4">
+					<!--
+						Danh mục phân hệ do máy chủ trả. Gọi hỏng thì không còn tên, mô tả hay icon để vẽ ô,
+						nên nói thẳng là chưa tải được và mời thử lại — điều hướng bằng sidebar vẫn chạy.
+					-->
+					<div
+						v-if="catalogFailed"
+						data-testid="catalog-error"
+						class="flex flex-col items-center gap-3 py-12 text-center"
+					>
+						<svg class="h-10 w-10 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+							/>
+						</svg>
+						<p class="text-sm text-gray-500 dark:text-gray-400">
+							Chưa tải được danh sách phân hệ. Bạn vẫn dùng được các mục trong thanh bên.
+						</p>
+						<button
+							type="button"
+							data-testid="catalog-retry"
+							:disabled="catalogLoading"
+							class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:border-[var(--color-accent)] hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+							@click="retryCatalog"
+						>
+							{{ catalogLoading ? 'Đang tải…' : 'Thử lại' }}
+						</button>
+					</div>
+
 					<!-- Gần đây: chỉ khi không tìm kiếm, và có nhiều hơn 1 app để nhảy qua lại -->
-					<template v-if="!normalized && recentApps.length > 1">
+					<template v-if="!catalogFailed && !normalized && recentApps.length > 1">
 						<p class="mb-2 text-[11px] font-semibold tracking-wider text-gray-400 uppercase">Gần đây</p>
 						<div class="mb-6 flex flex-wrap gap-2">
 							<button
@@ -105,7 +142,10 @@
 								class="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-[var(--color-accent)] hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
 								@click="open(app)"
 							>
-								<span :class="['flex h-6 w-6 items-center justify-center rounded-md text-white', app.tone]">
+								<span
+									class="flex h-6 w-6 items-center justify-center rounded-md text-white"
+									:style="{ backgroundColor: app.color }"
+								>
 									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
 										<path stroke-linecap="round" stroke-linejoin="round" :d="app.icon" />
 									</svg>
@@ -115,7 +155,7 @@
 						</div>
 					</template>
 
-					<div v-for="g in groups" :key="g.group" class="mb-6">
+					<div v-for="g in groups" :key="g.code" class="mb-6">
 						<p class="mb-2 text-[11px] font-semibold tracking-wider text-gray-400 uppercase">{{ g.group }}</p>
 						<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 							<button
@@ -132,7 +172,8 @@
 								@click="open(app)"
 							>
 								<span
-									:class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white', app.tone]"
+									class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white"
+									:style="{ backgroundColor: app.color }"
 								>
 									<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
 										<path stroke-linecap="round" stroke-linejoin="round" :d="app.icon" />
@@ -161,10 +202,8 @@
 								@click="openLocked(app)"
 							>
 								<span
-									:class="[
-										'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white opacity-45',
-										app.tone,
-									]"
+									class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white opacity-45"
+									:style="{ backgroundColor: app.color }"
 								>
 									<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
 										<path stroke-linecap="round" stroke-linejoin="round" :d="app.icon" />
@@ -198,7 +237,7 @@
 						</div>
 					</div>
 
-					<p v-if="!hasResult" class="py-12 text-center text-sm text-gray-400">
+					<p v-if="!hasResult && !catalogFailed" class="py-12 text-center text-sm text-gray-400">
 						Không tìm thấy phân hệ nào khớp “{{ keyword }}”.
 					</p>
 				</div>

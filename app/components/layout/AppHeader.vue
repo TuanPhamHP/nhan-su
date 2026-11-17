@@ -142,9 +142,12 @@
 				</svg>
 			</button>
 
-			<!-- Tên phân hệ đang mở: biết mình đang ở đâu mà không cần nhìn sidebar -->
+			<!--
+				Tên phân hệ đang mở: biết mình đang ở đâu mà không cần nhìn sidebar. Chưa tải được danh
+				mục thì không có tên, mà một dấu gạch chéo đứng trơ trọi thì khó hiểu hơn là không có gì.
+			-->
 			<span
-				v-if="currentApp"
+				v-if="currentApp?.label"
 				class="hidden md:flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap flex-shrink-0"
 			>
 				<span class="opacity-40">/</span>
