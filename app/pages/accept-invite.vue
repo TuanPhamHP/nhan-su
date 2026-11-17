@@ -4,7 +4,7 @@
 	import * as z from 'zod';
 	import { useAuthService } from '~/services';
 
-	definePageMeta({ layout: 'auth' });
+	definePageMeta({ layout: 'auth', title: 'Nhận lời mời' });
 
 	const route = useRoute();
 	const authStore = useAuthStore();

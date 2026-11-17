@@ -1,6 +1,8 @@
 <script setup lang="ts">
 	import CompanyLinkPrompt from '~/components/notifications/CompanyLinkPrompt.vue';
 
+	definePageMeta({ title: 'Đang mở đơn nghỉ phép' });
+
 	// Route cũ trong email duyệt đơn nghỉ — xem useLegacyNotificationRedirect.
 	const { prompt, switching, switchError, confirmSwitch, cancel } = useLegacyNotificationRedirect('leave_request');
 </script>

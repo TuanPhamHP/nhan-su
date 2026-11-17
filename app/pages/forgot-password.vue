@@ -4,7 +4,7 @@
 	import * as z from 'zod';
 	import { useAuthService } from '~/services';
 
-	definePageMeta({ layout: 'auth' });
+	definePageMeta({ layout: 'auth', title: 'Quên mật khẩu' });
 
 	const toast = useToast();
 

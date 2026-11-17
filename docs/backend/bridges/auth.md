@@ -25,6 +25,8 @@
 | PATCH | `/v1/auth/change-password` | JWT | Đổi mật khẩu tài khoản (hủy phiên ở **mọi** công ty, mọi thiết bị) |
 | POST | `/v1/auth/forgot-password` | Không | Yêu cầu link đặt lại mật khẩu qua email |
 | POST | `/v1/auth/reset-password` | Không | Đặt lại mật khẩu (hoặc đặt lần đầu) bằng token từ email |
+| GET | `/v1/public/companies/:code/logo` | Không | Ảnh logo công ty. Dùng nguyên `company.logoUrl`, xem mục "Logo, favicon, tiêu đề trang" |
+| GET | `/v1/public/companies/:code/favicon` | Không | Ảnh favicon công ty. Dùng nguyên `company.faviconUrl` |
 
 ---
 
@@ -38,6 +40,8 @@ export type SystemRole = 'EMPLOYEE' | 'MANAGER' | 'CHIEF' | 'DIRECTOR' | 'HR' | 
 export interface CompanyOption {
   code: string;   // mã công ty, ví dụ "cty-a" — dùng cho select-company và switch
   name: string;   // tên hiển thị
+  logoUrl: string | null;     // logo thanh bên, URL công khai đã kèm ?v=. null = logo mặc định của app
+  faviconUrl: string | null;  // favicon tab trình duyệt. null = favicon mặc định của app
 }
 
 // Response khi đã vào được một công ty: login (1 công ty), select-company, switch, refresh
@@ -169,8 +173,20 @@ Chỉ nhận **email** (giữ tên trường `identifier` để sau này nhận 
       "role": "EMPLOYEE",
       "avatarUrl": null
     },
-    "company": { "code": "cty-a", "name": "Công ty A" },
-    "companies": [{ "code": "cty-a", "name": "Công ty A" }]
+    "company": {
+      "code": "cty-a",
+      "name": "Công ty A",
+      "logoUrl": "https://api.example.com/v1/public/companies/cty-a/logo?v=3",
+      "faviconUrl": null
+    },
+    "companies": [
+      {
+        "code": "cty-a",
+        "name": "Công ty A",
+        "logoUrl": "https://api.example.com/v1/public/companies/cty-a/logo?v=3",
+        "faviconUrl": null
+      }
+    ]
   }
 }
 ```
@@ -184,8 +200,13 @@ gọi `/select-company`.
     "requiresCompanySelection": true,
     "selectionToken": "eyJhbGciOiJIUzI1NiJ9...",
     "companies": [
-      { "code": "cty-b", "name": "Công ty B" },
-      { "code": "cty-a", "name": "Công ty A" }
+      { "code": "cty-b", "name": "Công ty B", "logoUrl": null, "faviconUrl": null },
+      {
+        "code": "cty-a",
+        "name": "Công ty A",
+        "logoUrl": "https://api.example.com/v1/public/companies/cty-a/logo?v=3",
+        "faviconUrl": null
+      }
     ]
   }
 }
@@ -348,10 +369,20 @@ bộ chọn ở header (chỉ hiện khi `companies.length > 1`).
     "role": "EMPLOYEE",
     "avatarUrl": "https://…presigned…",
     "permissions": ["employee:read", "leave:create"],
-    "company": { "code": "cty-a", "name": "Công ty A" },
+    "company": {
+      "code": "cty-a",
+      "name": "Công ty A",
+      "logoUrl": "https://api.example.com/v1/public/companies/cty-a/logo?v=3",
+      "faviconUrl": "https://api.example.com/v1/public/companies/cty-a/favicon?v=1"
+    },
     "companies": [
-      { "code": "cty-a", "name": "Công ty A" },
-      { "code": "cty-b", "name": "Công ty B" }
+      {
+        "code": "cty-a",
+        "name": "Công ty A",
+        "logoUrl": "https://api.example.com/v1/public/companies/cty-a/logo?v=3",
+        "faviconUrl": "https://api.example.com/v1/public/companies/cty-a/favicon?v=1"
+      },
+      { "code": "cty-b", "name": "Công ty B", "logoUrl": null, "faviconUrl": null }
     ]
   }
 }
@@ -458,6 +489,33 @@ Link tới một bản ghi (đơn nghỉ, đơn tăng ca, đơn làm online, đ�
 data cũng có thêm khoá `tid`. Nếu `t`/`tid` khác công ty đang mở, FE hỏi người dùng có muốn
 chuyển sang công ty đó (gọi `/switch`) rồi mới mở bản ghi. Link đặt mật khẩu và lời mời **không**
 có `t`.
+
+---
+
+## Logo, favicon, tiêu đề trang theo công ty
+
+Từ 17/11/2026 mỗi công ty có logo, favicon riêng, do người vận hành đặt ở control plane. App đọc
+chúng từ `company` của phiên hiện tại (login, select-company, switch, refresh, `/auth/me`).
+
+| Chỗ | Lấy từ | Khi `null` |
+|---|---|---|
+| Logo góc trên thanh bên | `company.logoUrl` | Logo mặc định của app |
+| Favicon tab trình duyệt | `company.faviconUrl` | Favicon mặc định của app |
+| Tiêu đề tab trình duyệt | `{company.name} - {tên trang hoặc tên module}`, ví dụ `Công ty A - Nghỉ phép` | Chưa đăng nhập (đăng nhập, quên, đặt lại mật khẩu, nhận lời mời): `Hệ thống nhân sự - {tên trang}`. Trang cho người ngoài công ty (`/careers/**`, `/offer-response`) chỉ có tên trang và favicon của app, kể cả khi đang đăng nhập, vì đó có thể là tin của công ty khác |
+| Bộ chọn công ty | `companies[].logoUrl` (tuỳ chọn, vẽ cạnh tên) | Chỉ tên |
+
+- `logoUrl`, `faviconUrl` là URL **công khai, tuyệt đối**, đặt thẳng vào `<img src>` và
+  `<link rel="icon" href>`. Không gắn header `Authorization`, không gọi presign: ảnh này không phải
+  dữ liệu mật.
+- URL kèm số phiên bản `?v=`. Server cho cache một năm khi `v` đúng phiên bản hiện tại, nên **dùng
+  nguyên URL, không tự bỏ hay tự đổi `v`**. Người vận hành đổi ảnh thì `v` tăng, app nhận URL mới
+  trong vòng 30 giây ở lần gọi `/auth/me` hoặc refresh kế tiếp.
+- Đổi công ty bằng `/switch` thì đổi luôn logo, favicon, tiêu đề theo `company` mới.
+- Ảnh là PNG, JPEG hoặc WebP (logo), PNG, ICO hoặc WebP (favicon), không bao giờ là SVG. Logo nên
+  giới hạn chiều cao trong khung thanh bên (`object-fit: contain`), vì người vận hành tải ảnh tỉ lệ
+  tuỳ ý.
+- Route trả 404 `COMPANY_IMAGE_NOT_FOUND` khi công ty chưa có ảnh đó, đã gỡ ảnh hoặc ngừng dịch vụ.
+  URL cũ còn trong bộ nhớ có thể gặp 404 sau khi ảnh bị gỡ: bắt `@error` của `<img>` để về logo mặc định.
 
 ---
 

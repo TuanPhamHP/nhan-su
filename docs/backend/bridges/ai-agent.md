@@ -919,7 +919,7 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `approval-queue` | Hàng chờ duyệt đơn (**có tool ghi**, `L2_DECIDE`) | `MANAGER` `HR` `ADMIN` `DIRECTOR` `CHIEF` |
 | `hr-directory` | Danh bạ, phòng ban | mọi role |
 | `hr-org-overview` | Dashboard tổ chức | `MANAGER` `HR` `ADMIN` `DIRECTOR` |
-| `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm | mọi role |
+| `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm; giới thiệu chung về công ty (lĩnh vực, giờ làm việc, quy định chung) từ mô tả người vận hành viết, thêm 17/11/2026 | mọi role |
 | `request-history` | Tra đơn từ đã tạo (của mình; ADMIN, HR xem được của người khác) — chỉ đọc | mọi role |
 | `request-history-denied` | Hỏi đơn của người khác mà không có thẩm quyền — server trả câu từ chối cố định | mọi role trừ `ADMIN` `HR` |
 | `navigation` | Chỉ đường tới màn hình web làm được một việc | mọi role |

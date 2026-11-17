@@ -5,6 +5,8 @@
 	import { useDashboard, isCompanyDashboard, isDepartmentDashboard, isMyDashboard } from '~/composables/useDashboard';
 	import type { ActivityItem, ActivityType } from '~/types/dashboard.types';
 
+	definePageMeta({ title: 'Tổng quan' });
+
 	const { user } = useAuth();
 	const router = useRouter();
 	const uiStore = useUiStore();

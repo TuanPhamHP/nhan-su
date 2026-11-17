@@ -157,6 +157,10 @@
 									</p>
 									<ul class="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400 list-disc list-inside">
 										<li>
+											Cột <strong>Mã nhân viên</strong> (cột A): công ty đã có mã nhân viên thì để trống, hệ thống tự cấp
+											mã theo thứ tự dòng; mã ghi ở cột này chỉ dùng để cột Mã quản lý trỏ tới người trong cùng file.
+										</li>
+										<li>
 											Các cột CCCD (N–S) và Hộ chiếu (T–X) là <strong>điều kiện</strong> — nếu điền 1 field trong nhóm
 											thì phải điền đủ các field bắt buộc trong nhóm đó.
 										</li>

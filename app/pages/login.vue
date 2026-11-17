@@ -3,7 +3,7 @@
 	import { safeRedirectPath } from '~/utils/redirect';
 	import type { CompanyOption } from '~/types/auth.types';
 
-	definePageMeta({ layout: 'auth' });
+	definePageMeta({ layout: 'auth', title: 'Đăng nhập' });
 
 	const { login, selectCompany } = useAuth();
 	const authStore = useAuthStore();
@@ -53,10 +53,6 @@
 
 	function errorCode(err: unknown): string | undefined {
 		return (err as { data?: { error?: { code?: string } } } | null)?.data?.error?.code;
-	}
-
-	function companyInitial(name: string): string {
-		return (name.trim().split(/\s+/).pop() ?? '').charAt(0).toUpperCase() || '?';
 	}
 
 	async function finishLogin() {
@@ -274,11 +270,7 @@
 								class="w-full flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-left transition-colors hover:border-brand-500 hover:bg-brand-50/50 dark:hover:border-brand-400 dark:hover:bg-gray-700/60 disabled:cursor-not-allowed disabled:opacity-60"
 								@click="chooseCompany(option)"
 							>
-								<span
-									class="w-10 h-10 flex-shrink-0 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 flex items-center justify-center text-base font-semibold"
-								>
-									{{ companyInitial(option.name) }}
-								</span>
+								<CommonAppCompanyLogo :name="option.name" :logo-url="option.logoUrl" size="md" />
 								<span class="flex-1 min-w-0">
 									<span class="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
 										{{ option.name }}

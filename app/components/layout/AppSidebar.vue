@@ -53,6 +53,19 @@
 		activeTheme.value.logo === 'dark' ? '/app-logo-dark-mode.svg' : '/app-logo-light-mode.svg',
 	);
 
+	const { company } = useAuth();
+	/**
+	 * URL logo công ty vừa tải lỗi, để quay về logo app thay vì để ảnh vỡ.
+	 *
+	 * Giữ chính URL chứ không giữ một cờ đúng/sai: người vận hành đổi ảnh thì `?v=` tăng, URL mới
+	 * khác URL đã lỗi nên thanh bên tự thử lại ở lần `/auth/me` kế tiếp.
+	 */
+	const companyLogoFailed = ref<string | null>(null);
+	const companyLogo = computed(() => {
+		const url = company.value?.logoUrl?.trim();
+		return url && url !== companyLogoFailed.value ? url : null;
+	});
+
 	/** Mục ghim trên cùng, không thuộc phân hệ nào. */
 	const PINNED: NavItem[] = [
 		{
@@ -198,21 +211,40 @@
 	>
 		<!-- Logo -->
 		<div
-			class="flex items-center h-16 px-4 border-b flex-shrink-0"
+			:class="['flex items-center h-16 border-b flex-shrink-0', isOpen ? 'px-4' : 'px-2 justify-center']"
 			:style="{ borderColor: 'var(--color-border-theme)' }"
 		>
 			<div class="flex items-center gap-3 min-w-0">
-				<img :src="logoSrc" alt="HR System Logo" class="w-8 h-8 flex-shrink-0" />
-				<Transition
-					enter-active-class="transition-opacity duration-200"
-					enter-from-class="opacity-0"
-					enter-to-class="opacity-100"
-					leave-active-class="transition-opacity duration-100"
-					leave-from-class="opacity-100"
-					leave-to-class="opacity-0"
-				>
-					<span v-if="isOpen" class="text-sm font-bold whitespace-nowrap"> 8Hours - Solution </span>
-				</Transition>
+				<!--
+					Logo công ty là ảnh người vận hành tải lên, tỉ lệ tuỳ ý và thường nằm ngang, nên
+					khung chỉ cố định chiều cao và để `object-contain` tự thu. Lúc thanh bên thu gọn thì
+					khung hẹp lại theo đúng chiều rộng còn lại, logo nhỏ đi chứ không bị cắt.
+
+					Công ty có logo thì chữ "8Hours - Solution" nhường chỗ: ô này rộng 224px, mà một
+					logo ngang cao 32px đã chiếm quá nửa, để cả hai thì chữ bị cắt mất đuôi. Logo công
+					ty vốn đã mang tên họ, nên đứng một mình vẫn đủ nghĩa.
+				-->
+				<img
+					v-if="companyLogo"
+					:src="companyLogo"
+					:alt="`Logo ${company?.name ?? 'công ty'}`"
+					:class="['flex-shrink-0 object-contain', isOpen ? 'h-8 w-auto max-w-[11rem]' : 'h-8 w-12']"
+					data-testid="sidebar-company-logo"
+					@error="companyLogoFailed = companyLogo"
+				/>
+				<template v-else>
+					<img :src="logoSrc" alt="HR System Logo" class="w-8 h-8 flex-shrink-0" data-testid="sidebar-app-logo" />
+					<Transition
+						enter-active-class="transition-opacity duration-200"
+						enter-from-class="opacity-0"
+						enter-to-class="opacity-100"
+						leave-active-class="transition-opacity duration-100"
+						leave-from-class="opacity-100"
+						leave-to-class="opacity-0"
+					>
+						<span v-if="isOpen" class="text-sm font-bold whitespace-nowrap"> 8Hours - Solution </span>
+					</Transition>
+				</template>
 			</div>
 		</div>
 

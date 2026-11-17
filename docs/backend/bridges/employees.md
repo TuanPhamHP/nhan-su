@@ -173,7 +173,7 @@ export interface QueryEmployeeParams {
   status?: EmployeeStatus;
   role?: SystemRole;
   employmentType?: EmploymentType;
-  search?: string;        // tìm theo fullName, email, hoặc employeeCode
+  search?: string;        // tìm theo fullName, email, employeeCode, hoặc mã cũ trước lần đánh lại mã
   page?: number;          // default 1
   limit?: number;         // default 20, max 100
   pagination?: boolean;   // default true — false = trả toàn bộ, bỏ `meta`
@@ -355,7 +355,10 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 ```
 
 **Các trường quan trọng:**
-- `employeeCode` — **không truyền** — server tự generate theo format `EMP001`, `EMP002`, ...
+- `employeeCode` — **không truyền** — server tự cấp. Công ty đã có mã nhân viên của công ty (đặt ở
+  control plane, từ 17/11/2026) thì mã là `{mã công ty}-{4 số}`, ví dụ `STH-0001`, `STH-0002`, theo
+  bộ đếm riêng của công ty; công ty chưa đặt thì vẫn `EMP001`, `EMP002`… FE không tự đoán mã kế tiếp,
+  đọc `employeeCode` trong response. Người làm ở nhiều công ty có mã riêng ở từng công ty.
 - **Không có `password`.** HR không bao giờ biết mật khẩu của nhân viên. Từ G1 (11/2026),
   đăng nhập dùng **tài khoản** chung cho mọi công ty, nên server xử lý theo email:
   - Email **chưa có tài khoản**: tạo tài khoản, gửi email chào mừng có link kích hoạt (tự đặt
@@ -582,6 +585,22 @@ này đã gắn với một hồ sơ nhân sự khác trong công ty".
 - **Cột mã quản lý (K) nhận người đã có trong hệ thống**, trước đây chỉ nhận người nằm trong cùng file (lỗi cũ, đã sửa 16/11).
   Quản lý đã nghỉ việc thì lỗi `field: "managerCode"`, message `Quản lý "<mã>" (<tên>) đã nghỉ việc, bạn chọn người quản lý khác`.
 
+**Mã nhân viên theo công ty (17/11/2026):** khi công ty đã có mã nhân viên của công ty, cột A "Mã nhân
+viên" thôi là mã thật:
+- Được **để trống**. Server cấp mã `{mã công ty}-0001`… cho từng dòng theo thứ tự dòng trong file.
+- Có ghi thì giá trị đó chỉ là **khoá trong file**, để dòng khác trỏ tới ở cột K "Mã quản lý"; người
+  được nhập vẫn nhận mã do server cấp. Hai dòng ghi cùng khoá thì vẫn lỗi `Mã nhân viên bị trùng với dòng N`.
+- Cột K nhận khoá của dòng khác trong file, mã hiện tại của người đã có, hoặc **mã cũ** của họ (trước
+  lần đánh lại mã).
+- Response trả mã thật đã cấp trong `employeeCode` của từng người.
+
+Công ty chưa đặt mã thì như cũ: cột A bắt buộc, trùng mã đã có là lỗi `Mã nhân viên đã tồn tại trong hệ thống`.
+FE nên đổi nhãn cột A trong hướng dẫn nhập thành "Mã nhân viên (để trống: hệ thống tự cấp)" khi công ty
+đã có mã. Hiện API chưa trả mã công ty cho FE, nên hướng dẫn ghi chung cho cả hai trường hợp là đủ.
+
+Nhập **hợp đồng** (`/v1/contracts/import`, cột mã nhân viên) và **tài sản** (`/v1/asset-imports`, cột
+người sử dụng) cũng nhận mã cũ, nên file HR soạn trước lần đánh lại mã vẫn nhập được.
+
 ---
 
 ## Composable — useEmployees
@@ -689,6 +708,7 @@ Khi gửi lên (`POST`/`PATCH`), `joinDate` và `dateOfBirth` phải dùng `"YYY
 | Tạo employee với email đã tồn tại | 409 Conflict |
 | Deactivate employee đã INACTIVE | 400 Bad Request |
 | `search=nguyen` | Tìm trong `fullName`, `email`, `employeeCode` |
+| `search=EMP003` sau khi công ty đánh lại mã | Ra người từng mang mã `EMP003`, giờ là `ONGO-0001` (mã cũ giữ ở server, không trả trong response) |
 | `status` không truyền | Trả cả ACTIVE lẫn INACTIVE |
 | `PATCH` với `defaultShiftId: null` | Xóa liên kết ca làm việc |
 | `PATCH` với `managerId: null` | Xóa liên kết quản lý |

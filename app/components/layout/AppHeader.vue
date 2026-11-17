@@ -116,6 +116,7 @@
 		<div class="flex items-center gap-1 sm:gap-2 min-w-0">
 			<button
 				class="p-2 rounded-lg opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex-shrink-0"
+				aria-label="Ẩn hiện thanh bên"
 				@click="toggle"
 			>
 				<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -159,13 +160,15 @@
 					:title="`Đang làm việc ở ${company.name}. Bấm để chuyển công ty.`"
 					@click.stop="toggleCompanyMenu"
 				>
-					<svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-						/>
-					</svg>
+					<CommonAppCompanyLogo :name="company.name" :logo-url="company.logoUrl">
+						<svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+							/>
+						</svg>
+					</CommonAppCompanyLogo>
 					<span class="text-sm font-medium truncate">{{ company.name }}</span>
 					<svg class="w-4 h-4 flex-shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
@@ -177,13 +180,15 @@
 					class="flex items-center gap-2 max-w-[11rem] sm:max-w-[16rem] px-2.5 py-1.5"
 					:title="`Đang làm việc ở ${company.name}`"
 				>
-					<svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-						/>
-					</svg>
+					<CommonAppCompanyLogo :name="company.name" :logo-url="company.logoUrl">
+						<svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+							/>
+						</svg>
+					</CommonAppCompanyLogo>
 					<span class="text-sm font-medium truncate">{{ company.name }}</span>
 				</div>
 
@@ -210,6 +215,7 @@
 							class="flex items-center gap-2 w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
 							@click="handleSwitchCompany(option)"
 						>
+							<CommonAppCompanyLogo :name="option.name" :logo-url="option.logoUrl" />
 							<span class="flex-1 min-w-0">
 								<span class="block truncate" :class="option.code === company.code ? 'font-semibold' : ''">
 									{{ option.name }}
