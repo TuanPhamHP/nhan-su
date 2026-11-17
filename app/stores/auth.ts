@@ -23,6 +23,12 @@ export const useAuthStore = defineStore('auth', () => {
 	 * coi mọi module dùng được, API vẫn chặn ở phía sau. Đọc qua `useModuleAccess`.
 	 */
 	const modules = ref<ModuleEntitlement[]>([]);
+	/**
+	 * Hotline nhà cung cấp, về cùng response với `modules`. `null` khi BE chưa cấu hình, khi nạp
+	 * lỗi, hoặc khi nói chuyện với BE cũ chưa có trường này — ba trường hợp đó hiện như nhau: hộp
+	 * thoại phân hệ khoá giữ câu cũ, không ghi số.
+	 */
+	const businessHotline = ref<string | null>(null);
 	/** Lý do bị đăng xuất ngoài ý muốn (VD công ty ngừng dịch vụ), trang đăng nhập hiện câu này. */
 	const logoutNotice = ref<string | null>(null);
 
@@ -45,6 +51,7 @@ export const useAuthStore = defineStore('auth', () => {
 		company.value = null;
 		companies.value = [];
 		modules.value = [];
+		businessHotline.value = null;
 		resetCompanyScopedStores();
 	}
 
@@ -91,15 +98,20 @@ export const useAuthStore = defineStore('auth', () => {
 		const requestedFor = token.value;
 		entitlementsRequest = (async () => {
 			let next: ModuleEntitlement[] = [];
+			let hotline: string | null = null;
 			try {
 				const { getEntitlements } = useAuthService();
 				const res = await getEntitlements();
 				next = res.modules ?? [];
+				hotline = res.businessHotline ?? null;
 			} catch {
 				// Xem ghi chú ở `modules`.
 			}
 			// Trong lúc chờ đã đăng xuất hoặc đổi phiên thì kết quả này không còn là của phiên hiện tại.
-			if (token.value === requestedFor) modules.value = next;
+			if (token.value === requestedFor) {
+				modules.value = next;
+				businessHotline.value = hotline;
+			}
 		})().finally(() => {
 			entitlementsRequest = null;
 		});
@@ -124,6 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
 		company.value = res.company;
 		companies.value = res.companies;
 		modules.value = [];
+		businessHotline.value = null;
 		entitlementsRequest = null;
 
 		await Promise.all([loadPermissions(), loadEntitlements()]);
@@ -173,6 +186,7 @@ export const useAuthStore = defineStore('auth', () => {
 		permissions.value = [];
 		// Tải lại toàn trang ngay dưới đây: plugin auth gọi `fetchMe` và nạp quyền của công ty mới.
 		modules.value = [];
+		businessHotline.value = null;
 
 		if (import.meta.client) window.location.assign(redirectTo);
 	}
@@ -225,6 +239,7 @@ export const useAuthStore = defineStore('auth', () => {
 		company,
 		companies,
 		modules,
+		businessHotline,
 		logoutNotice,
 		isAuthenticated,
 		login,

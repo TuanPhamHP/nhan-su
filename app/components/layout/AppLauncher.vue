@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import type { AppModuleDef } from '~/types/navigation.types';
+	import type { LockedApp } from '~/utils/app-launcher';
 
 	const emit = defineEmits<{ close: [] }>();
 
@@ -20,15 +21,23 @@
 
 	const groups = computed(() =>
 		appsByGroup.value
-			.map(g => ({ ...g, apps: g.apps.filter(matches) }))
-			.filter(g => g.apps.length > 0),
+			.map(g => ({ ...g, apps: g.apps.filter(matches), lockedApps: g.lockedApps.filter(matches) }))
+			.filter(g => g.apps.length > 0 || g.lockedApps.length > 0),
 	);
 
 	const hasResult = computed(() => groups.value.length > 0);
 
+	/** Phân hệ khoá người dùng vừa bấm, `null` khi không có hộp thoại nào mở. */
+	const lockedTarget = ref<LockedApp | null>(null);
+
 	function open(app: AppModuleDef): void {
 		emit('close');
 		router.push(app.home);
+	}
+
+	/** Ô khoá không dẫn đi đâu: giữ nguyên lưới và nói vì sao chưa vào được. */
+	function openLocked(app: LockedApp): void {
+		lockedTarget.value = app;
 	}
 
 	onMounted(() => {
@@ -113,6 +122,7 @@
 								v-for="app in g.apps"
 								:key="app.code"
 								type="button"
+								:data-app="app.code"
 								:class="[
 									'flex items-start gap-3 rounded-xl border p-3 text-left transition',
 									currentApp?.code === app.code
@@ -137,6 +147,54 @@
 									</span>
 								</span>
 							</button>
+
+							<!--
+								Phân hệ công ty chưa dùng được: vẫn hiện để người dùng biết hệ thống có,
+								nhưng mờ đi, có ổ khoá, và bấm vào thì mở hộp thoại chứ không chuyển trang.
+							-->
+							<button
+								v-for="app in g.lockedApps"
+								:key="app.code"
+								type="button"
+								:data-locked-app="app.code"
+								class="flex items-start gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3 text-left transition hover:border-gray-400 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800/40 dark:hover:bg-gray-800"
+								@click="openLocked(app)"
+							>
+								<span
+									:class="[
+										'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white opacity-45',
+										app.tone,
+									]"
+								>
+									<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+										<path stroke-linecap="round" stroke-linejoin="round" :d="app.icon" />
+									</svg>
+								</span>
+								<span class="min-w-0">
+									<span class="flex items-center gap-1.5">
+										<span class="block text-sm font-semibold text-gray-500 dark:text-gray-400">
+											{{ app.label }}
+										</span>
+										<svg
+											class="h-3.5 w-3.5 shrink-0 text-gray-400"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+											/>
+										</svg>
+									</span>
+									<span class="mt-0.5 block text-xs leading-snug text-gray-400 dark:text-gray-500">
+										{{ app.lockBadge }} · {{ app.description }}
+									</span>
+								</span>
+							</button>
 						</div>
 					</div>
 
@@ -146,5 +204,13 @@
 				</div>
 			</div>
 		</div>
+
+		<CommonAppModuleLockedDialog
+			v-if="lockedTarget"
+			:label="lockedTarget.label"
+			:description="lockedTarget.description"
+			:reason="lockedTarget.lockReason"
+			@close="lockedTarget = null"
+		/>
 	</Teleport>
 </template>

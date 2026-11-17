@@ -2,6 +2,7 @@ import { APP_MODULES } from '~/config/app-modules';
 import type { AppGroup, AppModuleDef, NavItem } from '~/types/navigation.types';
 import type { UserRole } from '~/types/auth.types';
 import { isManagementRole } from '~/utils/role';
+import { splitLauncherApps, type LockedApp } from '~/utils/app-launcher';
 
 const RECENT_KEY = 'app.recent-modules';
 const RECENT_MAX = 4;
@@ -21,17 +22,25 @@ const GROUP_ORDER: AppGroup[] = [
  * App rỗng sau khi lọc thì biến mất khỏi lưới — người dùng không thấy ô dẫn vào nơi họ
  * không vào được. Đây chỉ là lớp cho gọn mắt, chặn thật vẫn là `permission-guard.global.ts`
  * và API.
+ *
+ * Riêng phân hệ bán riêng mà công ty chưa dùng được thì không biến mất mà sang danh sách
+ * `lockedApps`: lưới vẫn hiện ô đó ở trạng thái khoá để người dùng biết hệ thống có phân hệ ấy.
  */
 export function useAppModules() {
 	const { user } = useAuth();
 	const { hasPermission } = usePermissions();
-	const { canUse } = useModuleAccess();
+	const { canUse, moduleEntitlement } = useModuleAccess();
 	const route = useRoute();
 
 	function canSeeItem(item: NavItem): boolean {
+		if (item.module && !canUse(item.module)) return false;
+		return canSeeItemIgnoringModule(item);
+	}
+
+	/** Chỉ xét vai trò và quyền: dùng cho ô khoá, tức là "nếu công ty mua thì có vào được không". */
+	function canSeeItemIgnoringModule(item: NavItem): boolean {
 		const u = user.value;
 		if (!u) return false;
-		if (item.module && !canUse(item.module)) return false;
 		if (passesMainRule(item, u.role)) return true;
 		// Lối vào thứ hai, cho người chỉ xem (xem `NavItem.alsoFor`).
 		return !!item.alsoFor && item.alsoFor.roles.includes(u.role) && hasPermission(item.alsoFor.permission);
@@ -52,20 +61,31 @@ export function useAppModules() {
 	 * mà nhân viên thường bị middleware chặn khỏi `/management/**`. Để nguyên thì ô phân hệ
 	 * của họ dẫn thẳng vào chỗ bị đá ngược về trang chủ.
 	 */
-	const visibleApps = computed<AppModuleDef[]>(() => {
-		if (!user.value) return [];
-		return APP_MODULES.map(app => {
-			const items = app.items.filter(canSeeItem);
-			const home = items.some(i => i.route === app.home) ? app.home : (items[0]?.route ?? app.home);
-			return { ...app, items, home };
-		}).filter(app => app.items.length > 0);
+	const split = computed(() => {
+		if (!user.value) return { visible: [] as AppModuleDef[], locked: [] as LockedApp[] };
+		return splitLauncherApps(APP_MODULES, {
+			canSeeItem,
+			canSeeItemIgnoringModule,
+			moduleLock: code => (canUse(code) ? null : { reason: moduleEntitlement(code)?.reason ?? null }),
+		});
 	});
+
+	const visibleApps = computed<AppModuleDef[]>(() => split.value.visible);
+
+	/**
+	 * Phân hệ công ty chưa dùng được, để lưới và sidebar hiện ô khoá.
+	 *
+	 * Cố tình KHÔNG gộp vào `visibleApps`: `currentApp`, "Gần đây" và nút mở lưới ở header đều
+	 * tính trên `visibleApps`, mà ô khoá thì không dẫn đi đâu nên không được lọt vào mấy chỗ đó.
+	 */
+	const lockedApps = computed<LockedApp[]>(() => split.value.locked);
 
 	const appsByGroup = computed(() =>
 		GROUP_ORDER.map(group => ({
 			group,
 			apps: visibleApps.value.filter(a => a.group === group),
-		})).filter(g => g.apps.length > 0),
+			lockedApps: lockedApps.value.filter(a => a.group === group),
+		})).filter(g => g.apps.length > 0 || g.lockedApps.length > 0),
 	);
 
 	/**
@@ -127,5 +147,5 @@ export function useAppModules() {
 		{ immediate: true },
 	);
 
-	return { visibleApps, appsByGroup, currentApp, recentApps, canSeeItem };
+	return { visibleApps, lockedApps, appsByGroup, currentApp, recentApps, canSeeItem };
 }

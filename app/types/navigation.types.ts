@@ -72,6 +72,13 @@ export interface AppModuleDef {
 	group: AppGroup;
 	/** Màu nền ô icon trong lưới chọn app (class Tailwind). */
 	tone: string;
+	/**
+	 * Module bán riêng mà TOÀN BỘ màn hình của app này thuộc vào (`rec` → `RECRUIT`,
+	 * `ast` → `ASSET`). Công ty chưa dùng được module đó thì ô app hiện ở trạng thái khoá chứ
+	 * không biến mất. App gộp nhiều module (`chr`, `tal`) bỏ trống chỗ này và vẫn lọc từng mục
+	 * bằng `NavItem.module`.
+	 */
+	module?: ModuleCode;
 	/** Bấm vào ô app thì đi đâu. Phải nằm trong `routes`. */
 	home: string;
 	/**

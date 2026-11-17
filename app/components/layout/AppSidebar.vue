@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 	import type { NavItem } from '~/types/navigation.types';
+	import type { LockedApp } from '~/utils/app-launcher';
 	import { isManagementRole } from '~/utils/role';
 	// `app/services/` KHÔNG được Nuxt auto-import (chỉ composables/ và utils/), thiếu dòng
 	// này là sidebar crash 500 ngay khi dựng.
@@ -17,8 +18,10 @@
 	const { user } = useAuth();
 	const { hasPermission } = usePermissions();
 	const { modules, canUse } = useModuleAccess();
-	const { visibleApps, currentApp } = useAppModules();
+	const { visibleApps, lockedApps, currentApp } = useAppModules();
 	const route = useRoute();
+	/** Phân hệ khoá người dùng vừa bấm trong danh sách phân hệ ở trang chủ. */
+	const lockedTarget = ref<LockedApp | null>(null);
 	const metaDataStore = useMetaDataStore();
 	const approvalStore = useApprovalStore();
 	const { counts: approvalCounts } = storeToRefs(approvalStore);
@@ -362,7 +365,7 @@
 			</div>
 
 			<!-- Đang ở trang chủ: liệt kê phân hệ ngay tại sidebar, khỏi phải mở lưới -->
-			<div v-else-if="visibleApps.length">
+			<div v-else-if="visibleApps.length || lockedApps.length">
 				<p
 					v-if="isOpen"
 					class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 whitespace-nowrap"
@@ -393,9 +396,61 @@
 							<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ app.label }}</span>
 						</Transition>
 					</NuxtLink>
+
+					<!--
+						Phân hệ công ty chưa dùng được: là `button` chứ không phải `NuxtLink`, vì bấm vào
+						chỉ mở hộp thoại giải thích, không chuyển trang.
+					-->
+					<button
+						v-for="app in lockedApps"
+						:key="app.code"
+						type="button"
+						:data-locked-sidebar-app="app.code"
+						:class="[
+							'nav-item group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium opacity-60',
+							!isOpen && 'justify-center px-2',
+						]"
+						@mouseenter="!isOpen && showTooltip($event, `${app.label} — ${app.lockBadge}`)"
+						@mouseleave="hideTooltip"
+						@click="lockedTarget = app"
+					>
+						<svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" :d="app.icon" />
+						</svg>
+						<Transition
+							enter-active-class="transition-opacity duration-200"
+							enter-from-class="opacity-0"
+							enter-to-class="opacity-100"
+						>
+							<span v-if="isOpen" class="whitespace-nowrap flex-1">{{ app.label }}</span>
+						</Transition>
+						<svg
+							v-if="isOpen"
+							class="h-3.5 w-3.5 flex-shrink-0"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+							/>
+						</svg>
+					</button>
 				</div>
 			</div>
 		</nav>
+
+		<CommonAppModuleLockedDialog
+			v-if="lockedTarget"
+			:label="lockedTarget.label"
+			:description="lockedTarget.description"
+			:reason="lockedTarget.lockReason"
+			@close="lockedTarget = null"
+		/>
 
 		<!-- User Info Bottom -->
 		<div class="border-t p-3 flex-shrink-0" :style="{ borderColor: 'var(--color-border-theme)' }">
