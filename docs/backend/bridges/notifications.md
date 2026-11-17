@@ -67,6 +67,10 @@ export type NotificationType =
   | 'MAKEUP_CREATED'
   | 'MAKEUP_APPROVED'
   | 'MAKEUP_REJECTED'
+  // Chuyển nhân viên giữa hai công ty (control plane, 17/11/2026). Danh sách đủ mọi loại:
+  // fcm-notification-routing.json
+  | 'EMPLOYEE_TRANSFERRED_IN'
+  | 'EMPLOYEE_TRANSFERRED_OUT'
   // Admin test
   | 'TEST';
 
@@ -130,7 +134,13 @@ export interface QueryNotificationsParams {
 | `violation_request` | `/violation/:refId` | `VIOLATION_*` |
 | `online_work_request` | `/online-work/:refId` | `ONLINE_WORK_*` |
 | `makeup_request` | `/makeup/:refId` | `MAKEUP_*` |
+| `employee` | `/management/employees/:refId` | `EMPLOYEE_TRANSFERRED_IN`, `EMPLOYEE_TRANSFERRED_OUT`, `RECRUIT_NEW_HIRE` |
 | `null` | _(không navigate)_ | `ATTENDANCE` types, `TEST` |
+
+**Chuyển nhân viên (17/11/2026):** HR, admin nhận `EMPLOYEE_TRANSFERRED_IN` khi có người được chuyển tới công ty,
+`EMPLOYEE_TRANSFERRED_OUT` khi người của công ty được chuyển hẳn sang công ty khác (cần làm thủ tục nghỉ việc). Cả hai
+category `EVENT`, `NAVIGATE_ONLY`, `targetUrl` là trang hồ sơ, không nêu tên công ty kia. Nội dung: bảng T-01, T-02 ở
+`docs/notifications/notification-content-map.md`.
 
 ```typescript
 function navigateFromNotification(notification: NotificationResponse, router: Router) {

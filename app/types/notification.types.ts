@@ -75,6 +75,11 @@ export type NotificationType =
 	| 'PROFILE_CHANGE_REQUESTED'
 	| 'PROFILE_CHANGE_DECIDED'
 	| 'PROFILE_UPDATED_BY_HR'
+	// Chuyển nhân viên giữa hai công ty, làm ở control plane nên `nhan-su` chỉ nhận thông báo.
+	// Cả hai đi theo refType `employee` nên không cần nhánh định tuyến riêng: HR và admin công ty
+	// nhận mở hồ sơ mới, HR và admin công ty cũ mở hồ sơ cũ để làm thủ tục nghỉ việc.
+	| 'EMPLOYEE_TRANSFERRED_IN'
+	| 'EMPLOYEE_TRANSFERRED_OUT'
 	| 'TEST';
 
 export interface NotificationActionPayload {
