@@ -1,6 +1,8 @@
 <script setup lang="ts">
 	import CompanyLinkPrompt from '~/components/notifications/CompanyLinkPrompt.vue';
 
+	definePageMeta({ title: 'Đang mở đơn làm thêm giờ' });
+
 	// Route cũ trong email duyệt đơn OT — xem useLegacyNotificationRedirect.
 	const { prompt, switching, switchError, confirmSwitch, cancel } = useLegacyNotificationRedirect('overtime_request');
 </script>

@@ -919,7 +919,7 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `approval-queue` | Hàng chờ duyệt đơn (**có tool ghi**, `L2_DECIDE`) | `MANAGER` `HR` `ADMIN` `DIRECTOR` `CHIEF` |
 | `hr-directory` | Danh bạ, phòng ban | mọi role |
 | `hr-org-overview` | Dashboard tổ chức | `MANAGER` `HR` `ADMIN` `DIRECTOR` |
-| `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm | mọi role |
+| `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm; giới thiệu chung về công ty (lĩnh vực, giờ làm việc, quy định chung) từ mô tả người vận hành viết, thêm 17/11/2026 | mọi role |
 | `request-history` | Tra đơn từ đã tạo (của mình; ADMIN, HR xem được của người khác) — chỉ đọc | mọi role |
 | `request-history-denied` | Hỏi đơn của người khác mà không có thẩm quyền — server trả câu từ chối cố định | mọi role trừ `ADMIN` `HR` |
 | `navigation` | Chỉ đường tới màn hình web làm được một việc | mọi role |
@@ -961,7 +961,7 @@ hiện "Đang tra dữ liệu…".
 | `violation_createExplanation` | `L1_CREATE` | Phiếu giải trình chuyên cần |
 | `onlineWork_createRequest` | `L1_CREATE` | Đơn làm việc online |
 | `businessTrip_createRequest` | `L1_CREATE` | Đơn đi công tác — form dài hơn các đơn khác: bắt buộc có ít nhất một chặng di chuyển và người duyệt |
-| `approval_decide` | `L2_DECIDE` | Duyệt / từ chối một đơn đang chờ chính người hỏi — phủ đủ **6 loại đơn**, gồm cả đơn công tác |
+| `approval_decide` | `L2_DECIDE` | Duyệt / từ chối một đơn đang chờ chính người hỏi — phủ **7 loại**: 6 loại đơn và phiếu đề xuất (`requestKind: GENERAL`, từ lô 4a, chỉ người đang giữ lượt ở bước hiện tại). `approval_listPending` cũng trả phiếu đề xuất, `afterApprove` nói phiếu sẽ sang bước nào |
 
 Render form **tổng quát theo `AgentForm`**, đừng hardcode riêng cho từng loại đơn.
 

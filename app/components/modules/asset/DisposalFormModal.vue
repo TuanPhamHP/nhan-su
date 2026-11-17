@@ -8,8 +8,8 @@
 		apiErrorCode,
 		disposalItemErrors,
 		disposalNumber,
-		formatVndInput,
-		parseVndInput,
+		assetNumberField,
+		toAssetNumber,
 	} from '~/utils/asset.utils';
 	import { formatDate, todayYmd } from '~/utils/date';
 	import {
@@ -168,7 +168,7 @@
 					.trim()
 					.min(3, REASON_REQUIRED)
 					.max(4000, 'Lý do tối đa 4000 ký tự'),
-				proceeds: z.string().optional(),
+				proceeds: assetNumberField,
 				counterparty: z.string().max(200, 'Tối đa 200 ký tự').optional(),
 			})
 			.superRefine((v, ctx) => {
@@ -190,7 +190,7 @@
 			method: props.disposal?.method ?? '',
 			disposalDate: props.disposal?.disposalDate ?? todayYmd(),
 			reason: props.disposal?.reason ?? '',
-			proceeds: props.disposal?.proceeds != null ? String(props.disposal.proceeds) : '',
+			proceeds: props.disposal?.proceeds ?? undefined,
 			counterparty: props.disposal?.counterparty ?? '',
 		},
 	});
@@ -212,14 +212,6 @@
 		return null;
 	});
 
-	/** Ô giá thu về hiện dạng `1.500.000`; ghi thẳng vào ô vì gõ chữ cái thì giá trị không đổi, Vue không vẽ lại. */
-	function onProceedsInput(e: Event) {
-		const el = e.target as HTMLInputElement;
-		const n = parseVndInput(el.value);
-		proceeds.value = n != null ? String(n) : '';
-		el.value = formatVndInput(n);
-	}
-
 	useEscapeKey(
 		() => emit('close'),
 		() => !isSubmitting.value,
@@ -236,7 +228,7 @@
 			method: m,
 			disposalDate: values.disposalDate,
 			reason: values.reason.trim(),
-			proceeds: parseVndInput(values.proceeds),
+			proceeds: toAssetNumber(values.proceeds),
 			counterparty: NEEDS_COUNTERPARTY.includes(m) ? values.counterparty?.trim() || undefined : undefined,
 		};
 		try {
@@ -455,14 +447,12 @@
 
 					<div class="space-y-1">
 						<label for="disposal-proceeds" :class="labelCls">Giá thu về</label>
-						<input
+						<UiNumberInput
 							id="disposal-proceeds"
-							:value="formatVndInput(proceeds)"
-							type="text"
-							inputmode="numeric"
-							:class="inputCls"
+							v-model="proceeds"
+							:min="0"
+							:input-class="inputCls"
 							placeholder="VD: 1.500.000"
-							@input="onProceedsInput"
 						/>
 						<p class="text-xs text-gray-500 dark:text-gray-400">
 							Tổng số tiền thu về cho cả phiếu, tính bằng đồng. Bỏ trống nếu không thu tiền.

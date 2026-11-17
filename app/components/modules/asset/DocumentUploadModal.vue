@@ -41,7 +41,7 @@
 	const docType = ref<AssetDocumentType>(props.defaultType);
 	const number = ref('');
 	const issuedDate = ref('');
-	const amount = ref('');
+	const amount = ref<number | undefined>(undefined);
 	const uploading = ref(false);
 
 	/** Trần dung lượng theo từng loại giấy tờ, lấy từ bridge doc mục 5.6. */
@@ -79,7 +79,7 @@
 				type: docType.value,
 				number: number.value || undefined,
 				issuedDate: issuedDate.value || undefined,
-				amount: amount.value ? Number(amount.value) : undefined,
+				amount: amount.value,
 				assetIds: props.assetIds.length ? props.assetIds : undefined,
 				renewalId: props.renewalId,
 				maintenanceId: props.maintenanceId,
@@ -156,7 +156,7 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Số tiền</label>
-							<input v-model="amount" type="number" min="0" step="any" :class="inputCls" />
+							<UiNumberInput v-model="amount" :decimals="2" :min="0" :input-class="inputCls" />
 						</div>
 					</div>
 

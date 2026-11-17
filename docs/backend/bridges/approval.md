@@ -105,9 +105,15 @@ export interface ApprovalCountsResponseDto {
   onlineWorkRequests: number;
   assetDisposals: number;
   profileChanges: number; // lô 3a: yêu cầu thay đổi thông tin nhân sự chờ duyệt
+  generalRequests: number; // lô 4a: phiếu đề xuất đang chờ tôi ở bước hiện tại
   total: number;
 }
 ```
+
+> `generalRequests` (lô 4a): số phiếu đề xuất có lượt duyệt **của tôi** ở bước đang chờ, kể cả lượt duyệt thay theo uỷ
+> quyền. Phiếu đề xuất thuộc lõi, luôn bật. Hộp chờ duyệt lấy ở `GET /v1/general-requests/pending-for-me` (không có route
+> `/v1/approval/general-requests`), chi tiết ở [general-requests.md](./general-requests.md). Người duyệt có thể là
+> EMPLOYEE, nên tab "Phiếu đề xuất" cần hiện cả ngoài trang Phê duyệt (trang phiếu đề xuất, tab "Chờ tôi duyệt").
 
 > `profileChanges` (lô 3a): số yêu cầu thay đổi thông tin đang chờ của **người khác**, khi người gọi có
 > `employee:profile-change:approve` (ADMIN luôn có); không có quyền thì 0. Hồ sơ nhân viên thuộc lõi nên không phụ thuộc module.
@@ -127,7 +133,8 @@ Ví dụ:
     "onlineWorkRequests": 4,
     "assetDisposals": 0,
     "profileChanges": 2,
-    "total": 13
+    "generalRequests": 1,
+    "total": 14
   }
 }
 ```

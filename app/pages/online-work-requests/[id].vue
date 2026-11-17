@@ -1,6 +1,8 @@
 <script setup lang="ts">
 	import CompanyLinkPrompt from '~/components/notifications/CompanyLinkPrompt.vue';
 
+	definePageMeta({ title: 'Đang mở đơn làm online' });
+
 	// Route cũ trong email duyệt đơn làm online — xem useLegacyNotificationRedirect.
 	const { prompt, switching, switchError, confirmSwitch, cancel } =
 		useLegacyNotificationRedirect('online_work_request');

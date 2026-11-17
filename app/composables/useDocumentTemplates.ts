@@ -1,6 +1,19 @@
 import { useGeneralRequestService } from '~/services/general-request.service';
-import type { DocumentTemplateDetail, QueryTemplateParams } from '~/types/general-request.types';
+import type {
+	CreateTemplateDto,
+	DocumentTemplateDetail,
+	FlowResponse,
+	PutFlowDto,
+	QueryTemplateParams,
+	UpdateTemplateDto,
+} from '~/types/general-request.types';
 
+/**
+ * Loại phiếu đề xuất và luồng duyệt của từng loại.
+ *
+ * Lưu luồng tạo một phiên bản mới; phiếu đang chạy giữ chuỗi duyệt tính lúc gửi, nên sửa luồng
+ * không làm phiếu đang đi bị lệch bước.
+ */
 export function useDocumentTemplates() {
 	const service = useGeneralRequestService();
 
@@ -16,16 +29,24 @@ export function useDocumentTemplates() {
 		}
 	}
 
-	async function fetchTemplate(id: number): Promise<DocumentTemplateDetail> {
+	function fetchTemplate(id: number): Promise<DocumentTemplateDetail> {
 		return service.findTemplate(id);
 	}
 
-	async function createTemplate(dto: Parameters<ReturnType<typeof useGeneralRequestService>['createTemplate']>[0]): Promise<DocumentTemplateDetail> {
+	function createTemplate(dto: CreateTemplateDto): Promise<DocumentTemplateDetail> {
 		return service.createTemplate(dto);
 	}
 
-	async function updateTemplate(id: number, dto: Parameters<ReturnType<typeof useGeneralRequestService>['updateTemplate']>[1]): Promise<DocumentTemplateDetail> {
+	function updateTemplate(id: number, dto: UpdateTemplateDto): Promise<DocumentTemplateDetail> {
 		return service.updateTemplate(id, dto);
+	}
+
+	function fetchFlow(templateId: number): Promise<FlowResponse> {
+		return service.findFlow(templateId);
+	}
+
+	function saveFlow(templateId: number, dto: PutFlowDto): Promise<FlowResponse> {
+		return service.saveFlow(templateId, dto);
 	}
 
 	return {
@@ -35,5 +56,7 @@ export function useDocumentTemplates() {
 		fetchTemplate,
 		createTemplate,
 		updateTemplate,
+		fetchFlow,
+		saveFlow,
 	};
 }

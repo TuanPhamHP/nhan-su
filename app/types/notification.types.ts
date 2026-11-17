@@ -37,10 +37,18 @@ export type NotificationType =
 	| 'BUSINESS_TRIP_PENDING'
 	| 'BUSINESS_TRIP_APPROVED'
 	| 'BUSINESS_TRIP_REJECTED'
+	// Lô 4a phê duyệt điện tử: chín loại của phiếu đề xuất, refType `general_request`.
+	// `APPROVER_REASSIGNED` là thông báo uỷ quyền duyệt, không mang refType lẫn refId.
 	| 'GENERAL_REQUEST_PENDING'
 	| 'GENERAL_REQUEST_APPROVED'
 	| 'GENERAL_REQUEST_REJECTED'
+	| 'GENERAL_REQUEST_RETURNED'
 	| 'GENERAL_REQUEST_CANCELLED'
+	| 'GENERAL_REQUEST_COMMENTED'
+	| 'GENERAL_REQUEST_CONSULT'
+	| 'GENERAL_REQUEST_DUE_SOON'
+	| 'GENERAL_REQUEST_OVERDUE'
+	| 'APPROVER_REASSIGNED'
 	// Module tài sản; năm loại cuối thêm sau bài nhập vai (14/11). Định tuyến theo `refType`.
 	| 'ASSET_ASSIGNED'
 	| 'ASSET_RETURNED'

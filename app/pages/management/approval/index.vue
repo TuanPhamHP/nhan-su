@@ -27,6 +27,7 @@
 	import { useOnlineWorkRequestService } from '~/services/online-work-request.service';
 	import ApprovalFilterBar from '~/components/modules/approval/ApprovalFilterBar.vue';
 	import ProfileChangeDetailModal from '~/components/modules/approval/ProfileChangeDetailModal.vue';
+	import GeneralRequestApprovalTab from '~/components/modules/approval/GeneralRequestApprovalTab.vue';
 	import { useProfileChangeService } from '~/services/profile-change.service';
 	import {
 		PROFILE_CHANGE_STATUS_CLASS,
@@ -132,6 +133,16 @@
 			route: '/management/approval?tab=profileChanges',
 			permission: APPROVE_PERMISSIONS.profileChange,
 		},
+		/**
+		 * Phiếu đề xuất (lô 4a) KHÔNG khai `permission`: từ lô 4a ai cũng có thể được luồng duyệt
+		 * giao một bước, nên tab hiện cho mọi người vào được trang này, và danh sách bên trong đã
+		 * là phiếu chờ đúng người đang xem.
+		 */
+		{
+			key: 'generalRequests',
+			label: 'Phiếu đề xuất',
+			route: '/management/approval?tab=generalRequests',
+		},
 	];
 
 	const { canWrite } = useModuleAccess();
@@ -150,9 +161,26 @@
 	 */
 	const activeTab = ref<Tab>(hasRequestedTab ? requestedTab! : (visibleTabs.value[0]?.key ?? 'leaveRequests'));
 
+	/**
+	 * Cuộn tab đang mở vào tầm nhìn.
+	 *
+	 * Trang có chín tab nên trên điện thoại thanh tab phải cuộn ngang. Mở bằng `?tab=…` của một
+	 * tab nằm cuối thì người dùng chỉ thấy ba tab đầu, không tab nào sáng, trong khi nội dung bên
+	 * dưới lại là của tab khác.
+	 */
+	const tabBarRef = ref<HTMLElement | null>(null);
+
+	function scrollActiveTabIntoView() {
+		const current = tabBarRef.value?.querySelector<HTMLElement>(`[data-tab="${activeTab.value}"]`);
+		current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+	}
+
+	onMounted(scrollActiveTabIntoView);
+
 	watch(activeTab, tab => {
 		router.replace({ query: { ...route.query, tab } });
 		loadCurrentTab();
+		nextTick(scrollActiveTabIntoView);
 	});
 
 	// Module bị tắt ngay lúc đang mở tab của nó (biết được khi API trả `MODULE_*`).
@@ -173,6 +201,9 @@
 		assetDisposals: ['status'],
 		// `GET /profile-change-requests` nhận trạng thái, mục và nhân viên; mục chưa có ô lọc dùng chung.
 		profileChanges: ['status', 'employee'],
+		// `/pending-for-me` trả đúng phiếu đang chờ người xem, không nhận bộ lọc nào: thanh lọc
+		// ẩn hẳn ở tab này, còn tra cứu rộng thì trang Phiếu đề xuất có tab Tra cứu riêng.
+		generalRequests: [],
 	};
 
 	const STATUS_OPTIONS: Record<Tab, SelectOption[]> = {
@@ -220,6 +251,7 @@
 			{ value: undefined, label: 'Tất cả trạng thái' },
 			...Object.entries(PROFILE_CHANGE_STATUS_LABELS).map(([value, label]) => ({ value, label })),
 		],
+		generalRequests: [],
 	};
 
 	const PAGE_SIZE = 15;
@@ -236,6 +268,7 @@
 		businessTrips: 'PENDING',
 		assetDisposals: 'PENDING',
 		profileChanges: 'PENDING',
+		generalRequests: undefined,
 	};
 
 	// Mặc định: trạng thái chờ duyệt + tháng hiện tại (tab violation dùng month/year)
@@ -265,6 +298,7 @@
 		businessTrips: createFilterState('businessTrips'),
 		assetDisposals: createFilterState('assetDisposals'),
 		profileChanges: createFilterState('profileChanges'),
+		generalRequests: createFilterState('generalRequests'),
 	};
 
 	const filters = reactive<Record<Tab, ApprovalFilterState>>({
@@ -276,6 +310,7 @@
 		businessTrips: { ...DEFAULT_FILTERS.businessTrips },
 		assetDisposals: { ...DEFAULT_FILTERS.assetDisposals },
 		profileChanges: { ...DEFAULT_FILTERS.profileChanges },
+		generalRequests: { ...DEFAULT_FILTERS.generalRequests },
 	});
 
 	const activeFilter = computed<ApprovalFilterState>(() => filters[activeTab.value]);
@@ -336,6 +371,10 @@
 	const profileChangeDetail = ref<ProfileChangeDetail | null>(null);
 	const openingProfileChangeId = ref<number | null>(null);
 
+	/** Tab phiếu đề xuất tự tải dữ liệu bên trong component; trang chỉ gọi `reload` khi đổi tab. */
+	const generalRequestTab = ref<{ reload: () => void } | null>(null);
+	const generalRequestPage = ref(1);
+
 	const pageRefs: Record<Tab, Ref<number>> = {
 		leaveRequests: leavePage,
 		overtimeRequests: overtimePage,
@@ -345,6 +384,9 @@
 		businessTrips: tripPage,
 		assetDisposals: disposalPage,
 		profileChanges: profileChangePage,
+		// Tab phiếu đề xuất không phân trang (`/pending-for-me` trả cả mảng), nhưng `pageRefs` khai
+		// theo từng tab nên vẫn cần một ô giữ chỗ.
+		generalRequests: generalRequestPage,
 	};
 
 	function setPage(tab: Tab, page: number) {
@@ -562,6 +604,8 @@
 
 	function loadCurrentTab() {
 		switch (activeTab.value) {
+			case 'generalRequests':
+				return generalRequestTab.value?.reload();
 			case 'profileChanges':
 				return fetchProfileChanges();
 			case 'assetDisposals':
@@ -843,11 +887,15 @@
 			</p>
 		</div>
 
-		<!-- Tabs -->
-		<div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit overflow-x-auto max-w-full">
+		<!-- Tabs — chín tab không vừa bề ngang điện thoại, nên tab đang mở được cuộn vào tầm nhìn -->
+		<div
+			ref="tabBarRef"
+			class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit overflow-x-auto max-w-full"
+		>
 			<button
 				v-for="tab in visibleTabs"
 				:key="tab.key"
+				:data-tab="tab.key"
 				class="flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap"
 				:class="
 					activeTab === tab.key
@@ -866,8 +914,9 @@
 			</button>
 		</div>
 
-		<!-- Filter bar — field hiển thị theo tab đang mở -->
+		<!-- Filter bar — field hiển thị theo tab đang mở; tab không có ô lọc nào thì ẩn cả thanh -->
 		<ApprovalFilterBar
+			v-if="activeFilterFields.length"
 			:model-value="activeFilter"
 			:default-value="activeDefaultFilter"
 			:fields="activeFilterFields"
@@ -1459,6 +1508,14 @@
 					@update:current-page="p => goToPage('profileChanges', p)"
 				/>
 			</div>
+		</template>
+
+		<!-- ══════════════════════════════ Phiếu đề xuất ══════════════════════════════ -->
+		<template v-else-if="activeTab === 'generalRequests'">
+			<p class="text-sm text-gray-600 dark:text-gray-400">
+				Đây là những phiếu đề xuất đang chờ chính bạn duyệt, kể cả lượt bạn nhận theo uỷ quyền.
+			</p>
+			<GeneralRequestApprovalTab ref="generalRequestTab" @loaded="refreshBadge" />
 		</template>
 
 		<!-- ══════════════════════════════ Thanh lý tài sản ══════════════════════════════ -->

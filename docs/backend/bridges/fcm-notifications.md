@@ -126,9 +126,10 @@ Foreground (app đang mở) → OS KHÔNG hiện noti → SDK fire onMessage()
 | `LATE` | `ATTENDANCE` | `attendance_record` | Đi muộn |
 | `LEAVE_APPROVED` | `LEAVE` | `leave_request` | Đơn phép được duyệt |
 | `LEAVE_REJECTED` | `LEAVE` | `leave_request` | Đơn phép bị từ chối |
-| `GENERAL_REQUEST_PENDING`  | `REQUEST` | `general_request` | Đơn văn bản được nộp |
-| `GENERAL_REQUEST_APPROVED` | `REQUEST` | `general_request` | Đơn văn bản duyệt xong |
-| `GENERAL_REQUEST_REJECTED` | `REQUEST` | `general_request` | Đơn văn bản bị từ chối |
+| `GENERAL_REQUEST_PENDING`  | `REQUEST` | `general_request` | Phiếu đề xuất tới lượt duyệt; người theo dõi khi phiếu được gửi |
+| `GENERAL_REQUEST_APPROVED` | `REQUEST` | `general_request` | Phiếu đề xuất duyệt xong |
+| `GENERAL_REQUEST_REJECTED` | `REQUEST` | `general_request` | Phiếu đề xuất bị từ chối |
+| `GENERAL_REQUEST_RETURNED`, `_CANCELLED`, `_COMMENTED`, `_CONSULT`, `_DUE_SOON`, `_OVERDUE` | `REQUEST` | `general_request` | Lô 4a, xem [general-requests.md](./general-requests.md) mục 9 và `fcm-notification-routing.json` |
 | `TEST` | `EVENT` | `''` | Gọi từ admin qua `/v1/notifications/test-fcm` |
 
 Xem full enum: `prisma/schema.prisma → enum NotificationType`.

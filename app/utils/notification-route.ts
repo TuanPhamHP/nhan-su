@@ -52,6 +52,11 @@ import { isManagementRole } from '~/utils/role';
  * | profile_change_request    | /management/approval?tab=profileChanges&id=:id |
  * | my_profile_change_request | /profile?tab=requests&id=:id                   |
  * | my_profile                | /profile (không có refId)                      |
+ *
+ * Lô 4a phê duyệt điện tử cũng không rẽ theo vai trò, vì phiếu đề xuất dùng một trang chung
+ * cho cả người gửi và người duyệt:
+ * | general_request           | /general-requests?id=:id                       |
+ * | (APPROVER_REASSIGNED, không có refType) | /general-requests?tab=pending    |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -71,6 +76,11 @@ export function resolveNotificationRoute(
 	/** Loại thông báo, chỉ dùng để chọn tab ở trang chi tiết tài sản. */
 	type?: string | null,
 ): string | null {
+	// Uỷ quyền duyệt (lô 4a) gửi thông báo không mang `refType` lẫn `refId`, vì việc cần làm là
+	// cả hộp "Chờ tôi duyệt" chứ không phải một phiếu: người được uỷ quyền nhận luôn mọi lượt
+	// của người vắng trong khoảng ngày. Phải xét trước nhánh `!refType` phía dưới.
+	if (type === 'APPROVER_REASSIGNED' && !refType) return '/general-requests?tab=pending';
+
 	if (!refType) return null;
 
 	const manage = isManagementRole(role);
@@ -108,8 +118,12 @@ export function resolveNotificationRoute(
 			if (id) return `/business-trips/${id}`;
 			return manage ? '/management/business-trips' : '/business-trips';
 
+		// Chín loại thông báo `GENERAL_REQUEST_*` của lô 4a đều về đây và cũng không rẽ theo vai
+		// trò: phiếu đề xuất là trang dùng chung, nhân viên gửi phiếu cũng mở đúng trang này.
+		// Mở bằng `?id=` để trang danh sách chọn sẵn tab theo phiếu rồi mới mở chi tiết, giống
+		// `targetUrl` máy chủ dựng; vào thẳng `/general-requests/:id` thì bấm quay lại là mất tab.
 		case 'general_request':
-			return id ? `/general-requests/${id}` : '/general-requests';
+			return id ? `/general-requests?id=${id}` : '/general-requests';
 
 		// Năm refType của module tài sản. BE đã chọn sẵn refType theo từng người nhận
 		// (`docs/backend/bridges/assets.md` mục 9) nên ở đây KHÔNG rẽ theo vai trò: người

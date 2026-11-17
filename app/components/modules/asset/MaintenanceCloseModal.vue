@@ -58,7 +58,7 @@
 		initialValues: {
 			outcome: 'DONE',
 			workDone: props.maintenance.workDone ?? '',
-			cost: props.maintenance.cost != null ? String(props.maintenance.cost) : '',
+			cost: props.maintenance.cost ?? undefined,
 			doneAt: todayYmd(),
 		},
 	});
@@ -178,7 +178,7 @@
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<div class="space-y-1">
 							<label :class="labelCls">Chi phí thực tế</label>
-							<input v-model="cost" v-bind="costAttrs" type="number" min="0" step="any" :class="inputCls" />
+							<UiNumberInput v-model="cost" v-bind="costAttrs" :decimals="2" :min="0" :input-class="inputCls" />
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Ngày xong</label>

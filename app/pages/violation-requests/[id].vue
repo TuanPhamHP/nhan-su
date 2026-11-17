@@ -1,6 +1,8 @@
 <script setup lang="ts">
 	import CompanyLinkPrompt from '~/components/notifications/CompanyLinkPrompt.vue';
 
+	definePageMeta({ title: 'Đang mở phiếu vi phạm' });
+
 	// Route cũ trong email duyệt phiếu vi phạm — xem useLegacyNotificationRedirect.
 	const { prompt, switching, switchError, confirmSwitch, cancel } = useLegacyNotificationRedirect('violation_request');
 </script>

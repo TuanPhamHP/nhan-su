@@ -51,6 +51,14 @@ export interface AuthUser {
 export interface CompanyOption {
 	code: string;
 	name: string;
+	/**
+	 * Logo hiện ở góc trên thanh bên. URL công khai tuyệt đối, đã kèm `?v=` của phiên bản ảnh:
+	 * đặt thẳng vào `<img src>`, không gắn token, không bỏ hay đổi `v`. `null` nghĩa là công ty
+	 * chưa có logo, dùng logo mặc định của app.
+	 */
+	logoUrl: string | null;
+	/** Favicon của tab trình duyệt, cùng dạng URL như `logoUrl`. `null` thì dùng favicon của app. */
+	faviconUrl: string | null;
 }
 
 /** Người dùng trong một phiên trả về từ login (1 công ty), select-company, switch, refresh. */

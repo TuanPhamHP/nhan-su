@@ -7,8 +7,10 @@ export default defineNuxtConfig({
 		// pageTransition: { name: 'page', mode: 'out-in' },
 		pageTransition: false,
 		head: {
-			titleTemplate: 'Hệ thống nhân sự - %s',
-			title: 'Booking',
+			// Tiêu đề thật do `plugins/company-branding.client.ts` ghép: `{tên công ty} - {tên trang}`.
+			// Ở đây chỉ còn cái hiện trong khoảnh khắc trước khi app chạy, nên không ghép thêm gì.
+			titleTemplate: '%s',
+			title: 'Hệ thống nhân sự',
 			link: [
 				{
 					rel: 'preconnect',
@@ -23,7 +25,9 @@ export default defineNuxtConfig({
 					rel: 'stylesheet',
 					href: 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap',
 				},
-				{ rel: 'icon', type: 'image/x-icon', href: '/favicon.svg' },
+				// `key` để plugin nhận diện công ty thay được chính thẻ này. Không khai `type`: favicon
+				// công ty là PNG, ICO hoặc WebP tuỳ ảnh người vận hành tải lên.
+				{ rel: 'icon', key: 'favicon', href: '/favicon.svg' },
 				{ rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon-180x180.png' },
 			],
 			meta: [

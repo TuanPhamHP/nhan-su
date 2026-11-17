@@ -32,4 +32,10 @@ export interface ModuleEntitlement {
 
 export interface EntitlementsResponse {
 	modules: ModuleEntitlement[];
+	/**
+	 * Hotline của nhà cung cấp phần mềm, lấy từ env `BUSINESS_HOTLINE` của BE (đã bỏ khoảng trắng
+	 * hai đầu). `null` khi chưa cấu hình — và BE cũ không có trường này, nên nơi đọc phải chịu được
+	 * `undefined`. Mọi người đã đăng nhập nhận cùng một giá trị.
+	 */
+	businessHotline: string | null;
 }

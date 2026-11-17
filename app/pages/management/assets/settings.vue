@@ -22,8 +22,8 @@
 		name: '',
 		groupName: '',
 		kind: 'PHYSICAL' as AssetKind,
-		defaultDepreciationMonths: '',
-		defaultMaintenanceMonths: '',
+		defaultDepreciationMonths: undefined as number | undefined,
+		defaultMaintenanceMonths: undefined as number | undefined,
 		requireSerial: false,
 		isActive: true,
 	});
@@ -64,8 +64,8 @@
 			name: '',
 			groupName: '',
 			kind: 'PHYSICAL' as AssetKind,
-			defaultDepreciationMonths: '',
-			defaultMaintenanceMonths: '',
+			defaultDepreciationMonths: undefined,
+			defaultMaintenanceMonths: undefined,
 			requireSerial: false,
 			isActive: true,
 		});
@@ -78,10 +78,8 @@
 			name: c.name,
 			groupName: c.groupName,
 			kind: c.kind,
-			defaultDepreciationMonths:
-				c.defaultDepreciationMonths != null ? String(c.defaultDepreciationMonths) : '',
-			defaultMaintenanceMonths:
-				c.defaultMaintenanceMonths != null ? String(c.defaultMaintenanceMonths) : '',
+			defaultDepreciationMonths: c.defaultDepreciationMonths ?? undefined,
+			defaultMaintenanceMonths: c.defaultMaintenanceMonths ?? undefined,
 			requireSerial: c.requireSerial,
 			isActive: c.isActive,
 		});
@@ -92,10 +90,10 @@
 		if (!form.name.trim() || !form.groupName.trim() || saving.value) return;
 		saving.value = true;
 		try {
-			const months = form.defaultDepreciationMonths ? Number(form.defaultDepreciationMonths) : undefined;
-			const maintenanceMonths = form.defaultMaintenanceMonths
-				? Number(form.defaultMaintenanceMonths)
-				: undefined;
+			// Ô số trả về `number | undefined`, nên 0 là giá trị thật (loại không bảo dưỡng định kỳ)
+			// chứ không phải ô trống.
+			const months = form.defaultDepreciationMonths;
+			const maintenanceMonths = form.defaultMaintenanceMonths;
 			if (editing.value) {
 				// `kind` không đổi được khi loại đã có tài sản (BE trả 409), nên không gửi lại.
 				await service.updateCategory(editing.value.id, {
@@ -184,16 +182,20 @@
 				</div>
 				<div class="space-y-1">
 					<label :class="labelCls">Số tháng khấu hao mặc định</label>
-					<input v-model="form.defaultDepreciationMonths" type="number" min="1" :class="inputCls" placeholder="Bỏ trống nếu loại này không khấu hao" />
+					<UiNumberInput
+						v-model="form.defaultDepreciationMonths"
+						:min="1"
+						:input-class="inputCls"
+						placeholder="Bỏ trống nếu loại này không khấu hao"
+					/>
 				</div>
 				<div v-if="form.kind === 'PHYSICAL'" class="space-y-1">
 					<label :class="labelCls">Chu kỳ bảo dưỡng mặc định (tháng)</label>
-					<input
+					<UiNumberInput
 						v-model="form.defaultMaintenanceMonths"
-						type="number"
-						min="0"
-						max="120"
-						:class="inputCls"
+						:min="0"
+						:max="120"
+						:input-class="inputCls"
 						placeholder="Bỏ trống nếu loại này không bảo dưỡng định kỳ"
 					/>
 					<p class="text-xs text-gray-500 dark:text-gray-400">

@@ -208,6 +208,8 @@ export const APP_MODULES: AppModuleDef[] = [
 		label: 'Tuyển dụng',
 		description: 'Định biên, yêu cầu tuyển, tin tuyển dụng, kho ứng viên, phỏng vấn, offer.',
 		group: 'Thu hút & Phát triển',
+		// Mọi màn hình của phân hệ này đều thuộc `RECRUIT`, nên công ty chưa mua thì khoá cả ô.
+		module: 'RECRUIT',
 		tone: 'bg-amber-500',
 		icon: 'M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z',
 		home: '/management/recruitment',
@@ -311,6 +313,8 @@ export const APP_MODULES: AppModuleDef[] = [
 		label: 'Quản lý tài sản',
 		description: 'Thiết bị và dịch vụ thuê bao: cấp phát, bảo dưỡng, báo hỏng và khấu hao.',
 		group: 'Hành chính & Vận hành',
+		// Xem ghi chú ở phân hệ Tuyển dụng: cả phân hệ nằm trong một module bán riêng.
+		module: 'ASSET',
 		tone: 'bg-violet-500',
 		icon: 'M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z',
 		home: '/management/assets',
@@ -399,6 +403,47 @@ export const APP_MODULES: AppModuleDef[] = [
 					badgeKey: 'pendingAsset',
 					module: 'ASSET',
 				scope: 'personal',
+			},
+		],
+	},
+	{
+		/**
+		 * APV — Phê duyệt điện tử (lô 4a). Khác mục "Duyệt đơn" trong TAL: "Duyệt đơn" là đơn
+		 * nhân sự ảnh hưởng bảng công (nghỉ phép, OT, công tác), còn đây là phiếu đề xuất, tờ
+		 * trình, đề nghị mua sắm với luồng duyệt nhiều cấp do nhân sự cấu hình theo từng loại.
+		 *
+		 * "Phiếu đề xuất" là mục `personal` vì trang nằm ở root và mọi vai trò đều gửi được phiếu,
+		 * nhờ vậy nhân viên cũng thấy ô phân hệ này. Cấu hình loại phiếu thì nằm trong khu quản
+		 * trị và cần quyền `request-type:manage`.
+		 */
+		code: 'apv',
+		label: 'Phê duyệt điện tử',
+		description: 'Phiếu đề xuất, tờ trình, đề nghị mua sắm và luồng duyệt nhiều cấp theo từng loại phiếu.',
+		group: 'Hành chính & Vận hành',
+		tone: 'bg-violet-500',
+		icon: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z',
+		home: '/general-requests',
+		routes: ['/general-requests', '/management/settings/request-types'],
+		items: [
+			{
+				label: 'Phiếu đề xuất',
+				route: '/general-requests',
+				icon: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z',
+				scope: 'personal',
+			},
+			{
+				label: 'Chờ tôi duyệt',
+				route: '/general-requests?tab=pending',
+				icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+				matchQuery: { tab: 'pending' },
+				scope: 'personal',
+			},
+			{
+				label: 'Loại phiếu & luồng duyệt',
+				route: '/management/settings/request-types',
+				icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+				management: true,
+				permission: 'request-type:manage',
 			},
 		],
 	},
@@ -529,9 +574,10 @@ export const APP_MODULES: AppModuleDef[] = [
  * người dùng bấm hụt. Giữ ở đây để bản đồ trong code khớp với bản đồ nghiệp vụ — khi xây
  * xong màn hình đầu tiên của một mã thì chuyển mục tương ứng sang `APP_MODULES`.
  *
- * Lưu ý về `APV`: khác với mục "Duyệt đơn" đang nằm trong TAL. "Duyệt đơn" là duyệt đơn
- * nhân sự (nghỉ phép, OT, công tác); còn APV là phê duyệt điện tử nói chung — tờ trình,
- * đề nghị thanh toán, tạm ứng, mua sắm. Đừng gộp hai thứ này vì trùng chữ "duyệt".
+ * `APV` đã chuyển sang `APP_MODULES` ở lô 4a (phiếu đề xuất và luồng duyệt). Nó khác mục
+ * "Duyệt đơn" đang nằm trong TAL: "Duyệt đơn" là duyệt đơn nhân sự (nghỉ phép, OT, công
+ * tác); còn APV là phê duyệt điện tử nói chung — tờ trình, đề nghị thanh toán, tạm ứng,
+ * mua sắm. Đừng gộp hai thứ này vì trùng chữ "duyệt".
  *
  * `BEN` đã có một phần: màn hình BHXH hiện là một tab trong hồ sơ nhân viên
  * (`EmployeeSocialInsurance.vue`) và một thẻ ở trang hồ sơ cá nhân, chưa có trang quản lý
@@ -542,7 +588,6 @@ export const PLANNED_MODULES: Array<{ code: string; label: string; group: AppGro
 	{ code: 'ONB', label: 'Hội nhập & Thử việc', group: 'Thu hút & Phát triển', scope: 'Checklist đón nhân viên mới, cấp phát tài khoản/thiết bị, đánh giá thử việc' },
 	{ code: 'PER', label: 'Đánh giá hiệu suất (KPI/OKR)', group: 'Thu hút & Phát triển', scope: 'Giao mục tiêu, kỳ đánh giá, xếp loại, gắn kết quả với thưởng/lương' },
 	{ code: 'LND', label: 'Đào tạo & Phát triển', group: 'Thu hút & Phát triển', scope: 'Khung năng lực, kế hoạch đào tạo, LMS, cam kết đào tạo, lộ trình & kế nhiệm' },
-	{ code: 'APV', label: 'Phê duyệt điện tử', group: 'Hành chính & Vận hành', scope: 'Tờ trình, đề xuất, đề nghị thanh toán/tạm ứng/mua sắm, quy trình duyệt nhiều cấp' },
 	{ code: 'ADM', label: 'Hành chính văn phòng', group: 'Hành chính & Vận hành', scope: 'Văn phòng phẩm/vật tư, phòng họp, xe, văn thư công văn, con dấu' },
 	{ code: 'TSK', label: 'Quản lý công việc & Dự án', group: 'Hành chính & Vận hành', scope: 'Giao việc, dự án, kanban/gantt, việc định kỳ, timesheet, báo cáo tiến độ' },
 ];
