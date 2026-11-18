@@ -371,6 +371,12 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 - `email` — tự động lowercase + trim trước khi lưu
 - `joinDate` — format `"YYYY-MM-DD"` (không phải datetime)
 - `defaultShiftId`, `positionId`, `departmentId`, `managerId` — tất cả **optional**
+- `defaultShiftId` (từ 18/11/2026): ca phải tồn tại và đang dùng (`isActive`). Server lưu ca mặc định
+  **và** gán sẵn ca đó vào lịch ca (`employee_shift_schedules`, ô xanh ở màn Phân ca) trên những ngày
+  làm việc của ca (`workDays`), từ `joinDate` tới 31/12 cùng năm, ghi cùng transaction với hồ sơ.
+  Người vào làm từ năm trước thì gán từ 01/01 năm nay. Lý do: báo cáo công chỉ tính công định mức theo
+  lịch ca, không theo ca mặc định, nên trước bản vá nhân viên mới có công định mức 0. Response không đổi,
+  FE không phải gọi thêm `bulk-range`. Sang năm sau HR vẫn gán hàng loạt như với mọi nhân viên.
 
 **Response 201:** `ApiSuccess<EmployeeDetail>`
 
@@ -409,6 +415,12 @@ Không cần truyền id — lấy từ JWT. Mọi user đã đăng nhập đề
 email của hồ sơ cũ rồi tạo hồ sơ mới cùng người):
 ```json
 { "success": false, "error": { "code": "EMPLOYEE_ACCOUNT_IN_COMPANY", "message": "Email này đã gắn với một hồ sơ nhân sự khác trong công ty" } }
+```
+
+**404** nếu `defaultShiftId` không tồn tại, **400** nếu ca đã bị vô hiệu hóa. Cả hai đều không tạo hồ sơ:
+```json
+{ "success": false, "error": { "code": "NOT_FOUND", "message": "Ca làm việc không tồn tại" } }
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "Ca làm việc đã bị vô hiệu hóa" } }
 ```
 
 ---
@@ -706,6 +718,10 @@ Khi gửi lên (`POST`/`PATCH`), `joinDate` và `dateOfBirth` phải dùng `"YYY
 | `PATCH` đổi phòng ban với `effectiveDate` sau hôm nay (lô 3a) | 400 `EMPLOYMENT_EFFECTIVE_DATE_INVALID` |
 | `POST`/`PATCH` với `gender: "trai"` (lô 3a) | 400 "Giới tính phải là Nam, Nữ hoặc Khác" |
 | Tạo employee với email đã tồn tại | 409 Conflict |
+| Tạo employee có `defaultShiftId` | 201, lịch ca có sẵn từ `joinDate` (hoặc 01/01 năm nay) tới 31/12, chỉ ngày làm của ca |
+| Tạo employee mà ca không có ngày làm nào trong khoảng đó | 201, không gán ngày nào |
+| Tạo employee với `defaultShiftId` không tồn tại / đã vô hiệu hóa | 404 / 400, không tạo hồ sơ |
+| `PATCH` đổi `defaultShiftId` | Chỉ đổi ca mặc định, **không** gán lại lịch ca |
 | Deactivate employee đã INACTIVE | 400 Bad Request |
 | `search=nguyen` | Tìm trong `fullName`, `email`, `employeeCode` |
 | `search=EMP003` sau khi công ty đánh lại mã | Ra người từng mang mã `EMP003`, giờ là `ONGO-0001` (mã cũ giữ ở server, không trả trong response) |

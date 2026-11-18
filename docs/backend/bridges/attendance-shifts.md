@@ -246,6 +246,10 @@ WorkShift (khuôn ca — HR tạo, cố định)
 - Gọi `GET /shift-schedules/calendar` để render calendar view (HR)
 - HR gọi `POST /shift-schedules` hoặc `POST /shift-schedules/bulk` để gán ca
 - HR gọi `PATCH .../default-shift` để gán ca mặc định cho nhân viên mới
+- Từ 18/11/2026, `POST /v1/employees` có `defaultShiftId` tự gán ca đó vào `EmployeeShiftSchedule` trên
+  ngày làm của ca, từ ngày vào làm tới 31/12 (xem `employees.md`). Ca mặc định một mình **không đủ**:
+  check-in và cron vắng mặt dùng nó, nhưng báo cáo công chỉ tính công định mức theo `EmployeeShiftSchedule`.
+  Nhân viên chỉ có ô xám "mặc định" trên lưới thì cần gán ca (`bulk-range`) để báo cáo đúng
 - `EffectiveShiftOverride` — **không thao tác trực tiếp** — đọc qua `isHalfDay`/`effectiveStart`/`effectiveEnd` trong `AttendanceRecord`
 
 ---
