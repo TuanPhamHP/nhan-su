@@ -8,6 +8,22 @@ import {
 	navLabelFor,
 	pageTitle,
 } from '~/utils/company-branding';
+import type { AppTile } from '~/types/entitlement.types';
+
+/** Tên phân hệ do máy chủ trả; từ 17/11/2026 nhãn cấp phân hệ không còn nằm trong cấu hình web. */
+const TILES: AppTile[] = [
+	{
+		code: 'rec',
+		label: 'Tuyển dụng',
+		description: 'Định biên, yêu cầu tuyển, tin tuyển dụng, kho ứng viên, phỏng vấn, offer.',
+		group: 'TALENT',
+		color: '#f59e0b',
+		icon: 'M0 0',
+		module: 'RECRUIT',
+		locked: false,
+		lockReason: null,
+	},
+];
 
 /**
  * Nhận diện theo công ty — tiêu đề tab và favicon.
@@ -41,6 +57,20 @@ describe('tên trang', () => {
 	it('không mục nào khớp thì lùi về tên sản phẩm, không bao giờ rỗng', () => {
 		expect(navLabelFor('/khong-co-trang-nay')).toBeNull();
 		expect(pageTitle('/khong-co-trang-nay', undefined)).toBe(PRODUCT_NAME);
+	});
+
+	it('không mục nào khớp mà trang thuộc một phân hệ thì lấy tên phân hệ máy chủ trả', () => {
+		// `/recruitment/applications/3` nằm trong phân hệ Tuyển dụng nhưng không có mục menu riêng.
+		expect(navLabelFor('/recruitment/applications/3', TILES)).toBe('Tuyển dụng');
+	});
+
+	it('mục menu vẫn thắng tên phân hệ, vì nó nói đúng trang hơn', () => {
+		expect(navLabelFor('/management/recruitment/jobs', TILES)).toBe('Tin tuyển dụng');
+	});
+
+	it('chưa nạp được danh mục thì chỉ mất lớp dự phòng cấp phân hệ, mục menu vẫn có tên', () => {
+		expect(navLabelFor('/recruitment/applications/3')).toBeNull();
+		expect(navLabelFor('/management/recruitment/jobs')).toBe('Tin tuyển dụng');
 	});
 });
 

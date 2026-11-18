@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import type { AuthResponse, AuthUser, CompanyOption, LoginDto, LoginResponse } from '~/types/auth.types';
-import type { ModuleEntitlement } from '~/types/entitlement.types';
+import type { AppGroup, AppTile, ModuleEntitlement } from '~/types/entitlement.types';
 import { useAuthService } from '~/services';
 import { setOnForceLogout, setOnModuleDenied } from '~/services/http/auth.fetch';
 import { getCookie, setCookie, deleteCookie } from '~/utils/cookie';
@@ -29,6 +29,24 @@ export const useAuthStore = defineStore('auth', () => {
 	 * thoại phân hệ khoá giữ câu cũ, không ghi số.
 	 */
 	const businessHotline = ref<string | null>(null);
+	/**
+	 * Danh mục phân hệ của lưới chọn phân hệ, về cùng response với `modules`.
+	 *
+	 * Rỗng nghĩa là chưa nạp được (lỗi mạng, hoặc BE cũ không trả hai trường này). Khi đó web vẫn
+	 * điều hướng bằng bảng màn hình tĩnh của mình, còn lưới báo chưa tải được kèm nút thử lại —
+	 * xem `catalogFailed`.
+	 */
+	const appGroups = ref<AppGroup[]>([]);
+	const apps = ref<AppTile[]>([]);
+	/**
+	 * Đã gọi `/v1/me/entitlements` ít nhất một lần mà vẫn không có danh mục.
+	 *
+	 * Tách khỏi `apps.length === 0` để lưới không hiện câu báo lỗi trong khoảnh khắc đầu tiên,
+	 * lúc chưa ai gọi API lần nào.
+	 */
+	const catalogFailed = ref(false);
+	/** Đang gọi `/v1/me/entitlements`, để nút "Thử lại" biết lúc nào cần quay vòng chờ. */
+	const catalogLoading = ref(false);
 	/** Lý do bị đăng xuất ngoài ý muốn (VD công ty ngừng dịch vụ), trang đăng nhập hiện câu này. */
 	const logoutNotice = ref<string | null>(null);
 
@@ -52,7 +70,15 @@ export const useAuthStore = defineStore('auth', () => {
 		companies.value = [];
 		modules.value = [];
 		businessHotline.value = null;
+		clearCatalog();
 		resetCompanyScopedStores();
+	}
+
+	/** Danh mục là dữ liệu theo công ty, nên đổi phiên hay đổi công ty là phải xoá như `modules`. */
+	function clearCatalog() {
+		appGroups.value = [];
+		apps.value = [];
+		catalogFailed.value = false;
 	}
 
 	// Allow the auth fetch layer to clear reactive state on forced logout (expired refresh token,
@@ -96,14 +122,19 @@ export const useAuthStore = defineStore('auth', () => {
 		if (entitlementsRequest) return entitlementsRequest;
 
 		const requestedFor = token.value;
+		catalogLoading.value = true;
 		entitlementsRequest = (async () => {
 			let next: ModuleEntitlement[] = [];
 			let hotline: string | null = null;
+			let groups: AppGroup[] = [];
+			let tiles: AppTile[] = [];
 			try {
 				const { getEntitlements } = useAuthService();
 				const res = await getEntitlements();
 				next = res.modules ?? [];
 				hotline = res.businessHotline ?? null;
+				groups = res.groups ?? [];
+				tiles = res.apps ?? [];
 			} catch {
 				// Xem ghi chú ở `modules`.
 			}
@@ -111,9 +142,15 @@ export const useAuthStore = defineStore('auth', () => {
 			if (token.value === requestedFor) {
 				modules.value = next;
 				businessHotline.value = hotline;
+				appGroups.value = groups;
+				apps.value = tiles;
+				// Lỗi mạng và BE cũ đều rơi vào đây và hiện như nhau, vì cách chữa của người dùng
+				// giống nhau: bấm thử lại.
+				catalogFailed.value = tiles.length === 0;
 			}
 		})().finally(() => {
 			entitlementsRequest = null;
+			catalogLoading.value = false;
 		});
 		return entitlementsRequest;
 	}
@@ -137,6 +174,7 @@ export const useAuthStore = defineStore('auth', () => {
 		companies.value = res.companies;
 		modules.value = [];
 		businessHotline.value = null;
+		clearCatalog();
 		entitlementsRequest = null;
 
 		await Promise.all([loadPermissions(), loadEntitlements()]);
@@ -187,6 +225,7 @@ export const useAuthStore = defineStore('auth', () => {
 		// Tải lại toàn trang ngay dưới đây: plugin auth gọi `fetchMe` và nạp quyền của công ty mới.
 		modules.value = [];
 		businessHotline.value = null;
+		clearCatalog();
 
 		if (import.meta.client) window.location.assign(redirectTo);
 	}
@@ -240,6 +279,10 @@ export const useAuthStore = defineStore('auth', () => {
 		companies,
 		modules,
 		businessHotline,
+		appGroups,
+		apps,
+		catalogFailed,
+		catalogLoading,
 		logoutNotice,
 		isAuthenticated,
 		login,

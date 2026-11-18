@@ -1,20 +1,11 @@
 import { APP_MODULES } from '~/config/app-modules';
-import type { AppGroup, AppModuleDef, NavItem } from '~/types/navigation.types';
+import type { AppModuleDef, NavItem } from '~/types/navigation.types';
 import type { UserRole } from '~/types/auth.types';
 import { isManagementRole } from '~/utils/role';
-import { splitLauncherApps, type LockedApp } from '~/utils/app-launcher';
+import { appsWithoutCatalog, mergeAppCatalog, splitLauncherApps, type LockedApp } from '~/utils/app-launcher';
 
 const RECENT_KEY = 'app.recent-modules';
 const RECENT_MAX = 4;
-
-/** Thứ tự nhóm trong lưới chọn phân hệ — theo đúng thứ tự A–D của bức tranh tổng thể. */
-const GROUP_ORDER: AppGroup[] = [
-	'Quản trị nhân sự',
-	'Thu hút & Phát triển',
-	'Hành chính & Vận hành',
-	'Quản trị & Phân tích',
-	'Hệ thống',
-];
 
 /**
  * Lọc app + mục theo vai trò, quyền và gói module của công ty; cho biết đang đứng ở app nào.
@@ -30,7 +21,16 @@ export function useAppModules() {
 	const { user } = useAuth();
 	const { hasPermission } = usePermissions();
 	const { canUse, moduleEntitlement } = useModuleAccess();
+	const { apps: catalogApps, appGroups } = storeToRefs(useAuthStore());
 	const route = useRoute();
+
+	/**
+	 * Danh mục đã ghép. Chưa có danh mục thì dựng từ khai báo tĩnh: thiếu tên và icon, nhưng
+	 * `currentApp` và mục menu con vẫn còn nên người dùng không bị kẹt giữa trang.
+	 */
+	const catalog = computed<AppModuleDef[]>(() =>
+		catalogApps.value.length > 0 ? mergeAppCatalog(APP_MODULES, catalogApps.value) : appsWithoutCatalog(APP_MODULES),
+	);
 
 	function canSeeItem(item: NavItem): boolean {
 		if (item.module && !canUse(item.module)) return false;
@@ -63,7 +63,7 @@ export function useAppModules() {
 	 */
 	const split = computed(() => {
 		if (!user.value) return { visible: [] as AppModuleDef[], locked: [] as LockedApp[] };
-		return splitLauncherApps(APP_MODULES, {
+		return splitLauncherApps(catalog.value, {
 			canSeeItem,
 			canSeeItemIgnoringModule,
 			moduleLock: code => (canUse(code) ? null : { reason: moduleEntitlement(code)?.reason ?? null }),
@@ -80,12 +80,21 @@ export function useAppModules() {
 	 */
 	const lockedApps = computed<LockedApp[]>(() => split.value.locked);
 
+	/**
+	 * Lưới chia theo nhóm, thứ tự nhóm lấy từ `groups` của máy chủ.
+	 *
+	 * Nhóm không còn ô nào sau khi lọc theo vai trò thì biến mất, nên không ai thấy một tên nhóm
+	 * trống. `label` dùng để hiện, `code` chỉ để ghép và làm khoá `v-for`.
+	 */
 	const appsByGroup = computed(() =>
-		GROUP_ORDER.map(group => ({
-			group,
-			apps: visibleApps.value.filter(a => a.group === group),
-			lockedApps: lockedApps.value.filter(a => a.group === group),
-		})).filter(g => g.apps.length > 0 || g.lockedApps.length > 0),
+		appGroups.value
+			.map(group => ({
+				group: group.label,
+				code: group.code,
+				apps: visibleApps.value.filter(a => a.group === group.code),
+				lockedApps: lockedApps.value.filter(a => a.group === group.code),
+			}))
+			.filter(g => g.apps.length > 0 || g.lockedApps.length > 0),
 	);
 
 	/**

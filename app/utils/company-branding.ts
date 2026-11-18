@@ -1,4 +1,5 @@
 import { APP_MODULES } from '~/config/app-modules';
+import type { AppTile } from '~/types/entitlement.types';
 
 /**
  * Nhận diện theo công ty: tiêu đề tab, favicon và chữ cái dự phòng cho logo.
@@ -40,20 +41,25 @@ function pathOf(route: string): string {
  * `/management/assets/reports` sẽ nhận nhãn của `/management/reports`. Mục menu được ưu tiên hơn
  * nhãn phân hệ vì nó cụ thể hơn; không mục nào khớp thì lùi về nhãn phân hệ.
  *
+ * Nhãn mục menu nằm trong cấu hình của web, còn tên phân hệ do máy chủ trả nên phải truyền vào
+ * qua `tiles`. Chưa nạp được danh mục thì chỉ mất lớp dự phòng cấp phân hệ, các mục vẫn có tên.
+ *
  * Cố tình KHÔNG lọc theo vai trò hay quyền: đây chỉ là chữ trên tab trình duyệt, còn chặn truy
  * cập là việc của middleware. Lọc ở đây chỉ khiến người không có quyền thấy tiêu đề rỗng.
  */
-export function navLabelFor(path: string): string | null {
+export function navLabelFor(path: string, tiles: AppTile[] = []): string | null {
 	let best: { label: string; len: number; fromItem: boolean } | null = null;
+	const labelOf = new Map(tiles.map(t => [t.code, t.label]));
 
-	function offer(label: string, prefix: string, fromItem: boolean) {
+	function offer(label: string | undefined, prefix: string, fromItem: boolean) {
+		if (!label) return;
 		if (!(path === prefix || path.startsWith(`${prefix}/`))) return;
 		if (best && (prefix.length < best.len || (prefix.length === best.len && !fromItem))) return;
 		best = { label, len: prefix.length, fromItem };
 	}
 
 	for (const app of APP_MODULES) {
-		for (const prefix of app.routes) offer(app.label, pathOf(prefix), false);
+		for (const prefix of app.routes) offer(labelOf.get(app.code), pathOf(prefix), false);
 		for (const item of app.items) offer(item.label, pathOf(item.route), true);
 	}
 
@@ -61,9 +67,9 @@ export function navLabelFor(path: string): string | null {
 }
 
 /** Tên trang: `route.meta.title` nếu trang khai, không thì nhãn menu, cuối cùng là tên sản phẩm. */
-export function pageTitle(path: string, metaTitle: unknown): string {
+export function pageTitle(path: string, metaTitle: unknown, tiles: AppTile[] = []): string {
 	if (typeof metaTitle === 'string' && metaTitle.trim() !== '') return metaTitle.trim();
-	return navLabelFor(path) ?? PRODUCT_NAME;
+	return navLabelFor(path, tiles) ?? PRODUCT_NAME;
 }
 
 /**

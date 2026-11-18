@@ -803,6 +803,32 @@
       "note": "Hồ sơ nhân sự (lõi). Không có refId. Mở trang cá nhân. Không chứa giá trị nhạy cảm. Kèm email"
     },
 
+    "EMPLOYEE_TRANSFERRED_IN": {
+      "category": "EVENT",
+      "refType": "employee",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/employees/{refId}",
+      "trigger": "Người vận hành chuyển nhân viên từ công ty khác sang công ty này ở control plane (T-01)",
+      "recipients": ["HR", "admin"],
+      "frequency": "real-time",
+      "note": "refId là id hồ sơ MỚI ở công ty nhận. Không nêu tên công ty kia. Chỉ có trên web. Kèm email tóm tắt"
+    },
+
+    "EMPLOYEE_TRANSFERRED_OUT": {
+      "category": "EVENT",
+      "refType": "employee",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/employees/{refId}",
+      "trigger": "Người vận hành chuyển hẳn nhân viên của công ty này sang công ty khác ở control plane (T-02)",
+      "recipients": ["HR", "admin", "trừ người vừa chuyển"],
+      "frequency": "real-time",
+      "note": "refId là id hồ sơ ở công ty này (vẫn đang làm, chờ HR cho nghỉ). Không nêu tên công ty kia. Chỉ có trên web. Kèm email tóm tắt"
+    },
+
     "RECRUIT_INTERVIEW_ASSIGNED": {
       "category": "EVENT",
       "refType": "recruitment_my_interviews",
