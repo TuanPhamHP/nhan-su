@@ -9,23 +9,24 @@
 
 ### Nhóm 1 — WorkShift (khuôn ca cố định)
 
-| Method | Path                  | Ai được gọi       | Ghi chú                      |
-| ------ | --------------------- | ----------------- | ---------------------------- |
-| GET    | `/v1/work-shifts`     | Mọi authenticated | Danh sách tất cả ca          |
-| POST   | `/v1/work-shifts`     | `ADMIN`, `HR`     | Tạo ca mới                   |
-| PATCH  | `/v1/work-shifts/:id` | `ADMIN`, `HR`     | Cập nhật thông tin ca        |
-| DELETE | `/v1/work-shifts/:id` | `ADMIN`, `HR`     | Vô hiệu hóa ca (soft delete) |
+| Method | Path | Ai được gọi | Ghi chú |
+|--------|------|-------------|---------|
+| GET | `/v1/work-shifts` | Mọi authenticated | Danh sách tất cả ca |
+| POST | `/v1/work-shifts` | `ADMIN`, `HR` | Tạo ca mới |
+| PATCH | `/v1/work-shifts/:id` | `ADMIN`, `HR` | Cập nhật thông tin ca |
+| DELETE | `/v1/work-shifts/:id` | `ADMIN`, `HR` | Vô hiệu hóa ca (soft delete) |
 
 ### Nhóm 2 — ShiftSchedule (gán ca theo ngày)
 
 | Method | Path | Ai được gọi | Ghi chú |
-| --- | --- | --- | --- |
+|--------|------|-------------|---------|
 | GET | `/v1/shift-schedules/me` | `EMPLOYEE` | Lịch ca của tôi (mặc định: tuần hiện tại) |
 | GET | `/v1/shift-schedules/calendar` | `ADMIN`, `HR` | Calendar view theo ngày (tối đa 31 ngày) |
 | GET | `/v1/shift-schedules` | `ADMIN`, `HR` | Lịch ca toàn công ty |
 | POST | `/v1/shift-schedules` | `ADMIN`, `HR` | Gán ca 1 ngày cho 1 nhân viên |
 | POST | `/v1/shift-schedules/bulk` | `ADMIN`, `HR` | Gán ca hàng loạt (tối đa 100 mục) |
 | POST | `/v1/shift-schedules/bulk-online-saturday` | `ADMIN`, `HR` | Gán Ca online T7 cho nhiều nhân viên trong 1 tháng |
+| POST | `/v1/shift-schedules/bulk-range` | `ADMIN`, `HR` | Gán 1 ca cho nhiều nhân viên trong một khoảng ngày, theo ngày làm việc của ca |
 | PATCH | `/v1/shift-schedules/employees/:employeeId/default-shift` | `ADMIN`, `HR` | Gán ca mặc định hàng ngày |
 | DELETE | `/v1/shift-schedules/:employeeId/:date` | `ADMIN`, `HR` | Xóa lịch ca theo ngày |
 
@@ -42,47 +43,47 @@
 
 // Response từ GET /work-shifts, POST /work-shifts, PATCH /work-shifts/:id
 export interface WorkShiftResponse {
-	id: number;
-	name: string;
-	checkInTime: string; // "HH:mm" UTC — ví dụ "08:30"
-	checkOutTime: string; // "HH:mm" UTC — ví dụ "18:00"
-	breakStartTime: string | null; // "HH:mm" — bắt đầu nghỉ trưa (VD "12:00"). null = ca không hỗ trợ nghỉ nửa ngày
-	breakEndTime: string | null; // "HH:mm" — kết thúc nghỉ trưa (VD "13:30"). null = ca không hỗ trợ nghỉ nửa ngày
-	lateThresholdMin: number; // Số phút trễ được phép, mặc định 15
-	earlyThresholdMin: number; // Số phút về sớm được phép, mặc định 15
-	// Cửa sổ check-in/out là 4 mốc giờ HH:mm quanh giờ ca — null = TH1 dùng default ±60p, set = TH2 HR cài thủ công.
-	// Xem section "Cấu hình window check-in/out" bên dưới.
-	checkInWindowStart: string | null; // HH:mm — sớm nhất được check-in (VD "07:30"). null = default 60p trước checkInTime
-	checkInWindowEnd: string | null; // HH:mm — muộn nhất được check-in, chưa cộng approvedLate (VD "09:00"). null = default 60p sau
-	checkOutWindowStart: string | null; // HH:mm — sớm nhất được check-out, chưa trừ approvedEarly (VD "16:00"). null = default 60p trước checkOutTime
-	checkOutWindowEnd: string | null; // HH:mm — muộn nhất được check-out (VD "18:00"). null = default 60p sau
-	requireCheckIn: boolean; // false = ca chỉ check-out (không yêu cầu check-in), default true
-	requireCheckOut: boolean; // false = ca chỉ check-in (không yêu cầu check-out), default true
-	workDays: number[]; // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
-	isOnline: boolean; // true = ca online, hệ thống tự ghi công, KHÔNG cho check-in thủ công
-	requiresLocationCheck: boolean; // false = remote/online toàn thời gian — check-in thủ công nhưng KHÔNG check GPS
-	isActive: boolean;
-	createdAt: string; // ISO 8601
+  id: number;
+  name: string;
+  checkInTime: string;        // "HH:mm" UTC — ví dụ "08:30"
+  checkOutTime: string;       // "HH:mm" UTC — ví dụ "18:00"
+  breakStartTime: string | null;  // "HH:mm" — bắt đầu nghỉ trưa (VD "12:00"). null = ca không hỗ trợ nghỉ nửa ngày
+  breakEndTime: string | null;    // "HH:mm" — kết thúc nghỉ trưa (VD "13:30"). null = ca không hỗ trợ nghỉ nửa ngày
+  lateThresholdMin: number;   // Số phút trễ được phép, mặc định 15
+  earlyThresholdMin: number;  // Số phút về sớm được phép, mặc định 15
+  // Cửa sổ check-in/out là 4 mốc giờ HH:mm quanh giờ ca — null = TH1 dùng default ±60p, set = TH2 HR cài thủ công.
+  // Xem section "Cấu hình window check-in/out" bên dưới.
+  checkInWindowStart: string | null;    // HH:mm — sớm nhất được check-in (VD "07:30"). null = default 60p trước checkInTime
+  checkInWindowEnd: string | null;      // HH:mm — muộn nhất được check-in, chưa cộng approvedLate (VD "09:00"). null = default 60p sau
+  checkOutWindowStart: string | null;   // HH:mm — sớm nhất được check-out, chưa trừ approvedEarly (VD "16:00"). null = default 60p trước checkOutTime
+  checkOutWindowEnd: string | null;     // HH:mm — muộn nhất được check-out (VD "18:00"). null = default 60p sau
+  requireCheckIn: boolean;              // false = ca chỉ check-out (không yêu cầu check-in), default true
+  requireCheckOut: boolean;             // false = ca chỉ check-in (không yêu cầu check-out), default true
+  workDays: number[];         // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
+  isOnline: boolean;          // true = ca online, hệ thống tự ghi công, KHÔNG cho check-in thủ công
+  requiresLocationCheck: boolean;  // false = remote/online toàn thời gian — check-in thủ công nhưng KHÔNG check GPS
+  isActive: boolean;
+  createdAt: string;          // ISO 8601
 }
 
 // POST /work-shifts request
 export interface CreateWorkShiftDto {
-	name: string;
-	checkInTime: string; // "HH:mm"
-	checkOutTime: string; // "HH:mm"
-	breakStartTime?: string; // "HH:mm" — cả 2 break* phải cùng set hoặc cùng null
-	breakEndTime?: string; // "HH:mm"
-	lateThresholdMin?: number; // 0–60, mặc định 15
-	earlyThresholdMin?: number; // 0–60, mặc định 15
-	checkInWindowStart?: string; // HH:mm — sớm nhất được check-in. Phải ≤ checkInTime, cách ≤ 4 giờ. omit/null = default 60p
-	checkInWindowEnd?: string; // HH:mm — muộn nhất được check-in (chưa cộng approvedLate). Phải ≥ checkInTime, cách ≤ 4 giờ.
-	checkOutWindowStart?: string; // HH:mm — sớm nhất được check-out (chưa trừ approvedEarly). Phải ≤ checkOutTime, cách ≤ 4 giờ.
-	checkOutWindowEnd?: string; // HH:mm — muộn nhất được check-out. Phải ≥ checkOutTime, cách ≤ 4 giờ.
-	requireCheckIn?: boolean; // mặc định true — set false cho ca chỉ check-out
-	requireCheckOut?: boolean; // mặc định true — set false cho ca chỉ check-in
-	workDays: number[]; // 0=CN, 1=T2, ..., 6=T7
-	isOnline?: boolean; // mặc định false
-	requiresLocationCheck?: boolean; // mặc định true
+  name: string;
+  checkInTime: string;         // "HH:mm"
+  checkOutTime: string;        // "HH:mm"
+  breakStartTime?: string;     // "HH:mm" — cả 2 break* phải cùng set hoặc cùng null
+  breakEndTime?: string;       // "HH:mm"
+  lateThresholdMin?: number;   // 0–60, mặc định 15
+  earlyThresholdMin?: number;  // 0–60, mặc định 15
+  checkInWindowStart?: string;    // HH:mm — sớm nhất được check-in. Bất kỳ giờ nào (cross-midnight tolerant). omit/null = default 60p
+  checkInWindowEnd?: string;      // HH:mm — muộn nhất được check-in (chưa cộng approvedLate). Bất kỳ giờ nào (cross-midnight tolerant).
+  checkOutWindowStart?: string;   // HH:mm — sớm nhất được check-out (chưa trừ approvedEarly). Bất kỳ giờ nào (cross-midnight tolerant).
+  checkOutWindowEnd?: string;     // HH:mm — muộn nhất được check-out. Bất kỳ giờ nào (cross-midnight tolerant).
+  requireCheckIn?: boolean;    // mặc định true — set false cho ca chỉ check-out
+  requireCheckOut?: boolean;   // mặc định true — set false cho ca chỉ check-in
+  workDays: number[];          // 0=CN, 1=T2, ..., 6=T7
+  isOnline?: boolean;          // mặc định false
+  requiresLocationCheck?: boolean;  // mặc định true
 }
 
 // PATCH /work-shifts/:id — mọi field đều optional
@@ -92,94 +93,106 @@ export type UpdateWorkShiftDto = Partial<CreateWorkShiftDto>;
 
 // Shape của object "shift" lồng trong ShiftScheduleResponse
 export interface WorkShiftSummary {
-	id: number;
-	name: string;
-	checkInTime: string; // "HH:mm"
-	checkOutTime: string; // "HH:mm"
-	breakStartTime: string | null; // "HH:mm" | null — dùng để hiển thị nghỉ trưa trên calendar
-	breakEndTime: string | null; // "HH:mm" | null
-	workDays: number[]; // 0=CN, 1=T2, ..., 6=T7
+  id: number;
+  name: string;
+  checkInTime: string;   // "HH:mm"
+  checkOutTime: string;  // "HH:mm"
+  breakStartTime: string | null;  // "HH:mm" | null — dùng để hiển thị nghỉ trưa trên calendar
+  breakEndTime: string | null;    // "HH:mm" | null
+  workDays: number[];    // 0=CN, 1=T2, ..., 6=T7
 }
 
 // Response từ GET /shift-schedules và GET /shift-schedules/me
 export interface ShiftScheduleResponse {
-	id: number;
-	date: string; // "YYYY-MM-DD"
-	isOnline: boolean; // true = lịch gán này là online (không cần GPS check-in)
-	employee: {
-		id: number;
-		fullName: string;
-		employeeCode: string;
-	};
-	shift: WorkShiftSummary;
+  id: number;
+  date: string;    // "YYYY-MM-DD"
+  isOnline: boolean;  // true = lịch gán này là online (không cần GPS check-in)
+  employee: {
+    id: number;
+    fullName: string;
+    employeeCode: string;
+  };
+  shift: WorkShiftSummary;
 }
 
 // POST /shift-schedules request
 export interface AssignShiftDto {
-	employeeId: number;
-	shiftId: number;
-	date: string; // "YYYY-MM-DD"
-	isOnline?: boolean; // mặc định false
+  employeeId: number;
+  shiftId: number;
+  date: string;      // "YYYY-MM-DD"
+  isOnline?: boolean;  // mặc định false
 }
 
 // POST /shift-schedules/bulk request
 export interface BulkAssignShiftDto {
-	assignments: AssignShiftDto[]; // tối đa 100 phần tử
+  assignments: AssignShiftDto[];  // tối đa 100 phần tử
+}
+
+// POST /shift-schedules/bulk-range request
+export interface BulkRangeAssignShiftDto {
+  fromDate: string;      // "YYYY-MM-DD"
+  toDate: string;        // "YYYY-MM-DD", tối đa 366 ngày kể từ fromDate
+  shiftId: number;
+  employeeIds: number[]; // tối đa 100
+}
+// POST /shift-schedules/bulk-range response (data)
+export interface BulkRangeAssignResult {
+  totalAssignments: number; // số ngày × số nhân viên đã gán
 }
 
 // POST /shift-schedules/bulk-online-saturday request
 export interface BulkOnlineSaturdayDto {
-	month: number; // 1–12
-	year: number; // >= 2020
-	employeeIds: number[];
-	shiftId: number; // ID của "Ca online T7"
+  month: number;        // 1–12
+  year: number;         // >= 2020
+  employeeIds: number[];
+  shiftId: number;      // ID của "Ca online T7"
 }
 
 // PATCH /shift-schedules/employees/:id/default-shift request
 export interface SetDefaultShiftDto {
-	shiftId: number;
+  shiftId: number;
 }
 
 // Query params cho GET /shift-schedules và GET /shift-schedules/me
 export interface QueryShiftScheduleParams {
-	employeeId?: number;
-	departmentId?: number;
-	startDate?: string; // "YYYY-MM-DD" — mặc định đầu tuần hiện tại
-	endDate?: string; // "YYYY-MM-DD" — mặc định cuối tuần hiện tại
+  employeeId?: number;
+  departmentId?: number;
+  startDate?: string;  // "YYYY-MM-DD" — mặc định đầu tuần hiện tại
+  endDate?: string;    // "YYYY-MM-DD" — mặc định cuối tuần hiện tại
 }
 
 // ─── Calendar ──────────────────────────────────────────────────────────────
 
 // Query params cho GET /shift-schedules/calendar
 export interface QueryCalendarParams {
-	startDate: string; // "YYYY-MM-DD" — bắt buộc
-	endDate: string; // "YYYY-MM-DD" — bắt buộc, tối đa 31 ngày từ startDate
-	departmentId?: number;
-	employeeId?: number;
+  startDate: string;    // "YYYY-MM-DD" — bắt buộc
+  endDate: string;      // "YYYY-MM-DD" — bắt buộc, tối đa 31 ngày từ startDate
+  departmentId?: number;
+  employeeId?: number;
 }
 
 export interface CalendarShift {
-	id: number;
-	name: string;
-	checkInTime: string; // "HH:mm"
-	checkOutTime: string; // "HH:mm"
-	breakStartTime: string | null; // "HH:mm" | null
-	breakEndTime: string | null; // "HH:mm" | null
+  id: number;
+  name: string;
+  checkInTime: string;   // "HH:mm"
+  checkOutTime: string;  // "HH:mm"
+  breakStartTime: string | null;  // "HH:mm" | null
+  breakEndTime: string | null;    // "HH:mm" | null
 }
 
 export interface CalendarDayEmployee {
-	employeeId: number;
-	employeeCode: string;
-	fullName: string;
-	department: string | null;
-	shift: CalendarShift | null; // null = không có ca nào (không có default, không có override)
-	isDefault: boolean; // true = đang dùng defaultShift, false = override theo ngày cụ thể
+  employeeId: number;
+  employeeCode: string;
+  fullName: string;
+  department: string | null;
+  shift: CalendarShift | null;  // null = không có ca nào (không có default, không có override)
+  isDefault: boolean;           // true = đang dùng defaultShift, false = override theo ngày cụ thể
 }
 
 // Response từ GET /shift-schedules/calendar
 export interface CalendarDayResponse {
-	date: string; // "YYYY-MM-DD"
-	employees: CalendarDayEmployee[];
+  date: string;  // "YYYY-MM-DD"
+  employees: CalendarDayEmployee[];
 }
 ```
 
@@ -191,11 +204,10 @@ export interface CalendarDayResponse {
 > Ví dụ: `[1, 2, 3, 4, 5]` = Thứ 2 đến Thứ 6. `[0]` = Chủ nhật.
 
 > **Quan trọng về `breakStartTime`/`breakEndTime` (giờ nghỉ trưa):**
->
 > - Cả 2 phải **cùng set** hoặc **cùng null** (server reject 400 nếu chỉ có 1).
 > - Nếu set → thứ tự bắt buộc: `checkInTime < breakStartTime < breakEndTime < checkOutTime`.
 > - Ca cross-midnight (checkOut ≤ checkIn, VD ca đêm 22:00–06:00) **không được** set break — server reject 400.
-> - `null` cho cả 2 = ca không hỗ trợ nghỉ nửa ngày. Nếu user cố tạo đơn `HALF_DAY` (hoặc bất kỳ leave nào có `halfDayPeriod`) cho ngày dùng ca này → server trả **400** với message: _"Ca làm việc của ngày này không hỗ trợ nghỉ nửa ngày vì chưa cấu hình giờ nghỉ trưa"_.
+> - `null` cho cả 2 = ca không hỗ trợ nghỉ nửa ngày. Nếu user cố tạo đơn `HALF_DAY` (hoặc bất kỳ leave nào có `halfDayPeriod`) cho ngày dùng ca này → server trả **400** với message: *"Ca làm việc của ngày này không hỗ trợ nghỉ nửa ngày vì chưa cấu hình giờ nghỉ trưa"*.
 > - FE nên disable option "Nghỉ nửa ngày" trong form leave khi ca của employee cho ngày đó có `breakStartTime === null`.
 
 ---
@@ -229,7 +241,6 @@ WorkShift (khuôn ca — HR tạo, cố định)
 ```
 
 **Frontend cần làm:**
-
 - Gọi `GET /work-shifts` để populate dropdown khi tạo/gán ca
 - Gọi `GET /shift-schedules/me` để hiển thị lịch ca tuần này (EMPLOYEE)
 - Gọi `GET /shift-schedules/calendar` để render calendar view (HR)
@@ -247,51 +258,51 @@ Mọi authenticated user được gọi.
 
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"id": 1,
-			"name": "Ca hành chính HN",
-			"checkInTime": "08:30",
-			"checkOutTime": "18:00",
-			"breakStartTime": "12:00",
-			"breakEndTime": "13:30",
-			"lateThresholdMin": 15,
-			"earlyThresholdMin": 15,
-			"checkInWindowStart": null,
-			"checkInWindowEnd": null,
-			"checkOutWindowStart": null,
-			"checkOutWindowEnd": null,
-			"requireCheckIn": true,
-			"requireCheckOut": true,
-			"workDays": [1, 2, 3, 4, 5],
-			"isOnline": false,
-			"requiresLocationCheck": true,
-			"isActive": true,
-			"createdAt": "2026-01-01T00:00:00.000Z"
-		},
-		{
-			"id": 4,
-			"name": "Ca linh hoạt",
-			"checkInTime": "00:00",
-			"checkOutTime": "06:00",
-			"breakStartTime": null,
-			"breakEndTime": null,
-			"lateThresholdMin": 0,
-			"earlyThresholdMin": 0,
-			"checkInWindowStart": "23:30",
-			"checkInWindowEnd": "01:30",
-			"checkOutWindowStart": null,
-			"checkOutWindowEnd": null,
-			"requireCheckIn": true,
-			"requireCheckOut": true,
-			"workDays": [0, 1, 2, 3, 4, 5, 6],
-			"isOnline": false,
-			"requiresLocationCheck": true,
-			"isActive": true,
-			"createdAt": "2026-01-01T00:00:00.000Z"
-		}
-	]
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Ca hành chính HN",
+      "checkInTime": "08:30",
+      "checkOutTime": "18:00",
+      "breakStartTime": "12:00",
+      "breakEndTime": "13:30",
+      "lateThresholdMin": 15,
+      "earlyThresholdMin": 15,
+      "checkInWindowStart": null,
+      "checkInWindowEnd": null,
+      "checkOutWindowStart": null,
+      "checkOutWindowEnd": null,
+      "requireCheckIn": true,
+      "requireCheckOut": true,
+      "workDays": [1, 2, 3, 4, 5],
+      "isOnline": false,
+      "requiresLocationCheck": true,
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "name": "Ca linh hoạt",
+      "checkInTime": "00:00",
+      "checkOutTime": "06:00",
+      "breakStartTime": null,
+      "breakEndTime": null,
+      "lateThresholdMin": 0,
+      "earlyThresholdMin": 0,
+      "checkInWindowStart": "23:30",
+      "checkInWindowEnd": "01:30",
+      "checkOutWindowStart": null,
+      "checkOutWindowEnd": null,
+      "requireCheckIn": true,
+      "requireCheckOut": true,
+      "workDays": [0, 1, 2, 3, 4, 5, 6],
+      "isOnline": false,
+      "requiresLocationCheck": true,
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ]
 }
 ```
 
@@ -302,30 +313,28 @@ Mọi authenticated user được gọi.
 Chỉ `ADMIN` và `HR` được gọi.
 
 **Request body — ca có nghỉ trưa:**
-
 ```json
 {
-	"name": "Ca hành chính",
-	"checkInTime": "08:30",
-	"checkOutTime": "18:00",
-	"breakStartTime": "12:00",
-	"breakEndTime": "13:30",
-	"lateThresholdMin": 15,
-	"earlyThresholdMin": 15,
-	"workDays": [1, 2, 3, 4, 5]
+  "name": "Ca hành chính",
+  "checkInTime": "08:30",
+  "checkOutTime": "18:00",
+  "breakStartTime": "12:00",
+  "breakEndTime": "13:30",
+  "lateThresholdMin": 15,
+  "earlyThresholdMin": 15,
+  "workDays": [1, 2, 3, 4, 5]
 }
 ```
 
 **Request body — ca liên tục (không nghỉ trưa):**
-
 ```json
 {
-	"name": "Ca sáng sớm",
-	"checkInTime": "06:00",
-	"checkOutTime": "14:00",
-	"lateThresholdMin": 10,
-	"earlyThresholdMin": 10,
-	"workDays": [1, 2, 3, 4, 5]
+  "name": "Ca sáng sớm",
+  "checkInTime": "06:00",
+  "checkOutTime": "14:00",
+  "lateThresholdMin": 10,
+  "earlyThresholdMin": 10,
+  "workDays": [1, 2, 3, 4, 5]
 }
 ```
 
@@ -334,7 +343,7 @@ Chỉ `ADMIN` và `HR` được gọi.
 **400** — các case bị reject:
 
 | Case | Message |
-| --- | --- |
+|------|---------|
 | `checkInTime`/`checkOutTime` sai format | `"checkInTime must match /^\\d{2}:\\d{2}$/"` |
 | Chỉ set 1 trong 2 `break*` | `"breakStartTime và breakEndTime phải được set cùng nhau (hoặc cùng null)"` |
 | Ca cross-midnight có `break*` | `"Ca cross-midnight (checkOutTime ≤ checkInTime) không hỗ trợ nghỉ trưa"` |
@@ -349,7 +358,6 @@ Mọi field đều optional. Chỉ `ADMIN` và `HR` được gọi.
 **Ví dụ:** `PATCH /v1/work-shifts/1`
 
 **Request body:**
-
 ```json
 { "lateThresholdMin": 5 }
 ```
@@ -369,7 +377,6 @@ Soft delete — chỉ set `isActive = false`, không xóa khỏi DB. Chỉ `ADMI
 **Response: 204 No Content**
 
 **400** nếu ca đã bị vô hiệu hóa trước đó:
-
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Ca làm việc đã bị vô hiệu hóa" } }
 ```
@@ -385,27 +392,27 @@ Mặc định nếu không truyền: từ đầu đến cuối tuần hiện t�
 
 ```json
 {
-	"success": true,
-	"data": [
-		{
-			"id": 5,
-			"date": "2026-05-12",
-			"employee": {
-				"id": 4,
-				"fullName": "Nguyễn Văn An",
-				"employeeCode": "EMP004"
-			},
-			"shift": {
-				"id": 1,
-				"name": "Ca hành chính HN",
-				"checkInTime": "08:30",
-				"checkOutTime": "18:00",
-				"breakStartTime": "12:00",
-				"breakEndTime": "13:30",
-				"workDays": [1, 2, 3, 4, 5]
-			}
-		}
-	]
+  "success": true,
+  "data": [
+    {
+      "id": 5,
+      "date": "2026-05-12",
+      "employee": {
+        "id": 4,
+        "fullName": "Nguyễn Văn An",
+        "employeeCode": "EMP004"
+      },
+      "shift": {
+        "id": 1,
+        "name": "Ca hành chính HN",
+        "checkInTime": "08:30",
+        "checkOutTime": "18:00",
+        "breakStartTime": "12:00",
+        "breakEndTime": "13:30",
+        "workDays": [1, 2, 3, 4, 5]
+      }
+    }
+  ]
 }
 ```
 
@@ -469,13 +476,11 @@ Chỉ `ADMIN` và `HR` được gọi. `startDate` và `endDate` đều **bắt 
 ```
 
 **Hiểu `isDefault`:**
-
 - `isDefault: true` → nhân viên đang dùng `Employee.defaultShiftId` (không có override cho ngày này)
 - `isDefault: false` → nhân viên có `EmployeeShiftSchedule` cụ thể cho ngày này (override)
 - `shift: null` → nhân viên không có ca mặc định và không có override — sẽ bị `NO_SHIFT_TODAY`
 
 **400** nếu khoảng ngày vượt quá 31 ngày:
-
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Khoảng ngày phải từ 0 đến 31 ngày" } }
 ```
@@ -497,12 +502,11 @@ Chỉ `ADMIN` và `HR` được gọi.
 Nếu nhân viên đã có lịch ca cho ngày đó → **upsert** (ghi đè, không báo lỗi).
 
 **Request body:**
-
 ```json
 {
-	"employeeId": 4,
-	"shiftId": 1,
-	"date": "2026-05-20"
+  "employeeId": 4,
+  "shiftId": 1,
+  "date": "2026-05-20"
 }
 ```
 
@@ -510,36 +514,34 @@ Nếu nhân viên đã có lịch ca cho ngày đó → **upsert** (ghi đè, kh
 
 ```json
 {
-	"success": true,
-	"data": {
-		"id": 10,
-		"date": "2026-05-20",
-		"employee": {
-			"id": 4,
-			"fullName": "Nguyễn Văn An",
-			"employeeCode": "EMP004"
-		},
-		"shift": {
-			"id": 1,
-			"name": "Ca hành chính HN",
-			"checkInTime": "08:30",
-			"checkOutTime": "18:00",
-			"breakStartTime": "12:00",
-			"breakEndTime": "13:30",
-			"workDays": [1, 2, 3, 4, 5]
-		}
-	}
+  "success": true,
+  "data": {
+    "id": 10,
+    "date": "2026-05-20",
+    "employee": {
+      "id": 4,
+      "fullName": "Nguyễn Văn An",
+      "employeeCode": "EMP004"
+    },
+    "shift": {
+      "id": 1,
+      "name": "Ca hành chính HN",
+      "checkInTime": "08:30",
+      "checkOutTime": "18:00",
+      "breakStartTime": "12:00",
+      "breakEndTime": "13:30",
+      "workDays": [1, 2, 3, 4, 5]
+    }
+  }
 }
 ```
 
 **400** nếu ca đã bị vô hiệu hóa (`isActive: false`):
-
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Ca làm việc đã bị vô hiệu hóa" } }
 ```
 
 **404** nếu nhân viên hoặc ca không tồn tại:
-
 ```json
 { "success": false, "error": { "code": "NOT_FOUND", "message": "Nhân viên hoặc ca làm việc không tồn tại" } }
 ```
@@ -551,27 +553,54 @@ Nếu nhân viên đã có lịch ca cho ngày đó → **upsert** (ghi đè, kh
 Tối đa 100 mục trong một request. Gán cho nhiều nhân viên và/hoặc nhiều ngày.
 
 **Request body:**
-
 ```json
 {
-	"assignments": [
-		{ "employeeId": 4, "shiftId": 1, "date": "2026-05-19" },
-		{ "employeeId": 4, "shiftId": 1, "date": "2026-05-20" },
-		{ "employeeId": 5, "shiftId": 2, "date": "2026-05-19" }
-	]
+  "assignments": [
+    { "employeeId": 4, "shiftId": 1, "date": "2026-05-19" },
+    { "employeeId": 4, "shiftId": 1, "date": "2026-05-20" },
+    { "employeeId": 5, "shiftId": 2, "date": "2026-05-19" }
+  ]
 }
 ```
 
 **Response 201: No Content** (void — không trả data)
 
 **400** nếu vượt quá 100 mục:
-
 ```json
-{
-	"success": false,
-	"error": { "code": "BAD_REQUEST", "message": "assignments must contain no more than 100 elements" }
-}
+{ "success": false, "error": { "code": "BAD_REQUEST", "message": "assignments must contain no more than 100 elements" } }
 ```
+
+---
+
+## POST /v1/shift-schedules/bulk-range — Gán ca theo khoảng ngày
+
+Gán một ca cho nhiều nhân viên trên mọi ngày trong khoảng **mà ca đó khai là ngày làm việc** (`workDays` của khuôn
+ca, `0 = CN … 6 = T7`). Mỗi công ty tự khai ngày làm việc trong khuôn ca nên server không có luật riêng cho thứ Bảy
+hay Chủ nhật. Ngày đã có ca thì bị ghi đè (kể cả ca online T7). Dùng cho hộp "Gán hàng loạt" và "Gán ca theo khoảng"
+của một nhân viên.
+
+> Trước bản vá 18/11/2026, server luôn chỉ gán T2–T6, bỏ qua `workDays` của ca.
+
+**Request body:**
+```json
+{ "fromDate": "2026-01-01", "toDate": "2026-12-31", "shiftId": 3, "employeeIds": [31, 32, 33, 30] }
+```
+
+**Response 201:**
+```json
+{ "success": true, "data": { "totalAssignments": 1460 } }
+```
+Ví dụ trên: ca khai T2–CN, 365 ngày × 4 người. Cùng khoảng với ca T2–T6 là 1044, ca T2–T7 là 1252.
+
+**FE nên làm:** trước khi gửi, hiện cho HR những ngày sẽ được gán, lấy từ `workDays` của ca đang chọn (ví dụ
+"Gán vào T2–CN theo khuôn ca"). Không ghi "toàn bộ ngày trong khoảng".
+
+| HTTP | Khi nào | `error.message` |
+|---|---|---|
+| 400 | Ca không có ngày làm việc nào trong khoảng (ví dụ khoảng chỉ gồm T7, CN với ca T2–T6). Không ghi gì | `Ca này không có ngày làm việc nào trong khoảng đã chọn` |
+| 400 | Ca đã bị vô hiệu hoá | `Ca làm việc đã bị vô hiệu hóa` |
+| 400 | `fromDate` sau `toDate`, hoặc khoảng quá 366 ngày | |
+| 404 | Ca hoặc nhân viên không tồn tại | |
 
 ---
 
@@ -582,7 +611,6 @@ Gán ca mặc định cho nhân viên. Ca này được áp dụng cho mọi ng�
 **Ví dụ:** `PATCH /v1/shift-schedules/employees/4/default-shift`
 
 **Request body:**
-
 ```json
 { "shiftId": 1 }
 ```
@@ -590,7 +618,6 @@ Gán ca mặc định cho nhân viên. Ca này được áp dụng cho mọi ng�
 **Response 200: No Content** (void)
 
 **404** nếu nhân viên hoặc ca không tồn tại:
-
 ```json
 { "success": false, "error": { "code": "NOT_FOUND", "message": "Nhân viên không tồn tại" } }
 ```
@@ -606,7 +633,6 @@ Xóa override ca của một ngày cụ thể. Sau khi xóa, hệ thống fallba
 **Response: 204 No Content**
 
 **404** nếu không tìm thấy lịch ca:
-
 ```json
 { "success": false, "error": { "code": "NOT_FOUND", "message": "Lịch ca không tồn tại" } }
 ```
@@ -618,7 +644,7 @@ Xóa override ca của một ngày cụ thể. Sau khi xóa, hệ thống fallba
 Hai field này điều khiển 2 chế độ "remote" hoàn toàn khác nhau — đừng nhầm:
 
 | Chế độ | `isOnline` | `requiresLocationCheck` | Check-in thủ công | GPS check | Ai chấm công |
-| --- | --- | --- | --- | --- | --- |
+|---|---|---|---|---|---|
 | Ca offline bình thường | `false` | `true` | ✅ | ✅ | Nhân viên bấm nút check-in |
 | Ca online (vd. T7 WFH) | `true` | bất kỳ | ❌ (bị block) | — | Cron tự ghi PRESENT cuối ngày |
 | **Remote toàn thời gian (mới)** | `false` | `false` | ✅ | ❌ | Nhân viên bấm nút check-in |
@@ -637,7 +663,6 @@ Mobile app **bắt buộc** check field này trước khi prompt location — v�
 ### Tạo shift remote toàn thời gian
 
 HR gọi:
-
 ```http
 POST /v1/work-shifts
 {
@@ -660,7 +685,11 @@ Rồi gán cho nhân sự remote qua `PATCH /v1/shift-schedules/employees/:id/de
 
 "Ca online T7" là loại ca làm việc đặc biệt: nhân viên làm việc tại nhà vào Thứ 7 và **không cần GPS check-in**. Hệ thống tự động ghi nhận PRESENT cuối ngày.
 
-Hai cấp `isOnline`: | Field | Model | Ý nghĩa | |-------|-------|---------| | `WorkShift.isOnline` | Khuôn ca | Ca này được thiết kế dành cho online | | `EmployeeShiftSchedule.isOnline` | Lịch gán | Ngày cụ thể này nhân viên làm online |
+Hai cấp `isOnline`:
+| Field | Model | Ý nghĩa |
+|-------|-------|---------|
+| `WorkShift.isOnline` | Khuôn ca | Ca này được thiết kế dành cho online |
+| `EmployeeShiftSchedule.isOnline` | Lịch gán | Ngày cụ thể này nhân viên làm online |
 
 Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: true`).
 
@@ -672,25 +701,25 @@ Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: 
 
 ```json
 {
-	"id": 5,
-	"name": "Ca online T7",
-	"checkInTime": "08:00",
-	"checkOutTime": "13:00",
-	"breakStartTime": null,
-	"breakEndTime": null,
-	"lateThresholdMin": 0,
-	"earlyThresholdMin": 0,
-	"checkInWindowStart": null,
-	"checkInWindowEnd": null,
-	"checkOutWindowStart": null,
-	"checkOutWindowEnd": null,
-	"requireCheckIn": true,
-	"requireCheckOut": true,
-	"workDays": [6],
-	"isOnline": true,
-	"requiresLocationCheck": true,
-	"isActive": true,
-	"createdAt": "2026-01-01T00:00:00.000Z"
+  "id": 5,
+  "name": "Ca online T7",
+  "checkInTime": "08:00",
+  "checkOutTime": "13:00",
+  "breakStartTime": null,
+  "breakEndTime": null,
+  "lateThresholdMin": 0,
+  "earlyThresholdMin": 0,
+  "checkInWindowStart": null,
+  "checkInWindowEnd": null,
+  "checkOutWindowStart": null,
+  "checkOutWindowEnd": null,
+  "requireCheckIn": true,
+  "requireCheckOut": true,
+  "workDays": [6],
+  "isOnline": true,
+  "requiresLocationCheck": true,
+  "isActive": true,
+  "createdAt": "2026-01-01T00:00:00.000Z"
 }
 ```
 
@@ -698,19 +727,19 @@ Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: 
 
 ```json
 {
-	"id": 42,
-	"date": "2026-05-24",
-	"isOnline": true,
-	"employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
-	"shift": {
-		"id": 5,
-		"name": "Ca online T7",
-		"checkInTime": "08:00",
-		"checkOutTime": "13:00",
-		"breakStartTime": null,
-		"breakEndTime": null,
-		"workDays": [6]
-	}
+  "id": 42,
+  "date": "2026-05-24",
+  "isOnline": true,
+  "employee": { "id": 4, "fullName": "Nguyễn Văn An", "employeeCode": "EMP004" },
+  "shift": {
+    "id": 5,
+    "name": "Ca online T7",
+    "checkInTime": "08:00",
+    "checkOutTime": "13:00",
+    "breakStartTime": null,
+    "breakEndTime": null,
+    "workDays": [6]
+  }
 }
 ```
 
@@ -723,33 +752,30 @@ Seed mặc định có sẵn ca **"Ca online T7"** (`workDays: [6]`, `isOnline: 
 Tự động tìm tất cả ngày Thứ 7 trong tháng và upsert `EmployeeShiftSchedule` với `isOnline: true` cho từng nhân viên.
 
 **Request body:**
-
 ```json
 {
-	"month": 5,
-	"year": 2026,
-	"employeeIds": [4, 5, 7],
-	"shiftId": 5
+  "month": 5,
+  "year": 2026,
+  "employeeIds": [4, 5, 7],
+  "shiftId": 5
 }
 ```
 
 **Response 201:**
-
 ```json
 {
-	"success": true,
-	"data": {
-		"assigned": 15,
-		"month": 5,
-		"year": 2026
-	}
+  "success": true,
+  "data": {
+    "assigned": 15,
+    "month": 5,
+    "year": 2026
+  }
 }
 ```
 
 > `assigned` = tổng số bản ghi đã upsert = số Thứ 7 trong tháng × số nhân viên.
 
 **400** nếu không có ngày Thứ 7 nào (hiếm — tháng nào cũng có ít nhất 4):
-
 ```json
 { "success": false, "error": { "code": "BAD_REQUEST", "message": "Không có ngày T7 nào trong tháng đã chọn" } }
 ```
@@ -765,11 +791,11 @@ Khi nhân viên cố check-in thủ công vào ngày có `EmployeeShiftSchedule.
 
 ```json
 {
-	"success": false,
-	"error": {
-		"code": "BAD_REQUEST",
-		"message": "Hôm nay là ca làm việc online. Hệ thống sẽ tự động ghi nhận công."
-	}
+  "success": false,
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Hôm nay là ca làm việc online. Hệ thống sẽ tự động ghi nhận công."
+  }
 }
 ```
 
@@ -782,13 +808,13 @@ Hệ thống chạy cron lúc **23:50 Thứ 7 (VN time)** và tạo `AttendanceR
 
 ```json
 {
-	"status": "PRESENT",
-	"checkInAt": null,
-	"checkOutAt": null,
-	"isManual": true,
-	"note": "Tự động ghi nhận — Ca online T7",
-	"lateMinutes": 0,
-	"earlyMinutes": 0
+  "status": "PRESENT",
+  "checkInAt": null,
+  "checkOutAt": null,
+  "isManual": true,
+  "note": "Tự động ghi nhận — Ca online T7",
+  "lateMinutes": 0,
+  "earlyMinutes": 0
 }
 ```
 
@@ -798,7 +824,6 @@ Nếu nhân viên đã có `AttendanceRecord` cho ngày đó (ví dụ: đã đ�
 
 **Đơn nghỉ phép T7 hoạt động bình thường:**  
 Nếu nhân viên có đơn nghỉ phép đã duyệt trùng ngày Thứ 7 online:
-
 - `findActiveEmployeesWithoutAttendance` đã lọc ra những người có đơn nghỉ phép duyệt — họ không xuất hiện trong danh sách cần tạo record
 - Cron `autoRecordOnlineSaturday` bỏ qua nhân viên đã có `AttendanceRecord` (`existing` check)
 - Kết quả: `AttendanceRecord.status = ON_LEAVE` từ đơn nghỉ phép **override** PRESENT online — hoạt động đúng
@@ -832,70 +857,79 @@ Thứ 7 đến:
 ```typescript
 // composables/useShiftSchedules.ts
 import type {
-	WorkShiftResponse,
-	CreateWorkShiftDto,
-	UpdateWorkShiftDto,
-	ShiftScheduleResponse,
-	AssignShiftDto,
-	BulkAssignShiftDto,
-	BulkOnlineSaturdayDto,
-	SetDefaultShiftDto,
-	QueryShiftScheduleParams,
-	QueryCalendarParams,
-	CalendarDayResponse,
+  WorkShiftResponse,
+  CreateWorkShiftDto,
+  UpdateWorkShiftDto,
+  ShiftScheduleResponse,
+  AssignShiftDto,
+  BulkAssignShiftDto,
+  BulkOnlineSaturdayDto,
+  SetDefaultShiftDto,
+  QueryShiftScheduleParams,
+  QueryCalendarParams,
+  CalendarDayResponse,
 } from '~/types/shift.types';
 
 export function useShiftSchedules() {
-	const { get, post, patch, del } = useFetch();
+  const { get, post, patch, del } = useFetch();
 
-	// ─── WorkShift ──────────────────────────────────────────────────────────
+  // ─── WorkShift ──────────────────────────────────────────────────────────
 
-	const fetchWorkShifts = () => get<WorkShiftResponse[]>('/v1/work-shifts');
+  const fetchWorkShifts = () =>
+    get<WorkShiftResponse[]>('/v1/work-shifts');
 
-	const createWorkShift = (dto: CreateWorkShiftDto) => post<WorkShiftResponse>('/v1/work-shifts', dto);
+  const createWorkShift = (dto: CreateWorkShiftDto) =>
+    post<WorkShiftResponse>('/v1/work-shifts', dto);
 
-	const updateWorkShift = (id: number, dto: UpdateWorkShiftDto) =>
-		patch<WorkShiftResponse>(`/v1/work-shifts/${id}`, dto);
+  const updateWorkShift = (id: number, dto: UpdateWorkShiftDto) =>
+    patch<WorkShiftResponse>(`/v1/work-shifts/${id}`, dto);
 
-	const deactivateWorkShift = (id: number) => del(`/v1/work-shifts/${id}`);
+  const deactivateWorkShift = (id: number) =>
+    del(`/v1/work-shifts/${id}`);
 
-	// ─── ShiftSchedule ──────────────────────────────────────────────────────
+  // ─── ShiftSchedule ──────────────────────────────────────────────────────
 
-	const fetchMySchedule = (params?: QueryShiftScheduleParams) =>
-		get<ShiftScheduleResponse[]>('/v1/shift-schedules/me', { params });
+  const fetchMySchedule = (params?: QueryShiftScheduleParams) =>
+    get<ShiftScheduleResponse[]>('/v1/shift-schedules/me', { params });
 
-	const fetchSchedules = (params?: QueryShiftScheduleParams) =>
-		get<ShiftScheduleResponse[]>('/v1/shift-schedules', { params });
+  const fetchSchedules = (params?: QueryShiftScheduleParams) =>
+    get<ShiftScheduleResponse[]>('/v1/shift-schedules', { params });
 
-	const fetchCalendar = (params: QueryCalendarParams) =>
-		get<CalendarDayResponse[]>('/v1/shift-schedules/calendar', { params });
+  const fetchCalendar = (params: QueryCalendarParams) =>
+    get<CalendarDayResponse[]>('/v1/shift-schedules/calendar', { params });
 
-	const assignShift = (dto: AssignShiftDto) => post<ShiftScheduleResponse>('/v1/shift-schedules', dto);
+  const assignShift = (dto: AssignShiftDto) =>
+    post<ShiftScheduleResponse>('/v1/shift-schedules', dto);
 
-	const bulkAssign = (dto: BulkAssignShiftDto) => post<void>('/v1/shift-schedules/bulk', dto);
+  const bulkAssign = (dto: BulkAssignShiftDto) =>
+    post<void>('/v1/shift-schedules/bulk', dto);
 
-	const bulkOnlineSaturday = (dto: BulkOnlineSaturdayDto) =>
-		post<{ assigned: number; month: number; year: number }>('/v1/shift-schedules/bulk-online-saturday', dto);
+  const bulkOnlineSaturday = (dto: BulkOnlineSaturdayDto) =>
+    post<{ assigned: number; month: number; year: number }>(
+      '/v1/shift-schedules/bulk-online-saturday',
+      dto,
+    );
 
-	const setDefaultShift = (employeeId: number, dto: SetDefaultShiftDto) =>
-		patch<void>(`/v1/shift-schedules/employees/${employeeId}/default-shift`, dto);
+  const setDefaultShift = (employeeId: number, dto: SetDefaultShiftDto) =>
+    patch<void>(`/v1/shift-schedules/employees/${employeeId}/default-shift`, dto);
 
-	const removeShift = (employeeId: number, date: string) => del(`/v1/shift-schedules/${employeeId}/${date}`);
+  const removeShift = (employeeId: number, date: string) =>
+    del(`/v1/shift-schedules/${employeeId}/${date}`);
 
-	return {
-		fetchWorkShifts,
-		createWorkShift,
-		updateWorkShift,
-		deactivateWorkShift,
-		fetchMySchedule,
-		fetchSchedules,
-		fetchCalendar,
-		assignShift,
-		bulkAssign,
-		bulkOnlineSaturday,
-		setDefaultShift,
-		removeShift,
-	};
+  return {
+    fetchWorkShifts,
+    createWorkShift,
+    updateWorkShift,
+    deactivateWorkShift,
+    fetchMySchedule,
+    fetchSchedules,
+    fetchCalendar,
+    assignShift,
+    bulkAssign,
+    bulkOnlineSaturday,
+    setDefaultShift,
+    removeShift,
+  };
 }
 ```
 
@@ -930,28 +964,27 @@ windowEnd_checkOut   = checkOutWindowEnd   ?? (checkOutTime + 60p)
 ```
 
 Ràng buộc validate trên input HH:mm:
-
-- `checkInWindowStart` phải **≤ checkInTime**, cách tối đa **4 giờ**.
-- `checkInWindowEnd` phải **≥ checkInTime**, cách tối đa **4 giờ**.
-- `checkOutWindowStart` phải **≤ checkOutTime**, cách tối đa 4 giờ.
-- `checkOutWindowEnd` phải **≥ checkOutTime**, cách tối đa 4 giờ.
-- Cho phép cross-midnight khi hợp lý (VD ca `checkInTime=00:30` + `checkInWindowStart="22:30"` = 120p trước).
+- Chỉ kiểm tra định dạng `HH:mm`. Không giới hạn khoảng cách giữa window và shift time — HR có toàn quyền set giờ bất kỳ.
+- Cross-midnight tolerant, quy đổi modulo 1440 phút:
+  - `checkInWindowStart` > `checkInTime` → hiểu là **hôm trước** (VD `checkInTime=08:00, checkInWindowStart="20:00"` = 12h trước).
+  - `checkInWindowEnd` < `checkInTime` → hiểu là **hôm sau**.
+  - Tương tự cho 2 field checkOut.
+- Ví dụ hay dùng: ca `checkInTime=00:30` + `checkInWindowStart="22:30"` → 120p trước (hôm trước).
 
 ### Ví dụ
 
 | Ca | Fields cài | Check-in window | Check-out window |
-| --- | --- | --- | --- |
+|----|-----------|-----------------|------------------|
 | 08:30–18:00, không cài | tất cả null (TH1) | `[07:30, 09:30 + approvedLate]` | `[17:00 − approvedEarly, 19:00]` |
 | 08:30–18:00, cài mở rộng đầu ngày | `checkInWindowStart="08:00", checkInWindowEnd="10:00"` | `[08:00, 10:00 + approvedLate]` | `[17:00 − approvedEarly, 19:00]` (TH1) |
 | 08:00–17:00, cài siết checkout | `checkOutWindowStart="16:45", checkOutWindowEnd="17:30"` | `[07:00, 08:00 + approvedLate]` (TH1) | `[16:45 − approvedEarly, 17:30]` |
 
 **FE nên làm gì trong form tạo/sửa ca:**
-
 - Toggle "Dùng cấu hình mặc định" — khi ON, gửi 4 field = `undefined` (hoặc `null` khi PATCH).
 - Khi OFF, dùng 4 TimePicker (HH:mm) đối xứng với TimePicker của `checkInTime` / `checkOutTime`.
 - Client-side validate: `checkInWindowStart ≤ checkInTime ≤ checkInWindowEnd` (tương tự cho checkOut) — không cần tính phút thủ công.
 - Preview realtime: "Cho phép check-in từ 07:30 đến 09:30" bằng cách hiển thị trực tiếp giá trị 2 TimePicker.
-- Nếu BE reject 400 (`"checkInWindowStart (12:00) phải nằm trong 4 giờ trước checkInTime (08:00)"`) → hiển thị `error.message` trực tiếp.
+- BE chỉ reject 400 khi sai format `HH:mm` — mọi giá trị hợp format khác đều được chấp nhận (kể cả sai chiều, sẽ tự quy đổi sang cross-day). FE cần tự client-side validate để cảnh báo user nếu window nằm ngoài kỳ vọng.
 
 ---
 
@@ -962,23 +995,20 @@ Mặc định `requireCheckIn = true, requireCheckOut = true` — ca yêu cầu 
 Set `false` để tạo ca đặc thù:
 
 | Cấu hình | Ý nghĩa | Behavior |
-| --- | --- | --- |
+|----------|---------|----------|
 | `requireCheckIn: false` | Ca **chỉ check-out** (VD: ca không cần vào đúng giờ, chỉ quan trọng giờ ra) | `POST /attendance/check-in` → 400 `CHECK_IN_NOT_REQUIRED` |
 | `requireCheckOut: false` | Ca **chỉ check-in** (VD: ca part-time làm xong về tự do, không cần chấm ra) | `POST /attendance/check-out` → 400 `CHECK_OUT_NOT_REQUIRED` |
 | Cả 2 = `false` | Ca hoàn toàn không cần chấm công thủ công | Không dùng — HR nên cấu hình `isOnline=true` thay vì cấu hình này |
 
 **Ảnh hưởng đến violation:**
-
 - Khi `requireCheckOut=false`, phiếu `FORGOT_CHECKIN` cho ngày hiện tại (chưa có bản ghi) → `slotCost = 0` thay vì 1 hoặc 2. Nhân viên chỉ mất quota nếu thực sự thiếu check-in mà ca có yêu cầu.
 - Chi tiết xem [violation-requests.md](./violation-requests.md).
 
 **FE nên làm gì trong form tạo/sửa ca:**
-
 - 2 checkbox độc lập "Yêu cầu check-in" / "Yêu cầu check-out", cả 2 default ON
 - Nếu unchecked cả 2 → hiện warning "Ca không yêu cầu chấm công thủ công — cân nhắc dùng ca online thay vì cấu hình này"
 
 **FE nên làm gì trong màn chấm công (mobile):**
-
 - Đọc `TodayShiftDto.requireCheckIn` / `requireCheckOut` (xem [attendance.md](./attendance.md)) → ẩn nút tương ứng nếu = `false`
 
 ---
@@ -989,38 +1019,34 @@ Khi employee có đơn nghỉ nửa ngày (`halfDayPeriod = MORNING | AFTERNOON`
 
 ### Công thức
 
-| Half-day period                    | Bắt đầu ca hiệu lực | Kết thúc ca hiệu lực |
-| ---------------------------------- | ------------------- | -------------------- |
-| `MORNING` (nghỉ sáng, làm chiều)   | `breakEndTime`      | `checkOutTime`       |
-| `AFTERNOON` (làm sáng, nghỉ chiều) | `checkInTime`       | `breakStartTime`     |
+| Half-day period | Bắt đầu ca hiệu lực | Kết thúc ca hiệu lực |
+|-----------------|---------------------|----------------------|
+| `MORNING` (nghỉ sáng, làm chiều) | `breakEndTime` | `checkOutTime` |
+| `AFTERNOON` (làm sáng, nghỉ chiều) | `checkInTime` | `breakStartTime` |
 
 Ngoài phần ca hiệu lực, buffer chuẩn của check-in/check-out vẫn giữ nguyên (áp dụng default TH1 hoặc TH2 nếu ca có cài):
-
 - Check-in: `[effectiveStart − windowStart, effectiveStart + windowEnd + approvedLate]`
 - Check-out: `[effectiveEnd − windowStart − approvedEarly, effectiveEnd + windowEnd]`
 
 ### Ví dụ — Ca 08:30 / break 12:00–13:30 / 18:00 (TH1 default 60p)
 
-| Loại ngày                     | Check-in window | Check-out window |
-| ----------------------------- | --------------- | ---------------- |
-| Full-day                      | `07:30 – 09:30` | `17:00 – 19:00`  |
-| Half-day MORNING (làm chiều)  | `12:30 – 14:30` | `17:00 – 19:00`  |
-| Half-day AFTERNOON (làm sáng) | `07:30 – 09:30` | `11:00 – 13:00`  |
+| Loại ngày | Check-in window | Check-out window |
+|-----------|-----------------|------------------|
+| Full-day  | `07:30 – 09:30` | `17:00 – 19:00` |
+| Half-day MORNING (làm chiều) | `12:30 – 14:30` | `17:00 – 19:00` |
+| Half-day AFTERNOON (làm sáng) | `07:30 – 09:30` | `11:00 – 13:00` |
 
 ### FE nên làm gì
 
 **Trong form tạo đơn leave:**
-
 - Trước khi hiển thị option "Nghỉ nửa ngày", check `shift.breakStartTime` cho ngày được chọn. Nếu `null` → disable option + tooltip "Ca này không hỗ trợ nghỉ nửa ngày. Hãy chọn nghỉ cả ngày."
 - Sau khi user chọn `halfDayPeriod`, hiển thị preview khung giờ phải có mặt (tính từ công thức trên) để confirm.
 
 **Trong màn chấm công (mobile app):**
-
 - Đọc `attendance/today-info` như hiện tại — server đã trả `windowFrom`/`windowTo` đúng theo half-day override, FE **không** cần tính lại.
 - Nếu FE muốn hiển thị full breakdown (sáng: nghỉ, chiều: 13:30–18:00) → dùng `breakStartTime`/`breakEndTime` từ shift + `halfDayPeriod` từ đơn leave đã duyệt.
 
 **Trong calendar view (HR):**
-
 - Bổ sung tooltip nghỉ trưa `12:00–13:30` khi hover vào cell ca có `breakStartTime != null`.
 
 ---
@@ -1028,7 +1054,7 @@ Ngoài phần ca hiệu lực, buffer chuẩn của check-in/check-out vẫn gi�
 ## Edge cases
 
 | Tình huống | Kết quả |
-| --- | --- |
+|-----------|---------|
 | `EMPLOYEE` gọi `GET /shift-schedules` | 403 Forbidden |
 | Gán ca cho ngày đã có lịch ca | Upsert — ghi đè, không báo lỗi |
 | Gán ca đã bị vô hiệu hóa | 400 Bad Request |
@@ -1060,11 +1086,12 @@ Ngoài phần ca hiệu lực, buffer chuẩn của check-in/check-out vẫn gi�
 | Employee tạo đơn `halfDayPeriod` cho ngày có ca `breakStartTime === null` | 400 Bad Request — "Ca không hỗ trợ nghỉ nửa ngày" |
 | Employee tạo đơn `halfDayPeriod` nhưng ngày đó không có ca | 400 Bad Request — "Không tìm thấy ca làm việc cho ngày này" |
 | HR sửa `breakStartTime`/`breakEndTime` sau khi đã có đơn half-day approved | Đơn cũ giữ nguyên window (snapshot), chỉ đơn approve **sau** khi sửa mới dùng giờ mới |
-| Tạo ca với `checkInWindowStart` cách `checkInTime` > 4 giờ | 400 Bad Request — `"... phải nằm trong 4 giờ trước checkInTime (HH:mm)"` |
-| Tạo ca với `checkInWindowStart > checkInTime` (sai chiều) | 400 Bad Request — cùng message trên (modulo phát hiện offset vượt 240) |
+| Tạo ca với `checkInWindowStart` cách `checkInTime` bất kỳ khoảng nào | Hợp lệ — không còn giới hạn 4 giờ, HR tự chịu trách nhiệm cấu hình đúng |
+| Tạo ca với `checkInWindowStart > checkInTime` (sai chiều theo trực giác) | Hợp lệ — hiểu là hôm trước (modulo 1440). FE cần cảnh báo nếu không mong muốn. |
 | Tạo ca với 4 field window đều null | Hợp lệ — dùng TH1 default ±60p |
 | Tạo ca với chỉ `checkInWindowStart="08:00"` (3 field còn lại null) | Hợp lệ — check-in windowStart dùng 08:00, 3 chỗ còn lại vẫn dùng default 60p |
-| Ca `checkInTime="00:30"` + `checkInWindowStart="22:30"` | Hợp lệ — 120p trước, cross-midnight được tolerant |
+| Ca `checkInTime="00:30"` + `checkInWindowStart="22:30"` | Hợp lệ — 120p trước (hôm trước), cross-midnight tolerant |
+| Sai format HH:mm (VD `"8:00"` thiếu leading zero, `"25:00"`, `"abc"`) | 400 Bad Request — `"checkInWindowStart phải theo định dạng HH:mm"` |
 | Nhân viên cố `POST /attendance/check-in` khi ca có `requireCheckIn=false` | 400 `"Ca làm việc hôm nay không yêu cầu check-in"` |
 | Nhân viên cố `POST /attendance/check-out` khi ca có `requireCheckOut=false` | 400 `"Ca làm việc hôm nay không yêu cầu check-out"` |
 | Tạo phiếu `FORGOT_CHECKIN` (chưa có bản ghi) hôm nay cho ca có `requireCheckOut=false` | 201 với `slotCost: 0` — không tính quota |
