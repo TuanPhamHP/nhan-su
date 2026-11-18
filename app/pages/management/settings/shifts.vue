@@ -15,21 +15,14 @@
 	import type { EmployeeSummary } from '~/types/employee.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
 	import OnlineSaturdayModal from '~/components/modules/shifts/OnlineSaturdayModal.vue';
+	// Nhãn và thứ tự ngày đi cùng hàm dựng câu "những ngày sẽ được gán", nên để chung một nguồn ở
+	// `app/utils/shift.utils.ts`. Import tường minh vì hai tên này chỉ xuất hiện trong template,
+	// mà auto-import của Nuxt quét phần script.
+	import { ALL_WORK_DAYS, WORK_DAY_LABELS, shiftRangeHintFor } from '~/utils/shift.utils';
 
 	definePageMeta({ title: 'Quản lý ca làm việc' });
 
 	// ─── Constants ───
-	const WORK_DAY_LABELS: Record<number, string> = {
-		0: 'CN',
-		1: 'T2',
-		2: 'T3',
-		3: 'T4',
-		4: 'T5',
-		5: 'T6',
-		6: 'T7',
-	};
-	// Display order: T2→T7→CN
-	const ALL_WORK_DAYS = [1, 2, 3, 4, 5, 6, 0];
 	const DAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 	// ─── Composables & stores ───
@@ -581,6 +574,9 @@
 	const empOverrideEndDate = ref('');
 	const assigningEmpOverride = ref(false);
 
+	// Câu dưới chân hộp phải nói đúng những ngày server sẽ gán, tức là `workDays` của ca đang chọn.
+	const empOverrideRangeHint = computed(() => shiftRangeHintFor(shifts.value, empOverrideShiftId.value));
+
 	function openEmpOverrideModal(emp: EmployeeSummary) {
 		empOverrideTarget.value = emp;
 		empOverrideShiftId.value = undefined;
@@ -665,6 +661,8 @@
 	const bulkEndDate = ref('');
 	const bulkFilterDepartmentId = ref<number | undefined>(undefined);
 	const submittingBulk = ref(false);
+
+	const bulkRangeHint = computed(() => shiftRangeHintFor(shifts.value, bulkShiftId.value));
 
 	const bulkFilteredEmployees = computed<EmployeeSummary[]>(() => {
 		if (!bulkFilterDepartmentId.value) return directoryStore.employees;
@@ -1860,9 +1858,7 @@
 							/>
 						</div>
 
-						<p class="text-xs text-gray-400 dark:text-gray-500">
-							Server expand khoảng ngày thành từng ngày làm việc và gán override (ghi đè ca đã có).
-						</p>
+						<p class="text-xs text-gray-400 dark:text-gray-500">{{ empOverrideRangeHint }}</p>
 
 						<div class="flex justify-end gap-3">
 							<CommonAppButton variant="outline" @click="showEmpOverrideModal = false">Hủy</CommonAppButton>
@@ -1990,7 +1986,7 @@
 					<div
 						class="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0"
 					>
-						<p class="text-xs text-gray-400 dark:text-gray-500">Server sẽ gán toàn bộ ngày trong khoảng</p>
+						<p class="text-xs text-gray-400 dark:text-gray-500">{{ bulkRangeHint }}</p>
 						<div class="flex gap-3">
 							<CommonAppButton variant="outline" @click="showBulkModal = false">Hủy</CommonAppButton>
 							<CommonAppButton :loading="submittingBulk" @click="submitBulkAssign"> Gán ca </CommonAppButton>
