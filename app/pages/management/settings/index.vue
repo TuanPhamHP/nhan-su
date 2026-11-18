@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import { REQUEST_PERMISSIONS } from '~/utils/permission';
+	import type { UserRole } from '~/types/auth.types';
 
 	/**
 	 * Trang Cài đặt: lưới thẻ dẫn tới từng màn cấu hình.
@@ -12,6 +13,7 @@
 	definePageMeta({ title: 'Cài đặt' });
 
 	const { hasPermission } = usePermissions();
+	const { user } = useAuth();
 
 	interface SettingItem {
 		label: string;
@@ -21,6 +23,11 @@
 		tag: string;
 		/** Thẻ chỉ hiện với người có quyền này; vắng là mọi người vào được trang Cài đặt đều thấy. */
 		permission?: string;
+		/**
+		 * Thẻ chỉ hiện với các vai trò hệ thống này. Dùng cho màn mà máy chủ gác bằng vai trò chứ
+		 * không bằng mã quyền, để trưởng bộ phận vào Cài đặt không thấy thẻ bấm vào là 403.
+		 */
+		roles?: UserRole[];
 	}
 
 	const settingsItems: SettingItem[] = [
@@ -38,6 +45,7 @@
 			route: '/management/settings/shifts',
 			icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
 			tag: 'Chấm công',
+			roles: ['ADMIN', 'HR'],
 		},
 		{
 			label: 'Loại giấy tờ',
@@ -46,6 +54,7 @@
 			route: '/management/settings/document-types',
 			icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
 			tag: 'Hồ sơ',
+			roles: ['ADMIN', 'HR'],
 		},
 		{
 			label: 'Ngày lễ & Nghỉ bù',
@@ -53,6 +62,7 @@
 			route: '/management/settings/holidays',
 			icon: 'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5',
 			tag: 'Nghỉ lễ',
+			roles: ['ADMIN', 'HR'],
 		},
 		{
 			label: 'Loại phiếu đề xuất',
@@ -65,7 +75,13 @@
 		},
 	];
 
-	const visibleItems = computed(() => settingsItems.filter(item => !item.permission || hasPermission(item.permission)));
+	const visibleItems = computed(() =>
+		settingsItems.filter(item => {
+			const role = user.value?.role;
+			if (item.roles && (!role || !item.roles.includes(role))) return false;
+			return !item.permission || hasPermission(item.permission);
+		}),
+	);
 </script>
 
 <template>
