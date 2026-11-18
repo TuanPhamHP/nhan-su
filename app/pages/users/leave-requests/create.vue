@@ -2,8 +2,7 @@
 	import { useForm } from 'vee-validate';
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
-	import { eachDayOfInterval, isWeekend, parseISO, isValid } from 'date-fns';
-	import { isOverLateEarlyLimit, MAX_LATE_EARLY_MINUTES } from '~/utils/leave.utils';
+	import { isOverLateEarlyLimit, leaveDurationText, MAX_LATE_EARLY_MINUTES } from '~/utils/leave.utils';
 	import { useLeaveTypes } from '~/composables/useLeaveTypes';
 	import { useLeaveRequestService } from '~/services/leave-request.service';
 	import { useLeaveBalanceService } from '~/services/leave-balance.service';
@@ -299,34 +298,23 @@
 	watch([startDate, selectedEmployee], triggerShiftLookup);
 
 	// ─── Computed duration display ─────────────────────────────────────────────────
-	const durationText = computed(() => {
-		const code = selectedCode.value;
-		if (!code) return null;
-
-		if (code === 'ANNUAL' && startDate.value && endDate.value) {
-			try {
-				const s = parseISO(startDate.value as string);
-				const e = parseISO(endDate.value as string);
-				if (!isValid(s) || !isValid(e) || e < s) return null;
-				const workDays = eachDayOfInterval({ start: s, end: e }).filter(d => !isWeekend(d)).length;
-				return `${workDays} ngày làm việc`;
-			} catch {
-				return null;
-			}
-		}
-
-		if (code === 'HALF_DAY') return '0.5 ngày';
-		if (code === 'LATE' && lateMinutes.value) return `${lateMinutes.value} phút`;
-		if (code === 'EARLY' && earlyMinutes.value) return `${earlyMinutes.value} phút`;
-
-		return null;
-	});
+	// Số ngày phép lấy từ preview của máy chủ: ngày nghỉ tính theo ca của chính người gửi nên
+	// client không đếm được (xem `leaveDurationText`).
+	const durationText = computed(() =>
+		leaveDurationText({
+			code: selectedCode.value,
+			previewLoading: previewLoading.value,
+			totalDays: preview.value?.totalDays ?? null,
+			lateMinutes: lateMinutes.value,
+			earlyMinutes: earlyMinutes.value,
+		}),
+	);
 
 	// ─── Side panel note ──────────────────────────────────────────────────────────
 	const typeNote = computed(() => {
 		switch (selectedCode.value) {
 			case 'ANNUAL':
-				return 'Số ngày nghỉ sẽ được trừ vào số dư phép năm. Ngày lễ và cuối tuần không tính.';
+				return 'Số ngày nghỉ tính theo ca làm việc của bạn: ngày có ca thì tính, kể cả thứ Bảy, Chủ nhật; ngày lễ không tính.';
 			case 'HALF_DAY': {
 				const bs = dayShift.value?.breakStartTime;
 				const be = dayShift.value?.breakEndTime;
@@ -999,10 +987,8 @@
 						</svg>
 						<div>
 							<span class="text-sm text-gray-500 dark:text-gray-400">Khoảng thời gian: </span>
+							<!-- Không còn chú thích "server sẽ tính lại": con số này chính là của server. -->
 							<span class="text-sm font-semibold text-gray-900 dark:text-white">{{ durationText }}</span>
-							<span v-if="selectedCode === 'ANNUAL'" class="ml-1.5 text-xs text-gray-400"
-								>(chưa tính ngày lễ — server sẽ tính lại)</span
-							>
 						</div>
 					</div>
 

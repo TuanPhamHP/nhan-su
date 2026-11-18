@@ -16,6 +16,7 @@
 | POST | `/v1/leave-requests` | `EMPLOYEE` | Tạo đơn mới |
 | PATCH | `/v1/leave-requests/:id/approve` | `HR`, `ADMIN`, `MANAGER` | Duyệt đơn |
 | PATCH | `/v1/leave-requests/:id/reject` | `HR`, `ADMIN`, `MANAGER` | Từ chối đơn |
+| PATCH | `/v1/leave-requests/:id/payroll-split` | `HR`, `ADMIN` | **Chỉnh tay** P/KL của đơn đã duyệt |
 | PATCH | `/v1/leave-requests/:id/cancel` | `EMPLOYEE` (chính chủ) | Thu hồi → CANCELLED, giữ lịch sử |
 | DELETE | `/v1/leave-requests/:id` | `EMPLOYEE` (chính chủ) | Xóa hẳn khỏi DB (hard delete) |
 
@@ -24,15 +25,62 @@
 
 ---
 
+## Giới hạn lùi ngày khi tạo đơn
+
+`startDate` được phép nằm trong quá khứ, nhưng có giới hạn:
+
+| Role người tạo | Lùi tối đa |
+|---|---|
+| `EMPLOYEE`, `MANAGER`, `CHIEF`, `DIRECTOR` | **30 ngày** |
+| `HR`, `ADMIN` | không giới hạn |
+
+Vượt hạn → **400**:
+
+```
+Chỉ được tạo đơn nghỉ lùi tối đa 30 ngày (sớm nhất là 2026-08-10).
+Đơn này lùi 45 ngày — vui lòng liên hệ HR để được hỗ trợ.
+```
+
+Mốc so sánh là **đầu ngày theo giờ VN**, không so giờ — nên tạo đơn cho hôm nay lúc 23:00
+vẫn hợp lệ.
+
+`POST /leave-requests/preview` **không chặn** — nó là máy tính, không phải cổng kiểm soát.
+Nhưng nếu ngày vượt hạn, nó trả `warningMessage` báo trước để FE cảnh báo ngay khi user
+chọn ngày, thay vì để họ điền xong form mới bị từ chối.
+
+> **Chưa có đường HR tạo đơn hộ nhân viên.** `POST /leave-requests` luôn tạo đơn cho chính
+> người gọi (`employeeId = actor.id`). Nên "liên hệ HR" hiện chỉ giải quyết được khi HR
+> thao tác trên tài khoản của chính họ — chưa nhập bù được đơn cho người khác.
+
+---
+
 ## Hình thức đơn — 4 loại (phân biệt qua `leaveType.code`)
 
 | `leaveType.code` | Tên | Fields bắt buộc thêm | `totalDays` |
 |---|---|---|---|
-| `ANNUAL` | Nghỉ cả ngày | `startDate` + `endDate` (có thể nhiều ngày) | Số ngày làm việc thực tế (trừ cuối tuần + ngày lễ) |
+| `ANNUAL` | Nghỉ cả ngày | `startDate` + `endDate` (có thể nhiều ngày) | Số ngày người gửi **có ca** trong khoảng, trừ ngày lễ (xem mục dưới) |
 | `HALF_DAY` | Nghỉ nửa ngày | `startDate === endDate` + `halfDayPeriod` (`MORNING`/`AFTERNOON`) | `0.5` |
 | `LATE` | Đi muộn | `startDate === endDate` + `lateMinutes` (1–**120** phút) | `0` — không trừ phép |
 | `EARLY` | Về sớm | `startDate === endDate` + `earlyMinutes` (1–**120** phút) | `0` — không trừ phép |
-| `UNPAID` | Nghỉ không lương | `startDate` + `endDate` | Số ngày làm việc thực tế — `leaveCode` luôn là `'KL'` |
+| `UNPAID` | Nghỉ không lương | `startDate` + `endDate` | Như `ANNUAL` — `leaveCode` luôn là `'KL'` |
+
+### Cách tính số ngày nghỉ (`totalDays`)
+
+Từ bản vá 18/11/2026, số ngày nghỉ **tính theo ca của chính người gửi**, không theo thứ trong tuần:
+
+- Ngày nào người đó có ca thì tính, **kể cả thứ Bảy, Chủ nhật** (công ty làm cả tuần, ca T7 online…). Ngày không có
+  ca thì không tính. "Có ca" theo đúng lịch ca: lịch gán cho đúng ngày đó trước, không có thì ca mặc định theo
+  ngày làm việc của khuôn ca.
+- Ngày lễ không tính dù có ca.
+- Người **chưa được xếp ca nào** (không có ca mặc định, không có lịch trong khoảng) thì đếm thứ Hai đến thứ Sáu như
+  trước, để phép vẫn bị trừ.
+- Khoảng không có ngày nào có ca thì `totalDays = 0`; đơn vẫn tạo được như trước.
+- Đơn tạo trước bản vá giữ nguyên `totalDays` đã lưu, không tính lại.
+
+Ví dụ: ca T2–CN nghỉ thứ Bảy, Chủ nhật → 2; ca T2–T6 nghỉ từ thứ Sáu tới thứ Hai → 2; ca T2–T7 nghỉ thứ Bảy → 1.
+
+**FE và mobile:** không tự đếm ngày (bỏ cuối tuần) trên client nữa, vì client không biết ca của từng người. Hiện số
+ngày bằng `totalDays` của `POST /v1/leave-requests/preview`.
 
 **Quy tắc chọn form phía frontend:**
 1. Gọi `GET /v1/leave-types` để lấy danh sách loại phép.
@@ -203,7 +251,7 @@ export interface LeaveRequest {
   leaveType: LeaveTypeRef;
   startDate: string;            // "YYYY-MM-DD"
   endDate: string;              // "YYYY-MM-DD"
-  totalDays: number;            // 0 với LATE/EARLY, 0.5 với HALF_DAY, ≥1 với ANNUAL/UNPAID
+  totalDays: number;            // 0 với LATE/EARLY, 0.5 với HALF_DAY; ANNUAL/UNPAID: số ngày có ca, trừ ngày lễ (có thể 0)
   paidDays: number;             // số ngày hưởng lương (P)
   unpaidDays: number;           // số ngày không hưởng lương (KL)
   leaveCode: 'P' | 'KL' | 'P+KL' | null;  // null với đơn cũ trước khi deploy tính năng này
@@ -236,7 +284,7 @@ export interface CreateLeaveRequestDto {
 
 // Preview — dùng cùng body với CreateLeaveRequestDto, không tạo đơn
 export interface LeavePreviewResponse {
-  totalDays: number;              // tổng ngày làm việc trong khoảng startDate–endDate
+  totalDays: number;              // số ngày người gửi có ca trong khoảng startDate–endDate, trừ ngày lễ
   paidDays: number;               // số ngày hưởng lương (P)
   unpaidDays: number;             // số ngày không hưởng lương (KL)
   leaveCode: 'P' | 'KL' | 'P+KL';
@@ -479,8 +527,37 @@ Tất cả params đều optional. Response shape giống `/me`.
 | 400 | `LEAVE_INSUFFICIENT_BALANCE` — hết ngày phép (chỉ với loại phép tuỳ chỉnh có `daysPerYear`, không áp dụng với ANNUAL — ANNUAL tự split P/KL) |
 | 400 | `halfDayPeriod` được set nhưng ca ngày đó **không có `breakStartTime`/`breakEndTime`** → *"Ca làm việc của ngày này không hỗ trợ nghỉ nửa ngày vì chưa cấu hình giờ nghỉ trưa"* |
 | 400 | `halfDayPeriod` được set nhưng ngày đó **không có ca** (employee thiếu `defaultShift` và không có schedule) → *"Không tìm thấy ca làm việc cho ngày này"* |
+| **403** | **Nhân viên không được phép xin loại phép này theo `employmentType`** — xem mục "Employment Policy" bên dưới |
 | 409 | `LEAVE_OVERLAP` — đã có đơn PENDING/APPROVED **trùng buổi** (xem §"Overlap semantics" bên dưới) |
 | 404 | Loại phép không tồn tại |
+
+### Employment Policy — chặn 403 theo loại nhân viên
+
+Áp dụng cho cả `POST /v1/leave-requests` **và** `POST /v1/leave-requests/preview` (preview cũng throw sớm để tránh FE cho user nhập tiếp rồi mới báo lỗi ở submit).
+
+Rule chốt cứng trong `EmploymentPolicyService`, KHÔNG lấy từ DB — muốn đổi phải deploy code:
+
+| LeaveType `code` | Employment types được xin |
+|---|---|
+| `ANNUAL` (Phép năm) | `FULL_TIME`, `PART_TIME` |
+| `HALF_DAY` (Nghỉ nửa ngày) | `FULL_TIME`, `PART_TIME` |
+| `WELFARE` (Chế độ) | `FULL_TIME`, `PART_TIME` |
+| `UNPAID`, `LATE`, `EARLY`, loại mới HR tạo | Tất cả 6 loại |
+
+Vi phạm → HTTP **403** với body:
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Thực tập sinh không được phép xin loại phép \"Phép năm\"."
+  }
+}
+```
+
+Label trong message = `FULL_TIME → Nhân viên chính thức`, `PROBATION → Thử việc`, `APPRENTICE → Học việc`, `INTERN → Thực tập sinh`, `PART_TIME → Bán thời gian`, `CONTRACTOR → Cộng tác viên`.
+
+**FE nên chủ động lọc dropdown** loại phép theo `employmentType` của user để tránh 403 khi submit (BE là hàng rào cuối, FE có thể dùng bảng rule trên để hide options client-side).
 
 ### Overlap semantics (409 CONFLICT)
 
@@ -542,6 +619,61 @@ Nếu `halfDayPeriod` được set → backend tự tạo `EffectiveShiftOverrid
 ```
 
 **Response 200:** `ApiSuccess<LeaveRequest>` (status = `REJECTED`)
+
+---
+
+## PATCH /v1/leave-requests/:id/payroll-split — Chỉnh tay P/KL (HR/Admin)
+
+Ghi đè `paidDays` / `unpaidDays` / `leaveCode` của một đơn **đã duyệt**.
+
+Dùng khi kết quả tính tự động không đúng. Trường hợp thực tế: hệ thống chỉ có dữ liệu
+nghỉ phép từ cuối tháng 5/2026, nên `accruedDays` trên sổ quỹ chưa phản ánh đủ lịch sử —
+`LeaveSplitService` cắt đơn thành `KL` trong khi HR biết nhân sự vẫn còn phép.
+
+**Request body:**
+```json
+{
+  "leaveCode": "P",
+  "note": "HR xác nhận nhân sự còn phép năm, số dư trên hệ thống chưa cập nhật"
+}
+```
+
+| Field | Ràng buộc |
+|---|---|
+| `leaveCode` | **Bắt buộc**, một trong `P` / `KL` / `P+KL` |
+| `paidDays` | Chỉ dùng khi `leaveCode = "P+KL"`; phải > 0 và < `totalDays` của đơn |
+| `note` | **Bắt buộc**, tối thiểu 10 ký tự — thao tác ảnh hưởng công lương nên cần dấu vết |
+
+Bạn chọn **ký hiệu**, hệ thống suy ra số ngày:
+
+| `leaveCode` | `paidDays` | `unpaidDays` |
+|---|---|---|
+| `P` | = `totalDays` | 0 |
+| `KL` | 0 | = `totalDays` |
+| `P+KL` | lấy từ body | `totalDays − paidDays` |
+
+Không nhận `paidDays`/`unpaidDays` trực tiếp cho `P` và `KL` — làm vậy sẽ có lúc badge nói
+một đằng, tiền trả một nẻo.
+
+> **Ký hiệu trong bảng công KHÔNG đọc cột `leaveCode`.** Nó suy từ `paidDays`. Cột
+> `leaveCode` chỉ là badge trên danh sách đơn. Đó là lý do endpoint này nhận ký hiệu rồi
+> quy ra số, chứ không ghi thẳng ký hiệu — ghi thẳng thì bảng công không đổi gì cả.
+
+**Response 200:** `ApiSuccess<LeaveRequest>` với giá trị mới.
+
+### Ba điều cần biết trước khi dùng
+
+**Không đụng tới `usedDays` của quỹ.** Sổ quỹ cập nhật riêng qua
+`POST /v1/leave-balances/recalculate`, hoặc HR tự sửa. Sau khi chỉnh tay, số dư phép của
+nhân sự sẽ không khớp với phần lương đã trả cho tới khi đồng bộ lại.
+
+**Sẽ bị ghi đè nếu chạy lại `recalculate-requests`.** Endpoint đó tính lại toàn bộ đơn từ
+`accruedDays`, không biết đơn nào đã được chỉnh tay. Nếu sau này chạy nó cho cùng nhân sự
+và cùng tháng, giá trị chỉnh tay quay về giá trị tự động. Chỉ chạy lại sau khi số dư quỹ
+đã được sửa cho đúng.
+
+**Mọi lần chỉnh đều ghi log** dưới action `leave_request.override_payroll_split`, kèm
+`before` / `after` / `note`. Tra qua `GET /v1/system-logs?action=leave_request.override_payroll_split`.
 
 ---
 
