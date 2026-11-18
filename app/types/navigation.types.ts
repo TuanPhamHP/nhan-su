@@ -20,8 +20,11 @@ export interface NavItem {
 	 * cho người thuộc `roles` này mà có `permission` này (vẫn phải qua `module`). Dùng khi một màn
 	 * hình có cả người làm và người chỉ xem, ví dụ Kiểm kê: người có `asset:manage`, hoặc lãnh đạo
 	 * có `asset:read` xem ở chế độ chỉ xem.
+	 *
+	 * `permission` nhận mảng với nghĩa "có ít nhất một", cho màn gom nhiều thứ như Cài đặt: trưởng
+	 * bộ phận chỉ cần xem được một thẻ trong đó là đã có lý do để thấy mục này.
 	 */
-	alsoFor?: { roles: UserRole[]; permission: string };
+	alsoFor?: { roles: UserRole[]; permission: string | string[] };
 	dataTour?: string;
 	matchQuery?: Record<string, string>;
 	/**
