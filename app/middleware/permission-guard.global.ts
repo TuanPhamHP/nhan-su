@@ -27,6 +27,10 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; permission: string | string[] }
 	// Cài đặt tuyển dụng sửa quy trình mẫu, mẫu email và SMTP nên cần quyền phụ trách.
 	{ prefix: '/management/recruitment/settings', permission: 'recruitment:manage' },
 	{ prefix: '/management/recruitment', permission: 'recruitment:read' },
+	// Màn Phân quyền chỉ cần quyền xem; mọi thao tác ghi trong trang vẫn chỉ ADMIN làm được.
+	{ prefix: '/management/roles', permission: 'role:read' },
+	// Địa điểm chấm công: xem cần quyền đọc, còn thêm sửa xoá gán hỏi quyền riêng ngay trong trang.
+	{ prefix: '/management/settings/locations', permission: 'check-in-location:read' },
 ];
 
 export default defineNuxtRouteMiddleware(to => {

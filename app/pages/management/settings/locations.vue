@@ -10,6 +10,14 @@ definePageMeta({ title: 'Địa điểm chấm công' });
 const toast = useToast();
 const { locations, loading, locationEmployees, employeesLoading, fetchLocations, fetchLocationEmployees, createLocation, updateLocation, deactivateLocation, removeEmployee, bulkAssign } = useCheckInLocation();
 
+// Mỗi thao tác ghi ở đây có mã quyền riêng trên máy chủ, nên nút nào không dùng được thì ẩn hẳn,
+// thay vì để người dùng bấm vào một nút chắc chắn nhận 403. `hasPermission` đã cho ADMIN đi qua.
+const { hasPermission } = usePermissions();
+const canCreate = computed(() => hasPermission('check-in-location:create'));
+const canUpdate = computed(() => hasPermission('check-in-location:update'));
+const canDelete = computed(() => hasPermission('check-in-location:delete'));
+const canAssign = computed(() => hasPermission('check-in-location:assign'));
+
 // --- Selection ---
 const selectedLocationId = ref<number | null>(null);
 const selectedLocation = computed(() =>
@@ -364,6 +372,7 @@ onUnmounted(() => {
 				<div class="flex items-center gap-2">
 					<h1 class="text-base font-semibold text-gray-900 dark:text-white flex-1">Địa điểm chấm công</h1>
 					<button
+						v-if="canCreate"
 						class="w-8 h-8 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition-colors"
 						title="Thêm địa điểm"
 						@click="openAddModal"
@@ -438,7 +447,7 @@ onUnmounted(() => {
 							{{ selectedLocationId === loc.id ? locationEmployees.length + ' NV' : '—' }}
 						</div>
 					</div>
-					<div v-if="loc.isActive" class="mt-3 flex justify-end">
+					<div v-if="loc.isActive && canDelete" class="mt-3 flex justify-end">
 						<button
 							class="text-[11px] text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
 							@click.stop="deactivateTargetId = loc.id"
@@ -481,7 +490,7 @@ onUnmounted(() => {
 							{{ selectedLocation.name }}
 						</h2>
 						<button
-							v-if="selectedLocation.isActive"
+							v-if="selectedLocation.isActive && canUpdate"
 							class="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors flex-shrink-0 mt-0.5"
 							@click="showEditModal = true"
 						>
@@ -520,7 +529,7 @@ onUnmounted(() => {
 							<span v-if="locationEmployees.length" class="text-xs font-normal text-gray-400 ml-1">({{ locationEmployees.length }})</span>
 						</p>
 						<button
-							v-if="selectedLocation?.isActive"
+							v-if="selectedLocation?.isActive && canAssign"
 							class="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors"
 							@click="showAssignModal = true"
 						>
@@ -560,6 +569,7 @@ onUnmounted(() => {
 									<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ emp.employeeCode }}</p>
 								</div>
 								<button
+									v-if="canAssign"
 									:class="[
 										'flex-shrink-0 text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors',
 										'opacity-0 group-hover:opacity-100',

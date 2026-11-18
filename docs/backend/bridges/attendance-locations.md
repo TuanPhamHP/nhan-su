@@ -7,16 +7,25 @@
 
 ## Endpoints
 
-| Method | Path | Ai được gọi | Ghi chú |
-|--------|------|-------------|---------|
-| GET | `/v1/check-in-locations` | `ADMIN`, `HR` | Danh sách tất cả địa điểm |
-| GET | `/v1/check-in-locations/me` | `EMPLOYEE` | Danh sách địa điểm được gán cho tôi |
-| POST | `/v1/check-in-locations` | `ADMIN`, `HR` | Tạo địa điểm mới |
-| GET | `/v1/check-in-locations/:id` | `ADMIN`, `HR` | Chi tiết một địa điểm |
-| PATCH | `/v1/check-in-locations/:id` | `ADMIN`, `HR` | Cập nhật địa điểm |
-| DELETE | `/v1/check-in-locations/:id` | `ADMIN`, `HR` | Vô hiệu hóa — soft delete (`isActive = false`) |
-| POST | `/v1/check-in-locations/:id/employees/:employeeId` | `ADMIN`, `HR` | Gán nhân viên vào địa điểm |
-| DELETE | `/v1/check-in-locations/:id/employees/:employeeId` | `ADMIN`, `HR` | Bỏ gán nhân viên khỏi địa điểm |
+| Method | Path | Ai được gọi | Quyền | Ghi chú |
+|--------|------|-------------|-------|---------|
+| GET | `/v1/check-in-locations` | `ADMIN`, `HR` | `check-in-location:read` | Danh sách tất cả địa điểm |
+| GET | `/v1/check-in-locations/me` | `EMPLOYEE` | — | Danh sách địa điểm được gán cho tôi |
+| POST | `/v1/check-in-locations` | `ADMIN`, `HR` | `check-in-location:create` | Tạo địa điểm mới |
+| GET | `/v1/check-in-locations/:id` | `ADMIN`, `HR` | `check-in-location:read` | Chi tiết một địa điểm |
+| PATCH | `/v1/check-in-locations/:id` | `ADMIN`, `HR` | `check-in-location:update` | Cập nhật địa điểm |
+| DELETE | `/v1/check-in-locations/:id` | `ADMIN`, `HR` | `check-in-location:delete` | Vô hiệu hóa — soft delete (`isActive = false`) |
+| GET | `/v1/check-in-locations/:id/employees` | `ADMIN`, `HR` | `check-in-location:read` | Nhân viên đang gán vào địa điểm |
+| POST | `/v1/check-in-locations/:id/departments/:departmentId` | `ADMIN`, `HR` | `check-in-location:assign` | Gán cả phòng ban |
+| POST | `/v1/check-in-locations/:id/employees/bulk` | `ADMIN`, `HR` | `check-in-location:assign` | Gán nhiều nhân viên |
+| POST | `/v1/check-in-locations/:id/employees/:employeeId` | `ADMIN`, `HR` | `check-in-location:assign` | Gán nhân viên vào địa điểm |
+| DELETE | `/v1/check-in-locations/:id/employees/:employeeId` | `ADMIN`, `HR` | `check-in-location:assign` | Bỏ gán nhân viên khỏi địa điểm |
+
+> **Từ 18/11/2026 cột "Quyền" có hiệu lực.** Trước đó controller chỉ gác theo vai trò hệ thống,
+> nên bỏ tick quyền địa điểm cho một vai trò không có tác dụng gì với người mang `HR`. Giờ phải
+> thoả cả hai cột: vai trò hệ thống là `ADMIN` hoặc `HR`, và có đúng mã quyền (`ADMIN` bỏ qua cột
+> quyền). Thiếu quyền thì 403 như thiếu vai trò. FE nên ẩn nút theo `hasPermission` với đúng mã ở
+> cột này, để người thiếu quyền không bấm vào một nút chắc chắn nhận 403.
 
 > **Lưu ý thứ tự route:** `/check-in-locations/me` được khai báo **trước** `/:id` trong controller.  
 > Nếu gọi `/me` mà server trả 404, kiểm tra lại thứ tự route phía client.
@@ -53,7 +62,7 @@ export type UpdateCheckInLocationDto = Partial<CreateCheckInLocationDto>;
 
 ## GET /v1/check-in-locations — Danh sách tất cả địa điểm
 
-Chỉ `ADMIN` và `HR` được gọi.
+Chỉ `ADMIN` và `HR` có `check-in-location:read` được gọi.
 
 **Response:** `ApiSuccess<CheckInLocationResponse[]>`
 
@@ -83,7 +92,7 @@ Chỉ `ADMIN` và `HR` được gọi.
 }
 ```
 
-**403** nếu không phải HR hoặc ADMIN:
+**403** nếu không phải HR hoặc ADMIN, hoặc là HR nhưng thiếu `check-in-location:read`:
 ```json
 { "success": false, "error": { "code": "FORBIDDEN", "message": "Forbidden resource" } }
 ```

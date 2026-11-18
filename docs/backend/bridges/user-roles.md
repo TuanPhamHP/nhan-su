@@ -105,16 +105,31 @@ GET    /v1/permissions         Danh sách tất cả permissions, nhóm theo gro
 ### Roles
 
 ```
-GET    /v1/roles               Danh sách roles (có phân trang, filter)
+GET    /v1/roles               Danh sách roles (có phân trang, filter)          — cần role:read
 POST   /v1/roles               Tạo role CUSTOM (chỉ ADMIN)
-GET    /v1/roles/:id           Chi tiết role + danh sách permissions
+GET    /v1/roles/:id           Chi tiết role + danh sách permissions            — cần role:read
 PATCH  /v1/roles/:id           Cập nhật tên/mô tả role (chỉ ADMIN)
 DELETE /v1/roles/:id           Xóa role CUSTOM (chỉ ADMIN, không xóa DEFAULT)
 PUT    /v1/roles/:id/permissions   Thay thế toàn bộ permissions của role (chỉ ADMIN)
-GET    /v1/roles/:id/employees     Danh sách nhân viên thuộc role (phân trang)
+GET    /v1/roles/:id/employees     Danh sách nhân viên thuộc role (phân trang)  — cần role:read
 POST   /v1/roles/:id/employees     Thêm nhân viên vào role (bulk, chỉ ADMIN)
 DELETE /v1/roles/:id/employees/:employeeId   Xóa nhân viên khỏi role (chỉ ADMIN)
 ```
+
+"Chỉ ADMIN" ở đây nghĩa là `SystemRole` phải là `ADMIN`. Tick `role:create`, `role:update`,
+`role:delete` hay `role:assign` cho một vai trò khác không mở được các route này, kể cả với HR,
+và BE trả 403. Đây là chủ ý chống leo thang quyền: người có `role:create` và `role:assign` tự tạo
+được một vai trò đủ mọi quyền rồi gán cho chính mình.
+
+### Ai thấy màn Phân quyền (từ 18/11/2026)
+
+- Mục menu "Phân quyền" và route `/management/roles` gác bằng `role:read`, không gác theo
+  `SystemRole`. ADMIN luôn thấy vì `hasPermission` bypass cho ADMIN.
+- Người không phải ADMIN vào được trang thì chỉ xem: thấy danh sách vai trò, các ô quyền đang
+  tick và tab Người dùng, nhưng không có nút tạo, lưu, xoá, thêm hay gỡ người. Ô quyền hiện
+  trạng thái nhưng không bấm được.
+- Điều kiện hiện nút ghi là `isAdmin`, **không phải** `hasPermission('role:update')`. Dùng
+  `hasPermission` thì HR được tick sẽ thấy nút rồi bấm vào nhận 403.
 
 ---
 

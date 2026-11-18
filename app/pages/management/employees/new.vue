@@ -17,6 +17,14 @@ const { departments, fetchAll: fetchDepartments } = useDepartment();
 const directoryStore = useDirectoryStore();
 const { hasPermission } = usePermissions();
 const canCreate = computed(() => hasPermission('employee:create'));
+/**
+ * Ô chọn vị trí làm việc chỉ hiện khi người dùng vừa xem được danh sách địa điểm, vừa gán được
+ * người vào đó. Thiếu một trong hai thì không gọi API nào, và lúc lưu cũng không gán, vì máy chủ
+ * sẽ trả 403 và người tạo nhân viên nhận một cảnh báo chẳng giúp được gì.
+ */
+const canUseLocations = computed(
+	() => hasPermission('check-in-location:read') && hasPermission('check-in-location:assign'),
+);
 const positionService = usePositionService();
 const workShiftService = useWorkShiftService();
 const checkInLocationService = useCheckInLocationService();
@@ -43,6 +51,7 @@ async function loadShifts() {
 }
 
 async function loadCheckInLocations() {
+	if (!canUseLocations.value) return;
 	try {
 		checkInLocations.value = await checkInLocationService.findAll();
 	} catch {
@@ -136,7 +145,7 @@ const onSubmit = handleSubmit(async values => {
 	};
 	try {
 		const emp = await create(payload);
-		if (selectedLocationId.value) {
+		if (canUseLocations.value && selectedLocationId.value) {
 			try {
 				await checkInLocationService.assignEmployee(selectedLocationId.value, emp.id);
 			} catch {
@@ -301,7 +310,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 							<UiSelect v-model="defaultShiftId" :options="shiftOptions" />
 						</div>
 
-						<div>
+						<div v-if="canUseLocations">
 							<label :class="labelCls">Vị trí làm việc</label>
 							<UiSelect v-model="selectedLocationId" :options="locationOptions" />
 						</div>

@@ -494,7 +494,10 @@ export const APP_MODULES: AppScreensDef[] = [
 					label: 'Phân quyền',
 					route: '/management/roles',
 					icon: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',
-					roles: ['ADMIN'],
+					// Người được tick "Xem vai trò" thì thấy và xem được màn này; sửa thì vẫn chỉ ADMIN,
+					// vì mọi route ghi của BE gác bằng `@Roles(ADMIN)` để chống tự nâng quyền cho mình.
+					management: true,
+					permission: 'role:read',
 			},
 			{
 					label: 'Cài đặt',
