@@ -7,6 +7,16 @@ import RoleAddUserModal from '~/components/modules/role/RoleAddUserModal.vue';
 definePageMeta({ title: 'Phân quyền' });
 
 const toast = useToast();
+const { isAdmin } = usePermissions();
+
+/**
+ * Chỉ quản trị viên hệ thống được sửa phân quyền.
+ *
+ * Điều kiện là `isAdmin` chứ không phải quyền `role:update`: mọi route ghi của BE gác bằng vai trò
+ * ADMIN, nên người được tick quyền vai trò mà bấm nút vẫn nhận 403. Đó là chủ ý, để người có
+ * `role:create` và `role:assign` không tự tạo một vai trò đủ quyền rồi gán cho chính mình.
+ */
+const canEdit = computed(() => isAdmin.value);
 const {
 	roles,
 	currentRole,
@@ -100,12 +110,14 @@ function isGroupIndeterminate(group: PermissionGroupDto): boolean {
 }
 
 function togglePermission(id: number) {
+	if (!canEdit.value) return;
 	const current = new Set(editablePermissionIds.value);
 	current.has(id) ? current.delete(id) : current.add(id);
 	editablePermissionIds.value = [...current];
 }
 
 function toggleGroup(group: PermissionGroupDto) {
+	if (!canEdit.value) return;
 	const allChecked = isGroupAllChecked(group);
 	const current = new Set(editablePermissionIds.value);
 	group.permissions.forEach(p => allChecked ? current.delete(p.id) : current.add(p.id));
@@ -113,7 +125,7 @@ function toggleGroup(group: PermissionGroupDto) {
 }
 
 async function onSavePermissions() {
-	if (!selectedRoleId.value || !permissionsChanged.value) return;
+	if (!canEdit.value || !selectedRoleId.value || !permissionsChanged.value) return;
 	savingPermissions.value = true;
 	try {
 		await savePermissions(selectedRoleId.value, editablePermissionIds.value);
@@ -150,7 +162,7 @@ watch(activeTab, tab => {
 const removingEmployeeId = ref<number | null>(null);
 
 async function onRemoveEmployee(employeeId: number) {
-	if (!selectedRoleId.value) return;
+	if (!canEdit.value || !selectedRoleId.value) return;
 	removingEmployeeId.value = employeeId;
 	try {
 		await removeEmployeeFromRole(selectedRoleId.value, employeeId);
@@ -167,11 +179,12 @@ const confirmDeleteId = ref<number | null>(null);
 const deleting = ref(false);
 
 function openDeleteConfirm(roleId: number) {
+	if (!canEdit.value) return;
 	confirmDeleteId.value = roleId;
 }
 
 async function onDeleteRole() {
-	if (!confirmDeleteId.value) return;
+	if (!canEdit.value || !confirmDeleteId.value) return;
 	deleting.value = true;
 	try {
 		await deleteRole(confirmDeleteId.value);
@@ -223,6 +236,7 @@ function getRoleInitials(name: string): string {
 			<div class="flex items-center gap-2 px-4 pt-5 pb-3 flex-shrink-0">
 				<h1 class="text-base font-semibold text-gray-900 dark:text-white flex-1">Danh sách vai trò</h1>
 				<button
+					v-if="canEdit"
 					class="w-8 h-8 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition-colors"
 					title="Tạo vai trò mới"
 					@click="showCreateModal = true"
@@ -356,6 +370,20 @@ function getRoleInitials(name: string): string {
 					</div>
 				</div>
 
+				<!-- Chế độ chỉ xem: nói rõ vì sao không có nút nào để bấm, thay vì để trang trông như hỏng. -->
+				<div
+					v-if="!canEdit"
+					class="flex items-center gap-2.5 flex-shrink-0 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 px-6 py-2.5"
+				>
+					<svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+					</svg>
+					<p class="text-sm text-gray-600 dark:text-gray-300">
+						Bạn đang xem ở chế độ chỉ xem. Chỉ quản trị viên được thay đổi phân quyền.
+					</p>
+				</div>
+
 				<!-- Tab: Permissions -->
 				<div v-if="activeTab === 'permissions'" class="flex-1 overflow-y-auto p-6">
 					<div v-if="detailLoading" class="space-y-4">
@@ -370,7 +398,7 @@ function getRoleInitials(name: string): string {
 					<div v-else class="space-y-4">
 						<!-- Permission changed notice -->
 						<div
-							v-if="permissionsChanged"
+							v-if="canEdit && permissionsChanged"
 							class="flex items-center gap-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg px-4 py-3"
 						>
 							<svg class="w-4 h-4 text-brand-600 dark:text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -393,7 +421,7 @@ function getRoleInitials(name: string): string {
 							<!-- Group header -->
 							<div class="flex items-center justify-between mb-4">
 								<h3 class="text-sm font-semibold text-brand-700 dark:text-brand-400">{{ group.group }}</h3>
-								<label class="flex items-center gap-1.5 cursor-pointer">
+								<label v-if="canEdit" class="flex items-center gap-1.5 cursor-pointer">
 									<input
 										type="checkbox"
 										:checked="isGroupAllChecked(group)"
@@ -409,12 +437,17 @@ function getRoleInitials(name: string): string {
 								<label
 									v-for="perm in group.permissions"
 									:key="perm.id"
-									class="flex items-center gap-2.5 cursor-pointer group/perm"
+									:class="[
+										'flex items-center gap-2.5 group/perm',
+										canEdit ? 'cursor-pointer' : 'cursor-default',
+									]"
 								>
+									<!-- Chỉ xem: ô vẫn hiện đúng trạng thái tick, chỉ không bấm được. -->
 									<input
 										type="checkbox"
 										:checked="editablePermissionIds.includes(perm.id)"
-										class="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 flex-shrink-0"
+										:disabled="!canEdit"
+										class="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 flex-shrink-0 disabled:opacity-100"
 										@change="togglePermission(perm.id)"
 									/>
 									<span class="text-sm text-gray-700 dark:text-gray-300 group-hover/perm:text-gray-900 dark:group-hover/perm:text-white transition-colors select-none">
@@ -432,7 +465,7 @@ function getRoleInitials(name: string): string {
 						<p class="text-sm text-gray-500 dark:text-gray-400">
 							{{ currentRole?.employeeCount ?? 0 }} người trong vai trò này
 						</p>
-						<CommonAppButton size="sm" @click="showAddUserModal = true">
+						<CommonAppButton v-if="canEdit" size="sm" @click="showAddUserModal = true">
 							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
 							</svg>
@@ -464,7 +497,7 @@ function getRoleInitials(name: string): string {
 								</svg>
 							</div>
 							<p class="text-sm font-medium text-gray-600 dark:text-gray-300">Chưa có người dùng nào</p>
-							<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Thêm người vào vai trò này</p>
+							<p v-if="canEdit" class="text-xs text-gray-400 dark:text-gray-500 mt-1">Thêm người vào vai trò này</p>
 						</div>
 
 						<div v-else class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -489,6 +522,7 @@ function getRoleInitials(name: string): string {
 									{{ emp.department }}
 								</span>
 								<CommonAppButton
+									v-if="canEdit"
 									variant="ghost"
 									size="sm"
 									:loading="removingEmployeeId === emp.id"
@@ -573,8 +607,8 @@ function getRoleInitials(name: string): string {
 				</span>
 			</div>
 
-			<!-- Actions -->
-			<div class="p-4 space-y-2 flex-shrink-0 border-t border-gray-100 dark:border-gray-800">
+			<!-- Actions — chỉ quản trị viên mới có nút ghi ở đây -->
+			<div v-if="canEdit" class="p-4 space-y-2 flex-shrink-0 border-t border-gray-100 dark:border-gray-800">
 				<!-- Save permissions (only visible on permissions tab with changes) -->
 				<CommonAppButton
 					v-if="activeTab === 'permissions' && permissionsChanged"
@@ -613,14 +647,14 @@ function getRoleInitials(name: string): string {
 
 	<!-- Create role modal -->
 	<RoleCreateModal
-		v-if="showCreateModal"
+		v-if="canEdit && showCreateModal"
 		@close="showCreateModal = false"
 		@created="onRoleCreated"
 	/>
 
 	<!-- Add user modal -->
 	<RoleAddUserModal
-		v-if="showAddUserModal && selectedRoleId"
+		v-if="canEdit && showAddUserModal && selectedRoleId"
 		:role-id="selectedRoleId"
 		:existing-employees="roleEmployees"
 		@close="showAddUserModal = false"
@@ -638,7 +672,7 @@ function getRoleInitials(name: string): string {
 			leave-to-class="opacity-0"
 		>
 			<div
-				v-if="confirmDeleteId"
+				v-if="canEdit && confirmDeleteId"
 				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 				@click.self="confirmDeleteId = null"
 			>
