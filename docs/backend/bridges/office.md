@@ -295,11 +295,12 @@ tính vào `amount`: hiện cảnh báo nhỏ.
   đã có (bấm Đặt hai lần). Trùng một phần là cuộc họp khác: "Phòng này đã có lượt của bạn lúc … Bạn chọn giờ hoặc phòng
   khác." **Giữ hộp đặt, sửa mở** cùng dữ liệu đã gõ, hiện câu ở ô giờ.
 - **Lượt riêng tư (Q3): chỉ người tạo, chủ trì, người dự thấy nội dung.** Nhật ký hệ thống (`/system-logs`, HR và ADMIN
-  đọc được) cũng không ghi tiêu đề, người dự, lý do huỷ của lượt riêng tư, chỉ ghi có đổi hay không. Người khác, **kể cả HCNS** có
-  `office:booking:manage`, nhận `detailsVisible=false`, `title`, `note`, `cancelReason` là `null`, `attendees` rỗng; vẫn
-  thấy người đặt và khung giờ bận. HCNS vẫn dời giờ, đổi phòng, huỷ (có lý do) được, nhưng gửi tiêu đề, ghi chú,
-  `isPrivate`, `organizerId`, `attendeeIds` khác giá trị hiện tại thì 403: form sửa của người không thấy nội dung chỉ
-  được gửi `roomId`, `startAt`, `endAt`.
+  đọc được) cũng không ghi tiêu đề, người dự, lý do huỷ của lượt riêng tư, chỉ ghi số người dự và có đổi hay không. Người
+  khác, **kể cả HCNS** có `office:booking:manage`, nhận `detailsVisible=false`, `title`, `note`, `cancelReason` là `null`,
+  `attendees` rỗng; vẫn thấy người đặt và khung giờ bận. HCNS vẫn dời giờ, đổi phòng, huỷ (có lý do) được. Body có `title`,
+  `note` hay `attendeeIds` là 403, **dù giá trị giống hệt giá trị đang lưu** (để không đoán được nội dung qua mã trả về);
+  `isPrivate`, `organizerId` khác giá trị hiện tại cũng 403. Form sửa của người không thấy nội dung chỉ gửi `roomId`,
+  `startAt`, `endAt`.
 - Không có bước duyệt. Trùng giờ trả 409 `OFFICE_ROOM_BOOKING_CONFLICT` với câu nêu giờ, người đặt và người chủ trì (bấm đúp
   thì "Bạn đã đặt phòng này…"): hiện toast rồi tải lại lịch. Server chặn cả khi hai người bấm cùng lúc.
 - Giới hạn (L9): mỗi lượt ≤ 12 giờ, đặt trước tới hết ngày thứ 180 (giờ Việt Nam), không đặt giờ đã qua (trễ ≤ 5 phút vẫn
