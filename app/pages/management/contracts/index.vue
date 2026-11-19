@@ -145,8 +145,7 @@
 		<!-- Page header -->
 		<div class="flex items-start justify-between gap-3 flex-wrap">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Quản lý hợp đồng</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Hợp đồng lao động toàn công ty</p>
+				<UiPageHeader title="Quản lý hợp đồng" description="Hợp đồng lao động toàn công ty" />
 			</div>
 			<CommonAppButton v-if="canImport" variant="primary" @click="showImportModal = true">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

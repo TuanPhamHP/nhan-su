@@ -19,6 +19,9 @@ export const MODULE_ROUTES: Record<Exclude<ModuleCode, 'CORE'>, string[]> = {
 	// EMPLOYEE). Trang tuyển dụng công khai `/careers/...` và `/offer-response` KHÔNG nằm
 	// ở đây: chúng mở được khi chưa đăng nhập nên không có entitlement để tra.
 	RECRUIT: ['/management/recruitment', '/recruitment'],
+	// `/office` là nhóm trang của mọi nhân viên (phiếu văn phòng phẩm của phòng mình, đặt phòng
+	// họp), `/management/office` là nhóm trang của HCNS và trưởng phòng.
+	OFFICE: ['/management/office', '/office'],
 };
 
 /** Route này thuộc module nào, `null` nếu không thuộc module nào bật tắt được. */

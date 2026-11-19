@@ -133,11 +133,7 @@
 <template>
 	<div class="space-y-5 pb-40 sm:pb-24">
 		<div>
-			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Báo hỏng, báo mất</h1>
-			<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-				Báo cáo do nhân viên gửi về thiết bị họ đang giữ. Bạn mở từng báo cáo để tạo phiếu sửa, xác nhận
-				mất hoặc đóng lại.
-			</p>
+			<UiPageHeader title="Báo hỏng, báo mất" description="Báo cáo do nhân viên gửi về thiết bị họ đang giữ. Bạn mở từng báo cáo để tạo phiếu sửa, xác nhận mất hoặc đóng lại." />
 		</div>
 
 		<CommonAppModuleNotice module="ASSET" />

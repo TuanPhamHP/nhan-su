@@ -120,10 +120,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Chờ tôi duyệt</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Yêu cầu tuyển dụng, offer và đề xuất định biên đang đến lượt bạn
-				</p>
+				<UiPageHeader title="Chờ tôi duyệt" description="Yêu cầu tuyển dụng, offer và đề xuất định biên đang đến lượt bạn" />
 			</div>
 			<div class="w-52">
 				<UiSelect v-model="filterType" :options="typeOptions" />

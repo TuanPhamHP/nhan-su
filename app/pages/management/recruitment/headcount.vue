@@ -307,10 +307,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Định biên tuyển dụng</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Số người được duyệt cho từng vị trí trong năm, và phần còn trống để gửi yêu cầu tuyển
-				</p>
+				<UiPageHeader title="Định biên tuyển dụng" description="Số người được duyệt cho từng vị trí trong năm, và phần còn trống để gửi yêu cầu tuyển" />
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				<CommonAppButton variant="outline" :loading="exporting" @click="handleExport">

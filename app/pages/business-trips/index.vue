@@ -81,8 +81,7 @@ onMounted(() => {
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn công tác của tôi</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách các đơn công tác bạn đã tạo</p>
+				<UiPageHeader title="Đơn công tác của tôi" description="Danh sách các đơn công tác bạn đã tạo" />
 			</div>
 			<div v-if="canWrite('BUSINESS_TRIP')" class="hidden sm:block">
 				<NuxtLink to="/business-trips/create">

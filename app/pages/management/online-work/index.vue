@@ -252,8 +252,7 @@ watch(activeTab, tab => {
 	<div class="space-y-5">
 		<!-- Page header -->
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Làm việc online</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Duyệt và theo dõi đơn đăng ký làm việc từ xa</p>
+			<UiPageHeader title="Làm việc online" description="Duyệt và theo dõi đơn đăng ký làm việc từ xa" />
 		</div>
 
 		<CommonAppModuleNotice module="ONLINE_WORK" />

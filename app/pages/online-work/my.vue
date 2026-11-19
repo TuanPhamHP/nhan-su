@@ -116,8 +116,7 @@ onMounted(fetchRequests);
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn làm online của tôi</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và quản lý các đơn đăng ký làm việc tại nhà</p>
+				<UiPageHeader title="Đơn làm online của tôi" description="Xem và quản lý các đơn đăng ký làm việc tại nhà" />
 			</div>
 			<div v-if="canWrite('ONLINE_WORK')" class="hidden sm:block">
 				<NuxtLink to="/online-work/create">

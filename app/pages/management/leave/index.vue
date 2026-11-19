@@ -358,8 +358,7 @@
 	<div class="space-y-5">
 		<!-- Page header -->
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Nghỉ phép</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quản lý đơn nghỉ phép, loại phép và số dư phép</p>
+			<UiPageHeader title="Nghỉ phép" description="Quản lý đơn nghỉ phép, loại phép và số dư phép" />
 		</div>
 
 		<!-- Tabs -->

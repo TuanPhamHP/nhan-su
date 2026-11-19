@@ -48,6 +48,14 @@
 	const emit = defineEmits<{
 		'update:modelValue': [value: number | undefined];
 		blur: [];
+		/**
+		 * Ô vừa bỏ đi một ký tự người dùng gõ hoặc dán, kèm ký tự đó.
+		 *
+		 * Ô vẫn im lặng như trước nếu nơi dùng không nghe sự kiện này. Nơi nào cần nói cho người
+		 * dùng biết thì nghe: gõ "2,5" vào ô số nguyên ra 25 mà không ai nhắc là con số sai hẳn
+		 * so với ý người gõ, và họ ký vào phiếu với số sai đó.
+		 */
+		reject: [char: string];
 	}>();
 
 	// Biểu mẫu truyền `v-bind="xxxAttrs"` của vee-validate vào đây, nên thuộc tính và trình xử lý
@@ -105,12 +113,18 @@
 
 		if (event.key === '.' || event.key === ',') {
 			event.preventDefault();
-			if (props.decimals <= 0) return;
+			if (props.decimals <= 0) {
+				emit('reject', event.key);
+				return;
+			}
 			if (text.value.includes(',')) return;
 			insertComma();
 			return;
 		}
-		if (!/\d/.test(event.key)) event.preventDefault();
+		if (!/\d/.test(event.key)) {
+			event.preventDefault();
+			emit('reject', event.key);
+		}
 	}
 
 	/** Thay phím dấu chấm bằng dấu phẩy ngay tại vị trí con trỏ. */
@@ -133,6 +147,10 @@
 		const pasted = event.clipboardData?.getData('text');
 		if (!pasted) return;
 		event.preventDefault();
+		// Chuỗi dán có chữ, dấu trừ hay dấu lẻ ở ô số nguyên thì nơi dùng được biết, vì số đọc ra
+		// khác hẳn chuỗi người dùng nhìn thấy khi họ dán từ Excel hay từ một tin nhắn.
+		const allowed = props.decimals > 0 ? /^[\d.,\s]+$/ : /^[\d.\s]+$/;
+		if (!allowed.test(pasted.trim())) emit('reject', pasted.trim().slice(0, 40));
 		const next = parsePastedNumber(pasted, props.decimals);
 		text.value = next.text;
 		if (inputRef.value) inputRef.value.value = next.text;

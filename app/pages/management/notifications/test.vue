@@ -258,8 +258,7 @@
 	<div class="max-w-4xl mx-auto py-8 px-4 space-y-8">
 		<!-- Header -->
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Test Notification Pipeline</h1>
-			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Dành riêng cho ADMIN — kiểm tra từng lớp notification.</p>
+			<UiPageHeader title="Test Notification Pipeline" description="Dành riêng cho ADMIN — kiểm tra từng lớp notification." />
 		</div>
 
 		<!-- ─── Section 1: Unified Test ─────────────────────────────────────────── -->

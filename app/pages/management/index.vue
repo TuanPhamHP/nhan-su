@@ -10,7 +10,7 @@
 	import DashboardContractChart from '~/components/modules/dashboard/DashboardContractChart.vue';
 	import NewHiresModal from '~/components/modules/dashboard/NewHiresModal.vue';
 
-	definePageMeta({ title: 'Dashboard' });
+	definePageMeta({ title: 'Tổng quan' });
 
 	const { user } = useAuth();
 	if (import.meta.client && user.value?.role === 'EMPLOYEE') {
@@ -155,17 +155,19 @@
 
 <template>
 	<div class="space-y-6">
-		<!-- Header -->
-		<div class="flex items-center justify-between">
+		<!--
+			Header: tiêu đề tiếng Việt như mọi trang khác, và câu "Tổng quan toàn công ty" là mô tả nên
+			nằm sau dấu hỏi. Dòng phòng ban thì là DỮ LIỆU của người đang xem, nên vẫn hiện thẳng.
+		-->
+		<div class="flex items-start justify-between gap-3">
 			<div>
-				<h1 class="text-lg font-bold text-gray-900 dark:text-white">Dashboard</h1>
+				<UiPageHeader title="Tổng quan" :description="stats && 'departmentName' in stats && stats.departmentName ? '' : 'Tổng quan toàn công ty: số liệu nhân sự, chấm công và đơn từ của mọi phòng ban.'" />
 				<p
 					v-if="stats && 'departmentName' in stats && stats.departmentName"
 					class="text-sm text-gray-500 dark:text-gray-400 mt-0.5"
 				>
 					Phòng ban: {{ stats.departmentName }}
 				</p>
-				<p v-else class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tổng quan toàn công ty</p>
 			</div>
 			<button
 				:disabled="loading"

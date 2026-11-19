@@ -165,10 +165,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Lịch phỏng vấn</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Các buổi phỏng vấn và thi tuyển trong khoảng đang xem
-				</p>
+				<UiPageHeader title="Lịch phỏng vấn" description="Các buổi phỏng vấn và thi tuyển trong khoảng đang xem" />
 			</div>
 		</div>
 
