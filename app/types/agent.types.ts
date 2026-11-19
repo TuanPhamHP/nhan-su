@@ -234,6 +234,13 @@ export interface AgentConversationMessage {
 	id: number;
 	role: 'user' | 'assistant' | 'system' | string;
 	text: string;
+	/**
+	 * Chỉ có ở lượt trả lời hỏng giữa chừng: đúng câu báo lỗi người dùng đã thấy qua `event: error`.
+	 *
+	 * Hỏng trước khi sinh chữ nào thì `text` cũng bằng câu này; hỏng sau khi đã stream vài chữ thì
+	 * `text` là phần chữ dở. Tin nhắn cũ và mọi lượt trả lời trọn vẹn đều không có trường này.
+	 */
+	error?: string;
 	/** Có khi lượt đó server dựng biểu đồ. Tin nhắn cũ không có trường này. */
 	charts?: AgentChart[];
 	/** Có khi lượt đó server dựng bảng. Tin nhắn cũ không có trường này. */
