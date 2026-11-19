@@ -1,5 +1,7 @@
 <script setup lang="ts">
+	import RoomFormModal from '~/components/modules/office/RoomFormModal.vue';
 	import SiteFormModal from '~/components/modules/office/SiteFormModal.vue';
+	import type { DropdownMenuItem } from '~/components/ui/DropdownMenu.vue';
 	import { useOfficeService } from '~/services/office.service';
 	import { downloadOfficeFile, officeErrorCode, officeErrorMessage, officeMoney } from '~/utils/office.utils';
 	import type {
@@ -430,37 +432,22 @@
 	const loadingRooms = ref(false);
 	const roomsLoaded = ref(false);
 	/**
-	 * Văn phòng nào đang mở form thêm hoặc sửa phòng; `null` là không mở ở đâu cả.
+	 * Hộp thoại thêm, sửa phòng: văn phòng chứa phòng, và phòng đang sửa nếu là sửa.
 	 *
-	 * Form nằm TRONG thẻ của văn phòng, nên nó không cần ô chọn văn phòng nữa: người dùng bấm
-	 * "Thêm phòng họp" ở thẻ nào thì phòng mới thuộc văn phòng đó.
+	 * Văn phòng lấy theo khối mà người dùng bấm thêm, nên hộp thoại không có ô chọn văn phòng và
+	 * không ai tạo nhầm phòng sang văn phòng khác. Việc lưu nằm trong `RoomFormModal`.
 	 */
-	const roomFormSiteId = ref<number | null>(null);
+	const roomFormSite = ref<OfficeSite | null>(null);
 	const editingRoom = ref<MeetingRoom | null>(null);
-	const savingRoom = ref(false);
-	const roomNameError = ref('');
-	/**
-	 * Ô Tên phòng, để sau khi lưu con trỏ về đây cho người dùng gõ liền phòng kế tiếp.
-	 *
-	 * Gán bằng HÀM chứ không bằng `ref="..."`: ô nằm trong `v-for` của các thẻ văn phòng, mà ref
-	 * dạng chuỗi trong `v-for` cho ra một MẢNG phần tử, nên `.focus()` gọi thẳng sẽ ném lỗi. Mỗi
-	 * lúc chỉ có một form mở, nên giữ đúng một phần tử là đủ.
-	 */
-	const roomNameInput = ref<HTMLInputElement | null>(null);
 
-	function setRoomNameInput(el: unknown) {
-		roomNameInput.value = el instanceof HTMLInputElement ? el : null;
-	}
-	const roomForm = reactive({
-		officeSiteId: undefined as number | undefined,
-		name: '',
-		capacity: undefined as number | undefined,
-		/** Thiết bị gõ bằng dấu phẩy, vì danh sách thiết bị không có danh mục riêng. */
-		equipment: '',
-		note: '',
-		sortOrder: undefined as number | undefined,
-		isActive: true,
-	});
+	/**
+	 * Phòng đã ngừng dùng có hiện hay không.
+	 *
+	 * Mặc định ẩn: danh sách phòng đang dùng là thứ người dùng vào đây để xem, còn phòng đã ngừng
+	 * chỉ cần tới lúc muốn dùng lại. Số phòng đang ẩn vẫn ghi ngay cạnh công tắc để không ai tưởng
+	 * mình mất phòng.
+	 */
+	const showInactiveRooms = ref(false);
 
 	async function loadRooms() {
 		loadingRooms.value = true;
@@ -475,113 +462,132 @@
 		}
 	}
 
+	/**
+	 * Thiết bị gợi ý sẵn, để mọi phòng gọi cùng một thứ bằng cùng một tên.
+	 *
+	 * Danh sách mẫu là những thứ phòng họp nào cũng có; phần sau là thiết bị các phòng của công ty
+	 * đang dùng, lấy từ dữ liệu trang đã tải nên không gọi thêm API. Ô chip tự bỏ mục đã chọn và tự
+	 * bỏ trùng, nên ở đây chỉ cần gộp lại.
+	 */
+	const EQUIPMENT_SAMPLES = [
+		'Bảng trắng',
+		'Máy chiếu',
+		'Màn hình TV',
+		'Camera & mic',
+		'Cáp HDMI & bộ chuyển đổi',
+		'Loa',
+		'Điện thoại hội nghị',
+		'Bút trình chiếu',
+	];
+
+	const equipmentSuggestions = computed(() => [
+		...EQUIPMENT_SAMPLES,
+		...rooms.value.flatMap(room => room.equipment ?? []),
+	]);
+
 	/** Phòng họp của một văn phòng, theo ID chứ không theo tên: tên văn phòng có thể đổi. */
 	function roomsOf(siteId: number): MeetingRoom[] {
 		return rooms.value.filter(room => room.officeSiteId === siteId);
 	}
 
-	/** Mở form thêm phòng ngay trong thẻ của văn phòng, văn phòng đã chọn sẵn. */
+	/** Phòng hiện trên lưới của một văn phòng: bỏ phòng đã ngừng khi công tắc đang tắt. */
+	function visibleRoomsOf(siteId: number): MeetingRoom[] {
+		const all = roomsOf(siteId);
+		return showInactiveRooms.value ? all : all.filter(room => room.isActive);
+	}
+
+	/** Số phòng đã ngừng đang bị ẩn ở một văn phòng, để ghi cạnh lưới. */
+	function hiddenRoomCount(siteId: number): number {
+		return showInactiveRooms.value ? 0 : roomsOf(siteId).filter(room => !room.isActive).length;
+	}
+
+	/** Tổng số phòng đã ngừng của cả công ty, để ghi cạnh công tắc. */
+	const inactiveRoomTotal = computed(() => rooms.value.filter(room => !room.isActive).length);
+
+	/**
+	 * Câu tóm tắt dưới tên văn phòng, ví dụ "3 phòng · tối đa 34 người".
+	 *
+	 * Chỉ đếm phòng đang dùng và chỉ lấy sức chứa lớn nhất: người đọc dòng này đang muốn biết văn
+	 * phòng có chỗ họp hay không và phòng lớn nhất ngồi được bao nhiêu người.
+	 */
+	function siteSummary(siteId: number): string {
+		const active = roomsOf(siteId).filter(room => room.isActive);
+		if (!active.length) return 'Chưa có phòng họp';
+		const capacities = active.map(room => room.capacity).filter((c): c is number => c != null);
+		const roomCount = `${active.length} phòng`;
+		return capacities.length ? `${roomCount} · tối đa ${Math.max(...capacities)} người` : roomCount;
+	}
+
+	/** Mở hộp thoại thêm phòng, văn phòng chọn sẵn theo khối người dùng đang bấm. */
 	function openRoomCreate(site: OfficeSite) {
 		editingRoom.value = null;
-		roomNameError.value = '';
-		Object.assign(roomForm, {
-			officeSiteId: site.id,
-			name: '',
-			capacity: undefined,
-			equipment: '',
-			note: '',
-			sortOrder: undefined,
-			isActive: true,
-		});
-		roomFormSiteId.value = site.id;
-		nextTick(() => roomNameInput.value?.focus());
+		roomFormSite.value = site;
 	}
 
 	function openRoomEdit(room: MeetingRoom) {
+		const site = sites.value.find(s => s.id === room.officeSiteId);
+		if (!site) return;
 		editingRoom.value = room;
-		roomNameError.value = '';
-		Object.assign(roomForm, {
-			officeSiteId: room.officeSiteId,
-			name: room.name,
-			capacity: room.capacity ?? undefined,
-			equipment: room.equipment.join(', '),
-			note: room.note ?? '',
-			sortOrder: room.sortOrder,
-			isActive: room.isActive,
-		});
-		roomFormSiteId.value = room.officeSiteId;
-		nextTick(() => roomNameInput.value?.focus());
+		roomFormSite.value = site;
 	}
 
 	function closeRoomForm() {
-		roomFormSiteId.value = null;
+		roomFormSite.value = null;
 		editingRoom.value = null;
-		roomNameError.value = '';
 	}
 
-	function equipmentList(): string[] {
-		return roomForm.equipment
-			.split(',')
-			.map(part => part.trim())
-			.filter(Boolean);
+	/**
+	 * Lưu xong trong hộp thoại: nạp lại danh sách, và chỉ đóng hộp khi người dùng không chọn thêm
+	 * phòng nữa. Hộp tự xoá trắng các ô cho lượt gõ sau, nên ở đây không chạm vào nó.
+	 */
+	async function onRoomSaved(_saved: MeetingRoom, keepOpen: boolean) {
+		await loadRooms();
+		if (!keepOpen) closeRoomForm();
 	}
 
-	async function saveRoom() {
-		if (!roomForm.officeSiteId || !roomForm.name.trim() || savingRoom.value) return;
-		savingRoom.value = true;
-		roomNameError.value = '';
-		try {
-			if (editingRoom.value) {
-				await service.updateRoom(editingRoom.value.id, {
-					officeSiteId: roomForm.officeSiteId,
-					name: roomForm.name.trim(),
-					capacity: roomForm.capacity,
-					equipment: equipmentList(),
-					note: roomForm.note.trim(),
-					sortOrder: roomForm.sortOrder,
-					isActive: roomForm.isActive,
-				});
-			} else {
-				await service.createRoom({
-					officeSiteId: roomForm.officeSiteId,
-					name: roomForm.name.trim(),
-					capacity: roomForm.capacity,
-					equipment: equipmentList(),
-					note: roomForm.note.trim() || undefined,
-					sortOrder: roomForm.sortOrder,
-				});
-			}
-			const justSaved = roomForm.name.trim();
-			const wasEditing = !!editingRoom.value;
-			toast.success(`Đã lưu phòng họp ${justSaved}.`);
-			await loadRooms();
-			if (wasEditing) {
-				closeRoomForm();
-			} else {
-				// Thêm xong thì GIỮ FORM MỞ, xoá trắng các ô và đưa con trỏ về ô Tên: một văn phòng
-				// thường có vài phòng họp, và bắt người dùng bấm "Thêm phòng họp" lại cho từng phòng
-				// là bắt họ làm cùng một việc bốn lần.
-				Object.assign(roomForm, {
-					name: '',
-					capacity: undefined,
-					equipment: '',
-					note: '',
-					sortOrder: undefined,
-					isActive: true,
-				});
-				nextTick(() => roomNameInput.value?.focus());
-			}
-		} catch (e) {
-			if (officeErrorCode(e) === 'OFFICE_ROOM_NAME_EXISTS') {
-				roomNameError.value = officeErrorMessage(e, 'Văn phòng này đã có phòng họp tên như vậy.');
-			} else {
-				// `OFFICE_ROOM_HAS_BOOKINGS` khi ngừng phòng còn lượt sắp tới: câu của máy chủ nêu
-				// số lượt, nên hiện nguyên văn thay vì câu chung của trang.
-				toast.error(officeErrorMessage(e, 'Chưa lưu được phòng họp. Bạn thử lại sau ít phút.'));
-			}
-		} finally {
-			savingRoom.value = false;
-		}
+	/**
+	 * Việc ít dùng của một văn phòng hay một phòng nằm trong menu dấu ba chấm.
+	 *
+	 * Vì sao không để sẵn mấy nút cạnh nhau như trước: mỗi văn phòng có hai nút và mỗi phòng có hai
+	 * nút nữa, nên một công ty bốn phòng họp hiện ra mười cái nút xám giống nhau, và tên phòng —
+	 * thứ người dùng thực sự tìm — chìm giữa chúng. Nay thẻ chỉ còn thông tin, việc nằm sau dấu ba
+	 * chấm. Đường vẽ của icon là `d` của heroicons, đúng dạng `DropdownMenuItem` chờ.
+	 */
+	const ICON_PENCIL =
+		'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z';
+	const ICON_PLUS = 'M12 4v16m8-8H4';
+	const ICON_BAN =
+		'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636';
+	const ICON_CHECK = 'M4.5 12.75l6 6 9-13.5';
+
+	function siteActions(site: OfficeSite): DropdownMenuItem[] {
+		return [
+			{ label: 'Sửa văn phòng', icon: ICON_PENCIL, action: () => openSiteEdit(site) },
+			{
+				label: 'Thêm phòng họp',
+				icon: ICON_PLUS,
+				action: () => openRoomCreate(site),
+				hidden: !site.isActive,
+			},
+			{
+				label: site.isActive ? 'Ngừng dùng' : 'Dùng lại',
+				icon: site.isActive ? ICON_BAN : ICON_CHECK,
+				variant: site.isActive ? 'danger' : undefined,
+				action: () => toggleSite(site),
+			},
+		];
+	}
+
+	function roomActions(room: MeetingRoom): DropdownMenuItem[] {
+		return [
+			{ label: 'Sửa phòng', icon: ICON_PENCIL, action: () => openRoomEdit(room) },
+			{
+				label: room.isActive ? 'Ngừng dùng' : 'Dùng lại',
+				icon: room.isActive ? ICON_BAN : ICON_CHECK,
+				variant: room.isActive ? 'danger' : undefined,
+				action: () => toggleRoom(room),
+			},
+		];
 	}
 
 	/** Phòng nào đang chờ máy chủ trả lời cho nút Ngừng dùng hoặc Dùng lại. */
@@ -676,12 +682,25 @@
 		<!-- ── Văn phòng và phòng họp ──────────────────────────────────────── -->
 		<template v-if="activeTab === 'places'">
 			<div class="flex flex-wrap items-center justify-between gap-3">
-				<p class="text-sm text-gray-600 dark:text-gray-400">
-					Văn phòng là toà nhà hay địa điểm làm việc của công ty. Phòng họp nằm trong một văn phòng, và bạn thêm
-					phòng ngay trong thẻ của văn phòng đó.
+				<p class="max-w-2xl text-sm text-gray-600 dark:text-gray-400">
+					Văn phòng là toà nhà hay địa điểm làm việc của công ty, và mỗi phòng họp nằm trong một văn phòng. Bạn
+					thêm phòng ngay trong khối của văn phòng đó.
 				</p>
 				<CommonAppButton v-if="canEdit" variant="primary" @click="openSiteCreate">Thêm văn phòng</CommonAppButton>
 			</div>
+
+			<!-- Công tắc chỉ hiện khi có phòng đã ngừng: không có thì nó là một dòng vô nghĩa. -->
+			<label
+				v-if="inactiveRoomTotal > 0"
+				class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
+			>
+				<input
+					v-model="showInactiveRooms"
+					type="checkbox"
+					class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+				/>
+				Hiện {{ inactiveRoomTotal }} phòng đã ngừng dùng
+			</label>
 
 			<div v-if="loadingSites || loadingRooms" class="space-y-3">
 				<div v-for="i in 3" :key="i" class="h-32 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
@@ -707,8 +726,10 @@
 
 			<div v-else class="space-y-4">
 				<!--
-					Mỗi văn phòng là một thẻ, phòng họp của nó nằm ngay trong thẻ. Người dùng thấy quan hệ
-					"phòng nằm trong văn phòng" bằng mắt, và thêm phòng không phải chọn lại văn phòng.
+					Mỗi văn phòng là một khối, phòng họp của nó là các thẻ trong lưới bên trong khối. Người
+					dùng thấy quan hệ "phòng nằm trong văn phòng" bằng mắt, và thêm phòng không phải chọn
+					lại văn phòng. Lưới cho bốn phòng cạnh nhau đọc nhanh hơn bốn dòng xếp dọc, vì mỗi thẻ
+					là một phòng có hình khối riêng chứ không phải một dòng chữ nữa trong danh sách.
 				-->
 				<section
 					v-for="site in sites"
@@ -722,7 +743,7 @@
 						site.isActive ? '' : 'opacity-70',
 					]"
 				>
-					<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-700">
+					<div class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-700">
 						<div class="min-w-0">
 							<div class="flex flex-wrap items-center gap-2">
 								<h3 class="font-semibold text-gray-900 dark:text-white">{{ site.name }}</h3>
@@ -736,121 +757,83 @@
 							<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
 								{{ site.address || 'Chưa ghi địa chỉ' }}
 							</p>
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-								{{ roomsOf(site.id).length }} phòng họp
-							</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ siteSummary(site.id) }}</p>
 						</div>
-						<div v-if="canEdit" class="flex flex-wrap gap-2">
-							<CommonAppButton size="sm" variant="outline" @click="openSiteEdit(site)">Sửa</CommonAppButton>
-							<CommonAppButton
-								size="sm"
-								:variant="site.isActive ? 'ghost' : 'outline'"
-								:loading="togglingSiteId === site.id"
-								@click="toggleSite(site)"
-							>
-								{{ site.isActive ? 'Ngừng dùng' : 'Dùng lại' }}
-							</CommonAppButton>
-						</div>
+						<!-- Một nút ba chấm thay cho hai nút: tên văn phòng là thứ cần nổi, không phải các nút. -->
+						<UiDropdownMenu v-if="canEdit" :items="siteActions(site)" />
 					</div>
 
-					<!-- Phòng họp của văn phòng này -->
-					<div class="divide-y divide-gray-100 dark:divide-gray-800">
-						<p v-if="!roomsOf(site.id).length" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+					<!-- Phòng họp của văn phòng này, mỗi phòng một thẻ trong lưới. -->
+					<div class="p-4">
+						<p
+							v-if="!roomsOf(site.id).length && !canEdit"
+							class="py-2 text-sm text-gray-500 dark:text-gray-400"
+						>
 							Văn phòng này chưa có phòng họp nào.
 						</p>
-						<div
-							v-for="room in roomsOf(site.id)"
-							:key="room.id"
-							:class="[
-								'flex flex-wrap items-start justify-between gap-3 px-4 py-3',
-								room.isActive ? '' : 'opacity-60',
-							]"
-						>
-							<div class="min-w-0">
-								<div class="flex flex-wrap items-center gap-2">
-									<p class="font-medium text-gray-900 dark:text-white">{{ room.name }}</p>
+
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+							<article
+								v-for="room in visibleRoomsOf(site.id)"
+								:key="room.id"
+								:class="[
+									'flex flex-col gap-2 rounded-xl border p-3 transition-colors',
+									room.isActive
+										? 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
+										: 'border-dashed border-gray-300 bg-gray-50 opacity-60 dark:border-gray-600 dark:bg-gray-800/50',
+								]"
+							>
+								<div class="flex items-start justify-between gap-2">
+									<div class="min-w-0">
+										<p class="truncate font-medium text-gray-900 dark:text-white">{{ room.name }}</p>
+										<span
+											v-if="!room.isActive"
+											class="mt-1 inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+										>
+											Ngừng dùng
+										</span>
+									</div>
+									<UiDropdownMenu v-if="canEdit" :items="roomActions(room)" />
+								</div>
+
+								<!-- Sức chứa đi với icon người, nên đọc được mà không cần nhãn "Sức chứa". -->
+								<p class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
+									<Icon name="heroicons:user-group" class="h-4 w-4 flex-shrink-0 text-gray-400" aria-hidden="true" />
+									{{ room.capacity != null ? `${room.capacity} người` : 'Chưa ghi sức chứa' }}
+								</p>
+
+								<div v-if="room.equipment.length" class="flex flex-wrap gap-1">
 									<span
-										v-if="!room.isActive"
-										class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+										v-for="item in room.equipment"
+										:key="item"
+										class="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
 									>
-										Ngừng dùng
+										{{ item }}
 									</span>
 								</div>
-								<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">
-									{{ room.capacity != null ? `${room.capacity} người` : 'Chưa ghi sức chứa' }} ·
-									{{ room.equipment.length ? room.equipment.join(', ') : 'Chưa ghi thiết bị' }}
-								</p>
-								<p v-if="room.note" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ room.note }}</p>
-							</div>
-							<div v-if="canEdit" class="flex flex-wrap gap-2">
-								<CommonAppButton size="sm" variant="outline" @click="openRoomEdit(room)">Sửa</CommonAppButton>
-								<CommonAppButton
-									size="sm"
-									:variant="room.isActive ? 'ghost' : 'outline'"
-									:loading="togglingRoomId === room.id"
-									@click="toggleRoom(room)"
-								>
-									{{ room.isActive ? 'Ngừng dùng' : 'Dùng lại' }}
-								</CommonAppButton>
-							</div>
-						</div>
-					</div>
+								<p v-else class="text-xs text-gray-400 dark:text-gray-500">Chưa ghi thiết bị</p>
 
-					<!-- Form thêm, sửa phòng: mở NGAY TRONG thẻ nên không cần ô chọn văn phòng. -->
-					<div
-						v-if="roomFormSiteId === site.id"
-						class="border-t border-brand-200 bg-brand-50/40 p-4 dark:border-brand-800 dark:bg-brand-900/10"
-					>
-						<h4 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
-							{{ editingRoom ? `Sửa phòng ${editingRoom.name}` : `Thêm phòng họp cho ${site.name}` }}
-						</h4>
-						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-							<div class="space-y-1">
-								<label :class="labelCls">Tên phòng <span class="text-red-500">*</span></label>
-								<!-- Enter là lưu: người dùng gõ liền vài phòng thì không phải rời tay khỏi bàn phím. -->
-								<input
-									:ref="setRoomNameInput"
-									v-model="roomForm.name"
-									type="text"
-									maxlength="200"
-									:class="inputCls"
-									placeholder="VD: Phòng họp tầng 3"
-									@keydown.enter.prevent="saveRoom"
-								/>
-								<p v-if="roomNameError" class="text-xs text-red-500">{{ roomNameError }}</p>
-							</div>
-							<div class="space-y-1">
-								<label :class="labelCls">Sức chứa</label>
-								<UiNumberInput v-model="roomForm.capacity" :min="1" :input-class="inputCls" placeholder="Số người" />
-							</div>
-							<div class="space-y-1">
-								<label :class="labelCls">Thiết bị</label>
-								<input v-model="roomForm.equipment" type="text" :class="inputCls" placeholder="Máy chiếu, Bảng trắng" />
-								<p class="text-xs text-gray-500 dark:text-gray-400">Mỗi thiết bị cách nhau một dấu phẩy.</p>
-							</div>
-							<div class="space-y-1">
-								<label :class="labelCls">Ghi chú</label>
-								<input v-model="roomForm.note" type="text" maxlength="255" :class="inputCls" placeholder="VD: Mượn chìa khoá ở lễ tân" />
-							</div>
-							<div class="space-y-1">
-								<label :class="labelCls">Thứ tự hiện</label>
-								<UiNumberInput v-model="roomForm.sortOrder" :min="0" :input-class="inputCls" placeholder="Bỏ trống thì xếp cuối" />
-							</div>
-							<label v-if="editingRoom" class="flex items-center gap-2">
-								<input v-model="roomForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-								<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
-							</label>
-						</div>
-						<div class="mt-4 flex flex-wrap justify-end gap-3">
-							<CommonAppButton variant="secondary" @click="closeRoomForm">Đóng</CommonAppButton>
-							<CommonAppButton variant="primary" :disabled="!roomForm.name.trim()" :loading="savingRoom" @click="saveRoom">
-								{{ editingRoom ? 'Lưu' : 'Lưu và thêm phòng nữa' }}
-							</CommonAppButton>
-						</div>
-					</div>
+								<p v-if="room.note" class="text-xs text-gray-500 dark:text-gray-400">{{ room.note }}</p>
+							</article>
 
-					<div v-else-if="canEdit && site.isActive" class="border-t border-gray-100 p-4 dark:border-gray-800">
-						<CommonAppButton size="sm" variant="outline" @click="openRoomCreate(site)">Thêm phòng họp</CommonAppButton>
+							<!--
+								Thẻ cuối lưới là chỗ thêm phòng, nên việc "thêm phòng" nằm đúng nơi các phòng đang
+								hiện chứ không phải một cái nút rời ở đáy khối.
+							-->
+							<button
+								v-if="canEdit && site.isActive"
+								type="button"
+								class="flex min-h-[7rem] flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 p-3 text-sm font-medium text-gray-500 transition-colors hover:border-brand-400 hover:text-brand-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-brand-500 dark:hover:text-brand-400"
+								@click="openRoomCreate(site)"
+							>
+								<Icon name="heroicons:plus" class="h-5 w-5" aria-hidden="true" />
+								Thêm phòng họp
+							</button>
+						</div>
+
+						<p v-if="hiddenRoomCount(site.id)" class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+							{{ hiddenRoomCount(site.id) }} phòng đã ngừng dùng đang ẩn.
+						</p>
 					</div>
 				</section>
 			</div>
@@ -1188,6 +1171,16 @@
 			@saved="onSiteSaved"
 			@go-to-site="onGoToSite"
 			@close="showSiteForm = false"
+		/>
+
+		<!-- Phòng họp cũng đi qua hộp thoại, mở từ thẻ nét đứt trong lưới của văn phòng. -->
+		<RoomFormModal
+			v-if="roomFormSite"
+			:room="editingRoom"
+			:site="roomFormSite"
+			:equipment-suggestions="equipmentSuggestions"
+			@saved="onRoomSaved"
+			@close="closeRoomForm"
 		/>
 	</div>
 </template>
