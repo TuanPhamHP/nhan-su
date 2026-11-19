@@ -260,12 +260,7 @@
 					@mousedown.prevent="selectMention(emp)"
 					@mouseenter="activeIndex = i"
 				>
-					<div
-						class="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-300 overflow-hidden"
-					>
-						<img v-if="emp.avatarUrl" :src="emp.avatarUrl" class="w-full h-full object-cover" />
-						<span v-else>{{ emp.fullName.charAt(0).toUpperCase() }}</span>
-					</div>
+					<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 					<span class="font-medium text-gray-800 dark:text-gray-100 truncate">{{ emp.fullName }}</span>
 				</button>
 			</div>

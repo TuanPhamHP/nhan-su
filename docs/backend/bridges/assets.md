@@ -1286,6 +1286,17 @@ Trả `mau-nhap-tai-san.xlsx` gồm sheet "Tài sản", "Dịch vụ" và "Hư�
   không còn làm việc) **thì dòng vẫn được nhập**: thiết bị vào kho ở trạng thái Sẵn sàng, không có cấp phát; ghi chú tài
   sản thêm "Người sử dụng ghi trong file nhập: …"; dòng nằm ở `warnings` kèm `assetId`, `assetCode`. Cột "Người phụ
   trách" của sheet Dịch vụ tương tự: người nhập file thành người phụ trách.
+- **Từ 18/11/2026, sheet Tài sản nhận tên phòng ban ở cột "Người sử dụng"** ("BP Thu chi hộ", "Bộ phận Kho", tên trần):
+  không khớp nhân viên nào mà khớp đúng một phòng ban đang hoạt động thì thiết bị được cấp phát cho cả phòng, trưởng
+  phòng là `responsible`, giống cấp phát cho phòng ban trên web. Phòng chưa có trưởng phòng đang làm việc thì dòng vào
+  `warnings` như trên, câu bắt đầu bằng "Phòng ban … chưa có trưởng phòng đang làm việc". Sheet Dịch vụ không đổi.
+- **Từ 18/11/2026, ô "Thời gian bảo hành" ghi chữ không có số tháng** ("Bảo hành theo từng thiết bị") không còn là lỗi
+  dòng: số tháng để trống, câu được chép vào ghi chú tài sản "Bảo hành: …".
+- **Từ 18/11/2026, tên thiết bị là "Loại tài sản + Tên sản phẩm theo hãng"** ("Ghế làm việc", "Bộ máy tính bàn Dell
+  OptiPlex 7010"). Cột "Mô tả chi tiết tài sản" được chép vào đầu ghi chú, không còn làm tên. File cũ có cột "Tên tài
+  sản" thì cột đó vẫn là tên.
+- **Loại tự tạo khi nhập** (`autoCreated.categories`) giữ đúng tên trong file và lấy thời gian khấu hao của nhóm khi mọi
+  loại cùng nhóm có chung một con số; nhóm mới thì không khấu hao.
 - **Hiện `warnings` riêng với `errors`**: dòng cảnh báo đã có trong hệ thống, người dùng cấp phát trên trang tài sản
   (link `/management/assets/{assetId}`), **không** sửa file rồi nhập lại dòng đó, vì file không ghi Mã QLTS thì sẽ tạo
   trùng tài sản. Dòng lỗi thì vẫn sửa file rồi nhập lại như trước.
@@ -1586,6 +1597,9 @@ Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 | Nhập Excel có chú thích ô do openpyxl ghi | 201 | Chú thích bị bỏ qua, dữ liệu nhập bình thường |
 | Nhập Excel, "Người sử dụng" không khớp nhân viên của công ty | 201 | Tài sản vẫn được tạo ở trạng thái Sẵn sàng, không cấp phát; dòng vào `warnings` kèm `assetId`, `assetCode` (từ 16/11/2026; trước đó vào `errors`) |
 | Nhập Excel, "Người sử dụng" không khớp và dòng còn lỗi khác | 201 | Dòng vào `errors`, `messages` có cả câu về người |
+| Nhập Excel, "Người sử dụng" là tên phòng ban có trưởng phòng ("BP Thu chi hộ") | 201 | Tài sản Đang dùng, `holders[0]` có `department` và `responsible` là trưởng phòng, không có `warnings` |
+| Nhập Excel, "Người sử dụng" là phòng chưa có trưởng phòng đang làm việc | 201 | Tài sản vào kho, dòng vào `warnings` với câu "Phòng ban … chưa có trưởng phòng đang làm việc" |
+| Nhập Excel, "Thời gian bảo hành" ghi chữ không có số tháng | 201 | Dòng được nhập, `warrantyMonths` null, ghi chú có "Bảo hành: …" |
 | Mở presigned URL sau khi hết hạn | 403 từ S3 | Gọi lại `.../documents/:id/url` |
 
 ---
@@ -2146,7 +2160,7 @@ Người nhận vẫn tự bấm Đã nhận được khi đang `DISPUTED` (hai 
 | Mã | `type` | Người nhận | `refType` → trang |
 |---|---|---|---|
 | N-01 (đổi chữ) | `ASSET_ASSIGNED` | Người được cấp phát | `asset_holding` → `/assets/my` |
-| N-02b | `ASSET_RETURNED` | Người giữ cũ khi điều chuyển, title "🔄 Tài sản đã được điều chuyển" | `asset_holding` → `/assets/my` |
+| N-02b | `ASSET_RETURNED` | Người giữ cũ khi điều chuyển, title "Tài sản đã được điều chuyển" | `asset_holding` → `/assets/my` |
 | N-13 | `ASSET_LOST` | Người đang giữ khi tài sản được xác nhận mất | `asset_holding` → `/assets/my` |
 | N-13b | `ASSET_LOST` | Quản lý trực tiếp của người giữ, chỉ đọc | `asset` → `/management/assets/:refId` |
 | N-14 | `ASSET_INCIDENT_HANDLED` | Người gửi báo hỏng, báo mất | **`asset_my_incident`** → `/assets/my?incident_id=:refId` (refId là **id báo cáo**) |
@@ -2408,7 +2422,7 @@ Lỗi 4xx của route này vẫn trả JSON như mọi route khác.
 | Mã | `type` | Người nhận | `refType` → trang |
 |---|---|---|---|
 | N-10 | `ASSET_DISPOSAL_PENDING` | Người có `asset:disposal:approve` và ADMIN, trừ người lập. Gửi, gửi lại, và J-07 nhắc sau 3 ngày | `asset_disposal` → `/management/assets/disposals/{refId}` |
-| N-10 | `ASSET_DISPOSAL_DECIDED` | Người lập phiếu, khi được duyệt (✅) hoặc bị từ chối (❌) | `asset_disposal` → `/management/assets/disposals/{refId}` |
+| N-10 | `ASSET_DISPOSAL_DECIDED` | Người lập phiếu, khi được duyệt hoặc bị từ chối | `asset_disposal` → `/management/assets/disposals/{refId}` |
 
 Hai thông báo đều `NAVIGATE_ONLY` (category `REQUEST`): người duyệt phải mở phiếu xem tài sản và vòng gửi, không duyệt
 nhanh từ chuông. Câu chữ: `docs/notifications/notification-content-map.md`.
@@ -2515,7 +2529,7 @@ chữ tìm ra các chỗ dưới đây. Kiểu ở mục "TypeScript Types" phí
 | `expectedHolderName` khi cấp cho phòng ban | "Kỹ thuật (Lan chịu trách nhiệm)" | "Kỹ thuật, Lan chịu trách nhiệm"; thiếu người chịu trách nhiệm thì chỉ tên phòng |
 | Biên bản kiểm kê Excel | Một dòng tiêu đề dính tên công ty | Dòng 1 tên công ty, dòng 2 "BIÊN BẢN KIỂM KÊ TÀI SẢN: {tên đợt}", dòng 3 phạm vi và ai mở, đóng đợt, dòng 4 số liệu |
 | Excel kế toán, sheet "Giảm trong kỳ" | – | Thêm cột "Bên mua, bên nhận" |
-| Thông báo N-10 cho người duyệt | Tiêu đề giống nhau cho mọi phiếu | Tiêu đề có số phiếu: `📋 Cần duyệt phiếu thanh lý số {id}`; nội dung có bên mua, giá thu về khi có |
+| Thông báo N-10 cho người duyệt | Tiêu đề giống nhau cho mọi phiếu | Tiêu đề có số phiếu: `Cần duyệt phiếu thanh lý số {id}`; nội dung có bên mua, giá thu về khi có |
 
 **Nhãn đổi** (lấy từ `…Label` của response, web phải đổi các bản sao nhãn trong `asset.types.ts` cho khớp)
 

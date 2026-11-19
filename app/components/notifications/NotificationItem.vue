@@ -34,6 +34,21 @@
 			!!props.notification.actionPayload?.rejectEndpoint,
 	);
 
+	/**
+	 * Biểu tượng cạnh thông báo: icon của giao diện, chọn theo `category`.
+	 *
+	 * Trước đây chỗ này là emoji 🕐, 📅, 🔔. Emoji mỗi hệ điều hành vẽ một kiểu, không đổi màu theo
+	 * chế độ tối, và trình đọc màn hình đọc thành "mặt đồng hồ ba giờ", nên từ 19/11/2026 cả máy chủ
+	 * lẫn giao diện bỏ hết. Dùng heroicons như các màn khác của dự án.
+	 */
+	const CATEGORY_ICONS: Record<string, { icon: string; cls: string }> = {
+		ATTENDANCE: { icon: 'heroicons:clock', cls: 'text-amber-600 dark:text-amber-400' },
+		LEAVE: { icon: 'heroicons:calendar-days', cls: 'text-sky-600 dark:text-sky-400' },
+	};
+	const DEFAULT_ICON = { icon: 'heroicons:bell', cls: 'text-gray-500 dark:text-gray-400' };
+
+	const categoryIcon = computed(() => CATEGORY_ICONS[props.notification.category] ?? DEFAULT_ICON);
+
 	const showRejectInput = ref(false);
 	const rejectNote = ref('');
 	const isLoading = ref(false);
@@ -126,11 +141,9 @@
 		@click="handleClick"
 	>
 		<div class="flex items-start gap-3">
-			<!-- Icon theo category -->
-			<div class="mt-0.5 flex-shrink-0 text-base leading-none">
-				<span v-if="notification.category === 'ATTENDANCE'">🕐</span>
-				<span v-else-if="notification.category === 'LEAVE'">📅</span>
-				<span v-else>🔔</span>
+			<!-- Icon theo category; `aria-hidden` vì tiêu đề thông báo đã nói rõ đây là việc gì. -->
+			<div class="mt-0.5 flex-shrink-0">
+				<Icon :name="categoryIcon.icon" :class="['w-5 h-5', categoryIcon.cls]" aria-hidden="true" />
 			</div>
 
 			<div class="flex-1 min-w-0">
@@ -157,26 +170,28 @@
 					<button
 						v-if="canQuickAct"
 						:disabled="isLoading"
-						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 disabled:opacity-50 transition-colors"
+						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-1"
 						@click="handleQuickApprove"
 					>
-						✓ Duyệt
+						<Icon name="heroicons:check" class="w-3.5 h-3.5" aria-hidden="true" />
+						Duyệt
 					</button>
 
 					<button
 						v-if="canQuickAct"
 						:disabled="isLoading"
-						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
+						class="flex-1 py-1 px-2 text-xs font-medium rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-1"
 						@click="showRejectInput = true"
 					>
-						✗ Từ chối
+						<Icon name="heroicons:x-mark" class="w-3.5 h-3.5" aria-hidden="true" />
+						Từ chối
 					</button>
 
 					<button
 						class="py-1 px-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
 						@click="handleNavigate"
 					>
-						Xem →
+						Xem
 					</button>
 				</div>
 
@@ -206,8 +221,12 @@
 				</div>
 
 				<!-- Success state sau khi action -->
-				<div v-if="isActioned" class="mt-1 text-xs text-green-600 dark:text-green-400 font-medium">
-					✓ {{ actionedMessage }}
+				<div
+					v-if="isActioned"
+					class="mt-1 text-xs text-green-600 dark:text-green-400 font-medium inline-flex items-center gap-1"
+				>
+					<Icon name="heroicons:check-circle" class="w-4 h-4" aria-hidden="true" />
+					{{ actionedMessage }}
 				</div>
 			</div>
 		</div>

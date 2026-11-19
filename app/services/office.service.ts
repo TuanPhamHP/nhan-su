@@ -317,6 +317,19 @@ export const useOfficeService = () => {
 			return res.data;
 		},
 
+		/**
+		 * Lịch phòng của một khoảng ngày, tính cả hai đầu, tối đa 31 ngày.
+		 *
+		 * Mỗi phòng mang `bookings` của cả khoảng, xếp theo giờ bắt đầu; trang tự chia theo ngày bằng
+		 * `startAt` giờ Việt Nam. `now` chỉ có khi khoảng chứa hôm nay.
+		 */
+		async roomGridRange(siteId: number, fromDate: string, toDate: string): Promise<RoomGrid> {
+			const res = await authFetch<ApiResponse<RoomGrid>>('/v1/office/room-bookings', {
+				params: { siteId, from_date: fromDate, to_date: toDate },
+			});
+			return res.data;
+		},
+
 		async findBooking(id: number): Promise<RoomBooking> {
 			const res = await authFetch<ApiResponse<RoomBooking>>(`/v1/office/room-bookings/${id}`);
 			return res.data;

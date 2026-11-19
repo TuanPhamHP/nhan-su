@@ -343,7 +343,7 @@ Nội dung chính xác ở `docs/notifications/notification-content-map.md`. `re
 | `type` | Ai nhận | `actionType` | Email |
 |---|---|---|---|
 | `GENERAL_REQUEST_PENDING` | Người tới lượt duyệt (gửi, qua bước, được chuyển, duyệt thay, được đổi người) | `APPROVE_REJECT` | Có |
-| `GENERAL_REQUEST_PENDING` (📌) | Người theo dõi khi phiếu được gửi lần đầu | `NAVIGATE_ONLY` | Không |
+| `GENERAL_REQUEST_PENDING` (ThÃ´ng tin:) | Người theo dõi khi phiếu được gửi lần đầu | `NAVIGATE_ONLY` | Không |
 | `GENERAL_REQUEST_APPROVED` / `_REJECTED` | Người gửi (có email); người theo dõi | `NAVIGATE_ONLY` | Người gửi |
 | `GENERAL_REQUEST_RETURNED` | Người gửi | `NAVIGATE_ONLY` | Có |
 | `GENERAL_REQUEST_CANCELLED` | Người đang giữ lượt khi phiếu bị thu hồi | `NAVIGATE_ONLY` | Không |

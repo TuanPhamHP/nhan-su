@@ -3,25 +3,33 @@
 	import BookingFormModal from '~/components/modules/office/BookingFormModal.vue';
 	import { useOfficeService } from '~/services/office.service';
 	import {
+		addDaysYmd,
 		bookingBar,
+		bookingHourRange,
 		isHourPast,
+		nowLinePercent,
 		officeErrorMessage,
 		roomNowLabel,
 		slotStartHhmm,
 		sortMyBookings,
+		splitBookingsByDay,
 		vnMinutesOfDay,
 		vnTimeLabel,
+		weekDaysYmd,
+		weekRangeLabel,
 	} from '~/utils/office.utils';
 	import { formatDate, todayYmd, vnCalendarDate } from '~/utils/date';
 	import { OFFICE_PERMISSIONS } from '~/utils/permission';
-	import type { MeetingRoom, OfficeSite, RoomBooking, RoomGrid } from '~/types/office.types';
+	import type { MeetingRoom, OfficeSite, RoomBooking, RoomGrid, RoomStatusNow } from '~/types/office.types';
 
 	/**
-	 * Đặt phòng họp (UI-04): lưới phòng × giờ của một ngày, cộng tab Lịch của tôi.
+	 * Đặt phòng họp (UI-04): lịch phòng theo ngày hoặc theo tuần, cộng tab Lịch của tôi.
 	 *
-	 * Lưới tự vẽ bằng một dải giờ và các thanh đặt theo phần trăm, không thêm thư viện lịch: một
-	 * thư viện lịch mang theo cách hiểu múi giờ riêng của nó, mà cả module này chạy theo giờ Việt
-	 * Nam, nên tự vẽ vừa nhẹ hơn vừa không có chỗ cho lệch giờ lọt vào.
+	 * Lịch tự vẽ, không thêm thư viện lịch: một thư viện lịch mang theo cách hiểu múi giờ riêng của
+	 * nó, mà cả module này chạy theo giờ Việt Nam, nên tự vẽ vừa nhẹ hơn vừa không có chỗ cho lệch
+	 * giờ lọt vào. Thanh điều hướng và hai chế độ xem theo kiểu Google Calendar, nhưng phòng vẫn xếp
+	 * theo trục dọc: câu người dùng cần trả lời là "khung giờ này phòng nào còn trống", nên mỗi
+	 * phòng phải là một dòng đọc được từ trái sang phải.
 	 */
 	definePageMeta({ title: 'Đặt phòng họp' });
 
@@ -46,69 +54,131 @@
 	const canSetUpOffice = computed(() => hasPermission(OFFICE_PERMISSIONS.manage) && canWrite('OFFICE'));
 
 	/** Khung giờ mặc định: 7h tới 20h phủ hết giờ làm việc mà vẫn đọc được trên một màn hình. */
-	const DEFAULT_START_HOUR = 7;
-	const DEFAULT_END_HOUR = 20;
+	const DEFAULT_HOURS = { startHour: 7, endHour: 20 };
 
-	/** Văn phòng chọn lần trước, để người dùng không phải chọn lại mỗi lần vào trang. */
+	/** Văn phòng và chế độ xem chọn lần trước, để người dùng không phải chọn lại mỗi lần vào trang. */
 	const SITE_KEY = 'office.rooms.site';
+	const VIEW_KEY = 'office.rooms.view';
 
 	type RoomTab = 'grid' | 'mine';
 	const activeTab = ref<RoomTab>('grid');
 
+	type CalendarView = 'day' | 'week';
+	const VIEWS: Array<{ id: CalendarView; label: string }> = [
+		{ id: 'day', label: 'Ngày' },
+		{ id: 'week', label: 'Tuần' },
+	];
+	const view = ref<CalendarView>('day');
+
 	const sites = ref<OfficeSite[]>([]);
 	const siteId = ref<number | undefined>(undefined);
+	/** Ngày đang xem; ở chế độ tuần thì là một ngày bất kỳ trong tuần đang xem. */
 	const date = ref(todayYmd());
 	const grid = ref<RoomGrid | null>(null);
+	/** Lịch của cả tuần đang xem: mỗi phòng mang lượt của bảy ngày trong một danh sách. */
+	const weekGrid = ref<RoomGrid | null>(null);
 	const loading = ref(true);
 	const loadError = ref<string | null>(null);
+
+	/**
+	 * Số thứ tự của lần tải gần nhất.
+	 *
+	 * Bấm "tuần sau" ba lần liền là ba lượt tải chạy song song, và lượt về muộn nhất chưa chắc là
+	 * lượt của tuần đang hiện; không có số này thì lịch có thể hiện tuần trước dưới nhãn tuần này.
+	 */
+	let loadSeq = 0;
 
 	const myBookings = ref<RoomBooking[]>([]);
 	const loadingMine = ref(false);
 	const mineError = ref<string | null>(null);
 
-	/** Mốc thời gian để biết ô giờ nào đã qua; nhịp một phút là đủ cho một lưới theo giờ. */
+	/** Mốc thời gian để biết ô giờ nào đã qua và đặt vạch giờ hiện tại; nhịp một phút là đủ. */
 	const now = ref(new Date());
 	let ticker: ReturnType<typeof setInterval> | null = null;
 
-	/** Khung lưới, để tự cuộn tới giờ hiện tại trên điện thoại. */
+	/** Khung lịch, để tự cuộn tới giờ hiện tại trên điện thoại. */
 	const gridScrollRef = ref<HTMLElement | null>(null);
 
 	const formOpen = ref(false);
 	const formRoomId = ref<number | undefined>(undefined);
 	const formStart = ref<string | undefined>(undefined);
+	const formDate = ref(date.value);
 	const editingBooking = ref<RoomBooking | null>(null);
 	const detailBooking = ref<RoomBooking | null>(null);
 
 	const siteOptions = computed(() => sites.value.map(s => ({ value: s.id, label: s.name })));
 
-	const rooms = computed<MeetingRoom[]>(() => (grid.value?.rooms ?? []).map(r => r.room));
+	/**
+	 * Ngày neo của lịch. Ô ngày cho xoá trắng, và trong nhịp giữa lúc xoá với lúc `watch(date)` đưa
+	 * về hôm nay thì mọi phép tính ngày phải có một ngày thật, nếu không date-fns ném lỗi giữa trang.
+	 */
+	const anchor = computed(() => date.value || todayYmd());
+
+	const weekDays = computed(() => weekDaysYmd(anchor.value));
+
+	/** Lịch đang hiện: của một ngày, hoặc của cả tuần. */
+	const shownGrid = computed<RoomGrid | null>(() => (view.value === 'day' ? grid.value : weekGrid.value));
+
+	const rooms = computed<MeetingRoom[]>(() => (shownGrid.value?.rooms ?? []).map(r => r.room));
+
+	const siteName = computed(() => shownGrid.value?.site.name ?? '');
 
 	/**
-	 * Khung giờ thật của lịch: mặc định 7h–20h, nhưng nới ra nếu hôm đó có lượt sớm hơn hoặc muộn
-	 * hơn.
-	 *
-	 * Nếu để cứng 7h–20h thì một cuộc họp lúc 21h biến mất khỏi lịch, người xem tưởng phòng trống
-	 * rồi đặt chồng lên và bị máy chủ từ chối mà không hiểu vì sao.
+	 * Khung giờ thật của lịch: mặc định 7h–20h, nới ra nếu trong những ngày đang xem có lượt sớm
+	 * hơn hoặc muộn hơn.
 	 */
-	const hourRange = computed(() => {
-		let start = DEFAULT_START_HOUR;
-		let end = DEFAULT_END_HOUR;
-		for (const row of grid.value?.rooms ?? []) {
-			for (const booking of row.bookings) {
-				if (booking.status === 'CANCELLED') continue;
-				const from = Math.floor(vnMinutesOfDay(booking.startAt) / 60);
-				const rawEnd = vnMinutesOfDay(booking.endAt);
-				// Lượt kết thúc đúng nửa đêm hoặc vắt sang hôm sau thì coi như chạy tới hết ngày.
-				const to = rawEnd <= from * 60 ? 24 : Math.ceil(rawEnd / 60);
-				start = Math.min(start, from);
-				end = Math.max(end, to);
-			}
-		}
-		return { start: Math.max(0, start), end: Math.min(24, Math.max(end, start + 1)) };
-	});
+	const hourRange = computed(() =>
+		bookingHourRange(
+			(shownGrid.value?.rooms ?? []).flatMap(r => r.bookings),
+			DEFAULT_HOURS,
+		),
+	);
 
 	const HOURS = computed(() =>
 		Array.from({ length: hourRange.value.end - hourRange.value.start }, (_, i) => hourRange.value.start + i),
+	);
+
+	/** Vạch giờ hiện tại của chế độ ngày, phần trăm từ mép trái dải giờ; `null` là không vẽ. */
+	const nowLine = computed(() =>
+		view.value === 'day' ? nowLinePercent(anchor.value, hourRange.value, now.value) : null,
+	);
+
+	interface CalendarRow {
+		room: MeetingRoom;
+		/** Phòng đang bận hay trống lúc này; chỉ có khi lịch đang hiện có hôm nay. */
+		now: RoomStatusNow | null;
+		/** Lượt của ngày đang xem, cho chế độ ngày. */
+		bookings: RoomBooking[];
+		/** Lượt của từng ngày trong tuần, cho chế độ tuần. */
+		days: Array<{ date: string; bookings: RoomBooking[] }>;
+	}
+
+	/**
+	 * Một dòng mỗi phòng. Ở chế độ tuần, lượt của cả tuần được chia vào từng ngày theo giờ bắt đầu;
+	 * `now` máy chủ chỉ gửi khi tuần đang xem có hôm nay.
+	 */
+	const rows = computed<CalendarRow[]>(() =>
+		(shownGrid.value?.rooms ?? []).map(row => {
+			if (view.value === 'day') return { room: row.room, now: row.now, bookings: row.bookings, days: [] };
+			const perDay = splitBookingsByDay(row.bookings, weekDays.value);
+			const days = weekDays.value.map((day, i) => ({ date: day, bookings: perDay[i] ?? [] }));
+			return { room: row.room, now: row.now, bookings: [], days };
+		}),
+	);
+
+	/** Nhãn của khoảng đang xem trên thanh điều hướng. */
+	const rangeLabel = computed(() =>
+		view.value === 'day' ? formatDate(anchor.value, 'EEEE, dd/MM/yyyy') : weekRangeLabel(weekDays.value),
+	);
+
+	/**
+	 * Khoá của lần tải: đổi văn phòng, chế độ xem, hay sang ngày hoặc tuần khác thì tải lại.
+	 *
+	 * Ở chế độ tuần, đổi ngày trong cùng một tuần (ví dụ bấm tên ngày rồi quay lại) không đổi khoá,
+	 * nên không phải tải lại bảy ngày chỉ vì ngày neo dịch đi.
+	 */
+	const loadKey = computed(
+		() => `${siteId.value ?? ''}|${view.value}|${view.value === 'day' ? anchor.value : weekDays.value[0]}`,
 	);
 
 	/** Lượt do tôi đặt hoặc tôi chủ trì: dùng để biết huỷ có cần lý do hay không. */
@@ -117,25 +187,29 @@
 		return !!id && (booking.createdBy.id === id || booking.organizer.id === id);
 	}
 
-	function readSavedSite(): number | undefined {
-		if (!import.meta.client) return undefined;
+	function readSaved(key: string): string | null {
+		if (!import.meta.client) return null;
 		try {
-			const raw = localStorage.getItem(SITE_KEY);
-			const parsed = raw ? Number(raw) : NaN;
-			return Number.isFinite(parsed) ? parsed : undefined;
+			return localStorage.getItem(key);
 		} catch {
 			// Chế độ ẩn danh hoặc site data bị chặn: coi như chưa từng chọn.
-			return undefined;
+			return null;
 		}
 	}
 
-	function rememberSite(id: number) {
+	function remember(key: string, value: string) {
 		if (!import.meta.client) return;
 		try {
-			localStorage.setItem(SITE_KEY, String(id));
+			localStorage.setItem(key, value);
 		} catch {
 			// Không ghi được thì thôi, đây chỉ là tiện ích.
 		}
+	}
+
+	function readSavedSite(): number | undefined {
+		const raw = readSaved(SITE_KEY);
+		const parsed = raw ? Number(raw) : NaN;
+		return Number.isFinite(parsed) ? parsed : undefined;
 	}
 
 	async function loadSites() {
@@ -147,21 +221,36 @@
 		}
 	}
 
+	/** Tải lịch của chế độ đang xem: một ngày, hoặc cả tuần trong một lần gọi từ thứ Hai tới Chủ nhật. */
 	async function loadGrid() {
+		const seq = ++loadSeq;
 		if (!siteId.value) {
 			grid.value = null;
+			weekGrid.value = null;
 			loading.value = false;
 			return;
 		}
+		const id = siteId.value;
 		loading.value = true;
 		loadError.value = null;
 		try {
-			grid.value = await service.roomGrid(siteId.value, date.value);
+			if (view.value === 'day') {
+				const result = await service.roomGrid(id, anchor.value);
+				if (seq !== loadSeq) return;
+				grid.value = result;
+			} else {
+				const days = weekDays.value;
+				const result = await service.roomGridRange(id, days[0] ?? anchor.value, days[days.length - 1] ?? anchor.value);
+				if (seq !== loadSeq) return;
+				weekGrid.value = result;
+			}
 		} catch (e) {
+			if (seq !== loadSeq) return;
 			grid.value = null;
+			weekGrid.value = null;
 			loadError.value = officeErrorMessage(e, 'Chưa tải được lịch phòng họp. Bạn bấm Thử lại.');
 		} finally {
-			loading.value = false;
+			if (seq === loadSeq) loading.value = false;
 		}
 	}
 
@@ -194,7 +283,7 @@
 		try {
 			const booking = await service.findBooking(id);
 			detailBooking.value = booking;
-			// Lượt ở ngày khác thì đưa lưới về đúng ngày của nó, để đóng hộp ra là thấy ngay.
+			// Lượt ở ngày khác thì đưa lịch về đúng ngày của nó, để đóng hộp ra là thấy ngay.
 			const bookingDate = vnCalendarDate(booking.startAt);
 			if (bookingDate !== date.value) date.value = bookingDate;
 			if (booking.officeSite.id !== siteId.value) siteId.value = booking.officeSite.id;
@@ -204,14 +293,14 @@
 	}
 
 	/**
-	 * Cuộn lưới tới giờ hiện tại khi đang xem hôm nay.
+	 * Cuộn lịch ngày tới giờ hiện tại khi đang xem hôm nay.
 	 *
-	 * Trên điện thoại lưới rộng hơn màn hình nhiều lần, nên mở ra là thấy 7 giờ sáng và người dùng
+	 * Trên điện thoại lịch rộng hơn màn hình nhiều lần, nên mở ra là thấy 7 giờ sáng và người dùng
 	 * tưởng buổi chiều không có gì; đưa khung về giờ hiện tại thì cái họ cần nằm ngay trước mắt.
 	 */
 	function scrollToNow() {
 		const box = gridScrollRef.value;
-		if (!box || date.value !== todayYmd()) return;
+		if (!box || view.value !== 'day' || date.value !== todayYmd()) return;
 		const span = (hourRange.value.end - hourRange.value.start) * 60;
 		if (span <= 0) return;
 		const passed = vnMinutesOfDay(now.value) - hourRange.value.start * 60;
@@ -220,14 +309,30 @@
 		box.scrollLeft = Math.max(ratio * box.scrollWidth - box.clientWidth / 4, 0);
 	}
 
+	/** Lùi hoặc tới một ngày ở chế độ ngày, một tuần ở chế độ tuần. */
+	function shift(direction: 1 | -1) {
+		date.value = addDaysYmd(anchor.value, direction * (view.value === 'week' ? 7 : 1));
+	}
+
+	function goToday() {
+		date.value = todayYmd();
+	}
+
+	/** Bấm tên một ngày ở chế độ tuần thì mở ngày đó theo từng giờ, như Google Calendar. */
+	function openDay(day: string) {
+		date.value = day;
+		view.value = 'day';
+	}
+
 	onMounted(async () => {
 		ticker = setInterval(() => (now.value = new Date()), 60_000);
+		const savedView = readSaved(VIEW_KEY);
+		if (savedView === 'day' || savedView === 'week') view.value = savedView;
 		await loadSites();
 		const saved = readSavedSite();
 		siteId.value = sites.value.find(s => s.id === saved)?.id ?? sites.value[0]?.id;
-		await loadGrid();
-		await nextTick();
-		scrollToNow();
+		// Có văn phòng thì `watch(loadKey)` tự tải; không có thì phải tự tắt khung chờ.
+		if (!siteId.value) await loadGrid();
 		await openByQuery();
 	});
 
@@ -236,8 +341,15 @@
 	});
 
 	watch(siteId, id => {
-		if (id) rememberSite(id);
-		loadGrid();
+		if (id) remember(SITE_KEY, String(id));
+	});
+
+	watch(view, value => remember(VIEW_KEY, value));
+
+	watch(loadKey, async () => {
+		await loadGrid();
+		await nextTick();
+		scrollToNow();
 	});
 
 	/**
@@ -247,30 +359,39 @@
 	 * trang chỉ còn một hộp lỗi với nút Thử lại, không còn đường nào đặt phòng nữa.
 	 */
 	watch(date, value => {
-		if (!value) {
-			date.value = todayYmd();
-			return;
-		}
-		loadGrid();
+		if (!value) date.value = todayYmd();
 	});
 
 	watch(activeTab, tab => {
 		if (tab === 'mine' && !myBookings.value.length && !loadingMine.value) loadMine();
 	});
 
-	function openCreate(roomId: number, hour: number) {
+	function openCreate(roomId: number, hour: number, day: string = anchor.value) {
 		editingBooking.value = null;
 		formRoomId.value = roomId;
+		formDate.value = day;
 		// Bấm ô của giờ đang chạy thì đầu giờ đã là quá khứ, nên điền mốc năm phút kế tiếp.
-		formStart.value = slotStartHhmm(date.value, hour, now.value);
+		formStart.value = slotStartHhmm(day, hour, now.value);
 		formOpen.value = true;
 	}
 
-	/** Ngày đang xem đã qua: không còn giờ nào đặt được nên các ô giờ chỉ để xem. */
-	const pastDate = computed(() => date.value < todayYmd());
+	/** Ngày đã qua: không còn giờ nào đặt được nên các ô của ngày đó chỉ để xem. */
+	function isPastDay(day: string): boolean {
+		return day < todayYmd();
+	}
 
 	function slotPast(hour: number): boolean {
 		return isHourPast(date.value, hour, now.value);
+	}
+
+	/**
+	 * Ô một ngày của chế độ tuần còn đặt được không.
+	 *
+	 * Hôm nay mà đã qua giờ cuối của lịch thì cũng coi như đã qua: mở hộp đặt phòng lúc đó chỉ điền
+	 * sẵn một giờ đã trôi qua và người dùng nhận câu từ chối.
+	 */
+	function dayClosed(day: string): boolean {
+		return isPastDay(day) || isHourPast(day, hourRange.value.end - 1, now.value);
 	}
 
 	/** Lượt của tôi: sắp tới và đang họp lên trước, lượt đã kết thúc xuống cuối. */
@@ -284,20 +405,25 @@
 	 */
 	function openCreateAnyHour() {
 		// Ngày đã qua thì không mở hộp với giờ của hôm nay: ngày trong hộp phải là ngày đặt được.
-		if (pastDate.value) date.value = todayYmd();
-		openCreate(rooms.value[0]?.id ?? 0, defaultCreateHour());
+		const day = isPastDay(anchor.value) ? todayYmd() : anchor.value;
+		openCreate(rooms.value[0]?.id ?? 0, defaultCreateHour(day), day);
+	}
+
+	/** Bấm chỗ trống trong ô một ngày của chế độ tuần. */
+	function openCreateOnDay(roomId: number, day: string) {
+		openCreate(roomId, defaultCreateHour(day), day);
 	}
 
 	/**
-	 * Giờ điền sẵn cho nút "Đặt phòng": luôn là một giờ NẰM TRONG lịch đang vẽ.
+	 * Giờ điền sẵn khi mở hộp đặt phòng mà không chọn giờ: luôn là một giờ NẰM TRONG lịch đang vẽ.
 	 *
 	 * Lấy "giờ hiện tại cộng một" như trước thì người bấm lúc một giờ đêm nhận giờ 02:00, một giờ
 	 * không có trên lịch và cũng không ai họp. Hôm nay thì bắt đầu từ giờ hiện tại, ngày khác thì
 	 * từ giờ làm việc đầu tiên của lịch.
 	 */
-	function defaultCreateHour(): number {
+	function defaultCreateHour(day: string): number {
 		const { start, end } = hourRange.value;
-		if (date.value !== todayYmd()) return start;
+		if (day !== todayYmd()) return start;
 		const nowHour = Math.floor(vnMinutesOfDay(now.value) / 60);
 		return Math.min(Math.max(nowHour, start), Math.max(end - 1, start));
 	}
@@ -306,6 +432,7 @@
 		detailBooking.value = null;
 		editingBooking.value = booking;
 		formRoomId.value = booking.room.id;
+		formDate.value = date.value;
 		formStart.value = undefined;
 		formOpen.value = true;
 	}
@@ -330,17 +457,27 @@
 		if (activeTab.value === 'mine') await loadMine();
 	}
 
+	function hourLabel(hour: number): string {
+		return `${String(hour).padStart(2, '0')}:00`;
+	}
+
+	/** Tiêu đề hiện trên lịch: lượt riêng tư của người khác không lộ tiêu đề. */
+	function bookingTitle(booking: RoomBooking): string {
+		return booking.detailsVisible ? (booking.title ?? '') : 'Đã có người đặt';
+	}
+
 	/**
 	 * Nhãn đầy đủ của một lượt, dùng cho `title` khi rê chuột và cho `aria-label`.
 	 *
-	 * Thanh trên lưới hẹp nên tiêu đề bị cắt; câu đầy đủ nằm ở đây, và chạm vào thanh thì mở hộp
+	 * Thanh trên lịch hẹp nên tiêu đề bị cắt; câu đầy đủ nằm ở đây, và chạm vào thanh thì mở hộp
 	 * chi tiết — đó là đường của người dùng điện thoại, nơi không có chuột để rê.
 	 */
 	function barLabel(booking: RoomBooking): string {
 		const time = `${vnTimeLabel(booking.startAt)}–${vnTimeLabel(booking.endAt)}`;
-		const who = booking.organizer.id === booking.createdBy.id
-			? booking.createdBy.fullName
-			: `${booking.createdBy.fullName} đặt hộ ${booking.organizer.fullName}`;
+		const who =
+			booking.organizer.id === booking.createdBy.id
+				? booking.createdBy.fullName
+				: `${booking.createdBy.fullName} đặt hộ ${booking.organizer.fullName}`;
 		return booking.detailsVisible
 			? `${time} · ${booking.title} · ${who}`
 			: `${time} · Đã có người đặt · ${booking.createdBy.fullName}`;
@@ -348,25 +485,26 @@
 
 	/**
 	 * Thanh để vẽ của một phòng: lượt đã huỷ bỏ hẳn, lượt nằm ngoài dải giờ cũng bỏ vì không có
-	 * chỗ nào trên lưới để đặt chúng.
+	 * chỗ nào trên lịch để đặt chúng.
 	 *
 	 * Bề rộng đúng bằng thời lượng, KHÔNG có bề rộng tối thiểu. Đặt bề rộng tối thiểu như trước thì
 	 * một lượt nửa tiếng phủ sang lượt kế tiếp và cả hai trông như trùng giờ, còn lượt mười phút
 	 * thì bị thanh bên cạnh che kín không chạm được. Phần bấm được nới rộng hơn phần vẽ bằng một
-	 * vùng trong suốt, nên lượt ngắn vẫn chạm trúng mà lưới không vẽ chồng lên nhau.
+	 * vùng trong suốt, nên lượt ngắn vẫn chạm trúng mà lịch không vẽ chồng lên nhau.
 	 */
 	function barsOf(bookings: RoomBooking[]): Array<{
 		booking: RoomBooking;
 		style: Record<string, string>;
-		/** Chỗ nào đủ rộng để in gì: cả tiêu đề, chỉ giờ, hay không chữ nào. */
-		showTitle: boolean;
-		showTime: boolean;
+		/** Thanh hẹp: bỏ đệm chữ và nới vùng bấm. */
+		narrow: boolean;
+		/** Thanh quá hẹp để in chữ nào: chỉ còn màu, câu đầy đủ nằm ở `title`. */
+		showText: boolean;
 	}> {
 		const bars: Array<{
 			booking: RoomBooking;
 			style: Record<string, string>;
-			showTitle: boolean;
-			showTime: boolean;
+			narrow: boolean;
+			showText: boolean;
 		}> = [];
 		for (const booking of bookings) {
 			if (booking.status === 'CANCELLED') continue;
@@ -378,15 +516,18 @@
 			bars.push({
 				booking,
 				style: { left: `${bar.leftPercent}%`, width: `${bar.widthPercent}%` },
-				// Chỉ in tiêu đề khi thanh dài từ khoảng hai giờ trở lên. Thanh một giờ rộng chừng
-				// bốn mươi pixel, in tiêu đề vào đó chỉ ra "Giao ba…" — cắt ngang một cái tên thì
-				// người đọc vừa không biết họp gì vừa tưởng tên phòng sai; thà in giờ bắt đầu cho
-				// gọn, còn câu đầy đủ đã nằm ở `title` và ở hộp chi tiết khi bấm.
-				showTitle: bar.widthPercent >= 15,
-				showTime: bar.widthPercent >= 6,
+				// Thanh nửa giờ trên lịch 13 giờ là chừng 4%, vẫn đủ chỗ cho vài chữ của tiêu đề;
+				// dưới 2% thì chỉ còn một dấu ba chấm, in ra chỉ thêm rối.
+				narrow: bar.widthPercent < 6,
+				showText: bar.widthPercent >= 2,
 			});
 		}
 		return bars;
+	}
+
+	/** Dải bận của một ô ngày ở chế độ tuần, cùng thang giờ với chế độ ngày. */
+	function busyStrip(bookings: RoomBooking[]): Array<{ id: number; style: Record<string, string> }> {
+		return barsOf(bookings).map(bar => ({ id: bar.booking.id, style: bar.style }));
 	}
 </script>
 
@@ -438,12 +579,8 @@
 				</div>
 			</div>
 
-			<div v-if="loading" class="space-y-3">
-				<div v-for="i in 3" :key="i" class="h-20 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
-			</div>
-
 			<div
-				v-else-if="loadError"
+				v-if="loadError && !loading"
 				class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300"
 			>
 				<p>{{ loadError }}</p>
@@ -452,7 +589,7 @@
 
 			<!-- Người có quyền cài đặt tự tạo được văn phòng, nên chỉ đường thay vì bảo họ liên hệ HCNS. -->
 			<div
-				v-else-if="!sites.length"
+				v-else-if="!loading && !sites.length"
 				class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
 			>
 				<p>Công ty chưa có văn phòng nào, nên chưa có phòng họp để đặt.</p>
@@ -466,61 +603,161 @@
 				<p v-else class="mt-2">Bạn liên hệ HCNS để được thêm văn phòng và phòng họp.</p>
 			</div>
 
-			<p
-				v-else-if="!grid || !grid.rooms.length"
-				class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
-			>
-				Văn phòng này chưa có phòng họp nào đang dùng. Bạn liên hệ HCNS để thêm phòng.
-			</p>
-
+			<!--
+				Khung lịch luôn giữ thanh điều hướng, kể cả lúc đang tải hay ngày đó chưa có phòng: bấm
+				"tuần sau" mà cả khung biến thành khung chờ thì nút vừa bấm cũng biến mất dưới tay.
+			-->
 			<section
 				v-else
 				class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 			>
-				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">
-						{{ grid.site.name }} · {{ formatDate(grid.date) }}
-					</h2>
-					<p class="text-xs text-gray-500 dark:text-gray-400">
-						Lịch hiện từ {{ hourRange.start }} giờ tới {{ hourRange.end }} giờ.
-					</p>
+				<!--
+					Thanh điều hướng kiểu Google Calendar. Nhãn khoảng đang xem và chế độ xem ở dòng trên,
+					cụm Hôm nay, lùi, tới xuống dòng dưới: đặt nút bên trái nhãn thì bấm liền tay mấy lần
+					là mắt phải nhảy qua lại giữa nút và nhãn, còn nút nằm riêng một dòng thì vị trí của
+					chúng không đổi dù nhãn ngắn hay dài.
+				-->
+				<div class="space-y-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div class="min-w-0">
+							<h2 class="text-base font-semibold text-gray-900 first-letter:uppercase dark:text-white">
+								{{ rangeLabel }}
+							</h2>
+							<p v-if="siteName" class="truncate text-xs text-gray-500 dark:text-gray-400">
+								{{ siteName }} · lịch hiện từ {{ hourRange.start }} giờ tới {{ hourRange.end }} giờ
+							</p>
+						</div>
+
+						<div
+							class="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-700"
+							role="group"
+							aria-label="Chế độ xem"
+						>
+							<button
+								v-for="option in VIEWS"
+								:key="option.id"
+								type="button"
+								:aria-pressed="view === option.id"
+								:class="[
+									'rounded-md px-3 py-1 text-sm font-medium transition-colors',
+									view === option.id
+										? 'bg-brand-600 text-white dark:bg-brand-500'
+										: 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
+								]"
+								@click="view = option.id"
+							>
+								{{ option.label }}
+							</button>
+						</div>
+					</div>
+
+					<!--
+						Lùi, về hiện tại, tới: nút giữa nằm giữa hai mũi tên như một cụm điều hướng, và gọi
+						đúng tên khoảng đang xem ("Hôm nay" hay "Tuần này"). Cùng màu nền với nút chế độ xem
+						đang chọn để cả thanh điều hướng đọc như một khối; vuông 36 pixel để bấm trúng cả trên
+						điện thoại.
+					-->
+					<div class="flex items-center gap-2 justify-end">
+						<button
+							type="button"
+							class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white transition-colors hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+							:aria-label="view === 'week' ? 'Tuần trước' : 'Ngày trước'"
+							:title="view === 'week' ? 'Tuần trước' : 'Ngày trước'"
+							@click="shift(-1)"
+						>
+							<Icon name="heroicons:chevron-left" class="h-5 w-5" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-9 items-center justify-center rounded-lg bg-brand-600 px-3 text-sm font-medium text-white transition-colors hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+							@click="goToday"
+						>
+							{{ view === 'week' ? 'Tuần này' : 'Hôm nay' }}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white transition-colors hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+							:aria-label="view === 'week' ? 'Tuần sau' : 'Ngày sau'"
+							:title="view === 'week' ? 'Tuần sau' : 'Ngày sau'"
+							@click="shift(1)"
+						>
+							<Icon name="heroicons:chevron-right" class="h-5 w-5" />
+						</button>
+					</div>
 				</div>
 
+				<div v-if="loading" class="space-y-3 p-4">
+					<div v-for="i in 3" :key="i" class="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+				</div>
+
+				<p v-else-if="!rows.length" class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+					Văn phòng này chưa có phòng họp nào đang dùng. Bạn liên hệ HCNS để thêm phòng.
+				</p>
+
 				<!--
-					Lưới cuộn ngang TRONG khung của nó, không đẩy cả trang tràn ngang trên điện thoại.
+					Lịch cuộn ngang TRONG khung của nó, không đẩy cả trang tràn ngang trên điện thoại.
 					Cột tên phòng dính vào mép trái khi cuộn, nếu không thì người dùng cuộn tới buổi chiều
 					là mất luôn tên phòng và không còn biết dòng nào của phòng nào.
 				-->
-				<div class="relative">
+				<div v-else class="relative">
 					<!--
 						Đệm trái nằm TRONG ô tên phòng, không nằm ở khung cuộn: ô dính `left-0` dính vào mép
 						khung cuộn, nên nếu khung có đệm trái thì khi cuộn, tên phòng trượt vào phần đệm đó
 						và lệch đi mười sáu pixel so với lúc chưa cuộn.
 					-->
 					<div ref="gridScrollRef" class="overflow-x-auto">
-						<div class="min-w-[760px] py-4 pr-4">
-							<!-- Thước giờ -->
+						<div :class="['relative py-4 pr-4', view === 'day' ? 'min-w-[900px]' : 'min-w-[980px]']">
+							<!-- Thước: giờ ở chế độ ngày, tên ngày ở chế độ tuần. -->
 							<div class="flex items-end gap-3 pb-1">
 								<div
 									class="sticky left-0 z-20 w-32 flex-shrink-0 bg-white pl-4 text-xs text-gray-500 sm:w-52 dark:bg-gray-900 dark:text-gray-400"
 								>
 									Phòng
 								</div>
-								<div class="relative flex-1">
-									<div class="flex">
-										<div
-											v-for="hour in HOURS"
-											:key="hour"
-											class="flex-1 border-l border-gray-100 pl-1 text-[11px] text-gray-400 dark:border-gray-800"
-										>
-											{{ String(hour).padStart(2, '0') }}:00
-										</div>
+								<div v-if="view === 'day'" class="flex flex-1">
+									<div
+										v-for="hour in HOURS"
+										:key="hour"
+										class="flex-1 border-l border-gray-100 pb-1 pl-1 text-[11px] text-gray-400 dark:border-gray-800"
+									>
+										{{ hourLabel(hour) }}
 									</div>
+								</div>
+								<div v-else class="grid flex-1 grid-cols-7 gap-1.5">
+									<button
+										v-for="day in weekDays"
+										:key="day"
+										type="button"
+										class="group flex flex-col items-center rounded-lg py-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+										:title="`Xem ${formatDate(day, 'EEEE, dd/MM/yyyy')} theo từng giờ`"
+										@click="openDay(day)"
+									>
+										<span
+											:class="[
+												'text-[11px] font-medium uppercase',
+												day === todayYmd() ? 'text-brand-600 dark:text-brand-400' : 'text-gray-500 dark:text-gray-400',
+											]"
+										>
+											{{ formatDate(day, 'EEE') }}
+										</span>
+										<span
+											:class="[
+												'mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold',
+												day === todayYmd()
+													? 'bg-brand-600 text-white dark:bg-brand-500'
+													: isPastDay(day)
+														? 'text-gray-400 group-hover:bg-gray-100 dark:text-gray-500 dark:group-hover:bg-gray-700'
+														: 'text-gray-800 group-hover:bg-gray-100 dark:text-gray-100 dark:group-hover:bg-gray-700',
+											]"
+										>
+											{{ formatDate(day, 'd') }}
+										</span>
+									</button>
 								</div>
 							</div>
 
 							<div class="space-y-2">
-								<div v-for="row in grid.rooms" :key="row.room.id" class="flex items-stretch gap-3">
+								<div v-for="row in rows" :key="row.room.id" class="flex items-stretch gap-3">
 									<div class="sticky left-0 z-20 w-32 flex-shrink-0 bg-white pl-4 sm:w-52 dark:bg-gray-900">
 										<!--
 											Tên phòng XUỐNG DÒNG, không cắt bằng dấu ba chấm: cắt thì "Phòng họp tầng 3" và
@@ -538,14 +775,21 @@
 											</template>
 											<template v-if="row.now">
 												<template v-if="row.room.capacity != null || row.room.equipment.length"> · </template>
-												<span :class="row.now.busy ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">
+												<span
+													:class="
+														row.now.busy
+															? 'text-amber-600 dark:text-amber-400'
+															: 'text-emerald-600 dark:text-emerald-400'
+													"
+												>
 													{{ roomNowLabel(row.now) }}
 												</span>
 											</template>
 										</p>
 									</div>
 
-									<div class="relative h-14 flex-1 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+									<!-- ── Chế độ ngày: một dải giờ mỗi phòng ── -->
+									<div v-if="view === 'day'" class="relative h-14 flex-1 rounded-lg bg-gray-50 dark:bg-gray-800/60">
 										<!-- Lớp bấm: mỗi ô là một giờ, bấm vào mở hộp đặt phòng từ giờ đó. -->
 										<div class="absolute inset-0 flex">
 											<button
@@ -571,30 +815,32 @@
 														? 'Giờ này đã qua nên không đặt được.'
 														: !canBook
 															? 'Hành chính văn phòng đang ở chế độ chỉ xem nên không đặt thêm được.'
-															: `Đặt ${row.room.name} từ ${String(hour).padStart(2, '0')}:00`
+															: `Đặt ${row.room.name} từ ${hourLabel(hour)}`
 												"
 												@click="openCreate(row.room.id, hour)"
 											/>
 										</div>
 
 										<!--
-											Lớp lượt họp, đặt theo phần trăm của dải giờ.
+											Lớp lượt họp, đặt theo phần trăm của dải giờ. Tiêu đề luôn in một dòng và cắt
+											bằng dấu ba chấm, câu đầy đủ nằm ở `title` và ở hộp chi tiết khi bấm.
 											Thanh VẼ đúng thời lượng, nhưng vùng BẤM của thanh hẹp được nới mười pixel mỗi
 											bên bằng `after:` (trong suốt, không vẽ gì), nên lượt năm, mười phút vẫn chạm
-											trúng khoảng hai mươi lăm pixel mà lưới không có thanh nào phủ lên thanh khác.
+											trúng khoảng hai mươi lăm pixel mà lịch không có thanh nào phủ lên thanh khác.
 											Thanh rộng thì không nới, để hai lượt sát nhau không giành nhau cú bấm.
 										-->
 										<button
 											v-for="bar in barsOf(row.bookings)"
 											:key="bar.booking.id"
 											type="button"
-											class="absolute top-1 bottom-1 overflow-hidden rounded-md text-left text-xs transition-colors"
+											class="absolute top-1 bottom-1 overflow-hidden rounded-md border-l-[3px] text-left text-xs leading-4 transition-colors"
 											:class="[
 												bar.booking.detailsVisible
-													? 'bg-brand-500/90 text-white hover:bg-brand-600'
-													: 'bg-gray-400/90 text-white hover:bg-gray-500',
-												bar.showTime ? 'px-1.5' : 'px-0',
-												bar.showTitle ? '' : 'after:absolute after:-inset-x-2.5 after:inset-y-0 after:content-[\'\']',
+													? 'border-brand-700 bg-brand-500/90 text-white hover:bg-brand-600 dark:border-brand-300'
+													: 'border-gray-600 bg-gray-400/90 text-white hover:bg-gray-500',
+												bar.narrow
+													? 'px-0.5 after:absolute after:-inset-x-2.5 after:inset-y-0 after:content-[\'\']'
+													: 'px-1.5',
 												bar.booking.timing === 'ENDED' ? 'opacity-60' : '',
 											]"
 											:style="bar.style"
@@ -602,26 +848,113 @@
 											:aria-label="barLabel(bar.booking)"
 											@click.stop="detailBooking = bar.booking"
 										>
-											<template v-if="bar.showTitle">
-												<span class="block truncate font-medium">
-													{{ bar.booking.detailsVisible ? bar.booking.title : 'Đã có người đặt' }}
-												</span>
+											<template v-if="bar.showText">
+												<span class="block truncate pt-1 font-semibold">{{ bookingTitle(bar.booking) }}</span>
 												<span class="block truncate opacity-90">
-													{{ vnTimeLabel(bar.booking.startAt) }}–{{ vnTimeLabel(bar.booking.endAt) }} ·
-													{{ bar.booking.createdBy.fullName }}
+													{{ vnTimeLabel(bar.booking.startAt) }}–{{ vnTimeLabel(bar.booking.endAt) }}
 												</span>
 											</template>
-											<span v-else-if="bar.showTime" class="block truncate font-medium">
-												{{ vnTimeLabel(bar.booking.startAt) }}
-											</span>
 										</button>
 									</div>
+
+									<!-- ── Chế độ tuần: một ô mỗi ngày, liệt kê lượt theo giờ ── -->
+									<div v-else class="grid flex-1 grid-cols-7 gap-1.5">
+										<div
+											v-for="cell in row.days"
+											:key="cell.date"
+											:class="[
+												'relative min-h-[92px] rounded-lg p-1.5',
+												cell.date === todayYmd()
+													? 'bg-brand-50/70 ring-1 ring-brand-200 dark:bg-brand-900/15 dark:ring-brand-800'
+													: dayClosed(cell.date)
+														? 'bg-gray-100/80 dark:bg-gray-900/60'
+														: 'bg-gray-50 dark:bg-gray-800/60',
+											]"
+										>
+											<!-- Lớp bấm của chỗ trống trong ô: mở hộp đặt phòng cho phòng này, ngày này. -->
+											<button
+												type="button"
+												:disabled="dayClosed(cell.date) || !canBook"
+												:class="[
+													'absolute inset-0 rounded-lg transition-colors',
+													dayClosed(cell.date) || !canBook
+														? 'cursor-default'
+														: 'hover:bg-brand-50 dark:hover:bg-brand-900/20',
+												]"
+												:aria-label="`Đặt ${row.room.name} ngày ${formatDate(cell.date)}`"
+												:title="
+													dayClosed(cell.date)
+														? 'Ngày này đã qua nên không đặt được.'
+														: !canBook
+															? 'Hành chính văn phòng đang ở chế độ chỉ xem nên không đặt thêm được.'
+															: `Đặt ${row.room.name} ngày ${formatDate(cell.date)}`
+												"
+												@click="openCreateOnDay(row.room.id, cell.date)"
+											/>
+
+											<div class="pointer-events-none relative space-y-1">
+												<!--
+													Dải bận: cả ngày từ giờ đầu tới giờ cuối của lịch, phần tô là phần đã có
+													người đặt. Nhìn dọc một cột là thấy ngay phòng nào còn trống buổi nào.
+												-->
+												<div class="relative h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+													<span
+														v-for="seg in busyStrip(cell.bookings)"
+														:key="seg.id"
+														class="absolute inset-y-0 bg-brand-500 dark:bg-brand-400"
+														:style="seg.style"
+													/>
+												</div>
+
+												<button
+													v-for="booking in cell.bookings"
+													:key="booking.id"
+													type="button"
+													:class="[
+														'pointer-events-auto block w-full truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-4 transition-colors',
+														booking.detailsVisible
+															? 'border-brand-700 bg-brand-500/90 text-white hover:bg-brand-600 dark:border-brand-300'
+															: 'border-gray-600 bg-gray-400/90 text-white hover:bg-gray-500',
+														booking.timing === 'ENDED' ? 'opacity-60' : '',
+													]"
+													:title="barLabel(booking)"
+													:aria-label="barLabel(booking)"
+													@click="detailBooking = booking"
+												>
+													<span class="font-semibold">{{ vnTimeLabel(booking.startAt) }}</span>
+													{{ bookingTitle(booking) }}
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!--
+								Vạch giờ hiện tại của chế độ ngày, như vạch đỏ của Google Calendar. Lớp phủ trùng
+								khít dải giờ: mép trái bằng bề rộng cột tên phòng cộng khoảng cách `gap-3`, mép phải
+								bằng đệm phải của khung. Nằm DƯỚI cột tên phòng (z-10 < z-20) nên khi cuộn ngang,
+								vạch trượt vào dưới tên phòng chứ không vẽ đè lên chữ.
+							-->
+							<div
+								v-if="nowLine !== null"
+								class="pointer-events-none absolute top-4 right-4 bottom-4 left-[8.75rem] z-10 sm:left-[13.75rem]"
+								aria-hidden="true"
+							>
+								<div class="absolute inset-y-0" :style="{ left: `${nowLine}%` }">
+									<span
+										class="absolute top-0 -translate-x-1/2 rounded bg-rose-500 px-1 text-[10px] leading-4 font-semibold text-white"
+									>
+										{{ vnTimeLabel(now) }}
+									</span>
+									<span class="absolute top-[18px] h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-rose-500" />
+									<span class="absolute top-5 bottom-0 w-0.5 -translate-x-1/2 bg-rose-500" />
 								</div>
 							</div>
 						</div>
 					</div>
 
-					<!-- Bóng mờ ở mép phải: dấu hiệu lưới còn nội dung bên phải, cho người dùng điện thoại. -->
+					<!-- Bóng mờ ở mép phải: dấu hiệu lịch còn nội dung bên phải, cho người dùng điện thoại. -->
 					<div
 						class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent sm:hidden dark:from-gray-900"
 					/>
@@ -670,7 +1003,9 @@
 								{{ booking.detailsVisible ? booking.title : 'Lượt riêng tư' }}
 							</p>
 							<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-								{{ formatDate(booking.startAt) }} · {{ vnTimeLabel(booking.startAt) }}–{{ vnTimeLabel(booking.endAt) }}
+								{{ formatDate(booking.startAt) }} · {{ vnTimeLabel(booking.startAt) }}–{{
+									vnTimeLabel(booking.endAt)
+								}}
 								· {{ booking.room.name }}
 							</p>
 							<!-- Chủ trì đã nghỉ việc thì ghi rõ ngay ở dòng này: lượt đó cần người khác chủ trì. -->
@@ -705,7 +1040,7 @@
 
 		<BookingFormModal
 			v-if="formOpen"
-			:date="date"
+			:date="formDate"
 			:rooms="rooms"
 			:room-id="formRoomId"
 			:start-hhmm="formStart"

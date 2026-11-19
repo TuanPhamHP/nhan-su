@@ -292,8 +292,15 @@ watch(tripId, loadTrip);
 
 						<p class="text-xs text-gray-500 dark:text-gray-400">
 							<template v-if="route.desiredTime">
-								<template v-if="route.desiredTimeType === 'ARRIVAL'">📍 Cần có mặt lúc <strong>{{ fmtDateTime(route.desiredTime) }}</strong></template>
-								<template v-else>🚗 Cần xe đón lúc <strong>{{ fmtDateTime(route.desiredTime) }}</strong></template>
+								<Icon
+									:name="route.desiredTimeType === 'ARRIVAL' ? 'heroicons:map-pin' : 'mdi:car'"
+									class="inline-block w-3.5 h-3.5 -mt-0.5"
+									aria-hidden="true"
+								/>
+								<template v-if="route.desiredTimeType === 'ARRIVAL'">
+									Cần có mặt lúc <strong>{{ fmtDateTime(route.desiredTime) }}</strong>
+								</template>
+								<template v-else> Cần xe đón lúc <strong>{{ fmtDateTime(route.desiredTime) }}</strong> </template>
 							</template>
 							<template v-else>Chưa có thông tin thời gian</template>
 						</p>

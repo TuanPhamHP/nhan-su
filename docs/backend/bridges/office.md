@@ -252,9 +252,10 @@ tính vào `amount`: hiện cảnh báo nhỏ.
 | Method | Path | Ai | Ghi chú |
 |---|---|---|---|
 | GET | `/v1/office/room-bookings?siteId=1&date=2026-11-20` | Mọi nhân viên | Lịch một ngày (`RoomGridResponseDto`) |
+| GET | `/v1/office/room-bookings?siteId=1&from_date=2026-11-16&to_date=2026-11-22` | Mọi nhân viên | **Lịch theo khoảng ngày** (View Tuần gọi một lần thay vì 7 lần). Tính cả hai đầu, tối đa 31 ngày; cùng shape `RoomGridResponseDto`, mỗi phòng có `bookings` của cả khoảng (xếp theo giờ bắt đầu), FE tự chia theo ngày bằng `startAt` (giờ VN). Response có thêm `fromDate`, `toDate` (`date` = `fromDate`). `now` vẫn chỉ tính trong hôm nay và chỉ có khi khoảng chứa hôm nay. Thiếu một trong hai, `to_date` trước `from_date`, quá 31 ngày: 400 `OFFICE_DATE_INVALID` |
 | GET | `/v1/office/room-bookings/:id` | Mọi nhân viên | |
-| POST | `/v1/office/room-bookings` | Mọi nhân viên | `{ roomId, startAt, endAt, title, note?, isPrivate?, organizerId?, attendeeIds?: number[] }`. Giờ ISO **có múi giờ** (`Z` hoặc `+07:00`), server làm tròn xuống phút |
-| PATCH | `/v1/office/room-bookings/:id` | Người tạo, chủ trì, `office:booking:manage` | Dời giờ, đổi phòng, sửa tiêu đề, ghi chú (`""` hoặc null là xoá), người dự (thay toàn bộ), `organizerId` (đổi chủ trì). Lượt đang diễn ra: đổi `endAt` được (kéo dài, kết thúc sớm), giữ nguyên `startAt`. Lượt đã kết thúc: 409 PAST |
+| POST | `/v1/office/room-bookings` | Mọi nhân viên | `{ roomId?, meetingUrl?, startAt, endAt, title, note?, isPrivate?, organizerId?, attendeeIds?: number[] }`. Bỏ `roomId` là **họp online** (mục 5.1). Giờ ISO **có múi giờ** (`Z` hoặc `+07:00`), server làm tròn xuống phút |
+| PATCH | `/v1/office/room-bookings/:id` | Người tạo, chủ trì, `office:booking:manage` | Dời giờ, đổi phòng (`roomId: null` là chuyển sang họp online, trả phòng), thêm, đổi, bỏ link họp (`meetingUrl`, `""` hoặc null là bỏ), sửa tiêu đề, ghi chú (`""` hoặc null là xoá), người dự (thay toàn bộ), `organizerId` (đổi chủ trì). Lượt đang diễn ra: đổi `endAt` được (kéo dài, kết thúc sớm), giữ nguyên `startAt`. Lượt đã kết thúc: 409 PAST |
 | POST | `/v1/office/room-bookings/:id/cancel` | như trên | `{ reason? }`, huỷ lượt người khác thì `reason` bắt buộc; lượt đã kết thúc: 409 PAST; đang diễn ra vẫn huỷ được |
 | GET | `/v1/me/office/room-bookings?from=2026-11-20&to=2026-11-27` | Mọi nhân viên | Lượt tôi tạo, chủ trì, được mời (tối đa 3 tháng) |
 
@@ -307,7 +308,45 @@ tính vào `amount`: hiện cảnh báo nhỏ.
   được).
 - Thông báo khi sửa: người dự mới nhận lời mời; người bị bớt nhận "không còn trong danh sách" (lượt riêng tư không nêu
   tiêu đề); chủ trì cũ, chủ trì mới nhận câu riêng; người còn lại và người đặt hộ nhận báo dời nêu cũ và mới. Chỉ sửa
-  tiêu đề, ghi chú thì không báo ai.
+  tiêu đề, ghi chú thì không báo ai; chỉ thêm, đổi, bỏ link họp thì báo link (mục 5.1).
+
+### 5.1 Họp online, họp kết hợp (19/11/2026)
+
+Một lượt họp có ba hình thức, server suy ra rồi trả trong `mode` (không gửi lên):
+
+| `mode` | `modeLabel` | Khi nào |
+|---|---|---|
+| `IN_PERSON` | Tại phòng | Có `roomId`, không có `meetingUrl` |
+| `HYBRID` | Kết hợp phòng và online | Có `roomId` và `meetingUrl` |
+| `ONLINE` | Online | Không có `roomId` (link có hay chưa đều được, gắn sau khi cần) |
+
+- **Tạo họp online:** POST không gửi `roomId` (hoặc gửi null, `""`). Không giữ phòng nên không bao giờ trùng giờ với ai
+  (hai cuộc online cùng giờ đều được), không hiện trên lịch phòng (`GET /office/room-bookings?siteId&date`), chỉ hiện ở
+  "Lịch của tôi" (`GET /me/office/room-bookings`) và khi mở theo id. Response có `room: null`, `officeSite: null`.
+- **Link họp (`meetingUrl`):** chỉ `http://` hoặc `https://`, tối đa 500 ký tự, server cắt khoảng trắng hai đầu. Sai dạng
+  trả 400 mã kiểm dữ liệu chung, câu "Link họp online chưa đúng dạng đường dẫn, ví dụ https://congty.vn." (chặn cả
+  `javascript:`). Gắn lúc tạo hoặc PATCH sau; PATCH `meetingUrl: ""` hoặc null là bỏ link.
+- **Chuyển hình thức:** PATCH `roomId: null` là trả phòng, chuyển sang họp online (phòng trống ngay cho người khác). PATCH
+  `roomId: <id>` cho lượt online là giữ phòng, có kiểm trùng giờ (409 như đặt mới).
+- **Riêng tư:** link họp coi như nội dung, giấu như `title`: người xem `detailsVisible=false` (kể cả HCNS) nhận
+  `meetingUrl: null` và gửi `meetingUrl` là 403, dù giá trị giống hệt. `mode` vẫn trả cho mọi người. Nhật ký hệ thống chỉ ghi
+  có link hay không (`hasMeetingUrl`), không bao giờ ghi link.
+- **Thông báo:** câu nêu nơi họp theo hình thức: "tại Phòng họp tầng 3 (Văn phòng Hữu Nghị)", "tại …, kết hợp online" hoặc
+  "online". Email mời họp, giao chủ trì có dòng "Địa điểm" (tên phòng hoặc "Họp online") và "Link họp" khi có link. Chỉ
+  thêm, đổi link thì người trong cuộc họp nhận thông báo kèm email có link mới; bỏ link chỉ báo trong app. Đổi giờ hay nơi
+  họp cùng lúc với link thì một thông báo đổi giờ, đổi nơi họp kèm câu về link. Nhắc họp (N-06) có link thì nhắc "Link họp có
+  trong chi tiết cuộc họp"; họp online chưa có link thì nhắc "Cuộc họp chưa có link họp online".
+- Web, mobile: nút "Vào họp" mở `meetingUrl` ở tab mới (`target="_blank" rel="noopener noreferrer"`), chỉ hiện khi
+  `meetingUrl` khác null.
+
+```json
+// RoomBookingResponseDto, họp online có link
+{
+  "id": 41, "room": null, "officeSite": null, "mode": "ONLINE", "modeLabel": "Online",
+  "meetingUrl": "https://zoom.us/j/1234567890",
+  "startAt": "2026-11-20T02:00:00.000Z", "endAt": "2026-11-20T03:00:00.000Z", "title": "Giao ban online", "...": "..."
+}
+```
 
 ---
 
@@ -380,7 +419,9 @@ Làm hai màn cho mọi nhân viên, cùng API với web:
    nút "Lấy số tháng trước", thêm dòng ngoài danh mục, đếm ngược tới `period.lockAt`. Phiếu `ISSUED` có nút Đã nhận khi
    `canReceive`.
 2. **Đặt phòng họp:** chọn văn phòng (nhớ lần chọn trước), ngày (mặc định hôm nay), lịch phòng theo giờ, chạm ô trống để
-   đặt nhanh (tiêu đề, giờ kết thúc mặc định +60 phút). Tab "Lịch của tôi" dùng `GET /me/office/room-bookings`.
+   đặt nhanh (tiêu đề, giờ kết thúc mặc định +60 phút). Tab "Lịch của tôi" dùng `GET /me/office/room-bookings`, hiện cả
+   cuộc họp online (nhãn `modeLabel`, nút "Vào họp" khi có `meetingUrl`). Nút "Tạo cuộc họp online" mở form không có ô
+   phòng (mục 5.1).
 
 Deep link theo mục 7. Màn quản lý (mở kỳ, chốt, cấp, cài đặt, báo cáo) chỉ có trên web.
 
@@ -407,3 +448,8 @@ Deep link theo mục 7. Màn quản lý (mở kỳ, chốt, cấp, cài đặt, 
 | W15 | HR chốt lại phiếu đã cấp (đổi số, ghi lý do); sửa số thực nhận phiếu đã nhận | Số mới hiện ở phiếu và bảng tổng hợp; trưởng phòng nhận thông báo; kỳ đã đóng thì nút bị ẩn |
 | W16 | "Lấy số tháng trước" có dòng vượt định mức, dòng ngoài danh mục | Toast nêu số dòng đã thêm và từng dòng bỏ qua kèm lý do |
 | W17 | Nhân viên mở ô chọn mặt hàng, danh mục | Không có cột đơn giá |
+| W18 | Tạo cuộc họp online không link, mời người dự; sau đó thêm link | Không chọn phòng; người dự nhận lời mời "… online, …", rồi thông báo "đã có link họp online" kèm email; nút "Vào họp" mở tab mới |
+| W19 | Đặt phòng kèm link (kết hợp); đổi link; bỏ link | Nhãn "Kết hợp phòng và online"; lịch phòng vẫn hiện lượt; thông báo đổi, bỏ link |
+| W20 | Chuyển cuộc họp tại phòng sang online; chuyển online về phòng đang bận | Phòng trống ngay trên lịch; chuyển về phòng bận báo trùng giờ, giữ form |
+| W21 | Gõ link sai (`zoom.us/j/1` thiếu https, `javascript:…`) | Lỗi ở ô link, câu tiếng Việt |
+| W22 | HCNS mở cuộc họp riêng tư có link mình không dự | Không thấy link, form không có ô link |

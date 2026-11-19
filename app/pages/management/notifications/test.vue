@@ -370,9 +370,12 @@
 						]"
 					>
 						<div class="flex items-center gap-2">
-							<span :class="['text-base', result.sent ? 'text-green-600' : 'text-red-500']">
-								{{ result.sent ? '✅' : '❌' }}
-							</span>
+							<!-- Icon của giao diện, không dùng emoji: emoji mỗi hệ vẽ một kiểu và không theo chế độ tối. -->
+							<Icon
+								:name="result.sent ? 'heroicons:check-circle' : 'heroicons:x-circle'"
+								:class="['w-5 h-5', result.sent ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400']"
+								aria-hidden="true"
+							/>
 							<span class="text-sm font-semibold text-gray-800 dark:text-gray-200 font-mono">{{ platform }}</span>
 							<span :class="['text-xs font-medium', result.sent ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400']">
 								{{ result.sent ? 'sent' : 'failed' }}
@@ -554,7 +557,7 @@
 
 			<div v-if="emailResult" class="mt-4 border-t border-gray-100 dark:border-gray-700 pt-4">
 				<div class="flex items-center gap-2 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
-					<span class="text-green-600">✅</span>
+					<Icon name="heroicons:check-circle" class="w-5 h-5 text-green-600 dark:text-green-400" aria-hidden="true" />
 					<p class="text-sm text-gray-700 dark:text-gray-300">{{ emailResult }}</p>
 				</div>
 			</div>

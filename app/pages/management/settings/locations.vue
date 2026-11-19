@@ -561,9 +561,7 @@ onUnmounted(() => {
 								:key="emp.id"
 								class="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 group"
 							>
-								<div class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0">
-									<span class="text-xs font-bold text-brand-700 dark:text-brand-400">{{ emp.fullName.charAt(0) }}</span>
-								</div>
+								<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 								<div class="flex-1 min-w-0">
 									<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
 									<p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ emp.employeeCode }}</p>

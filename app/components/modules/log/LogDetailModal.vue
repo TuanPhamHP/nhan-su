@@ -169,15 +169,12 @@
 				<div class="space-y-2">
 					<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tác nhân</p>
 					<div class="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+						<CommonAppAvatar v-if="log.actor.type === 'USER'" :name="log.actor.name" size="sm" />
 						<div
-							:class="[
-								'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold',
-								log.actor.type === 'USER'
-									? 'bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300'
-									: 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
-							]"
+							v-else
+							class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
 						>
-							{{ log.actor.type === 'USER' ? (log.actor.name?.charAt(0)?.toUpperCase() ?? '?') : 'SYS' }}
+							SYS
 						</div>
 						<div class="min-w-0">
 							<div class="flex items-center gap-2 flex-wrap">

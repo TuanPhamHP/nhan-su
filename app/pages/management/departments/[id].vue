@@ -971,13 +971,7 @@
 									:key="emp.id"
 									class="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
 								>
-									<div
-										class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
-									>
-										<span class="text-sm font-semibold text-brand-600 dark:text-brand-400">
-											{{ emp.fullName.charAt(0).toUpperCase() }}
-										</span>
-									</div>
+									<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 									<div class="flex-1 min-w-0">
 										<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
 										<p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
@@ -1158,13 +1152,7 @@
 									:key="emp.id"
 									class="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
 								>
-									<div
-										class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0"
-									>
-										<span class="text-sm font-semibold text-brand-600 dark:text-brand-400">
-											{{ emp.fullName.charAt(0).toUpperCase() }}
-										</span>
-									</div>
+									<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 									<div class="flex-1 min-w-0">
 										<div class="flex items-center gap-2">
 											<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>

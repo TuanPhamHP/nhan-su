@@ -536,8 +536,11 @@ export interface RoomGridRoom {
 }
 
 export interface RoomGrid {
-	/** `YYYY-MM-DD`. */
+	/** `YYYY-MM-DD`; xem theo khoảng ngày thì bằng `fromDate`. */
 	date: string;
+	/** Ngày đầu và ngày cuối của khoảng xem, tính cả hai đầu; xem một ngày thì cả hai bằng `date`. */
+	fromDate: string;
+	toDate: string;
 	site: OfficeSite;
 	rooms: RoomGridRoom[];
 }

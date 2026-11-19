@@ -305,7 +305,7 @@ function fmtSegmentDate(dateYmd: string): string {
 								]"
 								@click="workMode = 'OFFLINE'"
 							>
-								<span class="text-2xl">🏢</span>
+								<Icon name="heroicons:building-office-2" class="w-7 h-7 flex-shrink-0" aria-hidden="true" />
 								<div class="text-left">
 									<p class="font-medium text-sm">Tại văn phòng</p>
 									<p class="text-xs opacity-70">Cần xác nhận GPS</p>
@@ -321,7 +321,7 @@ function fmtSegmentDate(dateYmd: string): string {
 								]"
 								@click="workMode = 'ONLINE'"
 							>
-								<span class="text-2xl">🏠</span>
+								<Icon name="heroicons:home" class="w-7 h-7 flex-shrink-0" aria-hidden="true" />
 								<div class="text-left">
 									<p class="font-medium text-sm">Online / Từ xa</p>
 									<p class="text-xs opacity-70">Không cần GPS</p>
@@ -349,8 +349,9 @@ function fmtSegmentDate(dateYmd: string): string {
 								:class="errors.locationId ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'"
 							>
 								<option :value="null">-- Chọn địa điểm --</option>
+								<!-- `option` chỉ nhận chữ, không đặt được icon SVG vào trong, nên để tên trần. -->
 								<option v-for="loc in availableLocations" :key="loc.id" :value="loc.id">
-									📍 {{ loc.name }}
+									{{ loc.name }}
 								</option>
 							</select>
 							<p v-if="errors.locationId" class="mt-1 text-xs text-red-500">{{ errors.locationId }}</p>
@@ -526,8 +527,9 @@ function fmtSegmentDate(dateYmd: string): string {
 							<span class="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">Địa điểm</span>
 							<span class="text-right min-w-0">
 								<template v-if="previewData.location">
-									<span class="text-sm font-medium text-gray-900 dark:text-white truncate">
-										📍 {{ previewData.location.name }}
+									<span class="inline-flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-white truncate">
+										<Icon name="heroicons:map-pin" class="w-4 h-4 flex-shrink-0 text-gray-400" aria-hidden="true" />
+										{{ previewData.location.name }}
 									</span>
 								</template>
 								<template v-else>

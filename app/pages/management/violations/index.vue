@@ -368,8 +368,10 @@
 									<span
 										v-if="req.isViolationFlagged"
 										class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+										title="Vi phạm kỷ luật"
 									>
-										⚠️ Vi phạm KL
+										<Icon name="heroicons:exclamation-triangle" class="w-3 h-3" aria-hidden="true" />
+										Vi phạm KL
 									</span>
 								</div>
 							</td>

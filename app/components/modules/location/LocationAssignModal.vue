@@ -165,11 +165,7 @@ onMounted(() => {
 							@click.stop
 							@change="toggleEmployee(emp.id)"
 						/>
-						<div class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center flex-shrink-0">
-							<span class="text-xs font-semibold text-brand-700 dark:text-brand-300">
-								{{ emp.fullName.charAt(0).toUpperCase() }}
-							</span>
-						</div>
+						<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 						<div class="flex-1 min-w-0">
 							<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
 							<p class="text-xs text-gray-400 truncate">{{ emp.email }}</p>
