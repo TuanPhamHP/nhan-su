@@ -1,4 +1,5 @@
 <script setup lang="ts">
+	import SiteFormModal from '~/components/modules/office/SiteFormModal.vue';
 	import { useOfficeService } from '~/services/office.service';
 	import { downloadOfficeFile, officeErrorCode, officeErrorMessage, officeMoney } from '~/utils/office.utils';
 	import type {
@@ -11,11 +12,11 @@
 	} from '~/types/office.types';
 
 	/**
-	 * Cài đặt hành chính (UI-09): văn phòng, danh mục văn phòng phẩm, định mức theo phòng và
-	 * phòng họp.
+	 * Cài đặt hành chính (UI-09): văn phòng cùng phòng họp của nó, danh mục văn phòng phẩm, và định
+	 * mức theo phòng ban.
 	 *
-	 * Bốn thẻ nằm chung một trang vì chúng là danh mục nền của cả module: mở kỳ đăng ký cần văn
-	 * phòng và danh mục mặt hàng, còn lưới phòng họp cần văn phòng và phòng. Trang đã được
+	 * Ba thẻ nằm chung một trang vì chúng là danh mục nền của cả module: mở kỳ đăng ký cần văn
+	 * phòng và danh mục mặt hàng, còn lịch phòng họp cần văn phòng và phòng. Trang đã được
 	 * `permission-guard` gác bằng `office:manage`, nên ở đây chỉ còn kiểm quyền ghi của module.
 	 */
 	definePageMeta({ title: 'Cài đặt hành chính' });
@@ -29,14 +30,37 @@
 	/** Công ty đang ở chế độ chỉ xem thì mọi nút ghi tắt, nhưng vẫn đọc và tải file được. */
 	const canEdit = computed(() => canWrite('OFFICE'));
 
-	type SettingsTab = 'sites' | 'supplies' | 'quotas' | 'rooms';
+	/**
+	 * Văn phòng và phòng họp nằm CHUNG một thẻ.
+	 *
+	 * Tách làm hai thẻ như trước khiến người dùng hiểu sai: muốn thêm bốn phòng họp cho một văn
+	 * phòng thì họ phải sang thẻ khác và chọn lại văn phòng bốn lần, và có người đã gõ "Tầng 4 -
+	 * Phòng 1" vào ô Địa chỉ của một văn phòng thứ hai vì tưởng mỗi phòng là một văn phòng. Gộp lại
+	 * thì phòng họp hiện ngay trong thẻ của văn phòng chứa nó, nên quan hệ "phòng nằm trong văn
+	 * phòng" đọc được bằng mắt.
+	 */
+	type SettingsTab = 'places' | 'supplies' | 'quotas';
 	const TABS: { id: SettingsTab; label: string }[] = [
-		{ id: 'sites', label: 'Văn phòng' },
+		{ id: 'places', label: 'Văn phòng và phòng họp' },
 		{ id: 'supplies', label: 'Văn phòng phẩm' },
 		{ id: 'quotas', label: 'Định mức theo phòng' },
-		{ id: 'rooms', label: 'Phòng họp' },
 	];
-	const activeTab = ref<SettingsTab>('sites');
+	const activeTab = ref<SettingsTab>('places');
+
+	/**
+	 * Mở thẻ theo `?tab=` của liên kết cũ.
+	 *
+	 * Liên kết `?tab=sites` và `?tab=rooms` đã nằm trong lịch sử trò chuyện, trong ghi chú của
+	 * người dùng, nên cả hai vẫn phải mở được, nay cùng về thẻ gộp.
+	 */
+	const route = useRoute();
+	const TAB_ALIASES: Record<string, SettingsTab> = {
+		places: 'places',
+		sites: 'places',
+		rooms: 'places',
+		supplies: 'supplies',
+		quotas: 'quotas',
+	};
 
 	const inputCls =
 		'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
@@ -46,11 +70,11 @@
 
 	const sites = ref<OfficeSite[]>([]);
 	const loadingSites = ref(true);
+	/** Hộp thoại thêm, sửa văn phòng đang mở hay không. */
 	const showSiteForm = ref(false);
 	const editingSite = ref<OfficeSite | null>(null);
-	const savingSite = ref(false);
-	const siteNameError = ref('');
-	const siteForm = reactive({ name: '', address: '', isActive: true });
+	/** Thẻ văn phòng được tô sáng và cuộn tới: sau khi lưu, hoặc khi người dùng gõ trùng tên. */
+	const highlightSiteId = ref<number | null>(null);
 
 	async function loadSites() {
 		loadingSites.value = true;
@@ -66,47 +90,35 @@
 
 	function openSiteCreate() {
 		editingSite.value = null;
-		siteNameError.value = '';
-		Object.assign(siteForm, { name: '', address: '', isActive: true });
 		showSiteForm.value = true;
 	}
 
 	function openSiteEdit(site: OfficeSite) {
 		editingSite.value = site;
-		siteNameError.value = '';
-		Object.assign(siteForm, { name: site.name, address: site.address ?? '', isActive: site.isActive });
 		showSiteForm.value = true;
 	}
 
-	async function saveSite() {
-		if (!siteForm.name.trim() || savingSite.value) return;
-		savingSite.value = true;
-		siteNameError.value = '';
-		try {
-			if (editingSite.value) {
-				await service.updateSite(editingSite.value.id, {
-					name: siteForm.name.trim(),
-					address: siteForm.address.trim() || undefined,
-					isActive: siteForm.isActive,
-				});
-			} else {
-				await service.createSite({ name: siteForm.name.trim(), address: siteForm.address.trim() || undefined });
-			}
-			toast.success(`Đã lưu văn phòng ${siteForm.name.trim()}.`);
-			showSiteForm.value = false;
-			await loadSites();
-		} catch (e) {
-			// Trùng tên là lỗi của ĐÚNG một ô, nên câu lỗi phải nằm ngay dưới ô tên chứ không
-			// chỉ thoáng qua ở toast rồi người dùng không biết sửa chỗ nào.
-			if (officeErrorCode(e) === 'OFFICE_SITE_NAME_EXISTS') {
-				siteNameError.value = officeErrorMessage(e, 'Tên văn phòng này đã có.');
-			} else {
-				// Ngừng văn phòng còn lượt đặt sắp tới: câu của máy chủ nêu rõ còn bao nhiêu lượt.
-				toast.error(officeErrorMessage(e, 'Chưa lưu được văn phòng. Bạn thử lại sau ít phút.'));
-			}
-		} finally {
-			savingSite.value = false;
-		}
+	/** Cuộn tới một thẻ văn phòng và tô viền nó, để mắt người dùng tìm thấy ngay. */
+	function spotlightSite(siteId: number) {
+		highlightSiteId.value = siteId;
+		nextTick(() => {
+			document.getElementById(`site-card-${siteId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		});
+	}
+
+	/** Lưu xong trong hộp thoại: đóng hộp, nạp lại danh sách rồi chỉ vào thẻ vừa lưu. */
+	async function onSiteSaved(saved: OfficeSite) {
+		showSiteForm.value = false;
+		editingSite.value = null;
+		await loadSites();
+		spotlightSite(saved.id);
+	}
+
+	/** Người dùng bấm "Đi tới thẻ …" ở câu lỗi trùng tên trong hộp thoại. */
+	function onGoToSite(siteId: number) {
+		showSiteForm.value = false;
+		editingSite.value = null;
+		spotlightSite(siteId);
 	}
 
 	// ─── Văn phòng phẩm: nhóm và mặt hàng ─────────────────────────────────────────
@@ -417,10 +429,28 @@
 	const rooms = ref<MeetingRoom[]>([]);
 	const loadingRooms = ref(false);
 	const roomsLoaded = ref(false);
-	const showRoomForm = ref(false);
+	/**
+	 * Văn phòng nào đang mở form thêm hoặc sửa phòng; `null` là không mở ở đâu cả.
+	 *
+	 * Form nằm TRONG thẻ của văn phòng, nên nó không cần ô chọn văn phòng nữa: người dùng bấm
+	 * "Thêm phòng họp" ở thẻ nào thì phòng mới thuộc văn phòng đó.
+	 */
+	const roomFormSiteId = ref<number | null>(null);
 	const editingRoom = ref<MeetingRoom | null>(null);
 	const savingRoom = ref(false);
 	const roomNameError = ref('');
+	/**
+	 * Ô Tên phòng, để sau khi lưu con trỏ về đây cho người dùng gõ liền phòng kế tiếp.
+	 *
+	 * Gán bằng HÀM chứ không bằng `ref="..."`: ô nằm trong `v-for` của các thẻ văn phòng, mà ref
+	 * dạng chuỗi trong `v-for` cho ra một MẢNG phần tử, nên `.focus()` gọi thẳng sẽ ném lỗi. Mỗi
+	 * lúc chỉ có một form mở, nên giữ đúng một phần tử là đủ.
+	 */
+	const roomNameInput = ref<HTMLInputElement | null>(null);
+
+	function setRoomNameInput(el: unknown) {
+		roomNameInput.value = el instanceof HTMLInputElement ? el : null;
+	}
 	const roomForm = reactive({
 		officeSiteId: undefined as number | undefined,
 		name: '',
@@ -445,23 +475,17 @@
 		}
 	}
 
-	const siteOptions = computed(() => sites.value.filter(s => s.isActive).map(s => ({ value: s.id, label: s.name })));
+	/** Phòng họp của một văn phòng, theo ID chứ không theo tên: tên văn phòng có thể đổi. */
+	function roomsOf(siteId: number): MeetingRoom[] {
+		return rooms.value.filter(room => room.officeSiteId === siteId);
+	}
 
-	const roomsBySite = computed(() => {
-		const map = new Map<string, MeetingRoom[]>();
-		for (const room of rooms.value) {
-			const list = map.get(room.officeSiteName) ?? [];
-			list.push(room);
-			map.set(room.officeSiteName, list);
-		}
-		return [...map.entries()].map(([siteName, siteRooms]) => ({ siteName, rooms: siteRooms }));
-	});
-
-	function openRoomCreate() {
+	/** Mở form thêm phòng ngay trong thẻ của văn phòng, văn phòng đã chọn sẵn. */
+	function openRoomCreate(site: OfficeSite) {
 		editingRoom.value = null;
 		roomNameError.value = '';
 		Object.assign(roomForm, {
-			officeSiteId: siteOptions.value[0]?.value,
+			officeSiteId: site.id,
 			name: '',
 			capacity: undefined,
 			equipment: '',
@@ -469,7 +493,8 @@
 			sortOrder: undefined,
 			isActive: true,
 		});
-		showRoomForm.value = true;
+		roomFormSiteId.value = site.id;
+		nextTick(() => roomNameInput.value?.focus());
 	}
 
 	function openRoomEdit(room: MeetingRoom) {
@@ -484,7 +509,14 @@
 			sortOrder: room.sortOrder,
 			isActive: room.isActive,
 		});
-		showRoomForm.value = true;
+		roomFormSiteId.value = room.officeSiteId;
+		nextTick(() => roomNameInput.value?.focus());
+	}
+
+	function closeRoomForm() {
+		roomFormSiteId.value = null;
+		editingRoom.value = null;
+		roomNameError.value = '';
 	}
 
 	function equipmentList(): string[] {
@@ -519,9 +551,26 @@
 					sortOrder: roomForm.sortOrder,
 				});
 			}
-			toast.success(`Đã lưu phòng họp ${roomForm.name.trim()}.`);
-			showRoomForm.value = false;
+			const justSaved = roomForm.name.trim();
+			const wasEditing = !!editingRoom.value;
+			toast.success(`Đã lưu phòng họp ${justSaved}.`);
 			await loadRooms();
+			if (wasEditing) {
+				closeRoomForm();
+			} else {
+				// Thêm xong thì GIỮ FORM MỞ, xoá trắng các ô và đưa con trỏ về ô Tên: một văn phòng
+				// thường có vài phòng họp, và bắt người dùng bấm "Thêm phòng họp" lại cho từng phòng
+				// là bắt họ làm cùng một việc bốn lần.
+				Object.assign(roomForm, {
+					name: '',
+					capacity: undefined,
+					equipment: '',
+					note: '',
+					sortOrder: undefined,
+					isActive: true,
+				});
+				nextTick(() => roomNameInput.value?.focus());
+			}
 		} catch (e) {
 			if (officeErrorCode(e) === 'OFFICE_ROOM_NAME_EXISTS') {
 				roomNameError.value = officeErrorMessage(e, 'Văn phòng này đã có phòng họp tên như vậy.');
@@ -535,19 +584,62 @@
 		}
 	}
 
+	/** Phòng nào đang chờ máy chủ trả lời cho nút Ngừng dùng hoặc Dùng lại. */
+	const togglingRoomId = ref<number | null>(null);
+
+	/**
+	 * Ngừng dùng hoặc dùng lại một phòng họp.
+	 *
+	 * Phòng còn lượt đặt sắp tới thì máy chủ trả 409 `OFFICE_ROOM_HAS_BOOKINGS` kèm số lượt, nên
+	 * hiện nguyên văn câu đó: người dùng cần biết còn mấy lượt phải dời.
+	 */
+	async function toggleRoom(room: MeetingRoom) {
+		if (togglingRoomId.value) return;
+		togglingRoomId.value = room.id;
+		try {
+			await service.updateRoom(room.id, { isActive: !room.isActive });
+			toast.success(room.isActive ? `Đã ngừng dùng phòng ${room.name}.` : `Đã dùng lại phòng ${room.name}.`);
+			await loadRooms();
+		} catch (e) {
+			toast.error(officeErrorMessage(e, 'Chưa đổi được trạng thái phòng họp. Bạn thử lại sau ít phút.'));
+		} finally {
+			togglingRoomId.value = null;
+		}
+	}
+
+	const togglingSiteId = ref<number | null>(null);
+
+	/** Ngừng dùng hoặc dùng lại một văn phòng; còn lượt sắp tới thì máy chủ cũng trả 409. */
+	async function toggleSite(site: OfficeSite) {
+		if (togglingSiteId.value) return;
+		togglingSiteId.value = site.id;
+		try {
+			await service.updateSite(site.id, { isActive: !site.isActive });
+			toast.success(site.isActive ? `Đã ngừng dùng ${site.name}.` : `Đã dùng lại ${site.name}.`);
+			await loadSites();
+		} catch (e) {
+			toast.error(officeErrorMessage(e, 'Chưa đổi được trạng thái văn phòng. Bạn thử lại sau ít phút.'));
+		} finally {
+			togglingSiteId.value = null;
+		}
+	}
+
 	// ─── Nạp dữ liệu theo thẻ đang mở ─────────────────────────────────────────────
 
 	onMounted(() => {
+		// Thẻ đầu tiên hiện cả văn phòng và phòng họp, nên nạp cả hai ngay từ đầu.
 		loadSites();
+		loadRooms();
+		const wanted = TAB_ALIASES[String(route.query.tab ?? '')];
+		if (wanted) activeTab.value = wanted;
 		directoryStore.load().catch(() => {
 			toast.error('Chưa tải được danh sách phòng ban, nên thẻ Định mức tạm thời chưa chọn được phòng.');
 		});
 	});
 
-	/** Nạp lười: mỗi thẻ chỉ gọi API lần đầu người dùng mở nó. */
+	/** Nạp lười phần còn lại: danh mục văn phòng phẩm chỉ gọi API khi người dùng mở thẻ của nó. */
 	watch(activeTab, tab => {
 		if ((tab === 'supplies' || tab === 'quotas') && !suppliesLoaded.value && !loadingSupplies.value) loadSupplies();
-		if (tab === 'rooms' && !roomsLoaded.value && !loadingRooms.value) loadRooms();
 	});
 
 	watch(quotaDepartmentId, () => loadQuotas());
@@ -557,7 +649,7 @@
 	<div class="space-y-5">
 		<UiPageHeader
 			title="Cài đặt hành chính"
-			description="Văn phòng, danh mục văn phòng phẩm, định mức theo phòng và phòng họp. Mở kỳ đăng ký cần có văn phòng và danh mục mặt hàng, nên bạn dựng ở đây trước."
+			description="Nơi dựng những thứ nền của phân hệ: văn phòng cùng các phòng họp trong đó, danh mục văn phòng phẩm và định mức của từng phòng ban. Mở kỳ đăng ký cần có văn phòng và danh mục mặt hàng, còn đặt phòng họp cần văn phòng và phòng, nên bạn dựng ở đây trước."
 		/>
 
 		<CommonAppModuleNotice module="OFFICE" />
@@ -581,76 +673,186 @@
 			</nav>
 		</div>
 
-		<!-- ── Văn phòng ───────────────────────────────────────────────────── -->
-		<template v-if="activeTab === 'sites'">
+		<!-- ── Văn phòng và phòng họp ──────────────────────────────────────── -->
+		<template v-if="activeTab === 'places'">
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<p class="text-sm text-gray-600 dark:text-gray-400">
-					Mỗi kỳ đăng ký văn phòng phẩm và mỗi lịch phòng họp đều thuộc một văn phòng.
+					Văn phòng là toà nhà hay địa điểm làm việc của công ty. Phòng họp nằm trong một văn phòng, và bạn thêm
+					phòng ngay trong thẻ của văn phòng đó.
 				</p>
 				<CommonAppButton v-if="canEdit" variant="primary" @click="openSiteCreate">Thêm văn phòng</CommonAppButton>
 			</div>
 
-			<div
-				v-if="showSiteForm"
-				class="rounded-xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-700 dark:bg-gray-900"
-			>
-				<h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
-					{{ editingSite ? `Sửa văn phòng ${editingSite.name}` : 'Thêm văn phòng' }}
-				</h3>
-				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div class="space-y-1">
-						<label :class="labelCls">Tên văn phòng <span class="text-red-500">*</span></label>
-						<input v-model="siteForm.name" type="text" maxlength="200" :class="inputCls" placeholder="VD: Văn phòng Hữu Nghị" />
-						<p v-if="siteNameError" class="text-xs text-red-500">{{ siteNameError }}</p>
-					</div>
-					<div class="space-y-1">
-						<label :class="labelCls">Địa chỉ</label>
-						<input v-model="siteForm.address" type="text" maxlength="255" :class="inputCls" placeholder="VD: Tầng 3, 12 Hữu Nghị, Hà Nội" />
-					</div>
-					<label v-if="editingSite" class="flex items-center gap-2">
-						<input v-model="siteForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-						<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
-					</label>
-				</div>
-				<div class="mt-4 flex justify-end gap-3">
-					<CommonAppButton variant="secondary" @click="showSiteForm = false">Đóng</CommonAppButton>
-					<CommonAppButton variant="primary" :disabled="!siteForm.name.trim()" :loading="savingSite" @click="saveSite">
-						Lưu
-					</CommonAppButton>
-				</div>
+			<div v-if="loadingSites || loadingRooms" class="space-y-3">
+				<div v-for="i in 3" :key="i" class="h-32 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
 			</div>
 
-			<div v-if="loadingSites" class="space-y-3">
-				<div v-for="i in 3" :key="i" class="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
-			</div>
-			<p
+			<!--
+				Chưa có văn phòng nào: nói văn phòng là gì và phòng họp nằm ở đâu, vì đây là lúc người
+				dùng dễ nhầm nhất — có người đã tạo mỗi phòng họp thành một văn phòng.
+			-->
+			<div
 				v-else-if="!sites.length"
-				class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+				class="rounded-xl border border-gray-200 bg-white px-6 py-14 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
 			>
-				Chưa có văn phòng nào.<template v-if="canEdit"> Bạn bấm Thêm văn phòng để tạo văn phòng đầu tiên.</template>
-			</p>
-			<div v-else class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-				<table class="w-full text-sm">
-					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-						<tr v-for="site in sites" :key="site.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-							<td class="px-4 py-3">
-								<p class="font-medium text-gray-900 dark:text-white">{{ site.name }}</p>
-								<p class="text-xs text-gray-500 dark:text-gray-400">{{ site.address || 'Chưa ghi địa chỉ' }}</p>
-							</td>
-							<td class="px-4 py-3">
+				<p class="font-medium text-gray-700 dark:text-gray-200">Công ty chưa có văn phòng nào.</p>
+				<p class="mx-auto mt-2 max-w-xl leading-relaxed">
+					Văn phòng là toà nhà hay địa điểm làm việc của công ty, ví dụ Văn phòng Hà Nội. Phòng họp nằm trong một
+					văn phòng, nên bạn tạo văn phòng trước rồi thêm từng phòng họp vào đó.
+				</p>
+				<CommonAppButton v-if="canEdit" class="mt-4" variant="primary" @click="openSiteCreate">
+					Thêm văn phòng đầu tiên
+				</CommonAppButton>
+			</div>
+
+			<div v-else class="space-y-4">
+				<!--
+					Mỗi văn phòng là một thẻ, phòng họp của nó nằm ngay trong thẻ. Người dùng thấy quan hệ
+					"phòng nằm trong văn phòng" bằng mắt, và thêm phòng không phải chọn lại văn phòng.
+				-->
+				<section
+					v-for="site in sites"
+					:id="`site-card-${site.id}`"
+					:key="site.id"
+					:class="[
+						'overflow-hidden rounded-xl border bg-white shadow-sm transition-colors dark:bg-gray-900',
+						highlightSiteId === site.id
+							? 'border-brand-500 ring-2 ring-brand-200 dark:border-brand-500 dark:ring-brand-900'
+							: 'border-gray-200 dark:border-gray-700',
+						site.isActive ? '' : 'opacity-70',
+					]"
+				>
+					<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-700">
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<h3 class="font-semibold text-gray-900 dark:text-white">{{ site.name }}</h3>
 								<span
 									v-if="!site.isActive"
 									class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
 								>
 									Ngừng dùng
 								</span>
-							</td>
-							<td class="px-4 py-3 text-right">
-								<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openSiteEdit(site)">Sửa</CommonAppButton>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+							</div>
+							<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+								{{ site.address || 'Chưa ghi địa chỉ' }}
+							</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+								{{ roomsOf(site.id).length }} phòng họp
+							</p>
+						</div>
+						<div v-if="canEdit" class="flex flex-wrap gap-2">
+							<CommonAppButton size="sm" variant="outline" @click="openSiteEdit(site)">Sửa</CommonAppButton>
+							<CommonAppButton
+								size="sm"
+								:variant="site.isActive ? 'ghost' : 'outline'"
+								:loading="togglingSiteId === site.id"
+								@click="toggleSite(site)"
+							>
+								{{ site.isActive ? 'Ngừng dùng' : 'Dùng lại' }}
+							</CommonAppButton>
+						</div>
+					</div>
+
+					<!-- Phòng họp của văn phòng này -->
+					<div class="divide-y divide-gray-100 dark:divide-gray-800">
+						<p v-if="!roomsOf(site.id).length" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+							Văn phòng này chưa có phòng họp nào.
+						</p>
+						<div
+							v-for="room in roomsOf(site.id)"
+							:key="room.id"
+							:class="[
+								'flex flex-wrap items-start justify-between gap-3 px-4 py-3',
+								room.isActive ? '' : 'opacity-60',
+							]"
+						>
+							<div class="min-w-0">
+								<div class="flex flex-wrap items-center gap-2">
+									<p class="font-medium text-gray-900 dark:text-white">{{ room.name }}</p>
+									<span
+										v-if="!room.isActive"
+										class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+									>
+										Ngừng dùng
+									</span>
+								</div>
+								<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">
+									{{ room.capacity != null ? `${room.capacity} người` : 'Chưa ghi sức chứa' }} ·
+									{{ room.equipment.length ? room.equipment.join(', ') : 'Chưa ghi thiết bị' }}
+								</p>
+								<p v-if="room.note" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ room.note }}</p>
+							</div>
+							<div v-if="canEdit" class="flex flex-wrap gap-2">
+								<CommonAppButton size="sm" variant="outline" @click="openRoomEdit(room)">Sửa</CommonAppButton>
+								<CommonAppButton
+									size="sm"
+									:variant="room.isActive ? 'ghost' : 'outline'"
+									:loading="togglingRoomId === room.id"
+									@click="toggleRoom(room)"
+								>
+									{{ room.isActive ? 'Ngừng dùng' : 'Dùng lại' }}
+								</CommonAppButton>
+							</div>
+						</div>
+					</div>
+
+					<!-- Form thêm, sửa phòng: mở NGAY TRONG thẻ nên không cần ô chọn văn phòng. -->
+					<div
+						v-if="roomFormSiteId === site.id"
+						class="border-t border-brand-200 bg-brand-50/40 p-4 dark:border-brand-800 dark:bg-brand-900/10"
+					>
+						<h4 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
+							{{ editingRoom ? `Sửa phòng ${editingRoom.name}` : `Thêm phòng họp cho ${site.name}` }}
+						</h4>
+						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+							<div class="space-y-1">
+								<label :class="labelCls">Tên phòng <span class="text-red-500">*</span></label>
+								<!-- Enter là lưu: người dùng gõ liền vài phòng thì không phải rời tay khỏi bàn phím. -->
+								<input
+									:ref="setRoomNameInput"
+									v-model="roomForm.name"
+									type="text"
+									maxlength="200"
+									:class="inputCls"
+									placeholder="VD: Phòng họp tầng 3"
+									@keydown.enter.prevent="saveRoom"
+								/>
+								<p v-if="roomNameError" class="text-xs text-red-500">{{ roomNameError }}</p>
+							</div>
+							<div class="space-y-1">
+								<label :class="labelCls">Sức chứa</label>
+								<UiNumberInput v-model="roomForm.capacity" :min="1" :input-class="inputCls" placeholder="Số người" />
+							</div>
+							<div class="space-y-1">
+								<label :class="labelCls">Thiết bị</label>
+								<input v-model="roomForm.equipment" type="text" :class="inputCls" placeholder="Máy chiếu, Bảng trắng" />
+								<p class="text-xs text-gray-500 dark:text-gray-400">Mỗi thiết bị cách nhau một dấu phẩy.</p>
+							</div>
+							<div class="space-y-1">
+								<label :class="labelCls">Ghi chú</label>
+								<input v-model="roomForm.note" type="text" maxlength="255" :class="inputCls" placeholder="VD: Mượn chìa khoá ở lễ tân" />
+							</div>
+							<div class="space-y-1">
+								<label :class="labelCls">Thứ tự hiện</label>
+								<UiNumberInput v-model="roomForm.sortOrder" :min="0" :input-class="inputCls" placeholder="Bỏ trống thì xếp cuối" />
+							</div>
+							<label v-if="editingRoom" class="flex items-center gap-2">
+								<input v-model="roomForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+								<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
+							</label>
+						</div>
+						<div class="mt-4 flex flex-wrap justify-end gap-3">
+							<CommonAppButton variant="secondary" @click="closeRoomForm">Đóng</CommonAppButton>
+							<CommonAppButton variant="primary" :disabled="!roomForm.name.trim()" :loading="savingRoom" @click="saveRoom">
+								{{ editingRoom ? 'Lưu' : 'Lưu và thêm phòng nữa' }}
+							</CommonAppButton>
+						</div>
+					</div>
+
+					<div v-else-if="canEdit && site.isActive" class="border-t border-gray-100 p-4 dark:border-gray-800">
+						<CommonAppButton size="sm" variant="outline" @click="openRoomCreate(site)">Thêm phòng họp</CommonAppButton>
+					</div>
+				</section>
 			</div>
 		</template>
 
@@ -975,117 +1177,17 @@
 			</div>
 		</template>
 
-		<!-- ── Phòng họp ───────────────────────────────────────────────────── -->
-		<template v-else>
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<p class="text-sm text-gray-600 dark:text-gray-400">
-					Phòng họp thuộc một văn phòng. Phòng ngừng dùng không còn hiện trên lịch đặt phòng.
-				</p>
-				<CommonAppButton v-if="canEdit && siteOptions.length" variant="primary" @click="openRoomCreate">
-					Thêm phòng họp
-				</CommonAppButton>
-			</div>
-
-			<div
-				v-if="showRoomForm"
-				class="rounded-xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-700 dark:bg-gray-900"
-			>
-				<h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
-					{{ editingRoom ? `Sửa phòng ${editingRoom.name}` : 'Thêm phòng họp' }}
-				</h3>
-				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div class="space-y-1">
-						<label :class="labelCls">Văn phòng <span class="text-red-500">*</span></label>
-						<UiSelect v-model="roomForm.officeSiteId" :options="siteOptions" placeholder="Chọn văn phòng" />
-					</div>
-					<div class="space-y-1">
-						<label :class="labelCls">Tên phòng <span class="text-red-500">*</span></label>
-						<input v-model="roomForm.name" type="text" maxlength="200" :class="inputCls" placeholder="VD: Phòng họp tầng 3" />
-						<p v-if="roomNameError" class="text-xs text-red-500">{{ roomNameError }}</p>
-					</div>
-					<div class="space-y-1">
-						<label :class="labelCls">Sức chứa</label>
-						<UiNumberInput v-model="roomForm.capacity" :min="1" :input-class="inputCls" placeholder="Số người" />
-					</div>
-					<div class="space-y-1">
-						<label :class="labelCls">Thiết bị</label>
-						<input v-model="roomForm.equipment" type="text" :class="inputCls" placeholder="Máy chiếu, Bảng trắng" />
-						<p class="text-xs text-gray-500 dark:text-gray-400">Mỗi thiết bị cách nhau một dấu phẩy.</p>
-					</div>
-					<div class="space-y-1 sm:col-span-2">
-						<label :class="labelCls">Ghi chú</label>
-						<input v-model="roomForm.note" type="text" maxlength="255" :class="inputCls" placeholder="VD: Mượn chìa khoá ở lễ tân" />
-					</div>
-					<div class="space-y-1">
-						<label :class="labelCls">Thứ tự hiện</label>
-						<UiNumberInput v-model="roomForm.sortOrder" :min="0" :input-class="inputCls" placeholder="Bỏ trống thì xếp cuối" />
-					</div>
-					<label v-if="editingRoom" class="flex items-center gap-2">
-						<input v-model="roomForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-						<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
-					</label>
-				</div>
-				<div class="mt-4 flex justify-end gap-3">
-					<CommonAppButton variant="secondary" @click="showRoomForm = false">Đóng</CommonAppButton>
-					<CommonAppButton
-						variant="primary"
-						:disabled="!roomForm.officeSiteId || !roomForm.name.trim()"
-						:loading="savingRoom"
-						@click="saveRoom"
-					>
-						Lưu
-					</CommonAppButton>
-				</div>
-			</div>
-
-			<div v-if="loadingRooms" class="space-y-3">
-				<div v-for="i in 3" :key="i" class="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
-			</div>
-			<p
-				v-else-if="!rooms.length"
-				class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
-			>
-				Chưa có phòng họp nào.<template v-if="canEdit"> Bạn bấm Thêm phòng họp để tạo phòng đầu tiên.</template>
-			</p>
-			<div v-else class="space-y-4">
-				<section
-					v-for="group in roomsBySite"
-					:key="group.siteName"
-					class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
-				>
-					<h3 class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100">
-						{{ group.siteName }}
-						<span class="ml-1 text-xs font-normal text-gray-400">{{ group.rooms.length }} phòng</span>
-					</h3>
-					<table class="w-full text-sm">
-						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-							<tr v-for="room in group.rooms" :key="room.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-								<td class="px-4 py-3">
-									<p class="font-medium text-gray-900 dark:text-white">{{ room.name }}</p>
-									<p v-if="room.note" class="text-xs text-gray-500 dark:text-gray-400">{{ room.note }}</p>
-								</td>
-								<td class="px-4 py-3 text-gray-600 dark:text-gray-300">
-									{{ room.capacity != null ? `${room.capacity} người` : 'Chưa ghi sức chứa' }}
-								</td>
-								<td class="px-4 py-3 text-gray-600 dark:text-gray-300">
-									{{ room.equipment.length ? room.equipment.join(', ') : 'Chưa ghi thiết bị' }}
-								</td>
-								<td class="px-4 py-3">
-									<span
-										v-if="!room.isActive"
-										class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-									>
-										Ngừng dùng
-									</span>
-								</td>
-								<td class="px-4 py-3 text-right">
-									<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openRoomEdit(room)">Sửa</CommonAppButton>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</section>
-			</div>
-		</template>
+		<!--
+			Thêm và sửa văn phòng đi qua hộp thoại: form chen trong trang mở ra ngay phía trên các thẻ
+			nên trông như đang dựng thêm một thẻ văn phòng nữa.
+		-->
+		<SiteFormModal
+			v-if="showSiteForm"
+			:site="editingSite"
+			:sites="sites"
+			@saved="onSiteSaved"
+			@go-to-site="onGoToSite"
+			@close="showSiteForm = false"
+		/>
 	</div>
 </template>

@@ -1,15 +1,89 @@
 /**
- * FE-53, FE-54, FE-36: những màn hình khi CHƯA có dữ liệu, và dấu hỏi mô tả trang trên điện thoại.
+ * S1, FE-54, FE-53, FE-36: những màn hình khi CHƯA có dữ liệu, và dấu hỏi mô tả trang trên điện
+ * thoại.
  *
- * Bài này phải chạy TRƯỚC `smoke-settings.mjs`: nó kiểm câu chỉ đường lúc công ty chưa có văn
- * phòng nào, mà bài cài đặt sẽ tạo văn phòng ngay bước đầu.
+ * Phần "chưa có văn phòng nào" chạy trên một công ty riêng ĐANG TRẮNG (`companies.nos` của sandbox,
+ * đã bật OFFICE nhưng chưa có văn phòng). Trước đây bài dùng công ty chính nên chỉ chạy được ngay
+ * sau khi dựng lại sandbox: các bài khác tạo văn phòng là màn hình rỗng không dựng lại được, mà
+ * API không có đường xoá văn phòng.
+ *
+ * Bài KHÔNG tạo văn phòng ở công ty trắng đó, để lần sau vẫn kiểm được; đường tạo văn phòng đầu
+ * tiên đã có `smoke-places.mjs` lo.
  */
-import { WHO, go, launch, line, shot, signIn, summary, text } from './helper.mjs';
+import { PASSWORD, SANDBOX, WHO, api, dialog, go, launch, line, shot, signIn, summary, text } from './helper.mjs';
 
+/** Công ty đã bật OFFICE mà chưa có văn phòng nào; `null` nghĩa là sandbox không còn công ty nào trắng. */
+async function findEmptyCompanyHr() {
+	for (const [code, company] of Object.entries(SANDBOX.companies ?? {})) {
+		if (!company?.hr) continue;
+		const res = await fetch(`${SANDBOX.api ?? 'http://localhost:3190'}/v1/auth/login`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email: company.hr, password: PASSWORD }),
+		});
+		const token = (await res.json())?.data?.accessToken;
+		if (!token) continue;
+		const sites = await api(token, '/v1/office/sites');
+		if (sites.status === 200 && (sites.json?.data ?? []).length === 0) {
+			console.log(`công ty trắng: ${code} (${company.hr})`);
+			return company.hr;
+		}
+	}
+	return null;
+}
+
+const emptyHrEmail = await findEmptyCompanyHr();
 const browser = await launch();
 
-// ─── FE-54: HCNS mở trang Kỳ và trang Đặt phòng khi công ty chưa có văn phòng ──
-const hr = await signIn(browser, WHO.hr.email);
+if (!emptyHrEmail) {
+	line(false, 'S1/FE-54 cần một công ty đã bật OFFICE mà chưa có văn phòng', 'sandbox không còn công ty nào trắng');
+} else {
+
+// ─── S1: trang Cài đặt hành chính của công ty chưa có văn phòng ───────────────
+const hr = await signIn(browser, emptyHrEmail);
+await go(hr, '/management/office/settings', 4500);
+const settingsText = (await text(hr)).replace(/\s+/g, ' ');
+line(
+	settingsText.includes('Công ty chưa có văn phòng nào.'),
+	'S1 trang Cài đặt nói rõ công ty chưa có văn phòng nào',
+	settingsText.match(/Công ty chưa có văn phòng nào\./)?.[0] ?? settingsText.slice(0, 200),
+);
+line(
+	settingsText.includes('Văn phòng là toà nhà hay địa điểm làm việc của công ty') &&
+		settingsText.includes('Phòng họp nằm trong một văn phòng'),
+	'S1 câu dẫn nói văn phòng là gì và phòng họp nằm ở đâu',
+	settingsText.match(/Văn phòng là toà nhà[^.]*\./)?.[0] ?? '',
+);
+const firstSiteButton = hr.getByRole('button', { name: 'Thêm văn phòng đầu tiên' });
+line((await firstSiteButton.count()) > 0, 'S1 có nút "Thêm văn phòng đầu tiên"');
+console.log('ảnh:', await shot(hr, 's1-settings-no-site'));
+
+// Bấm nút: HỘP THOẠI thêm văn phòng phải mở ngay, kèm hai câu nhắc về địa chỉ và tầng, số phòng.
+await firstSiteButton.click();
+await hr.waitForTimeout(1200);
+const siteModal = dialog(hr, 'Thêm văn phòng');
+const openedForm = (await siteModal.innerText()).replace(/\s+/g, ' ');
+line((await siteModal.count()) > 0, 'S1 bấm nút thì hộp thoại thêm văn phòng mở ra');
+line(
+	(await siteModal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').count()) > 0,
+	'S1 hộp thoại có ô Tên văn phòng',
+);
+line(
+	openedForm.includes('Tầng, số phòng là phòng họp: bạn thêm vào văn phòng ở bước sau'),
+	'S1 form nhắc trước rằng tầng và số phòng là phòng họp',
+	openedForm.match(/Tầng, số phòng[^.]*\./)?.[0] ?? '',
+);
+line(
+	(await siteModal.locator('input[placeholder*="Lý Thường Kiệt"]').count()) > 0,
+	'S1 ô Địa chỉ lấy ví dụ là địa chỉ phố',
+);
+// Đóng lại và KHÔNG lưu: công ty này phải còn trắng cho lần chạy sau.
+await siteModal.getByRole('button', { name: 'Đóng', exact: true }).click();
+await hr.waitForTimeout(600);
+line((await dialog(hr, 'Thêm văn phòng').count()) === 0, 'S1 nút Đóng đóng được hộp thoại');
+console.log('ảnh:', await shot(hr, 's1-settings-form-open'));
+
+// ─── FE-54: trang Kỳ và trang Đặt phòng của công ty chưa có văn phòng ─────────
 await go(hr, '/management/office/supply-periods');
 const periodsText = await text(hr);
 line(
@@ -50,6 +124,8 @@ line(
 	(await hr.getByRole('button', { name: 'Đặt phòng', exact: true }).count()) === 0,
 	'FE-54 không bày nút Đặt phòng khi chưa có phòng họp nào',
 );
+
+}
 
 // ─── FE-53: giám đốc không thuộc phòng ban nào ────────────────────────────────
 const director = await signIn(browser, WHO.director.email);
@@ -101,19 +177,20 @@ for (const [name, path] of [
 	line(reopened && closedAgain, `FE-36 chạm lần nữa ở ${name} thì bật tắt đúng`, `mở lại ${reopened}, đóng ${closedAgain}`);
 }
 
-// Desktop: rê chuột vẫn mở như trước.
-await go(hr, '/management/leave', 3500);
-const hrButton = hr.locator('button[aria-label^="Trang này dùng để làm gì"]').first();
+// Desktop: rê chuột vẫn mở như trước. Dùng HCNS của công ty chính, vì trang Nghỉ phép cần dữ liệu.
+const mainHr = await signIn(browser, WHO.hr.email);
+await go(mainHr, '/management/leave', 3500);
+const hrButton = mainHr.locator('button[aria-label^="Trang này dùng để làm gì"]').first();
 await hrButton.hover();
-await hr.waitForTimeout(600);
+await mainHr.waitForTimeout(600);
 line(
-	await hr.locator('[role="tooltip"]').first().isVisible().catch(() => false),
+	await mainHr.locator('[role="tooltip"]').first().isVisible().catch(() => false),
 	'FE-36 desktop rê chuột vẫn mở hộp mô tả',
 );
-console.log('ảnh:', await shot(hr, 'fe-36-tooltip-desktop'));
+console.log('ảnh:', await shot(mainHr, 'fe-36-tooltip-desktop'));
 
 for (const [name, page] of [
-	['HCNS', hr],
+	['HCNS', mainHr],
 	['giám đốc', director],
 	['điện thoại', phone],
 ]) {

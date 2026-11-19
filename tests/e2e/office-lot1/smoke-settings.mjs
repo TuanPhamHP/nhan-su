@@ -8,6 +8,7 @@ import {
 	HCNS_FILE,
 	WHO,
 	clearToasts,
+	dialog,
 	go,
 	launch,
 	line,
@@ -72,13 +73,15 @@ await go(page, '/management/office/settings');
  */
 async function addSite(name, address) {
 	await clearToasts(page);
-	if ((await page.locator('td', { hasText: name }).count()) > 0) return 'đã có từ lần chạy trước';
+	// Văn phòng nay hiện thành THẺ (tiêu đề h3), không còn là hàng của bảng.
+	if ((await page.locator('h3', { hasText: name }).count()) > 0) return 'đã có từ lần chạy trước';
 	await page.getByRole('button', { name: 'Thêm văn phòng' }).first().click();
-	await page.waitForTimeout(500);
-	const form = page.locator('div.rounded-xl', { hasText: 'Thêm văn phòng' }).last();
-	await form.locator('input[type="text"]').first().fill(name);
-	await form.locator('input[type="text"]').nth(1).fill(address);
-	await page.getByRole('button', { name: 'Lưu', exact: true }).first().click();
+	await page.waitForTimeout(800);
+	// Form văn phòng nay nằm trong hộp thoại.
+	const modal = dialog(page, 'Thêm văn phòng');
+	await modal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().fill(name);
+	await modal.locator('input[placeholder*="Lý Thường Kiệt"]').first().fill(address);
+	await modal.getByRole('button', { name: 'Lưu', exact: true }).click();
 	return toastText(page);
 }
 
@@ -150,21 +153,35 @@ line(/Đã lưu \d+ định mức/.test(quotaToast), 'FE-03 lưu định mức G
 console.log('ảnh:', await shot(page, 'fe-03-quota'));
 
 await clearToasts(page);
-await page.getByRole('button', { name: 'Phòng họp' }).first().click();
+// Phần nhập danh mục ở trên đã chuyển sang thẻ "Văn phòng phẩm", nên quay lại thẻ gộp để thấy các
+// thẻ văn phòng.
+await page.getByRole('button', { name: 'Văn phòng và phòng họp', exact: true }).first().click();
 await page.waitForTimeout(1500);
+
+/**
+ * Thêm phòng họp NGAY TRONG thẻ của văn phòng.
+ *
+ * Từ lần gộp hai thẻ, không còn thẻ "Phòng họp" riêng và form không còn ô chọn văn phòng: bấm
+ * "Thêm phòng họp" ở thẻ nào thì phòng thuộc văn phòng đó.
+ */
+const huuNghiCard = page
+	.locator('section')
+	.filter({ has: page.locator('h3', { hasText: 'Văn phòng Hữu Nghị' }) })
+	.first();
 
 async function addRoom(name, capacity, { skipIfExists = true } = {}) {
 	await clearToasts(page);
-	if (skipIfExists && (await page.locator('p', { hasText: name }).count()) > 0) {
+	if (skipIfExists && (await huuNghiCard.locator('p', { hasText: name }).count()) > 0) {
 		return 'đã có từ lần chạy trước';
 	}
-	await page.getByRole('button', { name: 'Thêm phòng họp' }).first().click();
-	await page.waitForTimeout(600);
-	const form = page.locator('div.rounded-xl', { hasText: 'Thêm phòng họp' }).last();
-	await selectAt(form, page, 0, 'Văn phòng Hữu Nghị');
-	await form.locator('input[type="text"]').first().fill(name);
-	await form.locator('input[role="spinbutton"]').first().fill(String(capacity));
-	await page.getByRole('button', { name: 'Lưu', exact: true }).first().click();
+	const addButton = huuNghiCard.getByRole('button', { name: 'Thêm phòng họp' });
+	if (await addButton.count()) {
+		await addButton.click();
+		await page.waitForTimeout(800);
+	}
+	await huuNghiCard.locator('input[placeholder*="Phòng họp tầng 3"]').first().fill(name);
+	await huuNghiCard.locator('input[role="spinbutton"]').first().fill(String(capacity));
+	await huuNghiCard.getByRole('button', { name: /^Lưu/ }).first().click();
 	return toastText(page);
 }
 
@@ -178,8 +195,7 @@ console.log('ảnh:', await shot(page, 'fe-03-rooms'));
 await clearToasts(page);
 const dup = await addRoom('Phòng họp tầng 3', 8, { skipIfExists: false });
 await page.waitForTimeout(800);
-const dupForm = page.locator('div.rounded-xl', { hasText: 'Thêm phòng họp' }).last();
-const dupError = await dupForm.locator('p.text-red-500').first().innerText().catch(() => '');
+const dupError = await huuNghiCard.locator('p.text-red-500').first().innerText().catch(() => '');
 line(
 	dupError.trim().length > 0,
 	'FE-03 trùng tên phòng báo lỗi ngay ô tên',
