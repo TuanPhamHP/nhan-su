@@ -153,7 +153,15 @@
 							</div>
 
 							<div v-else class="flex w-full justify-start gap-3">
+								<!-- Lượt hỏng mang icon cảnh báo thay mascot, cùng quy ước với khung chat -->
+								<div
+									v-if="m.error"
+									class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-300 sm:flex"
+								>
+									<Icon name="heroicons:exclamation-triangle" class="h-4 w-4" />
+								</div>
 								<img
+									v-else
 									:src="agentAvatar"
 									alt=""
 									draggable="false"
@@ -164,11 +172,25 @@
 									bề rộng, không thì chúng đẩy cột tràn ra ngoài mép màn hình điện thoại.
 								-->
 								<div class="flex w-full min-w-0 max-w-full flex-col items-start gap-1.5 sm:max-w-[85%]">
+									<!--
+										Lượt hỏng trước khi sinh chữ nào có `text` bằng chính câu lỗi, nên chỉ vẽ
+										bong bóng chữ khi nó KHÁC câu lỗi — phần chữ dở stream được trước lúc đứt.
+										Không thì cùng một câu hiện hai lần, một lần trắng một lần đỏ.
+									-->
 									<div
-										v-if="m.text"
+										v-if="m.text && m.text !== m.error"
 										class="min-w-0 max-w-full break-words rounded-2xl rounded-tl-md border border-gray-200 bg-white px-4 py-3 text-sm leading-relaxed text-gray-800 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
 									>
 										<div class="agent-md" v-html="renderHtml(m.text)" />
+									</div>
+
+									<!-- Câu báo lỗi người dùng đã thấy lúc đó, giữ nguyên chữ để ADMIN tra sự cố -->
+									<div
+										v-if="m.error"
+										data-testid="agent-transcript-error"
+										class="min-w-0 max-w-full break-words rounded-2xl rounded-tl-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-700 shadow-sm dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+									>
+										{{ m.error }}
 									</div>
 
 									<AgentChartBlock v-for="(c, i) in m.charts ?? []" :key="`chart-${i}`" :chart="c" />

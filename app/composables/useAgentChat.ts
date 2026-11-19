@@ -148,8 +148,12 @@ export function useAgentChat() {
 				.map((m) => ({
 					id: `h-${m.id}`,
 					role: m.role as AgentMessageRole,
-					text: m.text,
+					// Lượt hỏng giữa chừng hiện đúng bong bóng đỏ như lúc đang chat: nhánh
+					// `ev.type === 'error'` cũng thay cả phần chữ dở bằng câu lỗi. Giữ lại chữ dở ở
+					// đây thì cùng một lượt trông khác nhau trước và sau khi F5.
+					text: m.error || m.text,
 					messageId: m.id,
+					...(m.error ? { error: true } : {}),
 					// Biểu đồ đã lưu cùng tin nhắn nên mở lại hội thoại vẫn còn hình.
 					...(m.charts?.length ? { charts: m.charts } : {}),
 					// Bảng cũng được lưu cùng tin nhắn — mở lại hội thoại cũ phải còn bảng.
