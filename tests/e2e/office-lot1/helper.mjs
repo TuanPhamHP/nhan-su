@@ -24,6 +24,9 @@ mkdirSync(SHOTS, { recursive: true });
 
 const sandbox = JSON.parse(readFileSync(SANDBOX_FILE, 'utf8'));
 
+/** Cả file sandbox, cho bài cần công ty khác ngoài `sth`, `ogo`, `exp`. */
+export const SANDBOX = sandbox;
+
 export const PASSWORD = sandbox.password;
 export const HCNS_FILE = sandbox.hcnsFile;
 export const STH = sandbox.companies.sth;
