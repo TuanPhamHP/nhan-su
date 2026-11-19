@@ -12,9 +12,8 @@
 	 * biết mình đang ở bước nào. Hộp thoại tách hẳn việc "khai một văn phòng mới" khỏi danh sách
 	 * đang có.
 	 *
-	 * Form "Thêm phòng họp" thì vẫn nằm trong thẻ của văn phòng, không đưa vào hộp thoại: thêm liền
-	 * vài phòng cho cùng một văn phòng là việc người dùng làm nhiều nhất, và mở hộp thoại cho từng
-	 * phòng sẽ phá đúng chỗ đó.
+	 * Phòng họp cũng có hộp thoại riêng là `RoomFormModal`, mở từ thẻ nét đứt trong lưới phòng của
+	 * từng văn phòng. Hộp đó giữ được việc thêm liền vài phòng nhờ nút "Lưu và thêm phòng nữa".
 	 */
 	const props = defineProps<{
 		/** Văn phòng đang sửa; bỏ trống là thêm mới. */
