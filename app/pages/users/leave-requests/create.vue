@@ -564,11 +564,7 @@
 									class="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
 									@mousedown.prevent="selectEmployee(emp)"
 								>
-									<div
-										class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-brand-700 dark:text-brand-300"
-									>
-										{{ emp.fullName.charAt(0) }}
-									</div>
+									<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 									<div class="min-w-0">
 										<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ emp.fullName }}</p>
 										<p class="text-xs text-gray-400 dark:text-gray-500">

@@ -159,6 +159,9 @@
 	const showFormModal = ref(false);
 	const showImportModal = ref(false);
 
+	/** Khối Tổng quan, để gọi `reload()` của nó sau khi lưu hoặc nhập tài sản. */
+	const overviewPanel = ref<InstanceType<typeof AssetOverviewPanel> | null>(null);
+
 	function currentQuery() {
 		return {
 			search: search.value || undefined,
@@ -208,12 +211,20 @@
 		nextTick(() => document.getElementById('asset-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 	}
 
-	onMounted(async () => {
+	/**
+	 * Danh mục loại cho ô lọc. Lần nhập file có thể tự tạo loại mới, nên gọi lại sau khi nhập;
+	 * lỗi thì giữ danh sách cũ, giống lúc mở trang.
+	 */
+	async function loadCategories() {
 		try {
 			categories.value = await service.findCategories();
 		} catch {
 			// không chặn bảng chính: thiếu danh mục thì ô lọc loại rỗng thôi
 		}
+	}
+
+	onMounted(async () => {
+		await loadCategories();
 		directoryStore.load().catch(() => {
 			/* ô lọc phòng ban rỗng, bảng vẫn chạy */
 		});
@@ -440,16 +451,21 @@
 		() => confirmPrintByFilter.value,
 	);
 
+	/**
+	 * Lưu hoặc nhập xong thì khối Tổng quan phải đổi theo, không chờ người dùng F5: họ vừa nhập
+	 * một file trăm dòng mà vẫn đọc được "0 thiết bị" thì tưởng là nhập trượt.
+	 */
 	async function onSaved() {
 		showFormModal.value = false;
 		page.value = 1;
-		await loadTable();
+		await Promise.all([loadTable(), overviewPanel.value?.reload()]);
 	}
 
 	async function onImported() {
 		showImportModal.value = false;
 		page.value = 1;
-		await loadTable();
+		// Nhập file tự tạo loại mới, nên ô lọc loại cũng phải có loại đó ngay.
+		await Promise.all([loadTable(), overviewPanel.value?.reload(), loadCategories()]);
 	}
 </script>
 
@@ -493,7 +509,7 @@
 
 		<CommonAppModuleNotice module="ASSET" />
 
-		<AssetOverviewPanel @pick-status="onPickStatus" />
+		<AssetOverviewPanel ref="overviewPanel" @pick-status="onPickStatus" />
 
 		<!-- Bộ lọc -->
 		<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -522,8 +538,14 @@
 				</div>
 				<UiSelect v-model="filterKind" :options="kindOptions" />
 				<UiSelect v-model="filterStatus" :options="statusOptions" />
-				<UiSelect v-model="filterCategory" :options="categoryOptions" />
-				<UiSelect v-if="!isDepartmentScoped" v-model="filterDept" :options="deptOptions" />
+				<UiSelect v-model="filterCategory" :options="categoryOptions" searchable search-placeholder="Tìm loại tài sản" />
+				<UiSelect
+					v-if="!isDepartmentScoped"
+					v-model="filterDept"
+					:options="deptOptions"
+					searchable
+					search-placeholder="Tìm phòng ban"
+				/>
 			</div>
 
 			<!-- Nhãn của bộ lọc đến từ thẻ Tổng quan, mỗi nhãn bỏ được bằng dấu x. -->

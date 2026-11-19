@@ -1153,13 +1153,7 @@
 										title="Gán ca theo khoảng ngày"
 										@click="openEmpOverrideModal(emp)"
 									>
-										<div
-											class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0"
-										>
-											<span class="text-xs font-bold text-brand-700 dark:text-brand-400">{{
-												emp.fullName.charAt(0)
-											}}</span>
-										</div>
+										<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 										<div class="min-w-0">
 											<p class="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[120px]">
 												{{ emp.fullName }}
@@ -1810,13 +1804,7 @@
 					class="bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-sm"
 				>
 					<div class="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-						<div
-							class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0"
-						>
-							<span class="text-sm font-bold text-brand-700 dark:text-brand-400">{{
-								empOverrideTarget.fullName.charAt(0)
-							}}</span>
-						</div>
+						<CommonAppAvatar :src="empOverrideTarget.avatarUrl" :name="empOverrideTarget.fullName" size="sm" />
 						<div>
 							<p class="text-sm font-semibold text-gray-900 dark:text-white">{{ empOverrideTarget.fullName }}</p>
 							<p class="text-xs text-gray-400 dark:text-gray-500">Gán ca theo khoảng ngày</p>

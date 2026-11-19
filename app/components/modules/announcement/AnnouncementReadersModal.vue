@@ -30,15 +30,6 @@
 			: list.filter(r => !r.isRead);
 	});
 
-	function initials(name: string): string {
-		return name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(-2)
-			.map(w => w.charAt(0).toUpperCase())
-			.join('');
-	}
-
 	function formatReadAt(iso: string | null): string {
 		if (!iso) return '';
 		try {
@@ -125,17 +116,7 @@
 							:key="r.employeeId"
 							class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all"
 						>
-							<div
-								:class="[
-									'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden text-xs font-bold',
-									r?.isRead
-										? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-										: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
-								]"
-							>
-								<img v-if="r?.avatarUrl" :src="r?.avatarUrl" :alt="r?.fullName" class="w-full h-full object-cover" />
-								<span v-else>{{ initials(r.fullName) }}</span>
-							</div>
+							<CommonAppAvatar :src="r?.avatarUrl" :name="r?.fullName" size="md" />
 							<div class="flex-1 min-w-0">
 								<p class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
 									{{ r?.fullName }}

@@ -1286,6 +1286,17 @@ Trả `mau-nhap-tai-san.xlsx` gồm sheet "Tài sản", "Dịch vụ" và "Hư�
   không còn làm việc) **thì dòng vẫn được nhập**: thiết bị vào kho ở trạng thái Sẵn sàng, không có cấp phát; ghi chú tài
   sản thêm "Người sử dụng ghi trong file nhập: …"; dòng nằm ở `warnings` kèm `assetId`, `assetCode`. Cột "Người phụ
   trách" của sheet Dịch vụ tương tự: người nhập file thành người phụ trách.
+- **Từ 18/11/2026, sheet Tài sản nhận tên phòng ban ở cột "Người sử dụng"** ("BP Thu chi hộ", "Bộ phận Kho", tên trần):
+  không khớp nhân viên nào mà khớp đúng một phòng ban đang hoạt động thì thiết bị được cấp phát cho cả phòng, trưởng
+  phòng là `responsible`, giống cấp phát cho phòng ban trên web. Phòng chưa có trưởng phòng đang làm việc thì dòng vào
+  `warnings` như trên, câu bắt đầu bằng "Phòng ban … chưa có trưởng phòng đang làm việc". Sheet Dịch vụ không đổi.
+- **Từ 18/11/2026, ô "Thời gian bảo hành" ghi chữ không có số tháng** ("Bảo hành theo từng thiết bị") không còn là lỗi
+  dòng: số tháng để trống, câu được chép vào ghi chú tài sản "Bảo hành: …".
+- **Từ 18/11/2026, tên thiết bị là "Loại tài sản + Tên sản phẩm theo hãng"** ("Ghế làm việc", "Bộ máy tính bàn Dell
+  OptiPlex 7010"). Cột "Mô tả chi tiết tài sản" được chép vào đầu ghi chú, không còn làm tên. File cũ có cột "Tên tài
+  sản" thì cột đó vẫn là tên.
+- **Loại tự tạo khi nhập** (`autoCreated.categories`) giữ đúng tên trong file và lấy thời gian khấu hao của nhóm khi mọi
+  loại cùng nhóm có chung một con số; nhóm mới thì không khấu hao.
 - **Hiện `warnings` riêng với `errors`**: dòng cảnh báo đã có trong hệ thống, người dùng cấp phát trên trang tài sản
   (link `/management/assets/{assetId}`), **không** sửa file rồi nhập lại dòng đó, vì file không ghi Mã QLTS thì sẽ tạo
   trùng tài sản. Dòng lỗi thì vẫn sửa file rồi nhập lại như trước.
@@ -1586,6 +1597,9 @@ Danh sách màn hình: `docs/modules/15-assets.md` mục 11.
 | Nhập Excel có chú thích ô do openpyxl ghi | 201 | Chú thích bị bỏ qua, dữ liệu nhập bình thường |
 | Nhập Excel, "Người sử dụng" không khớp nhân viên của công ty | 201 | Tài sản vẫn được tạo ở trạng thái Sẵn sàng, không cấp phát; dòng vào `warnings` kèm `assetId`, `assetCode` (từ 16/11/2026; trước đó vào `errors`) |
 | Nhập Excel, "Người sử dụng" không khớp và dòng còn lỗi khác | 201 | Dòng vào `errors`, `messages` có cả câu về người |
+| Nhập Excel, "Người sử dụng" là tên phòng ban có trưởng phòng ("BP Thu chi hộ") | 201 | Tài sản Đang dùng, `holders[0]` có `department` và `responsible` là trưởng phòng, không có `warnings` |
+| Nhập Excel, "Người sử dụng" là phòng chưa có trưởng phòng đang làm việc | 201 | Tài sản vào kho, dòng vào `warnings` với câu "Phòng ban … chưa có trưởng phòng đang làm việc" |
+| Nhập Excel, "Thời gian bảo hành" ghi chữ không có số tháng | 201 | Dòng được nhập, `warrantyMonths` null, ghi chú có "Bảo hành: …" |
 | Mở presigned URL sau khi hết hạn | 403 từ S3 | Gọi lại `.../documents/:id/url` |
 
 ---

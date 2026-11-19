@@ -50,15 +50,6 @@
 			: null,
 	);
 
-	function initials(name: string): string {
-		return name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(-2) 
-			.map(w => w.charAt(0).toUpperCase())
-			.join('');
-	}
-
 	onMounted(load);
 </script>
 
@@ -117,15 +108,11 @@
 			<div class="flex items-start justify-between gap-4">
 				<div class="flex items-center gap-3.5 min-w-0">
 					<!-- Sender Avatar -->
-					<div class="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-sm flex-shrink-0 select-none overflow-hidden">
-						<img
-							v-if="announcement.createdBy.avatarUrl"
-							:src="announcement.createdBy.avatarUrl"
-							:alt="announcement.createdBy.fullName"
-							class="w-full h-full object-cover"
-						/>
-						<span v-else>{{ initials(announcement.createdBy.fullName) }}</span>
-					</div>
+					<CommonAppAvatar
+						:src="announcement.createdBy.avatarUrl"
+						:name="announcement.createdBy.fullName"
+						size="lg"
+					/>
 
 					<div class="min-w-0">
 						<!-- Name & Role -->

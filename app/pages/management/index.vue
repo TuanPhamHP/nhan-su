@@ -110,15 +110,6 @@
 		return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: vi });
 	}
 
-	function initials(name: string) {
-		return name
-			.split(' ')
-			.slice(-2)
-			.map(w => w[0])
-			.join('')
-			.toUpperCase();
-	}
-
 	function navigateActivity(item: ActivityItem) {
 		router.push(`${ACTIVITY_URL[item.type]}?open_id=${item.targetId}`);
 	}
@@ -533,12 +524,7 @@
 							:key="item.targetId"
 							class="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
 						>
-							<!-- Avatar initials -->
-							<div
-								class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 flex items-center justify-center text-xs font-bold flex-shrink-0"
-							>
-								{{ initials(item.employeeName) }}
-							</div>
+							<CommonAppAvatar :name="item.employeeName" size="sm" />
 							<!-- Info -->
 							<div class="flex-1 min-w-0">
 								<p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ item.employeeName }}</p>

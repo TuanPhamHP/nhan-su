@@ -1,3 +1,4 @@
+import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import type { SummaryRow } from '~/types/office.types';
 
 /**
@@ -190,6 +191,108 @@ export function bookingBar(
 		clippedStart: start < dayStart,
 		clippedEnd: end > dayEnd,
 	};
+}
+
+/**
+ * Dải giờ mà lịch phòng cần vẽ cho một tập lượt họp: mặc định là giờ làm việc, nới ra khi có lượt
+ * sớm hơn hoặc muộn hơn.
+ *
+ * Để cứng dải mặc định thì một cuộc họp lúc 21h biến mất khỏi lịch, người xem tưởng phòng trống
+ * rồi đặt chồng lên và bị máy chủ từ chối mà không hiểu vì sao. Lượt đã huỷ không giữ phòng nên
+ * không được kéo dải giờ ra.
+ */
+export function bookingHourRange(
+	bookings: Iterable<{ status: string; startAt: string; endAt: string }>,
+	defaults: { startHour: number; endHour: number },
+): { start: number; end: number } {
+	let start = defaults.startHour;
+	let end = defaults.endHour;
+	for (const booking of bookings) {
+		if (booking.status === 'CANCELLED') continue;
+		const from = Math.floor(vnMinutesOfDay(booking.startAt) / 60);
+		const rawEnd = vnMinutesOfDay(booking.endAt);
+		// Lượt kết thúc đúng nửa đêm hoặc vắt sang hôm sau thì coi như chạy tới hết ngày.
+		const to = rawEnd <= from * 60 ? 24 : Math.ceil(rawEnd / 60);
+		start = Math.min(start, from);
+		end = Math.max(end, to);
+	}
+	return { start: Math.max(0, start), end: Math.min(24, Math.max(end, start + 1)) };
+}
+
+/**
+ * Vị trí của vạch "bây giờ" trên dải giờ, tính bằng phần trăm từ mép trái.
+ *
+ * Trả `null` khi ngày đang xem không phải hôm nay hoặc giờ hiện tại nằm ngoài dải: vẽ vạch dính
+ * ở mép thì người xem tưởng bây giờ là 7 giờ sáng hay 8 giờ tối.
+ */
+export function nowLinePercent(
+	dateYmd: string,
+	range: { start: number; end: number },
+	now: Date = new Date(),
+): number | null {
+	if (dateYmd !== vnDateYmd(now)) return null;
+	const span = (range.end - range.start) * 60;
+	if (span <= 0) return null;
+	const passed = vnMinutesOfDay(now) - range.start * 60;
+	if (passed < 0 || passed > span) return null;
+	return (passed / span) * 100;
+}
+
+/** Cộng hoặc trừ số ngày trên một ngày `YYYY-MM-DD`. */
+export function addDaysYmd(dateYmd: string, days: number): string {
+	return format(addDays(parseISO(dateYmd), days), 'yyyy-MM-dd');
+}
+
+/**
+ * Bảy ngày của tuần chứa một ngày, từ thứ Hai tới Chủ nhật.
+ *
+ * Tuần bắt đầu từ thứ Hai như lịch làm việc ở Việt Nam, không phải Chủ nhật như mặc định của
+ * date-fns: bắt đầu từ Chủ nhật thì thứ Hai của tuần đang xem rơi sang cột thứ hai và cả tuần
+ * làm việc bị cắt đôi khi bấm sang tuần sau.
+ */
+export function weekDaysYmd(dateYmd: string): string[] {
+	const monday = startOfWeek(parseISO(dateYmd), { weekStartsOn: 1 });
+	return Array.from({ length: 7 }, (_, i) => format(addDays(monday, i), 'yyyy-MM-dd'));
+}
+
+/**
+ * Chia lượt họp của một khoảng ngày vào từng ngày, theo ngày bắt đầu giờ Việt Nam.
+ *
+ * Máy chủ trả lượt của cả khoảng trong một danh sách, gồm cả lượt bắt đầu từ trước ngày đầu mà
+ * vắt sang khoảng; lượt đó không thuộc ngày nào đang vẽ nên bỏ. Chia theo giờ UTC thì cuộc họp
+ * lúc 6 giờ sáng rơi về ngày hôm trước, nên phải đổi sang ngày Việt Nam trước khi chia. Lượt đã
+ * huỷ không giữ phòng nên cũng bỏ, còn thứ tự giữ nguyên theo giờ bắt đầu.
+ */
+export function splitBookingsByDay<T extends { status: string; startAt: string }>(
+	bookings: T[],
+	days: string[],
+): T[][] {
+	const index = new Map(days.map((day, i) => [day, i]));
+	const result: T[][] = days.map(() => []);
+	const sorted = [...bookings].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+	for (const booking of sorted) {
+		if (booking.status === 'CANCELLED') continue;
+		const i = index.get(vnDateYmd(booking.startAt));
+		if (i !== undefined) result[i]?.push(booking);
+	}
+	return result;
+}
+
+/**
+ * Nhãn của một tuần trên thanh điều hướng lịch.
+ *
+ * Cùng tháng thì gọn "16 – 22/11/2026"; vắt qua tháng hay qua năm thì ghi đủ hai đầu, nếu không
+ * "30 – 06/12/2026" đọc như ngày 30 tháng 12.
+ */
+export function weekRangeLabel(days: string[]): string {
+	const first = days[0];
+	const last = days[days.length - 1];
+	if (!first || !last) return '';
+	const a = parseISO(first);
+	const b = parseISO(last);
+	if (a.getFullYear() !== b.getFullYear()) return `${format(a, 'dd/MM/yyyy')} – ${format(b, 'dd/MM/yyyy')}`;
+	if (a.getMonth() !== b.getMonth()) return `${format(a, 'dd/MM')} – ${format(b, 'dd/MM/yyyy')}`;
+	return `${format(a, 'dd')} – ${format(b, 'dd/MM/yyyy')}`;
 }
 
 /**

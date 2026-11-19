@@ -340,15 +340,12 @@
 							<!-- Tác nhân -->
 							<td class="px-4 py-3 max-w-[180px]">
 								<div class="flex items-center gap-2 min-w-0">
+									<CommonAppAvatar v-if="log.actor.type === 'USER'" :name="log.actor.name" size="xs" />
 									<div
-										:class="[
-											'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-semibold',
-											log.actor.type === 'USER'
-												? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-												: 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
-										]"
+										v-else
+										class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-semibold bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
 									>
-										{{ log.actor.type === 'USER' ? (log.actor.name?.charAt(0)?.toUpperCase() ?? '?') : 'S' }}
+										S
 									</div>
 									<div class="min-w-0">
 										<p class="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[130px]">

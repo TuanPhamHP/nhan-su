@@ -105,15 +105,6 @@
 		showModal.value = true;
 	}
 
-	function initials(name: string): string {
-		return name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(-2)
-			.map(w => w.charAt(0).toUpperCase())
-			.join('');
-	}
-
 	// ── Realtime ──────────────────────────────────────────────────────────────
 	// Server broadcast payload.summary là source-of-truth cho counts. Actor tự bấm
 	// đã optimistic update rồi → khi event của chính mình về, replace bằng summary
@@ -297,19 +288,7 @@
 								class="flex items-center gap-3 px-3 py-2.5"
 							>
 								<div class="relative flex-shrink-0">
-									<div
-										class="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
-									>
-										<img
-											v-if="emp.avatarUrl"
-											:src="emp.avatarUrl"
-											:alt="emp.fullName"
-											class="w-full h-full object-cover"
-										/>
-										<span v-else class="text-xs font-semibold text-gray-600 dark:text-gray-300">
-											{{ initials(emp.fullName) }}
-										</span>
-									</div>
+									<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="md" />
 									<img
 										:src="EMOJI_MAP[emp.emoji as EmojiKey].src"
 										:alt="EMOJI_MAP[emp.emoji as EmojiKey].label"

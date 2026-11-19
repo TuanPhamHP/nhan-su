@@ -351,9 +351,7 @@
 			importResult.value = await service.importSupplyItems(file);
 			importFile.value = null;
 			const result = importResult.value;
-			toast.success(
-				`Đã nhập xong: thêm ${result.createdItems} mặt hàng và ${result.createdGroups.length} nhóm mới.`,
-			);
+			toast.success(`Đã nhập xong: thêm ${result.createdItems} mặt hàng và ${result.createdGroups.length} nhóm mới.`);
 			await loadSupplies();
 		} catch (e) {
 			toast.error(officeErrorMessage(e, 'Chưa nhập được danh mục từ file này. Bạn kiểm tra lại file.'));
@@ -556,8 +554,7 @@
 	const ICON_PENCIL =
 		'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z';
 	const ICON_PLUS = 'M12 4v16m8-8H4';
-	const ICON_BAN =
-		'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636';
+	const ICON_BAN = 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636';
 	const ICON_CHECK = 'M4.5 12.75l6 6 9-13.5';
 
 	function siteActions(site: OfficeSite): DropdownMenuItem[] {
@@ -683,8 +680,7 @@
 		<template v-if="activeTab === 'places'">
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<p class="max-w-2xl text-sm text-gray-600 dark:text-gray-400">
-					Văn phòng là toà nhà hay địa điểm làm việc của công ty, và mỗi phòng họp nằm trong một văn phòng. Bạn
-					thêm phòng ngay trong khối của văn phòng đó.
+					Văn phòng là toà nhà hay địa điểm làm việc của công ty.
 				</p>
 				<CommonAppButton v-if="canEdit" variant="primary" @click="openSiteCreate">Thêm văn phòng</CommonAppButton>
 			</div>
@@ -716,8 +712,8 @@
 			>
 				<p class="font-medium text-gray-700 dark:text-gray-200">Công ty chưa có văn phòng nào.</p>
 				<p class="mx-auto mt-2 max-w-xl leading-relaxed">
-					Văn phòng là toà nhà hay địa điểm làm việc của công ty, ví dụ Văn phòng Hà Nội. Phòng họp nằm trong một
-					văn phòng, nên bạn tạo văn phòng trước rồi thêm từng phòng họp vào đó.
+					Văn phòng là toà nhà hay địa điểm làm việc của công ty, ví dụ Văn phòng Hà Nội. Phòng họp nằm trong một văn
+					phòng, nên bạn tạo văn phòng trước rồi thêm từng phòng họp vào đó.
 				</p>
 				<CommonAppButton v-if="canEdit" class="mt-4" variant="primary" @click="openSiteCreate">
 					Thêm văn phòng đầu tiên
@@ -744,20 +740,34 @@
 					]"
 				>
 					<div class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-700">
-						<div class="min-w-0">
-							<div class="flex flex-wrap items-center gap-2">
-								<h3 class="font-semibold text-gray-900 dark:text-white">{{ site.name }}</h3>
-								<span
-									v-if="!site.isActive"
-									class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-								>
-									Ngừng dùng
-								</span>
+						<div class="flex items-center gap-3">
+							<div
+								class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-md bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400"
+							>
+								<Icon name="heroicons:building-office-2" class="h-6 w-6" aria-hidden="true" />
 							</div>
-							<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-								{{ site.address || 'Chưa ghi địa chỉ' }}
-							</p>
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ siteSummary(site.id) }}</p>
+							<div class="min-w-0">
+								<div class="flex flex-wrap items-center gap-2">
+									<h3 class="font-semibold text-gray-900 dark:text-white">{{ site.name }}</h3>
+									<p
+										class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 px-2 py-0.5 dark:bg-gray-700 rounded-lg"
+									>
+										{{ siteSummary(site.id) }}
+									</p>
+									<span
+										v-if="!site.isActive"
+										class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+									>
+										Ngừng dùng
+									</span>
+								</div>
+								<div class="flex items-center gap-1">
+									<Icon name="heroicons:map-pin" class="h-4 w-4 text-gray-500" aria-hidden="true" />
+									<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+										{{ site.address || 'Chưa ghi địa chỉ' }}
+									</p>
+								</div>
+							</div>
 						</div>
 						<!-- Một nút ba chấm thay cho hai nút: tên văn phòng là thứ cần nổi, không phải các nút. -->
 						<UiDropdownMenu v-if="canEdit" :items="siteActions(site)" />
@@ -765,27 +775,37 @@
 
 					<!-- Phòng họp của văn phòng này, mỗi phòng một thẻ trong lưới. -->
 					<div class="p-4">
-						<p
-							v-if="!roomsOf(site.id).length && !canEdit"
-							class="py-2 text-sm text-gray-500 dark:text-gray-400"
-						>
+						<p v-if="!roomsOf(site.id).length && !canEdit" class="py-2 text-sm text-gray-500 dark:text-gray-400">
 							Văn phòng này chưa có phòng họp nào.
 						</p>
 
-						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
 							<article
 								v-for="room in visibleRoomsOf(site.id)"
 								:key="room.id"
 								:class="[
-									'flex flex-col gap-2 rounded-xl border p-3 transition-colors',
+									'flex flex-col gap-2 rounded-xl border p-3 transition-colors hover:border-brand-400 hover:shadow-md cursor-pointer',
 									room.isActive
 										? 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
 										: 'border-dashed border-gray-300 bg-gray-50 opacity-60 dark:border-gray-600 dark:bg-gray-800/50',
 								]"
+								@click="openRoomEdit(room)"
 							>
-								<div class="flex items-start justify-between gap-2">
+								<div class="flex items-start justify-between gap-2 border-b border-gray-200 pb-1 dark:border-gray-700">
 									<div class="min-w-0">
-										<p class="truncate font-medium text-gray-900 dark:text-white">{{ room.name }}</p>
+										<div class="flex items-center gap-2">
+											<div
+												class="mx-auto flex h-5 w-5 items-center justify-center rounded-md bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400"
+											>
+												<Icon
+													name="fluent:conference-room-28-regular"
+													class="h-4 w-4 flex-shrink-0 text-gray-600"
+													aria-hidden="true"
+												/>
+											</div>
+
+											<p class="truncate font-medium text-gray-900 dark:text-white">{{ room.name }}</p>
+										</div>
 										<span
 											v-if="!room.isActive"
 											class="mt-1 inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
@@ -793,16 +813,25 @@
 											Ngừng dùng
 										</span>
 									</div>
-									<UiDropdownMenu v-if="canEdit" :items="roomActions(room)" />
+									<div @click.stop>
+										<UiDropdownMenu v-if="canEdit" :items="roomActions(room)" />
+									</div>
 								</div>
 
 								<!-- Sức chứa đi với icon người, nên đọc được mà không cần nhãn "Sức chứa". -->
 								<p class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
-									<Icon name="heroicons:user-group" class="h-4 w-4 flex-shrink-0 text-gray-400" aria-hidden="true" />
-									{{ room.capacity != null ? `${room.capacity} người` : 'Chưa ghi sức chứa' }}
+									<Icon name="heroicons:user-group" class="h-5 w-5 flex-shrink-0 text-gray-400" aria-hidden="true" />-
+									Tối đa {{ room.capacity != null ? `${room.capacity} người` : 'Chưa ghi sức chứa' }}
 								</p>
 
-								<div v-if="room.equipment.length" class="flex flex-wrap gap-1">
+								<div v-if="room.equipment.length" class="flex flex-wrap gap-1.5">
+									<span class="text-xs font-medium text-gray-500 dark:text-gray-400 block">
+										<Icon
+											name="energy-icons:control-room-20"
+											class="h-5 w-5 flex-shrink-0 text-gray-400"
+											aria-hidden="true"
+										/> </span
+									>-
 									<span
 										v-for="item in room.equipment"
 										:key="item"
@@ -826,7 +855,7 @@
 								class="flex min-h-[7rem] flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 p-3 text-sm font-medium text-gray-500 transition-colors hover:border-brand-400 hover:text-brand-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-brand-500 dark:hover:text-brand-400"
 								@click="openRoomCreate(site)"
 							>
-								<Icon name="heroicons:plus" class="h-5 w-5" aria-hidden="true" />
+								<Icon name="fluent:conference-room-28-regular" class="h-5 w-5" aria-hidden="true" />
 								Thêm phòng họp
 							</button>
 						</div>
@@ -845,9 +874,9 @@
 			<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
 				<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Nhập danh mục từ Excel</h3>
 				<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-					Bạn nhập được cả file mẫu và chính file đăng ký văn phòng phẩm hằng tháng đang dùng. Dòng số La Mã là
-					tên nhóm, nhóm ghi "(HCNS đặt)" thành nhóm chỉ HCNS đặt, còn nhóm ngoài danh sách thì bỏ qua. Mặt hàng
-					trùng tên không bị tạo lại, chỉ điền đơn giá khi danh mục đang để trống.
+					Bạn nhập được cả file mẫu và chính file đăng ký văn phòng phẩm hằng tháng đang dùng. Dòng số La Mã là tên
+					nhóm, nhóm ghi "(HCNS đặt)" thành nhóm chỉ HCNS đặt, còn nhóm ngoài danh sách thì bỏ qua. Mặt hàng trùng tên
+					không bị tạo lại, chỉ điền đơn giá khi danh mục đang để trống.
 				</p>
 				<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
 					<UiFileDropzone v-model="importFile" accept=".xlsx" :max-size-mb="10" :disabled="!canEdit || importing" />
@@ -855,7 +884,13 @@
 						<CommonAppButton variant="outline" :loading="downloadingTemplate" @click="downloadTemplate">
 							Tải file mẫu
 						</CommonAppButton>
-						<CommonAppButton v-if="canEdit" variant="primary" :disabled="!importFile" :loading="importing" @click="runImport">
+						<CommonAppButton
+							v-if="canEdit"
+							variant="primary"
+							:disabled="!importFile"
+							:loading="importing"
+							@click="runImport"
+						>
 							Nhập danh mục
 						</CommonAppButton>
 					</div>
@@ -866,9 +901,8 @@
 					class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-900/20"
 				>
 					<p class="font-medium text-emerald-800 dark:text-emerald-300">
-						Thêm {{ importResult.createdItems }} mặt hàng, {{ importResult.createdGroups.length }} nhóm mới; điền
-						đơn giá cho {{ importResult.updatedPrices }} mặt hàng; {{ importResult.existingItems }} mặt hàng đã
-						có từ trước.
+						Thêm {{ importResult.createdItems }} mặt hàng, {{ importResult.createdGroups.length }} nhóm mới; điền đơn
+						giá cho {{ importResult.updatedPrices }} mặt hàng; {{ importResult.existingItems }} mặt hàng đã có từ trước.
 						<template v-if="importSkippedRows > 0">
 							{{ importSkippedRows }} dòng không được nhập, bạn xem danh sách dưới.
 						</template>
@@ -903,7 +937,9 @@
 						Nhóm văn phòng phẩm
 						<span class="ml-1 text-xs font-normal text-gray-400">{{ groups.length }} nhóm</span>
 					</h3>
-					<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openGroupCreate">Thêm nhóm</CommonAppButton>
+					<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openGroupCreate"
+						>Thêm nhóm</CommonAppButton
+					>
 				</div>
 
 				<div
@@ -918,14 +954,27 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Thứ tự hiện</label>
-							<UiNumberInput v-model="groupForm.sortOrder" :min="0" :input-class="inputCls" placeholder="Bỏ trống thì xếp cuối" />
+							<UiNumberInput
+								v-model="groupForm.sortOrder"
+								:min="0"
+								:input-class="inputCls"
+								placeholder="Bỏ trống thì xếp cuối"
+							/>
 						</div>
 						<label class="flex items-center gap-2">
-							<input v-model="groupForm.hrOnly" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+							<input
+								v-model="groupForm.hrOnly"
+								type="checkbox"
+								class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+							/>
 							<span class="text-sm text-gray-700 dark:text-gray-300">Chỉ HCNS đặt</span>
 						</label>
 						<label v-if="editingGroup" class="flex items-center gap-2">
-							<input v-model="groupForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+							<input
+								v-model="groupForm.isActive"
+								type="checkbox"
+								class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+							/>
 							<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
 						</label>
 					</div>
@@ -934,7 +983,12 @@
 					</p>
 					<div class="mt-4 flex justify-end gap-3">
 						<CommonAppButton variant="secondary" @click="showGroupForm = false">Đóng</CommonAppButton>
-						<CommonAppButton variant="primary" :disabled="!groupForm.name.trim()" :loading="savingGroup" @click="saveGroup">
+						<CommonAppButton
+							variant="primary"
+							:disabled="!groupForm.name.trim()"
+							:loading="savingGroup"
+							@click="saveGroup"
+						>
 							Lưu
 						</CommonAppButton>
 					</div>
@@ -966,13 +1020,18 @@
 									</span>
 								</td>
 								<td class="px-4 py-3 text-right">
-									<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openGroupEdit(group)">Sửa</CommonAppButton>
+									<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openGroupEdit(group)"
+										>Sửa</CommonAppButton
+									>
 								</td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
-				<p v-else class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+				<p
+					v-else
+					class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+				>
 					Chưa có nhóm nào. Bạn nhập file đăng ký ở trên, hoặc bấm Thêm nhóm.
 				</p>
 
@@ -1015,7 +1074,13 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Tên mặt hàng <span class="text-red-500">*</span></label>
-							<input v-model="itemForm.name" type="text" maxlength="255" :class="inputCls" placeholder="VD: Giấy in A4 IK Plus" />
+							<input
+								v-model="itemForm.name"
+								type="text"
+								maxlength="255"
+								:class="inputCls"
+								placeholder="VD: Giấy in A4 IK Plus"
+							/>
 							<p v-if="itemNameError" class="text-xs text-red-500">{{ itemNameError }}</p>
 						</div>
 						<div class="space-y-1">
@@ -1024,14 +1089,28 @@
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Đơn giá gồm VAT</label>
-							<UiNumberInput v-model="itemForm.unitPrice" :min="0" :input-class="inputCls" placeholder="Bỏ trống nếu chưa có giá" />
+							<UiNumberInput
+								v-model="itemForm.unitPrice"
+								:min="0"
+								:input-class="inputCls"
+								placeholder="Bỏ trống nếu chưa có giá"
+							/>
 						</div>
 						<div class="space-y-1">
 							<label :class="labelCls">Thứ tự hiện</label>
-							<UiNumberInput v-model="itemForm.sortOrder" :min="0" :input-class="inputCls" placeholder="Bỏ trống thì xếp cuối" />
+							<UiNumberInput
+								v-model="itemForm.sortOrder"
+								:min="0"
+								:input-class="inputCls"
+								placeholder="Bỏ trống thì xếp cuối"
+							/>
 						</div>
 						<label v-if="editingItem" class="flex items-center gap-2">
-							<input v-model="itemForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+							<input
+								v-model="itemForm.isActive"
+								type="checkbox"
+								class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+							/>
 							<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
 						</label>
 					</div>
@@ -1054,7 +1133,9 @@
 						:key="group.groupName"
 						class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 					>
-						<h4 class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100">
+						<h4
+							class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100"
+						>
 							{{ group.groupName }}
 							<span class="ml-1 text-xs font-normal text-gray-400">{{ group.items.length }} mặt hàng</span>
 						</h4>
@@ -1075,14 +1156,19 @@
 										</span>
 									</td>
 									<td class="px-4 py-2.5 text-right">
-										<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openItemEdit(item)">Sửa</CommonAppButton>
+										<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openItemEdit(item)"
+											>Sửa</CommonAppButton
+										>
 									</td>
 								</tr>
 							</tbody>
 						</table>
 					</section>
 				</div>
-				<p v-else class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+				<p
+					v-else
+					class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+				>
 					Chưa có mặt hàng nào trong danh mục.
 				</p>
 			</template>
@@ -1092,8 +1178,8 @@
 		<template v-else-if="activeTab === 'quotas'">
 			<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
 				<p class="text-sm text-gray-600 dark:text-gray-400">
-					Định mức là số tối đa mỗi tháng của một phòng cho một mặt hàng. Nhân viên xin quá số này vẫn gửi được
-					nhưng phải ghi lý do, và HCNS thấy ngay dòng vượt định mức khi chốt phiếu.
+					Định mức là số tối đa mỗi tháng của một phòng cho một mặt hàng. Nhân viên xin quá số này vẫn gửi được nhưng
+					phải ghi lý do, và HCNS thấy ngay dòng vượt định mức khi chốt phiếu.
 				</p>
 				<div class="mt-3 max-w-md">
 					<label :class="labelCls">Phòng ban</label>
@@ -1107,7 +1193,10 @@
 				</div>
 			</div>
 
-			<p v-if="!quotaDepartmentId" class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+			<p
+				v-if="!quotaDepartmentId"
+				class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+			>
 				Bạn chọn một phòng ban để xem và sửa định mức của phòng đó.
 			</p>
 
@@ -1115,7 +1204,10 @@
 				<div v-for="i in 3" :key="i" class="h-12 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
 			</div>
 
-			<div v-else class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+			<div
+				v-else
+				class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+			>
 				<div class="space-y-3">
 					<!--
 						Trên điện thoại ba phần xếp dọc, và ô số có nhãn riêng: một ô số đứng dưới tên mặt hàng
@@ -1127,7 +1219,7 @@
 						class="grid grid-cols-1 gap-2 rounded-lg border border-gray-100 p-3 sm:grid-cols-[1fr_160px_auto] sm:items-end sm:border-0 sm:p-0 dark:border-gray-800"
 					>
 						<div class="space-y-1">
-							<label class="block text-xs font-medium text-gray-600 sm:hidden dark:text-gray-400">Mặt hàng</label>
+							<label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Mặt hàng</label>
 							<UiSelectInput
 								:model-value="row.itemId ?? null"
 								:options="quotaItemOptions"
@@ -1144,14 +1236,18 @@
 							label="Định mức mỗi tháng"
 							placeholder="VD: 10"
 						/>
-						<CommonAppButton v-if="canEdit" size="sm" variant="ghost" @click="removeQuotaRow(index)">Bỏ dòng</CommonAppButton>
+						<CommonAppButton v-if="canEdit" size="sm" variant="ghost" @click="removeQuotaRow(index)"
+							>Bỏ dòng</CommonAppButton
+						>
 					</div>
 					<p v-if="!quotaRows.length" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
 						Phòng này chưa có định mức nào.
 					</p>
 				</div>
 				<div v-if="canEdit" class="mt-4 flex flex-wrap justify-between gap-3">
-					<CommonAppButton variant="outline" :disabled="!quotaItemOptions.length" @click="addQuotaRow">Thêm dòng</CommonAppButton>
+					<CommonAppButton variant="outline" :disabled="!quotaItemOptions.length" @click="addQuotaRow"
+						>Thêm dòng</CommonAppButton
+					>
 					<CommonAppButton variant="primary" :loading="savingQuotas" @click="saveQuotas">Lưu định mức</CommonAppButton>
 				</div>
 				<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
