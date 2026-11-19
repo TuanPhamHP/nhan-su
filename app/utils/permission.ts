@@ -38,6 +38,24 @@ export const REQUEST_PERMISSIONS = {
 } as const;
 
 /**
+ * Quyền của module Hành chính văn phòng, lô 1 (`docs/backend/bridges/office.md` mục 1).
+ *
+ * `/office/supplies` và `/office/rooms` KHÔNG có trong bảng này vì chúng không cần quyền nào:
+ * mọi nhân viên của công ty có module đều đăng ký văn phòng phẩm cho phòng mình và đặt phòng họp.
+ * Bốn quyền dưới đây chỉ gác khu quản trị.
+ */
+export const OFFICE_PERMISSIONS = {
+	/** Cài đặt: văn phòng, danh mục văn phòng phẩm, định mức, phòng họp. */
+	manage: 'office:manage',
+	/** Mở kỳ, chốt, cấp, phiếu bổ sung, dự trù, đơn giá, ghi đã giao. */
+	supplyManage: 'office:supply:manage',
+	/** Xem bảng tổng hợp kỳ và báo cáo chi phí; trưởng phòng chỉ thấy phòng mình do máy chủ lọc. */
+	supplyReport: 'office:supply:report',
+	/** Dời, huỷ lượt đặt phòng của người khác và thấy tiêu đề lượt riêng tư. */
+	bookingManage: 'office:booking:manage',
+} as const;
+
+/**
  * Vai trò có phạm vi tài sản toàn công ty khi có `asset:read` (khớp `FULL_SCOPE_ROLES` ở BE,
  * `asset-scope.util.ts`). Trưởng phòng chỉ xem tài sản của phòng mình nên không có ở đây.
  */

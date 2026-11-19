@@ -355,10 +355,7 @@
 <template>
 	<div class="space-y-5 pb-40 sm:pb-24">
 		<div>
-			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Tài sản của tôi</h1>
-			<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-				Thiết bị được cấp phát cho bạn, báo hỏng và báo mất bạn đã gửi, cùng dịch vụ bạn phụ trách.
-			</p>
+			<UiPageHeader title="Tài sản của tôi" description="Thiết bị được cấp phát cho bạn, báo hỏng và báo mất bạn đã gửi, cùng dịch vụ bạn phụ trách." />
 		</div>
 
 		<CommonAppModuleNotice module="ASSET" />

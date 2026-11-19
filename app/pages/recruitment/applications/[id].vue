@@ -140,10 +140,7 @@
 			v-else-if="forbidden"
 			class="rounded-xl border border-gray-200 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-900"
 		>
-			<h1 class="text-lg font-semibold text-gray-900 dark:text-white">Bạn không xem được hồ sơ này</h1>
-			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-				Bạn chỉ xem được hồ sơ của những tin mình ngồi hội đồng.
-			</p>
+			<UiPageHeader title="Bạn không xem được hồ sơ này" description="Bạn chỉ xem được hồ sơ của những tin mình ngồi hội đồng." />
 			<CommonAppButton class="mt-4" variant="outline" @click="router.push('/recruitment/my-interviews')">
 				Về Phỏng vấn của tôi
 			</CommonAppButton>

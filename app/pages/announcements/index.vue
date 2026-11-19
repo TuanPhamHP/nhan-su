@@ -50,10 +50,7 @@
 	<div class="space-y-5">
 		<!-- Page header -->
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Thông báo công ty</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-				Thông báo chung, báo cáo chấm công, yêu cầu cập nhật hồ sơ…
-			</p>
+			<UiPageHeader title="Thông báo công ty" description="Thông báo chung, báo cáo chấm công, yêu cầu cập nhật hồ sơ…" />
 		</div>
 
 		<CommonAppModuleNotice module="ANNOUNCEMENT" />

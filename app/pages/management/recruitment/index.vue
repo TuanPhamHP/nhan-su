@@ -58,10 +58,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Tổng quan tuyển dụng</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Tin đang mở, lịch phỏng vấn, offer và định biên của năm đang chọn
-				</p>
+				<UiPageHeader title="Tổng quan tuyển dụng" description="Tin đang mở, lịch phỏng vấn, offer và định biên của năm đang chọn" />
 			</div>
 			<div class="w-40">
 				<UiSelect v-model="year" :options="yearOptions" />

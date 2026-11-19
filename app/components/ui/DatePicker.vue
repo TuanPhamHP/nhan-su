@@ -28,6 +28,18 @@ const inputId = computed(() => props.id ?? `ui-datepicker-${Math.random().toStri
 
 const textValue = ref('');
 
+/**
+ * Câu lỗi khi người dùng gõ một ngày không có thật, ví dụ 31/11/2026.
+ *
+ * Trước đây ô âm thầm quay về ngày cũ: người dùng gõ xong, nhìn thấy một ngày khác, và không ai
+ * nói gì cả, nên họ tưởng hệ thống tự sửa hộ và lưu luôn ngày sai. Giữ chữ họ đã gõ rồi nói sai ở
+ * đâu thì họ sửa đúng chỗ.
+ */
+const typedError = ref('');
+
+/** Lỗi của nơi dùng (biểu mẫu) ưu tiên hơn, vì nó nói về cả trường chứ không chỉ cách gõ. */
+const shownError = computed(() => props.error || typedError.value);
+
 watch(
 	() => props.modelValue,
 	val => {
@@ -64,6 +76,9 @@ function onTextInput(e: Event) {
 	el.value = formatted;
 	el.setSelectionRange(newCursor, newCursor);
 	textValue.value = formatted;
+	// Gõ tiếp là đang sửa, nên câu lỗi cũ hết việc; gõ đủ tám chữ số thì kiểm lại ngay tại chỗ.
+	typedError.value = '';
+	if (digits.length === 8) parseAndEmit();
 }
 
 function onTextKeydown(e: KeyboardEvent) {
@@ -95,6 +110,7 @@ function onTextBlur() {
 function parseAndEmit() {
 	const val = textValue.value;
 	if (!val) {
+		typedError.value = '';
 		emit('update:modelValue', undefined);
 		return;
 	}
@@ -105,19 +121,17 @@ function parseAndEmit() {
 		const y = Number(match[3]);
 		const date = new Date(y, m - 1, d);
 		if (date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d) {
+			typedError.value = '';
 			const ymd = toYMD(date);
 			emit('update:modelValue', ymd);
 			currentMonth.value = y * 12 + (m - 1);
 			return;
 		}
+		// Đủ chữ số nhưng ngày không tồn tại: nói đúng ngày họ gõ, giữ nguyên chữ trong ô.
+		typedError.value = `Ngày ${val} không có thật. Bạn kiểm tra lại ngày và tháng.`;
+		return;
 	}
-	// Invalid — reset to last valid modelValue
-	if (props.modelValue) {
-		const [y, m, d] = props.modelValue.split('-');
-		textValue.value = `${d}/${m}/${y}`;
-	} else {
-		textValue.value = '';
-	}
+	typedError.value = 'Bạn gõ ngày theo dạng ngày/tháng/năm, ví dụ 25/12/2026.';
 }
 
 function clearValue() {
@@ -324,7 +338,7 @@ function toYMD(d: Date): string {
 				'flex items-center w-full rounded-lg border transition-colors',
 				'bg-white dark:bg-gray-800',
 				disabled ? 'opacity-50 cursor-not-allowed' : '',
-				error
+				shownError
 					? 'border-red-400 focus-within:ring-2 focus-within:ring-red-300'
 					: isOpen
 						? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800'
@@ -533,7 +547,7 @@ function toYMD(d: Date): string {
 			</Transition>
 		</Teleport>
 
-		<p v-if="error" class="text-xs text-red-500 dark:text-red-400">{{ error }}</p>
+		<p v-if="shownError" class="text-xs text-red-500 dark:text-red-400">{{ shownError }}</p>
 		<p v-else-if="hint" class="text-xs text-gray-500 dark:text-gray-400">{{ hint }}</p>
 	</div>
 </template>

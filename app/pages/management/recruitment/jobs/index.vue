@@ -115,10 +115,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Tin tuyển dụng</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Tin đăng cho từng yêu cầu, mỗi tin có quy trình và hội đồng riêng
-				</p>
+				<UiPageHeader title="Tin tuyển dụng" description="Tin đăng cho từng yêu cầu, mỗi tin có quy trình và hội đồng riêng" />
 			</div>
 			<CommonAppButton v-if="canManage" variant="primary" @click="showForm = true">
 				Tạo tin

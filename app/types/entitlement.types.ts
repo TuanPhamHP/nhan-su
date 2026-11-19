@@ -12,7 +12,8 @@ export type ModuleCode =
 	| 'CONTRACT_INSURANCE'
 	| 'ANNOUNCEMENT'
 	| 'ASSET'
-	| 'RECRUIT';
+	| 'RECRUIT'
+	| 'OFFICE';
 
 export type ModuleState = 'ENABLED' | 'READ_ONLY' | 'DISABLED';
 
@@ -44,7 +45,11 @@ export interface AppGroup {
  * trong `app/config/app-modules.ts`. Nhờ vậy đổi tên hay icon chỉ cần phát hành BE.
  */
 export interface AppTile {
-	/** Ghép với `AppScreensDef.code`. Mã lạ thì web bỏ qua, không lỗi. */
+	/**
+	 * Ghép với `AppScreensDef.code`. Mã lạ thì web bỏ qua, không lỗi.
+	 *
+	 * Danh mục hiện có mười ô: `chr`, `tal`, `pay`, `rec`, `ast`, `apv`, `adm`, `eng`, `ana`, `sys`.
+	 */
 	code: string;
 	label: string;
 	description: string;

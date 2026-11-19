@@ -92,10 +92,7 @@
 <template>
 	<div class="space-y-5">
 		<div>
-			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Thư mời nhận việc</h1>
-			<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-				Offer đã tạo cho ứng viên, kèm trạng thái duyệt và phản hồi
-			</p>
+			<UiPageHeader title="Thư mời nhận việc" description="Offer đã tạo cho ứng viên, kèm trạng thái duyệt và phản hồi" />
 		</div>
 
 		<CommonAppModuleNotice module="RECRUIT" />

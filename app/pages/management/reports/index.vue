@@ -387,8 +387,7 @@
 	<div class="space-y-5">
 		<!-- Page header -->
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Báo cáo</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và xuất báo cáo chấm công, nghỉ phép</p>
+			<UiPageHeader title="Báo cáo" description="Xem và xuất báo cáo chấm công, nghỉ phép" />
 		</div>
 
 		<CommonAppModuleNotice module="REPORTS" />

@@ -228,8 +228,7 @@ function fmtSegmentDate(dateYmd: string): string {
 				</svg>
 			</NuxtLink>
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Tạo đơn làm thêm giờ</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Đăng ký ca OT để quản lý duyệt</p>
+				<UiPageHeader title="Tạo đơn làm thêm giờ" description="Đăng ký ca OT để quản lý duyệt" />
 			</div>
 		</div>
 

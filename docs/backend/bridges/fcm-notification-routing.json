@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema",
-  "version": "1.2.0",
-  "lastUpdated": "2026-11-16",
+  "version": "1.3.2",
+  "lastUpdated": "2026-11-19",
   "description": "Mapping NotificationType → mobile navigation route. App mobile dùng JSON này khi user tap vào notification để biết cần mở screen nào với param gì.",
 
   "fcmPayloadShape": {
@@ -1074,6 +1074,162 @@
       "recipients": ["người phụ trách tin"],
       "frequency": "daily cron",
       "note": "Module RECRUIT. Chỉ có trên web"
+    },
+
+    "OFFICE_SUPPLY_PERIOD_OPENED": {
+      "category": "EVENT",
+      "refType": "office_supply_request",
+      "hasEntityId": true,
+      "screen": "OfficeSupplies",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/office/supplies?request_id={refId}",
+      "trigger": "HCNS mở kỳ đăng ký văn phòng phẩm, mỗi phòng tham gia có sẵn một phiếu",
+      "recipients": ["mọi nhân viên đang làm của các phòng tham gia"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. refId là id phiếu của phòng người nhận. Email chỉ cho trưởng phòng và đầu mối"
+    },
+
+    "OFFICE_SUPPLY_PERIOD_CHANGED": {
+      "category": "EVENT",
+      "refType": "office_supply_request",
+      "hasEntityId": true,
+      "screen": "OfficeSupplies",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/office/supplies?request_id={refId}",
+      "trigger": "HCNS đổi hạn chót kỳ đang mở (báo người đã nhận thông báo mở kỳ), hoặc khoá sớm kỳ (báo trưởng phòng, đầu mối)",
+      "recipients": ["nhân viên các phòng tham gia (đổi hạn)", "trưởng phòng, đầu mối (khoá sớm)"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. Mở phiếu thì lấy lại period.lockAt: sau khi khoá sớm, lockAt là giờ khoá thật. HCNS huỷ kỳ (N-01d, chỉ trong app): KHÔNG có refId vì phiếu đã xoá cùng kỳ, mở màn OfficeSupplies không chọn phiếu (web /office/supplies)"
+    },
+
+    "OFFICE_SUPPLY_DEADLINE_REMINDER": {
+      "category": "EVENT",
+      "refType": "office_supply_request",
+      "hasEntityId": true,
+      "screen": "OfficeSupplies",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/office/supplies?request_id={refId}",
+      "trigger": "Việc định kỳ J-01, 08:00 ngày hạn chót, phòng chưa có dòng nào",
+      "recipients": ["trưởng phòng", "đầu mối văn phòng phẩm của phòng"],
+      "frequency": "daily cron",
+      "note": "Module OFFICE"
+    },
+
+    "OFFICE_SUPPLY_PERIOD_LOCKED": {
+      "category": "EVENT",
+      "refType": "office_supply_period",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/office/supply-periods/{refId}",
+      "trigger": "Việc định kỳ J-06 khoá kỳ đã qua hạn chót",
+      "recipients": ["người có office:supply:manage"],
+      "frequency": "daily cron",
+      "note": "Module OFFICE. Chỉ trong app, không push. Trang quản lý, chỉ có trên web"
+    },
+
+    "OFFICE_SUPPLY_REQUEST_ADJUSTED": {
+      "category": "EVENT",
+      "refType": "office_supply_request",
+      "hasEntityId": true,
+      "screen": "OfficeSupplies",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/office/supplies?request_id={refId}",
+      "trigger": "HCNS chốt phiếu có sửa số so với số xin; chốt lại phiếu đã chốt, đã cấp, đã nhận; hoặc sửa số thực nhận",
+      "recipients": ["trưởng phòng", "đầu mối văn phòng phẩm của phòng"],
+      "frequency": "real-time",
+      "note": "Module OFFICE"
+    },
+
+    "OFFICE_SUPPLY_SUPPLEMENT_CREATED": {
+      "category": "EVENT",
+      "refType": "office_supply_request",
+      "hasEntityId": true,
+      "screen": "OfficeSupplies",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/office/supplies?request_id={refId}",
+      "trigger": "HR tạo phiếu bổ sung cho phòng sau khi kỳ đã khoá",
+      "recipients": ["trưởng phòng", "đầu mối văn phòng phẩm của phòng"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. refId là id phiếu bổ sung"
+    },
+
+    "OFFICE_SUPPLY_ISSUED": {
+      "category": "EVENT",
+      "refType": "office_supply_request",
+      "hasEntityId": true,
+      "screen": "OfficeSupplies",
+      "params": { "requestId": "{refId}" },
+      "webUrl": "/office/supplies?request_id={refId}",
+      "trigger": "HCNS cấp hàng cho phiếu",
+      "recipients": ["trưởng phòng", "đầu mối văn phòng phẩm của phòng"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. Phiếu mở ra có nút Đã nhận khi canReceive"
+    },
+
+    "OFFICE_SUPPLY_RECEIVED": {
+      "category": "EVENT",
+      "refType": "office_supply_period",
+      "hasEntityId": true,
+      "screen": null,
+      "params": {},
+      "webUrl": "/management/office/supply-periods/{refId}",
+      "trigger": "Trưởng phòng hoặc đầu mối bấm Đã nhận mà có dòng nhận thiếu (có push), hoặc phiếu có hàng cuối cùng của kỳ vừa được nhận (chỉ trong app)",
+      "recipients": ["người có office:supply:manage"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. Có push. refId là id kỳ (HCNS mở kỳ để xem ghi chú nhận thiếu); trang quản lý chỉ có trên web, mobile mở danh sách thông báo"
+    },
+
+    "OFFICE_ROOM_BOOKING_INVITED": {
+      "category": "EVENT",
+      "refType": "office_room_booking",
+      "hasEntityId": true,
+      "screen": "OfficeRooms",
+      "params": { "bookingId": "{refId}" },
+      "webUrl": "/office/rooms?booking_id={refId}",
+      "trigger": "Được thêm vào lượt đặt phòng họp, hoặc được đặt hộ làm chủ trì",
+      "recipients": ["người dự", "chủ trì (trừ người vừa thao tác)"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. Có email"
+    },
+
+    "OFFICE_ROOM_BOOKING_UPDATED": {
+      "category": "EVENT",
+      "refType": "office_room_booking",
+      "hasEntityId": true,
+      "screen": "OfficeRooms",
+      "params": { "bookingId": "{refId}" },
+      "webUrl": "/office/rooms?booking_id={refId}",
+      "trigger": "Lượt họp bị dời giờ hoặc đổi phòng",
+      "recipients": ["người dự", "chủ trì (trừ người vừa thao tác)"],
+      "frequency": "real-time",
+      "note": "Module OFFICE"
+    },
+
+    "OFFICE_ROOM_BOOKING_CANCELLED": {
+      "category": "EVENT",
+      "refType": "office_room_booking",
+      "hasEntityId": true,
+      "screen": "OfficeRooms",
+      "params": { "bookingId": "{refId}" },
+      "webUrl": "/office/rooms?booking_id={refId}",
+      "trigger": "Lượt họp bị huỷ (người tạo, HCNS huỷ, hoặc chủ trì nghỉ việc)",
+      "recipients": ["người dự", "chủ trì", "người tạo (trừ người vừa thao tác)"],
+      "frequency": "real-time",
+      "note": "Module OFFICE. Có email. Lượt đã huỷ vẫn mở xem được, status CANCELLED kèm cancelReason"
+    },
+
+    "OFFICE_ROOM_BOOKING_REMINDER": {
+      "category": "EVENT",
+      "refType": "office_room_booking",
+      "hasEntityId": true,
+      "screen": "OfficeRooms",
+      "params": { "bookingId": "{refId}" },
+      "webUrl": "/office/rooms?booking_id={refId}",
+      "trigger": "Việc định kỳ J-02, khoảng 15 phút trước giờ họp",
+      "recipients": ["chủ trì", "người dự"],
+      "frequency": "cron mỗi 5 phút",
+      "note": "Module OFFICE"
     },
 
     "TEST": {

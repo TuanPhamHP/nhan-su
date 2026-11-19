@@ -108,10 +108,7 @@
 					</svg>
 					Cài đặt
 				</NuxtLink>
-				<h1 class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">Loại giấy tờ</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-					Danh mục này quyết định các loại giấy tờ mà phòng nhân sự chọn được khi tải tài liệu vào hồ sơ nhân viên.
-				</p>
+				<UiPageHeader title="Loại giấy tờ" description="Danh mục này quyết định các loại giấy tờ mà phòng nhân sự chọn được khi tải tài liệu vào hồ sơ nhân viên." />
 			</div>
 			<CommonAppButton v-if="canManage" @click="openCreate">Thêm loại giấy tờ</CommonAppButton>
 		</div>

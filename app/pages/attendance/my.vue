@@ -273,8 +273,7 @@
 	<div class="space-y-5">
 		<!-- Page title -->
 		<div>
-			<h1 class="text-lg font-semibold text-gray-900 dark:text-white">Chấm công của tôi</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Lịch sử chấm công cá nhân theo tháng</p>
+			<UiPageHeader title="Chấm công của tôi" description="Lịch sử chấm công cá nhân theo tháng" />
 		</div>
 
 		<!-- Stats row -->

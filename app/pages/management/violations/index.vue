@@ -241,8 +241,7 @@
 		<!-- Page header -->
 		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý vi phạm chuyên cần</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem xét và duyệt phiếu giải trình vi phạm chấm công</p>
+				<UiPageHeader title="Quản lý vi phạm chuyên cần" description="Xem xét và duyệt phiếu giải trình vi phạm chấm công" />
 			</div>
 			<!-- API xuất file nằm ở `/v1/reports`, thuộc module Báo cáo -->
 			<CommonAppButton v-if="canUse('REPORTS')" variant="secondary" :loading="exportingReport" @click="handleExport">

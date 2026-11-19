@@ -57,6 +57,13 @@ import { isManagementRole } from '~/utils/role';
  * cho cả người gửi và người duyệt:
  * | general_request           | /general-requests?id=:id                       |
  * | (APPROVER_REASSIGNED, không có refType) | /general-requests?tab=pending    |
+ *
+ * Lô 1 Hành chính văn phòng (module `OFFICE`) cũng không rẽ theo vai trò: phiếu văn phòng phẩm
+ * và lượt đặt phòng là trang dùng chung của mọi nhân viên, còn `office_supply_period` chỉ gửi cho
+ * người có `office:supply:manage` nên luôn mở trang quản lý:
+ * | office_supply_request     | /office/supplies?request_id=:id                |
+ * | office_supply_period      | /management/office/supply-periods/:id          |
+ * | office_room_booking       | /office/rooms?booking_id=:id                   |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -208,6 +215,23 @@ export function resolveNotificationRoute(
 		// N-03 không mang refId: người nhận chỉ cần mở hồ sơ của mình để xem chỗ vừa bị sửa.
 		case 'my_profile':
 			return '/profile';
+
+		// Ba refType của lô 1 Hành chính văn phòng. Giống module Tài sản, BE đã chọn refType theo
+		// từng người nhận nên ở đây KHÔNG rẽ theo vai trò: năm loại thông báo văn phòng phẩm gửi
+		// cho nhân viên, trưởng phòng và đầu mối của phòng, mà cả ba đều mở đúng phiếu của phòng
+		// mình ở trang dùng chung.
+		// Không có refId là chuyện bình thường ở đây: HCNS huỷ kỳ thì phiếu bị xoá cùng kỳ, nên
+		// `OFFICE_SUPPLY_PERIOD_CHANGED` của lần đó mở trang phiếu chung thay vì một phiếu cụ thể.
+		case 'office_supply_request':
+			return id ? `/office/supplies?request_id=${id}` : '/office/supplies';
+
+		// Chỉ gửi cho người có `office:supply:manage`: việc định kỳ khoá kỳ đã qua hạn chót, và
+		// `OFFICE_SUPPLY_RECEIVED` khi một phòng nhận thiếu hoặc kỳ đã nhận xong (UAT đợt B).
+		case 'office_supply_period':
+			return id ? `/management/office/supply-periods/${id}` : '/management/office/supply-periods';
+
+		case 'office_room_booking':
+			return id ? `/office/rooms?booking_id=${id}` : '/office/rooms';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,
