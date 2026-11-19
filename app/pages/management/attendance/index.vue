@@ -219,8 +219,7 @@
 		<!-- Page header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Chấm công</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Theo dõi chấm công nhân viên</p>
+				<UiPageHeader title="Chấm công" description="Theo dõi chấm công nhân viên" />
 			</div>
 		</div>
 

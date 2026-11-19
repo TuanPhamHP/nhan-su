@@ -79,10 +79,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Loại phiếu đề xuất</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Mỗi loại phiếu có biểu mẫu riêng, mẫu in riêng và luồng duyệt riêng.
-				</p>
+				<UiPageHeader title="Loại phiếu đề xuất" description="Mỗi loại phiếu có biểu mẫu riêng, mẫu in riêng và luồng duyệt riêng." />
 			</div>
 			<CommonAppButton v-if="canManage" @click="openCreate">
 				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

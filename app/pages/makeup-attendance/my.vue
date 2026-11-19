@@ -137,10 +137,7 @@
 		<!-- Header -->
 		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn bù công của tôi</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-					Theo dõi trạng thái các đơn bù công đã gửi
-				</p>
+				<UiPageHeader title="Đơn bù công của tôi" description="Theo dõi trạng thái các đơn bù công đã gửi" />
 			</div>
 			<NuxtLink
 				to="/attendance/my"

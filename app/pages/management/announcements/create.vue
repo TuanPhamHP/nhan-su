@@ -282,8 +282,7 @@
 				</svg>
 			</button>
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Tạo thông báo công ty</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Soạn nội dung, đính kèm file và chọn người nhận</p>
+				<UiPageHeader title="Tạo thông báo công ty" description="Soạn nội dung, đính kèm file và chọn người nhận" />
 			</div>
 		</div>
 

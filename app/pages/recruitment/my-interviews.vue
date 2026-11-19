@@ -102,10 +102,7 @@
 <template>
 	<div class="mx-auto w-full max-w-4xl space-y-4 p-4 sm:p-6">
 		<header>
-			<h1 class="text-xl font-bold text-gray-900 sm:text-2xl dark:text-white">Phỏng vấn của tôi</h1>
-			<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-				Buổi phỏng vấn bạn được giao và phiếu đánh giá đang chờ bạn chấm.
-			</p>
+			<UiPageHeader title="Phỏng vấn của tôi" description="Buổi phỏng vấn bạn được giao và phiếu đánh giá đang chờ bạn chấm." />
 		</header>
 
 		<CommonAppModuleNotice module="RECRUIT" />

@@ -147,10 +147,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Kho ứng viên</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Toàn bộ ứng viên của công ty, gồm cả người đã lưu vào kho tiềm năng
-				</p>
+				<UiPageHeader title="Kho ứng viên" description="Toàn bộ ứng viên của công ty, gồm cả người đã lưu vào kho tiềm năng" />
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				<CommonAppButton v-if="canManage" variant="outline" @click="showImport = true">

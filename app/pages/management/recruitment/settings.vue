@@ -38,10 +38,7 @@
 <template>
 	<div class="space-y-5">
 		<div>
-			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Cài đặt tuyển dụng</h1>
-			<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-				Danh mục, mẫu email, quy trình và các quy tắc dùng chung của module
-			</p>
+			<UiPageHeader title="Cài đặt tuyển dụng" description="Danh mục, mẫu email, quy trình và các quy tắc dùng chung của module" />
 		</div>
 
 		<CommonAppModuleNotice module="RECRUIT" />

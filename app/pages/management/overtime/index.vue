@@ -260,8 +260,7 @@ watch(activeTab, tab => {
 	<div class="space-y-5">
 		<!-- Page header -->
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý OT</h1>
-			<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Duyệt đơn làm thêm giờ và xem báo cáo OT</p>
+			<UiPageHeader title="Quản lý OT" description="Duyệt đơn làm thêm giờ và xem báo cáo OT" />
 		</div>
 
 		<CommonAppModuleNotice module="OVERTIME" />

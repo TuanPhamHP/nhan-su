@@ -195,10 +195,7 @@
 		<!-- Page header -->
 		<div class="flex items-start justify-between flex-wrap gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý thông báo công ty</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-					Danh sách thông báo đã gửi, xem trạng thái đọc từng người nhận
-				</p>
+				<UiPageHeader title="Quản lý thông báo công ty" description="Danh sách thông báo đã gửi, xem trạng thái đọc từng người nhận" />
 			</div>
 			<NuxtLink
 				v-if="canSend"

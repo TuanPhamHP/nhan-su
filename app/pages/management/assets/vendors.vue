@@ -173,10 +173,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Nhà cung cấp</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Nơi mua thiết bị, đơn vị sửa chữa và nhà cung cấp dịch vụ
-				</p>
+				<UiPageHeader title="Nhà cung cấp" description="Nơi mua thiết bị, đơn vị sửa chữa và nhà cung cấp dịch vụ" />
 			</div>
 			<CommonAppButton v-if="canManage" variant="primary" @click="openCreate">Thêm nhà cung cấp</CommonAppButton>
 		</div>

@@ -145,8 +145,7 @@
 			<div class="space-y-5">
 				<!-- Page header -->
 				<div>
-					<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Bảng lương</h1>
-					<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quản lý và phát hành phiếu lương nhân viên</p>
+					<UiPageHeader title="Bảng lương" description="Quản lý và phát hành phiếu lương nhân viên" />
 				</div>
 
 				<!-- Filter bar -->

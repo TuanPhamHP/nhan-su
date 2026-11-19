@@ -499,8 +499,7 @@
 				</svg>
 			</NuxtLink>
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Tạo đơn nghỉ phép</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">HR / Admin tạo đơn thay nhân viên</p>
+				<UiPageHeader title="Tạo đơn nghỉ phép" description="HR / Admin tạo đơn thay nhân viên" />
 			</div>
 		</div>
 

@@ -213,10 +213,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Báo cáo tuyển dụng</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Phễu ứng viên, định biên, hiệu quả nguồn, thời gian và chi phí tuyển
-				</p>
+				<UiPageHeader title="Báo cáo tuyển dụng" description="Phễu ứng viên, định biên, hiệu quả nguồn, thời gian và chi phí tuyển" />
 			</div>
 			<CommonAppButton v-if="canExport" variant="outline" :loading="exporting" @click="handleExport">
 				Xuất Excel

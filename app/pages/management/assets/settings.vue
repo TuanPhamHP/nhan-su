@@ -141,10 +141,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Cài đặt tài sản</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Loại tài sản, xếp theo Nhóm → Loại. Mã tài sản sinh theo mã công ty, không cấu hình ở đây.
-				</p>
+				<UiPageHeader title="Cài đặt tài sản" description="Loại tài sản, xếp theo Nhóm → Loại. Mã tài sản sinh theo mã công ty, không cấu hình ở đây." />
 			</div>
 			<CommonAppButton v-if="canEdit" variant="primary" @click="openCreate">Thêm loại</CommonAppButton>
 		</div>
