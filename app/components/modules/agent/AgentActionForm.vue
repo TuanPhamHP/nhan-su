@@ -2,7 +2,11 @@
 	import AppButton from '~/components/common/AppButton.vue';
 	import type { AgentFormField, AgentPendingAction } from '~/types/agent.types';
 
-	const props = defineProps<{ pending: AgentPendingAction }>();
+	const props = defineProps<{
+		pending: AgentPendingAction;
+		/** Khung hẹp như cửa sổ chat nhanh: đệm, khoảng cách và cỡ chữ nhỏ lại. */
+		compact?: boolean;
+	}>();
 
 	const emit = defineEmits<{
 		confirm: [payload: Record<string, unknown>];
@@ -110,11 +114,21 @@
 	 * Safari iOS tự phóng to trang khi focus vào ô nhập có font < 16px. Form này có ô ngày,
 	 * ô giờ và ô lý do — người dùng phải gõ vào chúng, nên cả form sẽ giật mỗi lần chạm.
 	 */
-	const inputClass =
-		'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base sm:text-sm text-gray-900 transition ' +
+	const INPUT_BASE =
+		'w-full rounded-lg border border-gray-300 bg-white text-gray-900 transition ' +
 		'focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] focus:outline-none ' +
 		'disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ' +
 		'dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800';
+
+	/**
+	 * Bản gọn vẫn giữ `text-base` dưới `sm:` vì cùng lý do trên: dưới 640px cửa sổ chat nhanh phủ
+	 * kín màn hình, nên chỗ đó đã đủ rộng và chữ nhỏ hơn 16px chỉ làm Safari phóng to trang.
+	 */
+	const inputClass = computed(() =>
+		props.compact
+			? `${INPUT_BASE} px-2.5 py-1.5 text-base sm:text-[13px]`
+			: `${INPUT_BASE} px-3 py-2 text-base sm:text-sm`,
+	);
 </script>
 
 <template>
@@ -122,10 +136,18 @@
 		class="w-full overflow-hidden rounded-2xl border border-[var(--color-accent)]/30 bg-white shadow-sm dark:bg-gray-800"
 	>
 		<header
-			class="flex items-center gap-2 border-b border-gray-200 bg-[var(--color-accent)]/5 px-4 py-2.5 dark:border-gray-700"
+			:class="[
+				'flex items-center gap-2 border-b border-gray-200 bg-[var(--color-accent)]/5 dark:border-gray-700',
+				compact ? 'px-3 py-2' : 'px-4 py-2.5',
+			]"
 		>
 			<Icon name="heroicons:clipboard-document-check" class="h-4 w-4 text-[var(--color-accent)]" />
-			<h3 class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
+			<h3
+				:class="[
+					'min-w-0 flex-1 truncate font-semibold text-gray-900 dark:text-gray-50',
+					compact ? 'text-[13px]' : 'text-sm',
+				]"
+			>
 				{{ pending.form.title }}
 			</h3>
 			<span
@@ -164,40 +186,69 @@
 			</div>
 		</div>
 
-		<form v-else class="px-4 py-3" @submit.prevent="submit">
+		<form v-else :class="compact ? 'px-3 py-2.5' : 'px-4 py-3'" @submit.prevent="submit">
 			<!-- Dữ liệu do SERVER dựng, không phải lời văn của model -->
 			<dl
 				v-if="pending.form.context.length || readonlyFields.length"
-				class="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-xl bg-gray-50 px-3 py-2.5 dark:bg-gray-900/40"
+				:class="[
+					'grid grid-cols-2 rounded-xl bg-gray-50 dark:bg-gray-900/40',
+					compact ? 'mb-2.5 gap-x-3 gap-y-1 px-2.5 py-2' : 'mb-3 gap-x-4 gap-y-1.5 px-3 py-2.5',
+				]"
 			>
 				<div v-for="f in readonlyFields" :key="f.name" class="min-w-0">
 					<dt class="text-[11px] text-gray-400 dark:text-gray-500">{{ f.label }}</dt>
-					<dd class="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{{ f.value }}</dd>
+					<dd
+						:class="[
+							'truncate font-medium text-gray-800 dark:text-gray-100',
+							compact ? 'text-[13px] leading-snug' : 'text-sm',
+						]"
+					>
+						{{ f.value }}
+					</dd>
 				</div>
 				<div v-for="c in pending.form.context" :key="c.label" class="min-w-0">
 					<dt class="text-[11px] text-gray-400 dark:text-gray-500">{{ c.label }}</dt>
-					<dd class="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{{ c.value }}</dd>
+					<dd
+						:class="[
+							'truncate font-medium text-gray-800 dark:text-gray-100',
+							compact ? 'text-[13px] leading-snug' : 'text-sm',
+						]"
+					>
+						{{ c.value }}
+					</dd>
 				</div>
 			</dl>
 
 			<ul
 				v-if="pending.form.warnings.length"
-				class="mb-3 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10"
+				:class="[
+					'space-y-1 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10',
+					compact ? 'mb-2.5 px-2.5 py-1.5' : 'mb-3 px-3 py-2',
+				]"
 			>
 				<li
 					v-for="w in pending.form.warnings"
 					:key="w"
-					class="flex items-start gap-1.5 text-[13px] text-amber-800 dark:text-amber-300"
+					:class="[
+						'flex items-start gap-1.5 text-amber-800 dark:text-amber-300',
+						compact ? 'text-xs' : 'text-[13px]',
+					]"
 				>
 					<Icon name="heroicons:exclamation-triangle" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>{{ w }}</span>
 				</li>
 			</ul>
 
-			<div class="space-y-3">
+			<div :class="compact ? 'space-y-2' : 'space-y-3'">
 				<div v-for="f in editable" v-show="isVisible(f)" :key="f.name">
-					<label :for="`af-${pending.pendingActionId}-${f.name}`" class="mb-1 flex items-center gap-1.5">
-						<span class="text-[13px] font-medium text-gray-700 dark:text-gray-200">{{ f.label }}</span>
+					<label
+						:for="`af-${pending.pendingActionId}-${f.name}`"
+						:class="['flex items-center gap-1.5', compact ? 'mb-0.5' : 'mb-1']"
+					>
+						<span
+							:class="['font-medium text-gray-700 dark:text-gray-200', compact ? 'text-xs' : 'text-[13px]']"
+							>{{ f.label }}</span
+						>
 						<!-- Dấu * theo trạng thái HIỆN TẠI: chọn "Từ chối" thì ô Ghi chú mới hiện sao -->
 						<span v-if="isRequired(f)" class="text-red-500">*</span>
 						<!-- Người dùng PHẢI phân biệt được cái gì là máy đoán để mà soát -->
@@ -245,10 +296,15 @@
 						@blur="touched[f.name] = true"
 					/>
 
-					<p v-if="errorFor(f)" class="mt-1 text-[11px] text-red-500">{{ errorFor(f) }}</p>
+					<p v-if="errorFor(f)" :class="['text-[11px] text-red-500', compact ? 'mt-0.5' : 'mt-1']">
+						{{ errorFor(f) }}
+					</p>
 					<p
 						v-else-if="f.helpText && f.type !== 'textarea'"
-						class="mt-1 text-[11px] text-gray-400 dark:text-gray-500"
+						:class="[
+							'text-[11px] text-gray-400 dark:text-gray-500',
+							compact ? 'mt-0.5 leading-snug' : 'mt-1',
+						]"
 					>
 						{{ f.helpText }}
 					</p>
@@ -268,7 +324,7 @@
 				<span>{{ pending.message }}</span>
 			</p>
 
-			<div class="mt-4 flex items-center justify-end gap-2">
+			<div :class="['flex items-center justify-end gap-2', compact ? 'mt-3' : 'mt-4']">
 				<AppButton variant="ghost" size="sm" :disabled="locked" @click="emit('cancel')">Huỷ</AppButton>
 				<AppButton type="submit" size="sm" :loading="submitting" :disabled="locked">
 					{{ pending.form.submitLabel }}

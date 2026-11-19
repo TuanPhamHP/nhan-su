@@ -256,3 +256,10 @@ export interface AgentSuggestion {
 	icon: string;
 	label: string;
 }
+
+/** Gợi ý dùng chung cho trang Trợ lý và cửa sổ chat nhanh, để hai nơi không lệch nhau. */
+export const AGENT_SUGGESTIONS: AgentSuggestion[] = [
+	{ icon: 'heroicons:sun', label: 'Tôi còn mấy ngày phép?' },
+	{ icon: 'heroicons:clock', label: 'Tháng này tôi đi muộn mấy lần?' },
+	{ icon: 'heroicons:table-cells', label: 'Cho xem bảng công tháng trước' },
+];
