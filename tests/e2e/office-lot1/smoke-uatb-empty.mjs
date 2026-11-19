@@ -10,7 +10,7 @@
  * Bài KHÔNG tạo văn phòng ở công ty trắng đó, để lần sau vẫn kiểm được; đường tạo văn phòng đầu
  * tiên đã có `smoke-places.mjs` lo.
  */
-import { PASSWORD, SANDBOX, WHO, api, go, launch, line, shot, signIn, summary, text } from './helper.mjs';
+import { PASSWORD, SANDBOX, WHO, api, dialog, go, launch, line, shot, signIn, summary, text } from './helper.mjs';
 
 /** Công ty đã bật OFFICE mà chưa có văn phòng nào; `null` nghĩa là sandbox không còn công ty nào trắng. */
 async function findEmptyCompanyHr() {
@@ -58,13 +58,15 @@ const firstSiteButton = hr.getByRole('button', { name: 'Thêm văn phòng đầu
 line((await firstSiteButton.count()) > 0, 'S1 có nút "Thêm văn phòng đầu tiên"');
 console.log('ảnh:', await shot(hr, 's1-settings-no-site'));
 
-// Bấm nút: form thêm văn phòng phải mở ngay, kèm hai câu nhắc về địa chỉ và tầng, số phòng.
+// Bấm nút: HỘP THOẠI thêm văn phòng phải mở ngay, kèm hai câu nhắc về địa chỉ và tầng, số phòng.
 await firstSiteButton.click();
 await hr.waitForTimeout(1200);
-const openedForm = (await text(hr)).replace(/\s+/g, ' ');
+const siteModal = dialog(hr, 'Thêm văn phòng');
+const openedForm = (await siteModal.innerText()).replace(/\s+/g, ' ');
+line((await siteModal.count()) > 0, 'S1 bấm nút thì hộp thoại thêm văn phòng mở ra');
 line(
-	(await hr.locator('input[placeholder*="Văn phòng Hữu Nghị"]').count()) > 0,
-	'S1 bấm nút thì form thêm văn phòng mở ra',
+	(await siteModal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').count()) > 0,
+	'S1 hộp thoại có ô Tên văn phòng',
 );
 line(
 	openedForm.includes('Tầng, số phòng là phòng họp: bạn thêm vào văn phòng ở bước sau'),
@@ -72,9 +74,13 @@ line(
 	openedForm.match(/Tầng, số phòng[^.]*\./)?.[0] ?? '',
 );
 line(
-	(await hr.locator('input[placeholder*="Lý Thường Kiệt"]').count()) > 0,
+	(await siteModal.locator('input[placeholder*="Lý Thường Kiệt"]').count()) > 0,
 	'S1 ô Địa chỉ lấy ví dụ là địa chỉ phố',
 );
+// Đóng lại và KHÔNG lưu: công ty này phải còn trắng cho lần chạy sau.
+await siteModal.getByRole('button', { name: 'Đóng', exact: true }).click();
+await hr.waitForTimeout(600);
+line((await dialog(hr, 'Thêm văn phòng').count()) === 0, 'S1 nút Đóng đóng được hộp thoại');
 console.log('ảnh:', await shot(hr, 's1-settings-form-open'));
 
 // ─── FE-54: trang Kỳ và trang Đặt phòng của công ty chưa có văn phòng ─────────

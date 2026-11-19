@@ -1,7 +1,7 @@
 <script setup lang="ts">
+	import SiteFormModal from '~/components/modules/office/SiteFormModal.vue';
 	import { useOfficeService } from '~/services/office.service';
 	import { downloadOfficeFile, officeErrorCode, officeErrorMessage, officeMoney } from '~/utils/office.utils';
-	import { vnSearchText } from '~/utils/vn-text';
 	import type {
 		MeetingRoom,
 		OfficeSite,
@@ -70,15 +70,11 @@
 
 	const sites = ref<OfficeSite[]>([]);
 	const loadingSites = ref(true);
+	/** Hộp thoại thêm, sửa văn phòng đang mở hay không. */
 	const showSiteForm = ref(false);
 	const editingSite = ref<OfficeSite | null>(null);
-	const savingSite = ref(false);
-	const siteNameError = ref('');
-	/** Câu gợi ý khi tên văn phòng đã có: chỉ người dùng sang thẻ của văn phòng đó mà thêm phòng. */
-	const siteNameHint = ref('');
-	/** Thẻ văn phòng được tô sáng và cuộn tới, sau khi người dùng gõ trùng tên. */
+	/** Thẻ văn phòng được tô sáng và cuộn tới: sau khi lưu, hoặc khi người dùng gõ trùng tên. */
 	const highlightSiteId = ref<number | null>(null);
-	const siteForm = reactive({ name: '', address: '', isActive: true });
 
 	async function loadSites() {
 		loadingSites.value = true;
@@ -94,69 +90,35 @@
 
 	function openSiteCreate() {
 		editingSite.value = null;
-		siteNameError.value = '';
-		siteNameHint.value = '';
-		Object.assign(siteForm, { name: '', address: '', isActive: true });
 		showSiteForm.value = true;
 	}
 
 	function openSiteEdit(site: OfficeSite) {
 		editingSite.value = site;
-		siteNameError.value = '';
-		siteNameHint.value = '';
-		Object.assign(siteForm, { name: site.name, address: site.address ?? '', isActive: site.isActive });
 		showSiteForm.value = true;
 	}
 
-	/**
-	 * Người dùng gõ trùng tên văn phòng: đưa họ tới đúng thẻ của văn phòng đã có.
-	 *
-	 * Người gặp lỗi này thường đang muốn thêm một PHÒNG HỌP mới cho văn phòng đó, nên chỉ nói
-	 * "tên đã có" là bỏ họ lại giữa đường; cuộn tới thẻ và tô sáng nó thì việc cần làm nằm ngay
-	 * trước mắt.
-	 */
-	function pointToExistingSite(name: string) {
-		const target = sites.value.find(site => vnSearchText(site.name) === vnSearchText(name));
-		if (!target) return;
-		siteNameHint.value = `Văn phòng này đã có trong danh sách. Bạn bấm "Thêm phòng họp" trong thẻ ${target.name} để thêm phòng cho nó.`;
-		highlightSiteId.value = target.id;
+	/** Cuộn tới một thẻ văn phòng và tô viền nó, để mắt người dùng tìm thấy ngay. */
+	function spotlightSite(siteId: number) {
+		highlightSiteId.value = siteId;
 		nextTick(() => {
-			document.getElementById(`site-card-${target.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			document.getElementById(`site-card-${siteId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 		});
 	}
 
-	async function saveSite() {
-		if (!siteForm.name.trim() || savingSite.value) return;
-		savingSite.value = true;
-		siteNameError.value = '';
-		siteNameHint.value = '';
-		highlightSiteId.value = null;
-		try {
-			if (editingSite.value) {
-				await service.updateSite(editingSite.value.id, {
-					name: siteForm.name.trim(),
-					address: siteForm.address.trim() || undefined,
-					isActive: siteForm.isActive,
-				});
-			} else {
-				await service.createSite({ name: siteForm.name.trim(), address: siteForm.address.trim() || undefined });
-			}
-			toast.success(`Đã lưu văn phòng ${siteForm.name.trim()}.`);
-			showSiteForm.value = false;
-			await loadSites();
-		} catch (e) {
-			// Trùng tên là lỗi của ĐÚNG một ô, nên câu lỗi phải nằm ngay dưới ô tên chứ không
-			// chỉ thoáng qua ở toast rồi người dùng không biết sửa chỗ nào.
-			if (officeErrorCode(e) === 'OFFICE_SITE_NAME_EXISTS') {
-				siteNameError.value = officeErrorMessage(e, 'Tên văn phòng này đã có.');
-				pointToExistingSite(siteForm.name.trim());
-			} else {
-				// Ngừng văn phòng còn lượt đặt sắp tới: câu của máy chủ nêu rõ còn bao nhiêu lượt.
-				toast.error(officeErrorMessage(e, 'Chưa lưu được văn phòng. Bạn thử lại sau ít phút.'));
-			}
-		} finally {
-			savingSite.value = false;
-		}
+	/** Lưu xong trong hộp thoại: đóng hộp, nạp lại danh sách rồi chỉ vào thẻ vừa lưu. */
+	async function onSiteSaved(saved: OfficeSite) {
+		showSiteForm.value = false;
+		editingSite.value = null;
+		await loadSites();
+		spotlightSite(saved.id);
+	}
+
+	/** Người dùng bấm "Đi tới thẻ …" ở câu lỗi trùng tên trong hộp thoại. */
+	function onGoToSite(siteId: number) {
+		showSiteForm.value = false;
+		editingSite.value = null;
+		spotlightSite(siteId);
 	}
 
 	// ─── Văn phòng phẩm: nhóm và mặt hàng ─────────────────────────────────────────
@@ -721,48 +683,6 @@
 				<CommonAppButton v-if="canEdit" variant="primary" @click="openSiteCreate">Thêm văn phòng</CommonAppButton>
 			</div>
 
-			<div
-				v-if="showSiteForm"
-				class="rounded-xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-700 dark:bg-gray-900"
-			>
-				<h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
-					{{ editingSite ? `Sửa văn phòng ${editingSite.name}` : 'Thêm văn phòng' }}
-				</h3>
-				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div class="space-y-1">
-						<label :class="labelCls">Tên văn phòng <span class="text-red-500">*</span></label>
-						<input v-model="siteForm.name" type="text" maxlength="200" :class="inputCls" placeholder="VD: Văn phòng Hữu Nghị" />
-						<p v-if="siteNameError" class="text-xs text-red-500">{{ siteNameError }}</p>
-					</div>
-					<div class="space-y-1">
-						<label :class="labelCls">Địa chỉ</label>
-						<!-- Địa chỉ là địa chỉ của TOÀ NHÀ: ví dụ phải là đường phố, không phải tầng và số phòng. -->
-						<input
-							v-model="siteForm.address"
-							type="text"
-							maxlength="255"
-							:class="inputCls"
-							placeholder="VD: 25 Lý Thường Kiệt, Hoàn Kiếm"
-						/>
-					</div>
-					<label v-if="editingSite" class="flex items-center gap-2">
-						<input v-model="siteForm.isActive" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-						<span class="text-sm text-gray-700 dark:text-gray-300">Đang dùng</span>
-					</label>
-				</div>
-				<!-- Nhắc trước điều người dùng hay nhầm: tầng và số phòng là phòng họp, không phải văn phòng. -->
-				<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-					Tầng, số phòng là phòng họp: bạn thêm vào văn phòng ở bước sau.
-				</p>
-				<p v-if="siteNameHint" class="mt-2 text-sm text-amber-700 dark:text-amber-300">{{ siteNameHint }}</p>
-				<div class="mt-4 flex justify-end gap-3">
-					<CommonAppButton variant="secondary" @click="showSiteForm = false">Đóng</CommonAppButton>
-					<CommonAppButton variant="primary" :disabled="!siteForm.name.trim()" :loading="savingSite" @click="saveSite">
-						Lưu
-					</CommonAppButton>
-				</div>
-			</div>
-
 			<div v-if="loadingSites || loadingRooms" class="space-y-3">
 				<div v-for="i in 3" :key="i" class="h-32 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
 			</div>
@@ -1256,5 +1176,18 @@
 				</p>
 			</div>
 		</template>
+
+		<!--
+			Thêm và sửa văn phòng đi qua hộp thoại: form chen trong trang mở ra ngay phía trên các thẻ
+			nên trông như đang dựng thêm một thẻ văn phòng nữa.
+		-->
+		<SiteFormModal
+			v-if="showSiteForm"
+			:site="editingSite"
+			:sites="sites"
+			@saved="onSiteSaved"
+			@go-to-site="onGoToSite"
+			@close="showSiteForm = false"
+		/>
 	</div>
 </template>
