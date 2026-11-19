@@ -157,8 +157,7 @@ onMounted(fetchRequests);
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Đơn OT của tôi</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Xem và quản lý các đơn làm thêm giờ của bạn</p>
+				<UiPageHeader title="Đơn OT của tôi" description="Xem và quản lý các đơn làm thêm giờ của bạn" />
 			</div>
 			<div v-if="canWrite('OVERTIME')" class="hidden sm:block">
 				<NuxtLink to="/overtime/create">

@@ -81,6 +81,10 @@
 </template>
 
 <script setup lang="ts">
+	// Import tường minh, không dựa vào auto-import: component này còn được mount trong test đơn vị,
+	// nơi không có lớp auto-import của Nuxt, và ở đó hàm thiếu sẽ ném ReferenceError giữa lúc lọc.
+	import { vnSearchIncludes } from '~/utils/vn-text';
+
 	interface Option {
 		label: string;
 		value: string | number;
@@ -117,10 +121,15 @@
 		return option ? option.label : '';
 	});
 
+	/**
+	 * Lọc theo chữ đã bỏ dấu, nên gõ "but chi" vẫn ra "Bút chì gỗ".
+	 *
+	 * Người dùng gõ nhanh thường không bật bộ gõ tiếng Việt, mà danh mục thì viết đủ dấu; so từng
+	 * ký tự thì danh sách trống và họ kết luận là hệ thống thiếu dữ liệu.
+	 */
 	const filteredOptions = computed(() => {
 		if (!searchQuery.value.trim()) return props.options;
-		const q = searchQuery.value.trim().toLowerCase();
-		return props.options.filter(o => o.label.toLowerCase().includes(q));
+		return props.options.filter(o => vnSearchIncludes(o.label, searchQuery.value));
 	});
 
 	const HTML_ESCAPES: Record<string, string> = {

@@ -139,8 +139,7 @@
 		<!-- Header -->
 		<div class="flex items-center justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Xin nghỉ phép</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Danh sách đơn của bạn</p>
+				<UiPageHeader title="Xin nghỉ phép" description="Danh sách đơn của bạn" />
 			</div>
 			<NuxtLink
 				to="/users/leave-requests/create"

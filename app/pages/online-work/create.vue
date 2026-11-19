@@ -89,8 +89,7 @@ const onSubmit = handleSubmit(async vals => {
 				</svg>
 			</NuxtLink>
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Tạo đơn làm online</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Đăng ký làm việc tại nhà để quản lý phê duyệt</p>
+				<UiPageHeader title="Tạo đơn làm online" description="Đăng ký làm việc tại nhà để quản lý phê duyệt" />
 			</div>
 		</div>
 

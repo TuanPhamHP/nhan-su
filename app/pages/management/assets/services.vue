@@ -85,10 +85,7 @@
 <template>
 	<div class="space-y-5">
 		<div>
-			<h1 class="text-xl font-bold text-gray-900 dark:text-white">Dịch vụ thuê bao</h1>
-			<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-				Phần mềm, tên miền và máy chủ thuê theo kỳ, xếp theo hạn gia hạn gần nhất trước.
-			</p>
+			<UiPageHeader title="Dịch vụ thuê bao" description="Phần mềm, tên miền và máy chủ thuê theo kỳ, xếp theo hạn gia hạn gần nhất trước." />
 		</div>
 
 		<CommonAppModuleNotice module="ASSET" />

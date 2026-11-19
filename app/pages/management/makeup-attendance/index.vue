@@ -193,10 +193,7 @@
 		<!-- Header -->
 		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Quản lý đơn bù công</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-					Xem xét và duyệt đơn bù công cho các bản ghi chấm công đã khoá
-				</p>
+				<UiPageHeader title="Quản lý đơn bù công" description="Xem xét và duyệt đơn bù công cho các bản ghi chấm công đã khoá" />
 			</div>
 		</div>
 

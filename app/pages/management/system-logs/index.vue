@@ -173,10 +173,7 @@
 		<!-- Page header -->
 		<div class="flex items-center justify-between">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Nhật ký hệ thống</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-					Lịch sử toàn bộ hành vi mutation trong hệ thống
-				</p>
+				<UiPageHeader title="Nhật ký hệ thống" description="Lịch sử toàn bộ hành vi mutation trong hệ thống" />
 			</div>
 			<div
 				v-if="meta"

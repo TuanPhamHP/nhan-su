@@ -358,10 +358,7 @@
 		<!-- Đầu trang -->
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Phiếu đề xuất</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Tại đây bạn gửi phiếu, theo dõi phiếu của mình và xử lý phiếu đang chờ bạn duyệt.
-				</p>
+				<UiPageHeader title="Phiếu đề xuất" description="Tại đây bạn gửi phiếu, theo dõi phiếu của mình và xử lý phiếu đang chờ bạn duyệt." />
 			</div>
 			<NuxtLink to="/general-requests/create">
 				<CommonAppButton>

@@ -122,10 +122,7 @@
 	<div class="space-y-5">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Yêu cầu tuyển dụng</h1>
-				<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-					Đề nghị tuyển người của từng phòng, có duyệt trước khi mở tin
-				</p>
+				<UiPageHeader title="Yêu cầu tuyển dụng" description="Đề nghị tuyển người của từng phòng, có duyệt trước khi mở tin" />
 			</div>
 			<CommonAppButton v-if="canCreate" variant="primary" @click="showForm = true">
 				Tạo yêu cầu

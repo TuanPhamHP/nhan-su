@@ -45,3 +45,4 @@ export * from './asset.service';
 export * from './recruitment.service';
 export * from './recruitment-public.service';
 export * from './recruitment-me.service';
+export * from './office.service';

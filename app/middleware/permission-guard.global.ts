@@ -27,6 +27,11 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; permission: string | string[] }
 	// Cài đặt tuyển dụng sửa quy trình mẫu, mẫu email và SMTP nên cần quyền phụ trách.
 	{ prefix: '/management/recruitment/settings', permission: 'recruitment:manage' },
 	{ prefix: '/management/recruitment', permission: 'recruitment:read' },
+	// Hành chính văn phòng: cài đặt sửa danh mục dùng chung nên cần quyền phụ trách, còn bảng
+	// tổng hợp kỳ và báo cáo chi phí mở cho cả trưởng phòng (máy chủ lọc về phòng họ quản lý).
+	{ prefix: '/management/office/settings', permission: OFFICE_PERMISSIONS.manage },
+	{ prefix: '/management/office/supply-periods', permission: OFFICE_PERMISSIONS.supplyReport },
+	{ prefix: '/management/office/reports', permission: OFFICE_PERMISSIONS.supplyReport },
 	// Màn Phân quyền chỉ cần quyền xem; mọi thao tác ghi trong trang vẫn chỉ ADMIN làm được.
 	{ prefix: '/management/roles', permission: 'role:read' },
 	// Địa điểm chấm công: xem cần quyền đọc, còn thêm sửa xoá gán hỏi quyền riêng ngay trong trang.

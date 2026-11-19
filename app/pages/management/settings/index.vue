@@ -87,8 +87,7 @@
 <template>
 	<div class="space-y-6">
 		<div>
-			<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Cài đặt</h1>
-			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Quản lý cấu hình hệ thống</p>
+			<UiPageHeader title="Cài đặt" description="Quản lý cấu hình hệ thống" />
 		</div>
 
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

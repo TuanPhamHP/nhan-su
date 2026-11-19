@@ -186,10 +186,7 @@ onMounted(async () => {
 					</svg>
 					Tools
 				</NuxtLink>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white mt-1">Tính lại phép năm & công lương</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-					Sửa dữ liệu cũ sau khi quy tắc nghỉ nửa ngày đổi sang trừ 0.5 ngày quỹ phép năm.
-				</p>
+				<UiPageHeader title="Tính lại phép năm & công lương" description="Sửa dữ liệu cũ sau khi quy tắc nghỉ nửa ngày đổi sang trừ 0.5 ngày quỹ phép năm." />
 			</div>
 			<CommonAppButton variant="ghost" size="sm" @click="resetWizard">Đặt lại</CommonAppButton>
 		</div>

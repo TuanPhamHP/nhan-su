@@ -108,10 +108,7 @@
 	<div class="space-y-5 pb-44 sm:pb-36">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div class="min-w-0">
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Thanh lý tài sản</h1>
-				<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-					Trang này liệt kê các phiếu đề nghị thanh lý thiết bị cùng kết quả duyệt.
-				</p>
+				<UiPageHeader title="Thanh lý tài sản" description="Trang này liệt kê các phiếu đề nghị thanh lý thiết bị cùng kết quả duyệt." />
 			</div>
 			<CommonAppButton v-if="canManage" variant="primary" class="min-h-11 sm:min-h-0" @click="showForm = true">
 				Tạo phiếu thanh lý

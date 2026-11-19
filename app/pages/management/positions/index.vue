@@ -189,8 +189,7 @@
 		<!-- Page header -->
 		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 			<div>
-				<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Chức vụ</h1>
-				<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quản lý danh sách chức vụ theo phòng ban</p>
+				<UiPageHeader title="Chức vụ" description="Quản lý danh sách chức vụ theo phòng ban" />
 			</div>
 			<CommonAppButton v-if="isHRorAdmin" @click="openCreate">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
