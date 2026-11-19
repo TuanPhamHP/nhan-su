@@ -252,6 +252,7 @@ tính vào `amount`: hiện cảnh báo nhỏ.
 | Method | Path | Ai | Ghi chú |
 |---|---|---|---|
 | GET | `/v1/office/room-bookings?siteId=1&date=2026-11-20` | Mọi nhân viên | Lịch một ngày (`RoomGridResponseDto`) |
+| GET | `/v1/office/room-bookings?siteId=1&from_date=2026-11-16&to_date=2026-11-22` | Mọi nhân viên | **Lịch theo khoảng ngày** (View Tuần gọi một lần thay vì 7 lần). Tính cả hai đầu, tối đa 31 ngày; cùng shape `RoomGridResponseDto`, mỗi phòng có `bookings` của cả khoảng (xếp theo giờ bắt đầu), FE tự chia theo ngày bằng `startAt` (giờ VN). Response có thêm `fromDate`, `toDate` (`date` = `fromDate`). `now` vẫn chỉ tính trong hôm nay và chỉ có khi khoảng chứa hôm nay. Thiếu một trong hai, `to_date` trước `from_date`, quá 31 ngày: 400 `OFFICE_DATE_INVALID` |
 | GET | `/v1/office/room-bookings/:id` | Mọi nhân viên | |
 | POST | `/v1/office/room-bookings` | Mọi nhân viên | `{ roomId?, meetingUrl?, startAt, endAt, title, note?, isPrivate?, organizerId?, attendeeIds?: number[] }`. Bỏ `roomId` là **họp online** (mục 5.1). Giờ ISO **có múi giờ** (`Z` hoặc `+07:00`), server làm tròn xuống phút |
 | PATCH | `/v1/office/room-bookings/:id` | Người tạo, chủ trì, `office:booking:manage` | Dời giờ, đổi phòng (`roomId: null` là chuyển sang họp online, trả phòng), thêm, đổi, bỏ link họp (`meetingUrl`, `""` hoặc null là bỏ), sửa tiêu đề, ghi chú (`""` hoặc null là xoá), người dự (thay toàn bộ), `organizerId` (đổi chủ trì). Lượt đang diễn ra: đổi `endAt` được (kéo dài, kết thúc sớm), giữ nguyên `startAt`. Lượt đã kết thúc: 409 PAST |
