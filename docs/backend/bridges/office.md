@@ -22,7 +22,7 @@ Lô 1 gồm **văn phòng phẩm theo kỳ** và **đặt phòng họp**. Mọi 
 | `office:manage` | HR, ADMIN | `/management/office/settings` (văn phòng, văn phòng phẩm, định mức, phòng họp) |
 | `office:supply:manage` | HR, ADMIN | Mở kỳ, chốt, cấp, phiếu bổ sung, dự trù, đơn giá, ghi đã giao |
 | `office:supply:report` | HR, DIRECTOR, MANAGER, CHIEF, ADMIN | `/management/office/supply-periods`, `/management/office/reports`. **MANAGER chỉ thấy phòng mình quản lý** (server lọc) |
-| `office:booking:manage` | HR, ADMIN | Dời, huỷ lượt đặt phòng của người khác; thấy tiêu đề lượt riêng tư |
+| `office:booking:manage` | HR, ADMIN | Dời, đổi phòng, huỷ lượt đặt phòng của người khác; **không** thấy nội dung lượt riêng tư (Q3, mục 5) |
 
 Không cần permission (mọi nhân viên của công ty có module): `/office/supplies` (phiếu của phòng mình) và `/office/rooms`
 (đặt phòng). Route quản lý trả 403 cho vai trò EMPLOYEE như module Tài sản.
@@ -294,7 +294,8 @@ tính vào `amount`: hiện cảnh báo nhỏ.
 - Trùng giờ (`OFFICE_ROOM_BOOKING_CONFLICT`): câu "…rồi, không cần đặt lại." chỉ còn khi đặt mới **đúng** khung giờ của lượt
   đã có (bấm Đặt hai lần). Trùng một phần là cuộc họp khác: "Phòng này đã có lượt của bạn lúc … Bạn chọn giờ hoặc phòng
   khác." **Giữ hộp đặt, sửa mở** cùng dữ liệu đã gõ, hiện câu ở ô giờ.
-- **Lượt riêng tư (Q3): chỉ người tạo, chủ trì, người dự thấy nội dung.** Người khác, **kể cả HCNS** có
+- **Lượt riêng tư (Q3): chỉ người tạo, chủ trì, người dự thấy nội dung.** Nhật ký hệ thống (`/system-logs`, HR và ADMIN
+  đọc được) cũng không ghi tiêu đề, người dự, lý do huỷ của lượt riêng tư, chỉ ghi có đổi hay không. Người khác, **kể cả HCNS** có
   `office:booking:manage`, nhận `detailsVisible=false`, `title`, `note`, `cancelReason` là `null`, `attendees` rỗng; vẫn
   thấy người đặt và khung giờ bận. HCNS vẫn dời giờ, đổi phòng, huỷ (có lý do) được, nhưng gửi tiêu đề, ghi chú,
   `isPrivate`, `organizerId`, `attendeeIds` khác giá trị hiện tại thì 403: form sửa của người không thấy nội dung chỉ
