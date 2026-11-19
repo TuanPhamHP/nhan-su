@@ -8,6 +8,7 @@ import {
 	HCNS_FILE,
 	WHO,
 	clearToasts,
+	dialog,
 	go,
 	launch,
 	line,
@@ -75,11 +76,12 @@ async function addSite(name, address) {
 	// Văn phòng nay hiện thành THẺ (tiêu đề h3), không còn là hàng của bảng.
 	if ((await page.locator('h3', { hasText: name }).count()) > 0) return 'đã có từ lần chạy trước';
 	await page.getByRole('button', { name: 'Thêm văn phòng' }).first().click();
-	await page.waitForTimeout(500);
-	const form = page.locator('div.rounded-xl', { hasText: 'Thêm văn phòng' }).last();
-	await form.locator('input[type="text"]').first().fill(name);
-	await form.locator('input[type="text"]').nth(1).fill(address);
-	await page.getByRole('button', { name: 'Lưu', exact: true }).first().click();
+	await page.waitForTimeout(800);
+	// Form văn phòng nay nằm trong hộp thoại.
+	const modal = dialog(page, 'Thêm văn phòng');
+	await modal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().fill(name);
+	await modal.locator('input[placeholder*="Lý Thường Kiệt"]').first().fill(address);
+	await modal.getByRole('button', { name: 'Lưu', exact: true }).click();
 	return toastText(page);
 }
 

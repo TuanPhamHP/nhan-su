@@ -10,6 +10,7 @@ import {
 	api,
 	apiToken,
 	clearToasts,
+	dialog,
 	go,
 	launch,
 	line,
@@ -89,23 +90,33 @@ await go(hr, '/management/office/settings', 4000);
 await clearToasts(hr);
 await hr.getByRole('button', { name: 'Thêm văn phòng' }).first().click();
 await hr.waitForTimeout(1200);
-const siteForm = hr.locator('div', { hasText: 'Tên văn phòng' }).last();
-const siteNameBox = hr.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first();
+// Form văn phòng nay nằm trong HỘP THOẠI, không chen giữa trang.
+const siteModal = dialog(hr, 'Thêm văn phòng');
+line((await siteModal.count()) > 0, 'S2 bấm "Thêm văn phòng" thì mở hộp thoại');
+line(
+	(await hr.locator('div[role="dialog"][aria-label="Thêm văn phòng"]').count()) > 0,
+	'S2 hộp thoại khai báo đúng vai trò cho trình đọc màn hình',
+);
+const siteNameBox = siteModal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first();
 await siteNameBox.fill(SITE_MAIN);
-const addressBox = hr.locator('input[placeholder*="Lý Thường Kiệt"]').first();
+const addressBox = siteModal.locator('input[placeholder*="Lý Thường Kiệt"]').first();
 line(await addressBox.count() > 0, 'S2 ô Địa chỉ có ví dụ là địa chỉ phố, không phải tầng và số phòng');
 await addressBox.fill('25 Lý Thường Kiệt, Hoàn Kiếm');
-const formText = (await text(hr)).replace(/\s+/g, ' ');
+const formText = (await siteModal.innerText()).replace(/\s+/g, ' ');
 line(
 	formText.includes('Tầng, số phòng là phòng họp: bạn thêm vào văn phòng ở bước sau'),
-	'S2 form thêm văn phòng nhắc trước rằng tầng và số phòng là phòng họp',
+	'S2 hộp thoại nhắc trước rằng tầng và số phòng là phòng họp',
 	formText.match(/Tầng, số phòng[^.]*\./)?.[0] ?? '',
 );
-console.log('ảnh:', await shot(hr, 's2-site-form'));
-await hr.getByRole('button', { name: 'Lưu', exact: true }).first().click();
+console.log('ảnh:', await shot(hr, 's2-site-modal'));
+await siteModal.getByRole('button', { name: 'Lưu', exact: true }).click();
 const siteToast = await toastText(hr, 20000);
 line(new RegExp(`Đã lưu văn phòng ${SITE_MAIN}`).test(siteToast), 'S2 tạo được văn phòng', siteToast);
 await hr.waitForTimeout(2500);
+line(
+	(await dialog(hr, 'Thêm văn phòng').count()) === 0,
+	'S2 lưu xong thì hộp thoại đóng lại',
+);
 
 const siteId = ((await api(hrToken, '/v1/office/sites', {})).json?.data ?? []).find(s => s.name === SITE_MAIN)?.id;
 line(!!siteId, 'S2 đọc được id văn phòng vừa tạo', `id ${siteId}`);
@@ -173,8 +184,8 @@ console.log('ảnh:', await shot(hr, 's2-card-with-four-rooms'));
 await clearToasts(hr);
 await hr.getByRole('button', { name: 'Thêm văn phòng' }).first().click();
 await hr.waitForTimeout(1000);
-await hr.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().fill(SITE_SECOND);
-await hr.getByRole('button', { name: 'Lưu', exact: true }).first().click();
+await dialog(hr, 'Thêm văn phòng').locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().fill(SITE_SECOND);
+await dialog(hr, 'Thêm văn phòng').getByRole('button', { name: 'Lưu', exact: true }).click();
 await toastText(hr, 20000);
 await hr.waitForTimeout(2500);
 const secondId = ((await api(hrToken, '/v1/office/sites', {})).json?.data ?? []).find(s => s.name === SITE_SECOND)?.id;
@@ -219,26 +230,59 @@ await hr.waitForTimeout(600);
 await clearToasts(hr);
 await hr.getByRole('button', { name: 'Thêm văn phòng' }).first().click();
 await hr.waitForTimeout(1000);
-await hr.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().fill(SITE_MAIN);
-await hr.locator('input[placeholder*="Lý Thường Kiệt"]').first().fill('Tầng 4 - Phòng 1');
-await hr.getByRole('button', { name: 'Lưu', exact: true }).first().click();
+const dupModal = dialog(hr, 'Thêm văn phòng');
+await dupModal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().fill(SITE_MAIN);
+await dupModal.locator('input[placeholder*="Lý Thường Kiệt"]').first().fill('Tầng 4 - Phòng 1');
+await dupModal.getByRole('button', { name: 'Lưu', exact: true }).click();
 await hr.waitForTimeout(3000);
-const dupSiteText = (await text(hr)).replace(/\s+/g, ' ');
+const dupSiteText = (await dupModal.innerText()).replace(/\s+/g, ' ');
 line(
 	/đã có/i.test(dupSiteText),
-	'S4 trùng tên văn phòng thì báo ngay dưới ô Tên',
-	dupSiteText.match(/[^.]*Tên văn phòng[^.]*\./)?.[0]?.slice(0, 120) ?? '',
+	'S4 trùng tên văn phòng thì báo ngay trong hộp thoại, dưới ô Tên',
+	dupSiteText.match(/[^.]*đã có[^.]*\./)?.[0]?.slice(0, 140) ?? '',
 );
+const goToCard = dupModal.getByRole('button', { name: `Đi tới thẻ ${SITE_MAIN}` });
+line((await goToCard.count()) > 0, 'S4 câu lỗi có liên kết "Đi tới thẻ …" của văn phòng đã có', dupSiteText.slice(0, 160));
+console.log('ảnh:', await shot(hr, 's4-duplicate-site-name'));
+await goToCard.click();
+await hr.waitForTimeout(1500);
 line(
-	dupSiteText.includes(`Bạn bấm "Thêm phòng họp" trong thẻ ${SITE_MAIN}`),
-	'S4 câu gợi ý chỉ đúng việc cần làm: thêm phòng vào thẻ của văn phòng đã có',
-	dupSiteText.match(/Văn phòng này đã có[^.]*\./)?.[0]?.slice(0, 180) ?? '',
+	(await dialog(hr, 'Thêm văn phòng').count()) === 0,
+	'S4 bấm liên kết thì hộp thoại đóng lại',
 );
 const highlighted = await hr.locator(`#site-card-${siteId}[class*="border-brand-500"]`).count();
-line(highlighted > 0, 'S4 thẻ của văn phòng đó được tô sáng', `${highlighted} thẻ được tô`);
-console.log('ảnh:', await shot(hr, 's4-duplicate-site-name'));
-await hr.getByRole('button', { name: 'Đóng' }).first().click();
-await hr.waitForTimeout(600);
+line(highlighted > 0, 'S4 và thẻ của văn phòng đó được tô viền', `${highlighted} thẻ được tô`);
+console.log('ảnh:', await shot(hr, 's4-go-to-card'));
+
+// ─── S12: sửa văn phòng qua chính hộp thoại đó ────────────────────────────────
+await clearToasts(hr);
+await siteHeader(hr.locator(`#site-card-${secondId}`)).getByRole('button', { name: 'Sửa' }).click();
+await hr.waitForTimeout(1200);
+const editModal = dialog(hr, 'Sửa văn phòng');
+line((await editModal.count()) > 0, 'S12 bấm Sửa thì mở cùng hộp thoại đó, tiêu đề là "Sửa văn phòng …"');
+const editFilled = await editModal.locator('input[placeholder*="Văn phòng Hữu Nghị"]').first().inputValue();
+line(editFilled === SITE_SECOND, 'S12 hộp thoại điền sẵn tên đang có', `ô ghi "${editFilled}"`);
+line(
+	(await editModal.locator('input[type="checkbox"]').count()) > 0,
+	'S12 hộp thoại sửa có ô "Đang dùng", hộp thoại thêm thì không',
+);
+await editModal.locator('input[placeholder*="Lý Thường Kiệt"]').first().fill('1 Trần Phú, Hải Châu');
+await editModal.getByRole('button', { name: 'Lưu', exact: true }).click();
+const editSiteToast = await toastText(hr, 20000);
+line(new RegExp(`Đã lưu văn phòng ${SITE_SECOND}`).test(editSiteToast), 'S12 sửa được văn phòng', editSiteToast);
+await hr.waitForTimeout(2500);
+line(
+	(await hr.locator(`#site-card-${secondId}`).innerText()).includes('1 Trần Phú, Hải Châu'),
+	'S12 thẻ hiện lại địa chỉ mới',
+);
+console.log('ảnh:', await shot(hr, 's12-site-edit-modal'));
+
+// Esc đóng hộp thoại, không lưu gì.
+await siteHeader(hr.locator(`#site-card-${secondId}`)).getByRole('button', { name: 'Sửa' }).click();
+await hr.waitForTimeout(1000);
+await hr.keyboard.press('Escape');
+await hr.waitForTimeout(800);
+line((await dialog(hr, 'Sửa văn phòng').count()) === 0, 'S12 bấm Esc thì hộp thoại đóng');
 
 // ─── S6: sửa phòng ────────────────────────────────────────────────────────────
 const mainCard = hr.locator(`#site-card-${siteId}`);
@@ -340,6 +384,28 @@ line(
 	phoneInputs ? `rộng ${Math.round(phoneInputs.width)}px` : 'không thấy ô',
 );
 console.log('ảnh:', await shot(phone, 's9-phone-card-and-form'));
+await phoneCard.getByRole('button', { name: 'Đóng' }).click();
+await phone.waitForTimeout(600);
+
+// Hộp thoại văn phòng trên điện thoại: vừa khung, không tràn ngang.
+await phone.getByRole('button', { name: 'Thêm văn phòng' }).first().click();
+await phone.waitForTimeout(1200);
+const phoneModal = dialog(phone, 'Thêm văn phòng');
+line((await phoneModal.count()) > 0, 'S9 điện thoại: mở được hộp thoại thêm văn phòng');
+const modalBox = await phoneModal.locator('div.rounded-2xl').first().boundingBox();
+line(
+	!!modalBox && modalBox.x >= 0 && modalBox.x + modalBox.width <= 391,
+	'S9 điện thoại: hộp thoại nằm trong màn hình',
+	modalBox ? `x ${Math.round(modalBox.x)}, rộng ${Math.round(modalBox.width)}` : 'không đo được',
+);
+line(
+	(await phone.evaluate(() => document.documentElement.scrollWidth)) <= 391,
+	'S9 điện thoại: mở hộp thoại không làm trang tràn ngang',
+	`scrollWidth ${await phone.evaluate(() => document.documentElement.scrollWidth)}`,
+);
+console.log('ảnh:', await shot(phone, 's9-phone-site-modal'));
+await phoneModal.getByRole('button', { name: 'Đóng', exact: true }).click();
+await phone.waitForTimeout(600);
 
 // ─── S11: nhân viên thường vẫn bị chặn ────────────────────────────────────────
 const employee = await signIn(browser, WHO.employeeA1.email);
