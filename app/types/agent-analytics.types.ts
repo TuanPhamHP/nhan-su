@@ -160,6 +160,11 @@ export interface AgentReviewMessage {
 	id: number;
 	role: 'user' | 'assistant' | 'system';
 	text: string;
+	/**
+	 * Chỉ có ở lượt trả lời hỏng giữa chừng: câu báo lỗi người dùng đã thấy. `text` bằng chính câu
+	 * này khi lượt đó hỏng trước lúc sinh chữ, hoặc là phần chữ dở khi hỏng giữa dòng.
+	 */
+	error?: string;
 	charts?: AgentChart[];
 	tables?: AgentTable[];
 	/** Điểm của chủ hội thoại. `null` = chưa chấm. */

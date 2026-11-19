@@ -43,9 +43,20 @@
 		return DOMPurify.sanitize(renderAgentMarkdown(props.message.text));
 	});
 
-	/** Hiện nút copy khi câu trả lời đã xong và có nội dung. */
+	/**
+	 * Hiện nút copy khi câu trả lời đã xong và có nội dung.
+	 *
+	 * Lượt hỏng thì không: thứ nằm trong bong bóng là câu báo lỗi chứ không phải câu trả lời, mà
+	 * một nút "Sao chép câu trả lời" ngay dưới đó khiến người dùng tưởng vẫn có gì để mang đi dùng.
+	 * Chữ lỗi vẫn bôi đen chép tay được, và ADMIN tra lại được ở màn xem hội thoại.
+	 */
 	const canCopy = computed(
-		() => !isUser.value && !props.message.streaming && !props.message.status && !!props.message.text,
+		() =>
+			!isUser.value
+			&& !props.message.error
+			&& !props.message.streaming
+			&& !props.message.status
+			&& !!props.message.text,
 	);
 
 	async function copy(): Promise<void> {

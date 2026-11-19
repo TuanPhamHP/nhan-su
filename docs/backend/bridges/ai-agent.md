@@ -253,6 +253,12 @@ không có gì để chấm điểm — ẩn phần đánh giá đi, đừng g�
 
 Chỉ có `message` — **không** `code`, **không** `type`.
 
+**Từ 19/11/2026 câu báo lỗi được LƯU vào hội thoại** khi lỗi xảy ra sau lúc server đã lưu câu hỏi
+(nhà cung cấp AI từ chối, hết giờ, đứt mạng). Mở lại hội thoại qua
+`GET /v1/agent/conversations/:id/messages` thì lượt đó là một tin `assistant` có trường `error` mang
+đúng chuỗi `message` vừa nhận, nên F5 không còn làm mất bong bóng lỗi. Lỗi xảy ra trước khi lưu câu
+hỏi (trợ lý bị tắt, hết hạn mức, `conversationId` không tồn tại) thì không lưu gì, kể cả câu hỏi.
+
 ### Thứ tự event được bảo đảm
 
 ```
@@ -554,6 +560,25 @@ Trả **toàn bộ** message, cũ → mới, **không phân trang**.
 
 **`feedback` chỉ xuất hiện khi CHÍNH NGƯỜI GỌI đã chấm câu trả lời đó** — không bao giờ là điểm của
 người khác, và tin nhắn chưa chấm thì không có trường này. Xem mục "Đánh giá câu trả lời".
+
+**`error` chỉ xuất hiện ở lượt trả lời hỏng giữa chừng**, mang đúng câu báo lỗi người dùng đã thấy
+qua `event: error`:
+
+```jsonc
+{ "id": 97, "role": "assistant",
+  "text": "Trợ lý đã dùng hết hạn mức của dịch vụ AI. Vui lòng báo quản trị viên.",
+  "error": "Trợ lý đã dùng hết hạn mức của dịch vụ AI. Vui lòng báo quản trị viên.",
+  "createdAt": "2026-11-19T03:27:26.000Z" }
+```
+
+- Hỏng trước khi sinh chữ nào thì `text` bằng chính câu lỗi, để client chưa biết trường `error` vẫn
+  hiện được một bong bóng có nội dung.
+- Hỏng sau khi đã stream được vài chữ thì `text` là phần chữ dở, còn `error` là câu lỗi.
+- Client mới: thấy `error` thì vẽ bong bóng lỗi với nội dung `error`, giống lúc nhận `event: error`,
+  và không hiện nút sao chép hay chấm điểm cho tin đó.
+- Câu lỗi không bao giờ được gửi ngược lên model ở lượt sau.
+- `GET /v1/agent/analytics/conversations/:id/messages` (ADMIN) trả cùng trường này, để tra lại sự cố.
+- Thống kê `answers` của `GET /v1/agent/analytics/overview` không đếm các tin lỗi.
 
 **`charts` chỉ xuất hiện khi lượt đó CÓ biểu đồ** — tin nhắn cũ và mọi lượt không vẽ đều
 không có trường này, nên client cũ không vỡ. Biểu đồ được lưu ngay trong nội dung tin nhắn,
@@ -1230,6 +1255,8 @@ export interface ConversationMessage {
   id: number;
   role: AgentMessageRole;     // đã hạ về chữ thường
   text: string;
+  /** Chỉ có ở lượt trả lời hỏng giữa chừng: câu báo lỗi người dùng đã thấy qua `event: error`. */
+  error?: string;
   /** Chỉ có khi lượt đó CÓ biểu đồ. Tin nhắn cũ không có trường này. */
   charts?: AgentChart[];
   /** Chỉ có khi CHÍNH NGƯỜI GỌI đã chấm câu trả lời này. Không bao giờ là điểm của người khác. */
