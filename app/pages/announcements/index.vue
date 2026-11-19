@@ -96,7 +96,7 @@
 				v-else-if="myItems.length === 0"
 				class="py-16 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700"
 			>
-				<p class="text-4xl mb-2">📭</p>
+				<Icon name="heroicons:inbox" class="w-10 h-10 mx-auto mb-2 text-gray-300 dark:text-gray-600" aria-hidden="true" />
 				<p class="text-sm text-gray-500 dark:text-gray-400">Chưa có thông báo nào</p>
 			</div>
 
@@ -113,9 +113,13 @@
 				]"
 			>
 				<div
-					class="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/30 flex items-center justify-center text-lg"
+					class="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-300"
 				>
-					{{ ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].icon }}
+					<Icon
+						:name="ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].icon"
+						class="w-5 h-5"
+						aria-hidden="true"
+					/>
 				</div>
 				<div class="flex-1 min-w-0 space-y-1">
 					<div class="flex items-start justify-between gap-2">

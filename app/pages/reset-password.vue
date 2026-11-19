@@ -113,9 +113,10 @@
 						<div>
 							<NuxtLink
 								to="/login"
-								class="text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+								class="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
 							>
-								← Quay lại đăng nhập
+								<Icon name="heroicons:arrow-left" class="w-4 h-4" aria-hidden="true" />
+								Quay lại đăng nhập
 							</NuxtLink>
 						</div>
 					</div>
@@ -227,9 +228,10 @@
 						<div class="text-center">
 							<NuxtLink
 								to="/login"
-								class="text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+								class="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
 							>
-								← Quay lại đăng nhập
+								<Icon name="heroicons:arrow-left" class="w-4 h-4" aria-hidden="true" />
+								Quay lại đăng nhập
 							</NuxtLink>
 						</div>
 					</form>

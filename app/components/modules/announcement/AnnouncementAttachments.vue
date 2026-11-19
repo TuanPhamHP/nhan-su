@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import AttachmentImageGallery from '~/components/modules/announcement/AttachmentImageGallery.vue';
 	import type { AnnouncementAttachment, AnnouncementLink } from '~/types/announcement.types';
+	import { fileIconName } from '~/utils/file-icon';
 
 	const props = defineProps<{
 		attachments: AnnouncementAttachment[];
@@ -22,14 +23,6 @@
 
 	function openImage(idx: number) {
 		imageViewer.open(imageUrls.value, idx);
-	}
-
-	function fileIcon(name: string): string {
-		const lower = name.toLowerCase();
-		if (lower.endsWith('.pdf')) return '📕';
-		if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return '📊';
-		if (lower.endsWith('.docx') || lower.endsWith('.doc')) return '📝';
-		return '📎';
 	}
 
 	function formatDomain(url: string): string {
@@ -107,7 +100,7 @@
 					<div
 						class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-lg flex-shrink-0 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/60 transition-colors"
 					>
-						<span>{{ fileIcon(f.name) }}</span>
+						<Icon :name="fileIconName(f.name)" class="w-5 h-5" aria-hidden="true" />
 					</div>
 					<div class="flex-1 min-w-0">
 						<p class="font-semibold text-gray-800 dark:text-gray-200 truncate">{{ f.name }}</p>

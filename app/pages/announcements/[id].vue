@@ -93,7 +93,7 @@
 			v-else-if="notFound || !announcement || !config"
 			class="p-12 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3"
 		>
-			<p class="text-4xl">🚫</p>
+			<Icon name="heroicons:no-symbol" class="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600" aria-hidden="true" />
 			<p class="text-base font-semibold text-gray-800 dark:text-gray-200">
 				Thông báo không tồn tại hoặc đã bị thu hồi.
 			</p>
@@ -146,7 +146,7 @@
 							<span
 								class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium"
 							>
-								<span>{{ config.icon }}</span>
+								<Icon :name="config.icon" class="w-3.5 h-3.5" aria-hidden="true" />
 								<span>{{ config.label }}</span>
 							</span>
 							<span class="text-xs text-gray-500 dark:text-gray-400">

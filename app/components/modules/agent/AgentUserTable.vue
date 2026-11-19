@@ -110,7 +110,12 @@
 								@click="sortBy = col.key"
 							>
 								{{ col.label }}
-								<span v-if="sortBy === col.key">↓</span>
+								<Icon
+									v-if="sortBy === col.key"
+									name="heroicons:arrow-small-down"
+									class="inline-block w-3.5 h-3.5"
+									title="Đang sắp theo cột này, giảm dần"
+								/>
 							</button>
 						</th>
 						<th class="w-40 px-4 py-2 text-left font-medium">Tỷ trọng</th>

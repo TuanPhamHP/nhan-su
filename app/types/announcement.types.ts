@@ -192,6 +192,12 @@ export interface CreateCommentDto {
 	parentId?: number;
 }
 
+/**
+ * `icon` là tên icon của `@nuxt/icon`, dùng trực tiếp với `<Icon :name="config.icon" />`.
+ *
+ * Trước đây đây là emoji (📊, 👤, 📄, 📢). Bỏ từ 19/11/2026 vì emoji mỗi hệ điều hành vẽ một
+ * kiểu, không đổi màu theo chế độ tối, và trình đọc màn hình đọc thành tên hình vẽ.
+ */
 export const ANNOUNCEMENT_TYPE_CONFIG: Record<
 	AnnouncementType,
 	{
@@ -203,24 +209,24 @@ export const ANNOUNCEMENT_TYPE_CONFIG: Record<
 > = {
 	ATTENDANCE_REPORT: {
 		label: 'Báo cáo chấm công',
-		icon: '📊',
+		icon: 'heroicons:chart-bar',
 		actionLabel: 'Xem báo cáo công tháng',
 		actionUrl: '/attendance/my',
 	},
 	PROFILE_UPDATE: {
 		label: 'Cập nhật thông tin cá nhân',
-		icon: '👤',
+		icon: 'heroicons:user-circle',
 		actionLabel: 'Cập nhật ngay',
 		actionUrl: '/profile',
 	},
 	DOCUMENT_SUBMIT: {
 		label: 'Nộp hồ sơ lao động',
-		icon: '📄',
+		icon: 'heroicons:document-text',
 		actionLabel: 'Nộp hồ sơ',
 		actionUrl: '/employees/me/documents',
 	},
 	GENERAL: {
 		label: 'Thông báo chung',
-		icon: '📢',
+		icon: 'heroicons:megaphone',
 	},
 };

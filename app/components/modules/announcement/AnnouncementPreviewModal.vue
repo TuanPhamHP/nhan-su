@@ -4,6 +4,7 @@
 	import { vi } from 'date-fns/locale';
 	import AttachmentImageGallery from '~/components/modules/announcement/AttachmentImageGallery.vue';
 	import { ANNOUNCEMENT_TYPE_CONFIG, type AnnouncementLink, type AnnouncementType } from '~/types/announcement.types';
+	import { fileIconName } from '~/utils/file-icon';
 
 	const props = defineProps<{
 		modelValue: boolean;
@@ -46,13 +47,6 @@
 		);
 	}
 
-	function fileIcon(f: File): string {
-		if (f.type === 'application/pdf') return '📕';
-		if (f.type.includes('spreadsheet') || f.name.endsWith('.xlsx')) return '📊';
-		if (f.type.includes('word') || f.name.endsWith('.docx')) return '📝';
-		return '📎';
-	}
-
 	function handleClose() {
 		emit('update:modelValue', false);
 	}
@@ -88,7 +82,10 @@
 				<div class="flex-1 overflow-y-auto">
 					<!-- Simulated email header -->
 					<div class="px-8 py-5 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-						<p class="text-xs font-medium tracking-wide opacity-90">📢 THÔNG BÁO TỪ CÔNG TY</p>
+						<p class="inline-flex items-center gap-1.5 text-xs font-medium tracking-wide opacity-90">
+							<Icon name="heroicons:megaphone" class="w-4 h-4" aria-hidden="true" />
+							THÔNG BÁO TỪ CÔNG TY
+						</p>
 					</div>
 
 					<div class="px-8 py-6 space-y-5">
@@ -97,7 +94,7 @@
 							<div
 								class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold"
 							>
-								<span>{{ config.icon }}</span>
+								<Icon :name="config.icon" class="w-3.5 h-3.5" aria-hidden="true" />
 								<span>{{ config.label }}</span>
 							</div>
 							<h1 class="text-2xl font-bold text-gray-900 dark:text-white leading-tight">
@@ -132,9 +129,10 @@
 									:href="l.url"
 									target="_blank"
 									rel="noopener noreferrer"
-									class="block items-center gap-1.5 text-sm text-brand-600 dark:text-brand-400 hover:underline"
+									class="flex items-center gap-1.5 text-sm text-brand-600 dark:text-brand-400 hover:underline"
 								>
-									🔗 {{ l.label || l.url }}
+									<Icon name="heroicons:link" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+									{{ l.label || l.url }}
 								</a>
 							</div>
 						</div>
@@ -153,7 +151,7 @@
 									:key="`${f.name}-${idx}`"
 									class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300"
 								>
-									<span>{{ fileIcon(f) }}</span>
+									<Icon :name="fileIconName(f.name, f.type)" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
 									<span class="truncate">{{ f.name }}</span>
 								</div>
 							</div>
@@ -161,8 +159,9 @@
 
 						<!-- Action button -->
 						<div v-if="config.actionUrl" class="pt-3">
+							<!-- Nút này mô phỏng nút trong email; email của máy chủ cũng đã bỏ mũi tên. -->
 							<span class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium">
-								{{ config.actionLabel }} →
+								{{ config.actionLabel }}
 							</span>
 						</div>
 					</div>

@@ -13,7 +13,8 @@ import type { NotificationResponse, NotificationType } from '~/types/notificatio
  */
 const noti = (type: NotificationType, refId: number, targetUrl: string): NotificationResponse => ({
 	id: 1,
-	title: '📌 Thông tin: Nhân viên chuyển tới',
+	// Máy chủ bỏ tiền tố emoji `📌` ngày 19/11/2026; bản ghi mẫu chép theo bản mới.
+	title: 'Thông tin: Nhân viên chuyển tới',
 	body: 'Người Một (BETA-0002) được chuyển tới từ một công ty khác trong hệ thống.',
 	category: 'EVENT',
 	type,

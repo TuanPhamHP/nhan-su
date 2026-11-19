@@ -304,11 +304,12 @@
 					<div class="mt-6 text-center">
 						<button
 							type="button"
-							class="text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+							class="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
 							:disabled="!!selectingCode"
 							@click="backToCredentials()"
 						>
-							← Đăng nhập bằng tài khoản khác
+							<Icon name="heroicons:arrow-left" class="w-4 h-4" aria-hidden="true" />
+							Đăng nhập bằng tài khoản khác
 						</button>
 					</div>
 				</div>

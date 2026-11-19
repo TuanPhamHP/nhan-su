@@ -206,7 +206,11 @@ watch(
 						<div
 							class="w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center flex-shrink-0"
 						>
-							<span class="text-base">🖥️</span>
+							<Icon
+								name="heroicons:computer-desktop"
+								class="w-4 h-4 text-sky-600 dark:text-sky-300"
+								aria-hidden="true"
+							/>
 						</div>
 						<h2 class="text-base font-semibold text-gray-900 dark:text-white flex-1">Cấu hình T7 Online</h2>
 						<button
@@ -225,7 +229,11 @@ watch(
 						<div
 							class="flex gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
 						>
-							<span class="text-base flex-shrink-0">ℹ️</span>
+							<Icon
+								name="heroicons:information-circle"
+								class="w-5 h-5 flex-shrink-0 text-blue-500 dark:text-blue-400"
+								aria-hidden="true"
+							/>
 							<p class="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">
 								Hệ thống sẽ tự động tạo bản ghi <strong>PRESENT</strong> lúc 23:50 mỗi T7.
 								Nếu nhân viên có đơn nghỉ phép T7 đó, bản ghi PRESENT sẽ không được tạo

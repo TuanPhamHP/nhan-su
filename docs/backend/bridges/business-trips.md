@@ -384,7 +384,7 @@ Nhân viên khi tạo đơn khai báo **lộ trình mong muốn** (`pickupPoint`
    └─────────────────────────────────────────────────────────────┘
 
 5. Sau khi update:
-   - Chủ đơn nhận notification tự động (title "🚗 Thông tin phương tiện đã cập nhật")
+   - Chủ đơn nhận notification tự động (title "Thông tin phương tiện đã cập nhật")
    - Response trả về TOÀN BỘ trip (routes+transports mới nhất) → FE state cập nhật ngay
 ```
 
@@ -671,8 +671,8 @@ Không cần request body. Chỉ approver được chỉ định (hoặc HR/ADMI
 **Response 200:** `BusinessTripResponse` với `status = "APPROVED"`.
 
 **Side effect — notification:**
-- Chủ đơn nhận `businessTripApprovedOwner` (title `✅ Đơn công tác được duyệt`).
-- **Mọi HR/ADMIN đang `ACTIVE`** nhận `businessTripApprovedHR` — title `📌 Đơn công tác cần xử lý`,
+- Chủ đơn nhận `businessTripApprovedOwner` (title `Đơn công tác được duyệt`).
+- **Mọi HR/ADMIN đang `ACTIVE`** nhận `businessTripApprovedHR` — title `Đơn công tác cần xử lý`,
   body `{fullName} - {employeeCode} đăng ký công tác "{title}" từ {DD/MM/YYYY} đến {DD/MM/YYYY}. Vui lòng kiểm tra và xử lý.`
   Mục đích: HR biết để đặt xe/vé. Gửi **in-app + FCM**, cố ý **không gửi email**.
 - `refType = business_trip`, `refId = tripId`, `actionType = NAVIGATE_ONLY`,

@@ -593,7 +593,7 @@
 								</svg>
 								{{ selectedEmployee.fullName }}
 							</span>
-							<span class="text-xs text-gray-400">Xem số dư phép bên phải →</span>
+							<span class="text-xs text-gray-400">Xem số dư phép ở khung bên phải</span>
 						</div>
 					</div>
 
@@ -681,8 +681,11 @@
 							>
 								<!-- Kịch bản P: đủ phép -->
 								<template v-if="preview.leaveCode === 'P'">
-									<p class="text-sm font-medium text-green-800 dark:text-green-300">
-										✓ {{ preview.totalDays }} ngày nghỉ hưởng lương (P)
+									<p
+										class="inline-flex items-center gap-1.5 text-sm font-medium text-green-800 dark:text-green-300"
+									>
+										<Icon name="heroicons:check-circle" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+										{{ preview.totalDays }} ngày nghỉ hưởng lương (P)
 									</p>
 									<p class="text-xs text-green-600 dark:text-green-400 mt-1">
 										Số dư còn lại sau khi duyệt: {{ preview.remainingAfter }} ngày
@@ -691,7 +694,10 @@
 
 								<!-- Kịch bản KL: hết phép -->
 								<template v-else-if="preview.leaveCode === 'KL'">
-									<p class="text-sm font-medium text-red-800 dark:text-red-300">⚠️ Số dư phép năm đã hết</p>
+									<p class="inline-flex items-center gap-1.5 text-sm font-medium text-red-800 dark:text-red-300">
+										<Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+										Số dư phép năm đã hết
+									</p>
 									<p class="text-sm text-red-700 dark:text-red-400 mt-1">
 										{{ preview.totalDays }} ngày sẽ tính là Nghỉ không lương (KL)
 									</p>
@@ -699,8 +705,11 @@
 
 								<!-- Kịch bản P+KL: split -->
 								<template v-else>
-									<p class="text-sm font-medium text-amber-800 dark:text-amber-300">
-										⚠️ Phép năm không đủ — tự động tách đơn
+									<p
+										class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 dark:text-amber-300"
+									>
+										<Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+										Phép năm không đủ — tự động tách đơn
 									</p>
 									<div class="mt-2 space-y-1">
 										<div class="flex justify-between text-sm">
@@ -859,10 +868,11 @@
 										<button
 											v-if="suggestHalfDay"
 											type="button"
-											class="mt-2 text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:no-underline transition-all"
+											class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:no-underline transition-all"
 											@click="switchToHalfDay"
 										>
-											→ Chuyển sang đơn nghỉ nửa ngày
+											<Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+											Chuyển sang đơn nghỉ nửa ngày
 										</button>
 									</div>
 								</div>
@@ -941,10 +951,11 @@
 										<button
 											v-if="suggestHalfDay"
 											type="button"
-											class="mt-2 text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:no-underline transition-all"
+											class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:no-underline transition-all"
 											@click="switchToHalfDay"
 										>
-											→ Chuyển sang đơn nghỉ nửa ngày
+											<Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+											Chuyển sang đơn nghỉ nửa ngày
 										</button>
 									</div>
 								</div>

@@ -2146,7 +2146,7 @@ Người nhận vẫn tự bấm Đã nhận được khi đang `DISPUTED` (hai 
 | Mã | `type` | Người nhận | `refType` → trang |
 |---|---|---|---|
 | N-01 (đổi chữ) | `ASSET_ASSIGNED` | Người được cấp phát | `asset_holding` → `/assets/my` |
-| N-02b | `ASSET_RETURNED` | Người giữ cũ khi điều chuyển, title "🔄 Tài sản đã được điều chuyển" | `asset_holding` → `/assets/my` |
+| N-02b | `ASSET_RETURNED` | Người giữ cũ khi điều chuyển, title "Tài sản đã được điều chuyển" | `asset_holding` → `/assets/my` |
 | N-13 | `ASSET_LOST` | Người đang giữ khi tài sản được xác nhận mất | `asset_holding` → `/assets/my` |
 | N-13b | `ASSET_LOST` | Quản lý trực tiếp của người giữ, chỉ đọc | `asset` → `/management/assets/:refId` |
 | N-14 | `ASSET_INCIDENT_HANDLED` | Người gửi báo hỏng, báo mất | **`asset_my_incident`** → `/assets/my?incident_id=:refId` (refId là **id báo cáo**) |
@@ -2408,7 +2408,7 @@ Lỗi 4xx của route này vẫn trả JSON như mọi route khác.
 | Mã | `type` | Người nhận | `refType` → trang |
 |---|---|---|---|
 | N-10 | `ASSET_DISPOSAL_PENDING` | Người có `asset:disposal:approve` và ADMIN, trừ người lập. Gửi, gửi lại, và J-07 nhắc sau 3 ngày | `asset_disposal` → `/management/assets/disposals/{refId}` |
-| N-10 | `ASSET_DISPOSAL_DECIDED` | Người lập phiếu, khi được duyệt (✅) hoặc bị từ chối (❌) | `asset_disposal` → `/management/assets/disposals/{refId}` |
+| N-10 | `ASSET_DISPOSAL_DECIDED` | Người lập phiếu, khi được duyệt hoặc bị từ chối | `asset_disposal` → `/management/assets/disposals/{refId}` |
 
 Hai thông báo đều `NAVIGATE_ONLY` (category `REQUEST`): người duyệt phải mở phiếu xem tài sản và vòng gửi, không duyệt
 nhanh từ chuông. Câu chữ: `docs/notifications/notification-content-map.md`.
@@ -2515,7 +2515,7 @@ chữ tìm ra các chỗ dưới đây. Kiểu ở mục "TypeScript Types" phí
 | `expectedHolderName` khi cấp cho phòng ban | "Kỹ thuật (Lan chịu trách nhiệm)" | "Kỹ thuật, Lan chịu trách nhiệm"; thiếu người chịu trách nhiệm thì chỉ tên phòng |
 | Biên bản kiểm kê Excel | Một dòng tiêu đề dính tên công ty | Dòng 1 tên công ty, dòng 2 "BIÊN BẢN KIỂM KÊ TÀI SẢN: {tên đợt}", dòng 3 phạm vi và ai mở, đóng đợt, dòng 4 số liệu |
 | Excel kế toán, sheet "Giảm trong kỳ" | – | Thêm cột "Bên mua, bên nhận" |
-| Thông báo N-10 cho người duyệt | Tiêu đề giống nhau cho mọi phiếu | Tiêu đề có số phiếu: `📋 Cần duyệt phiếu thanh lý số {id}`; nội dung có bên mua, giá thu về khi có |
+| Thông báo N-10 cho người duyệt | Tiêu đề giống nhau cho mọi phiếu | Tiêu đề có số phiếu: `Cần duyệt phiếu thanh lý số {id}`; nội dung có bên mua, giá thu về khi có |
 
 **Nhãn đổi** (lấy từ `…Label` của response, web phải đổi các bản sao nhãn trong `asset.types.ts` cho khớp)
 

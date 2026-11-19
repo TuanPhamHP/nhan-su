@@ -123,9 +123,13 @@ export interface QueryNotificationsParams {
 
 | `actionType` | Ý nghĩa | Hiển thị trên UI |
 |-------------|---------|-----------------|
-| `'APPROVE_REJECT'` | Người nhận cần duyệt/từ chối — tiền tố `📋` | Hiện nút "Xem và duyệt" |
-| `'NAVIGATE_ONLY'` | Chỉ đọc/theo dõi — tiền tố `✅❌🔄⚠️⏰📌` | Chỉ điều hướng |
+| `'APPROVE_REJECT'` | Người nhận cần duyệt/từ chối | Hiện nút "Xem và duyệt" |
+| `'NAVIGATE_ONLY'` | Chỉ đọc/theo dõi; bản gửi HR để biết có tiền tố chữ `Thông tin:` | Chỉ điều hướng |
 | `null` | Không điều hướng (ATTENDANCE informational) | Không có nút/link |
+
+**Từ 19/11/2026 `title`, `body` và email không còn emoji.** Bản trước có tiền tố `📋`, `✅`, `📌 Thông tin:`…; thông
+báo đã lưu trước ngày đó vẫn giữ nguyên chữ cũ. Client không dựa vào emoji để phân loại: dùng `actionType`, `category`,
+`type`. Biểu tượng cạnh thông báo (nếu có) là icon của giao diện, chọn theo `category`.
 
 | `refType` | Route fallback | Các type sử dụng |
 |-----------|---------------|------------------|
@@ -180,7 +184,7 @@ function navigateFromNotification(notification: NotificationResponse, router: Ro
   "data": [
     {
       "id": 101,
-      "title": "Đơn nghỉ phép được duyệt ✅",
+      "title": "Đơn nghỉ phép được duyệt",
       "body": "Đơn Nghỉ phép năm ngày 03/06/2026 đã được duyệt",
       "category": "LEAVE",
       "type": "LEAVE_APPROVED",
