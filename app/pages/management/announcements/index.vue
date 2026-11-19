@@ -296,7 +296,7 @@
 						</tr>
 						<tr v-else-if="items.length === 0">
 							<td colspan="6" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
-								<p class="text-2xl mb-1">📤</p>
+								<Icon name="heroicons:inbox" class="w-8 h-8 mx-auto mb-1" aria-hidden="true" />
 								Chưa có thông báo nào
 							</td>
 						</tr>
@@ -311,9 +311,11 @@
 							<td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ stt(idx) }}</td>
 							<td class="px-4 py-3 min-w-[240px] max-w-md">
 								<div class="flex items-center gap-2">
-									<span class="flex-shrink-0 text-base">
-										{{ ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].icon }}
-									</span>
+									<Icon
+										:name="ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].icon"
+										class="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400"
+										:title="ANNOUNCEMENT_TYPE_CONFIG[item.announcementType].label"
+									/>
 									<NuxtLink
 										:to="`/management/announcements/${item.id}`"
 										:class="[
@@ -339,7 +341,8 @@
 									:title="item.recalledAt ? `Thu hồi lúc ${formatDateTime(item.recalledAt)}` : 'Đã thu hồi'"
 									class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
 								>
-									🚫 Đã thu hồi
+									<Icon name="heroicons:no-symbol" class="w-3 h-3" aria-hidden="true" />
+									Đã thu hồi
 								</span>
 								<span
 									v-else

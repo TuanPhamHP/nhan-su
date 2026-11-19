@@ -160,9 +160,13 @@ const timelineSteps = computed(() => {
 				<!-- OT Rate + WorkMode badges -->
 				<div class="flex items-center gap-2 flex-wrap">
 					<span
-						:class="['inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold', rateBadgeClass(rateBadge.maxRate)]"
+						:class="[
+							'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-semibold',
+							rateBadgeClass(rateBadge.maxRate),
+						]"
 					>
-						⏱ {{ rateBadge.label }}
+						<Icon name="heroicons:clock" class="w-4 h-4" aria-hidden="true" />
+						{{ rateBadge.label }}
 					</span>
 
 					<span
@@ -173,14 +177,20 @@ const timelineSteps = computed(() => {
 								: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
 						]"
 					>
-						{{ request.workMode === 'OFFLINE' ? '🏢 Tại văn phòng' : '🏠 Online' }}
+						<Icon
+							:name="request.workMode === 'OFFLINE' ? 'heroicons:building-office-2' : 'heroicons:home'"
+							class="w-4 h-4"
+							aria-hidden="true"
+						/>
+						{{ request.workMode === 'OFFLINE' ? 'Tại văn phòng' : 'Online' }}
 					</span>
 
 					<span
 						v-if="request.finalWorkMode && request.finalWorkMode !== request.workMode"
 						class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
 					>
-						⚠️ Đã chuyển sang {{ request.finalWorkMode === 'ONLINE' ? 'Online' : 'Văn phòng' }}
+						<Icon name="heroicons:exclamation-triangle" class="w-4 h-4" aria-hidden="true" />
+						Đã chuyển sang {{ request.finalWorkMode === 'ONLINE' ? 'Online' : 'Văn phòng' }}
 					</span>
 				</div>
 
@@ -248,7 +258,8 @@ const timelineSteps = computed(() => {
 					<div v-if="request.location" class="flex justify-between">
 						<span class="text-gray-500 dark:text-gray-400">Địa điểm OT</span>
 						<span class="font-medium text-gray-900 dark:text-white flex items-center gap-1">
-							<span>📍</span>{{ request.location.name }}
+							<Icon name="heroicons:map-pin" class="w-4 h-4 text-gray-400" aria-hidden="true" />
+							{{ request.location.name }}
 						</span>
 					</div>
 					<div class="flex justify-between gap-4">
@@ -296,7 +307,8 @@ const timelineSteps = computed(() => {
 					]"
 				>
 					<h4 class="font-medium text-sm mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
-						📍 Xác nhận vị trí làm việc
+						<Icon name="heroicons:map-pin" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+						Xác nhận vị trí làm việc
 						<span v-if="request.locationStatus.isResolved" class="text-xs font-normal text-gray-400 dark:text-gray-500">
 							(Đã hoàn tất)
 						</span>
@@ -318,13 +330,21 @@ const timelineSteps = computed(() => {
 							<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">{{ formatTime(request.startTime) }}</p>
 
 							<template v-if="request.locationStatus.start.isValid === true">
-								<p class="text-green-600 dark:text-green-400 text-sm font-medium">✓ Hợp lệ</p>
+								<p
+									class="inline-flex items-center justify-center gap-1 text-green-600 dark:text-green-400 text-sm font-medium"
+								>
+									<Icon name="heroicons:check-circle" class="w-4 h-4" aria-hidden="true" />
+									Hợp lệ
+								</p>
 								<p v-if="request.locationStatus.start.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
 									{{ formatDateTime(request.locationStatus.start.checkedAt) }}
 								</p>
 							</template>
 							<template v-else-if="request.locationStatus.start.isValid === false">
-								<p class="text-red-600 dark:text-red-400 text-sm font-medium">✗ Ngoài phạm vi</p>
+								<p class="inline-flex items-center justify-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
+									<Icon name="heroicons:x-circle" class="w-4 h-4" aria-hidden="true" />
+									Ngoài phạm vi
+								</p>
 								<p v-if="request.locationStatus.start.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
 									{{ formatDateTime(request.locationStatus.start.checkedAt) }}
 								</p>
@@ -357,13 +377,21 @@ const timelineSteps = computed(() => {
 							<p class="text-xs text-gray-400 dark:text-gray-500 mb-2">{{ formatTime(request.endTime) }}</p>
 
 							<template v-if="request.locationStatus.end.isValid === true">
-								<p class="text-green-600 dark:text-green-400 text-sm font-medium">✓ Hợp lệ</p>
+								<p
+									class="inline-flex items-center justify-center gap-1 text-green-600 dark:text-green-400 text-sm font-medium"
+								>
+									<Icon name="heroicons:check-circle" class="w-4 h-4" aria-hidden="true" />
+									Hợp lệ
+								</p>
 								<p v-if="request.locationStatus.end.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
 									{{ formatDateTime(request.locationStatus.end.checkedAt) }}
 								</p>
 							</template>
 							<template v-else-if="request.locationStatus.end.isValid === false">
-								<p class="text-red-600 dark:text-red-400 text-sm font-medium">✗ Ngoài phạm vi</p>
+								<p class="inline-flex items-center justify-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
+									<Icon name="heroicons:x-circle" class="w-4 h-4" aria-hidden="true" />
+									Ngoài phạm vi
+								</p>
 								<p v-if="request.locationStatus.end.checkedAt" class="text-xs text-gray-400 dark:text-gray-500">
 									{{ formatDateTime(request.locationStatus.end.checkedAt) }}
 								</p>
@@ -389,16 +417,21 @@ const timelineSteps = computed(() => {
 					>
 						<p
 							:class="[
-								'text-sm font-medium',
+								'inline-flex items-center gap-1 text-sm font-medium',
 								request.finalWorkMode === 'OFFLINE'
 									? 'text-green-600 dark:text-green-400'
 									: 'text-orange-600 dark:text-orange-400',
 							]"
 						>
+							<Icon
+								:name="request.finalWorkMode === 'OFFLINE' ? 'heroicons:check-circle' : 'heroicons:arrow-right-circle'"
+								class="w-4 h-4 flex-shrink-0"
+								aria-hidden="true"
+							/>
 							{{
 								request.finalWorkMode === 'OFFLINE'
-									? '✓ Xác nhận làm việc tại văn phòng'
-									: '→ Đã chuyển sang hình thức Online'
+									? 'Xác nhận làm việc tại văn phòng'
+									: 'Đã chuyển sang hình thức Online'
 							}}
 						</p>
 					</div>

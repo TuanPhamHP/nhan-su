@@ -368,9 +368,10 @@ async function save() {
 									/>
 									<span
 										v-else
-										class="text-sm text-brand-600 dark:text-brand-400"
+										class="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400"
 									>
-										📄 Đã tải lên
+										<Icon name="heroicons:document" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+										Đã tải lên
 									</span>
 								</template>
 								<template v-else>
@@ -385,9 +386,10 @@ async function save() {
 										:href="t.ticketImageUrl"
 										target="_blank"
 										rel="noopener"
-										class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+										class="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline"
 									>
-										📄 Xem file đính kèm
+										<Icon name="heroicons:document" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+										Xem file đính kèm
 									</a>
 								</template>
 								<button
@@ -414,7 +416,10 @@ async function save() {
 									@click="ticketInputRefs[idx]?.click()"
 								>
 									<span v-if="uploadingTicket[idx]">Đang upload…</span>
-									<span v-else>📎 Chọn ảnh vé</span>
+									<span v-else class="inline-flex items-center gap-1.5">
+										<Icon name="heroicons:paper-clip" class="w-4 h-4" aria-hidden="true" />
+										Chọn ảnh vé
+									</span>
 								</button>
 								<p class="text-xs text-gray-400 mt-1">JPG, PNG, PDF · tối đa 10MB</p>
 							</div>

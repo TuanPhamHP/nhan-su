@@ -307,11 +307,24 @@
 							>
 								{{ pendingTotal }}
 							</p>
+							<!-- Mỗi loại đơn một icon, có `title` để biết đang đếm loại nào. -->
 							<div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-								<span>📅 {{ stats.pendingLeave }}</span>
-								<span v-if="canUse('OVERTIME')">⏱ {{ stats.pendingOT }}</span>
-								<span v-if="canUse('ONLINE_WORK')">🏠 {{ stats.pendingOnlineWork }}</span>
-								<span>⚠ {{ stats.pendingViolation }}</span>
+								<span class="inline-flex items-center gap-1" title="Đơn nghỉ phép">
+									<Icon name="heroicons:calendar-days" class="w-3.5 h-3.5" aria-hidden="true" />
+									{{ stats.pendingLeave }}
+								</span>
+								<span v-if="canUse('OVERTIME')" class="inline-flex items-center gap-1" title="Đơn tăng ca">
+									<Icon name="heroicons:clock" class="w-3.5 h-3.5" aria-hidden="true" />
+									{{ stats.pendingOT }}
+								</span>
+								<span v-if="canUse('ONLINE_WORK')" class="inline-flex items-center gap-1" title="Đơn làm việc online">
+									<Icon name="heroicons:home" class="w-3.5 h-3.5" aria-hidden="true" />
+									{{ stats.pendingOnlineWork }}
+								</span>
+								<span class="inline-flex items-center gap-1" title="Phiếu chỉnh công">
+									<Icon name="heroicons:exclamation-triangle" class="w-3.5 h-3.5" aria-hidden="true" />
+									{{ stats.pendingViolation }}
+								</span>
 							</div>
 						</div>
 						<div
@@ -491,8 +504,12 @@
 			>
 				<div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
 					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Đơn cần duyệt</h2>
-					<NuxtLink to="/management/leave" class="text-xs text-brand-600 dark:text-brand-400 hover:underline">
-						Xem tất cả {{ pendingTotal > 0 ? `${pendingTotal} đơn` : '' }} →
+					<NuxtLink
+						to="/management/leave"
+						class="inline-flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:underline"
+					>
+						Xem tất cả {{ pendingTotal > 0 ? `${pendingTotal} đơn` : '' }}
+						<Icon name="heroicons:arrow-right" class="w-3.5 h-3.5" aria-hidden="true" />
 					</NuxtLink>
 				</div>
 
@@ -606,7 +623,8 @@
 							class="flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline transition-colors"
 							@click="showNewHiresModal = true"
 						>
-							Xem danh sách nhân viên mới →
+							Xem danh sách nhân viên mới
+							<Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
 						</button>
 					</div>
 				</template>
@@ -622,9 +640,10 @@
 					<p class="text-sm">Chưa có nhân viên mới</p>
 					<NuxtLink
 						to="/management/employees/new"
-						class="text-xs text-brand-600 dark:text-brand-400 hover:underline mt-1"
+						class="inline-flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:underline mt-1"
 					>
-						Thêm nhân viên →
+						Thêm nhân viên
+						<Icon name="heroicons:arrow-right" class="w-3.5 h-3.5" aria-hidden="true" />
 					</NuxtLink>
 				</div>
 			</div>

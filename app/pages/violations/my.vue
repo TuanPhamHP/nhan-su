@@ -155,8 +155,12 @@
 					Đã duyệt tháng {{ currentMonth }}/{{ currentYear }}:
 					<strong class="text-blue-700 dark:text-blue-300">{{ myStatus.approvedThisMonth }} lượt</strong>
 				</span>
-				<span v-if="myStatus.isNextMultiLevel" class="text-sm text-orange-600 dark:text-orange-400 font-medium">
-					⚠️ Đơn tiếp theo cần 2 cấp duyệt
+				<span
+					v-if="myStatus.isNextMultiLevel"
+					class="inline-flex items-center gap-1.5 text-sm text-orange-600 dark:text-orange-400 font-medium"
+				>
+					<Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+					Đơn tiếp theo cần 2 cấp duyệt
 				</span>
 			</div>
 		</div>
@@ -272,7 +276,8 @@
 										class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
 										title="Vi phạm kỷ luật"
 									>
-										⚠️ Vi phạm KL
+										<Icon name="heroicons:exclamation-triangle" class="w-3 h-3" aria-hidden="true" />
+										Vi phạm KL
 									</span>
 								</div>
 							</td>

@@ -675,8 +675,16 @@
 									</div>
 								</div>
 								<p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{{ vr.reason }}</p>
-								<p v-if="vr.reviewNote" class="text-xs text-red-600 dark:text-red-400 mt-1 italic">
-									↳ {{ vr.reviewNote }}
+								<p
+									v-if="vr.reviewNote"
+									class="flex items-start gap-1 text-xs text-red-600 dark:text-red-400 mt-1 italic"
+								>
+									<Icon
+										name="heroicons:arrow-turn-down-right"
+										class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
+										aria-hidden="true"
+									/>
+									{{ vr.reviewNote }}
 								</p>
 							</button>
 						</div>

@@ -8,6 +8,7 @@
 		type AnnouncementLink,
 		type AnnouncementType,
 	} from '~/types/announcement.types';
+	import { fileIconName } from '~/utils/file-icon';
 
 	interface RecipientOption {
 		id: number;
@@ -67,11 +68,11 @@
 	);
 	const recipientsLoading = computed(() => directoryLoading.value && recipients.value.length === 0);
 
+	// `option` của thẻ `select` chỉ nhận chữ, không đặt được icon vào trong, nên chỉ lấy nhãn.
 	const typeOptions = computed(() =>
 		(Object.keys(ANNOUNCEMENT_TYPE_CONFIG) as AnnouncementType[]).map(key => ({
 			value: key,
 			label: ANNOUNCEMENT_TYPE_CONFIG[key].label,
-			icon: ANNOUNCEMENT_TYPE_CONFIG[key].icon,
 		})),
 	);
 
@@ -190,13 +191,6 @@
 
 	function removeFile(index: number) {
 		attachmentFiles.value.splice(index, 1);
-	}
-
-	function fileIcon(f: File): string {
-		if (f.type === 'application/pdf') return '📕';
-		if (f.type.includes('spreadsheet') || f.name.endsWith('.xlsx')) return '📊';
-		if (f.type.includes('word') || f.name.endsWith('.docx')) return '📝';
-		return '📎';
 	}
 
 	function formatSize(bytes: number): string {
@@ -318,7 +312,7 @@
 							class="block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors appearance-none"
 						>
 							<option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">
-								{{ opt.icon }} {{ opt.label }}
+								{{ opt.label }}
 							</option>
 						</select>
 					</div>
@@ -402,10 +396,11 @@
 						<button
 							type="button"
 							:disabled="attachmentFiles.length >= MAX_FILES"
-							class="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+							class="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 							@click="fileInputRef?.click()"
 						>
-							📎 Chọn file
+							<Icon name="heroicons:paper-clip" class="w-4 h-4" aria-hidden="true" />
+							Chọn file
 						</button>
 						<span class="text-xs text-gray-500 dark:text-gray-400">
 							Tổng dung lượng: {{ totalSizeMb }} MB / 100 MB
@@ -424,7 +419,12 @@
 								:alt="f.name"
 								class="w-10 h-10 rounded object-cover flex-shrink-0"
 							/>
-							<span v-else class="text-lg flex-shrink-0">{{ fileIcon(f) }}</span>
+							<Icon
+								v-else
+								:name="fileIconName(f.name, f.type)"
+								class="w-6 h-6 flex-shrink-0 text-gray-500 dark:text-gray-400"
+								aria-hidden="true"
+							/>
 							<div class="flex-1 min-w-0">
 								<p class="text-sm text-gray-700 dark:text-gray-300 truncate">{{ f.name }}</p>
 								<p class="text-xs text-gray-500 dark:text-gray-400">{{ formatSize(f.size) }}</p>

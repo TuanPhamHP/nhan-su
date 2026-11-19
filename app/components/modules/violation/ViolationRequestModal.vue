@@ -146,8 +146,9 @@
 					v-if="monthlyStatus.isNextMultiLevel"
 					class="mb-4 px-3 py-2.5 rounded-lg bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-700 space-y-1"
 				>
-					<p class="text-sm text-orange-700 dark:text-orange-300 font-medium">
-						⚠️ Tháng này đã có {{ monthlyStatus.approvedThisMonth }} lượt được duyệt
+					<p class="inline-flex items-center gap-1.5 text-sm text-orange-700 dark:text-orange-300 font-medium">
+						<Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+						Tháng này đã có {{ monthlyStatus.approvedThisMonth }} lượt được duyệt
 					</p>
 					<p class="text-xs text-orange-600 dark:text-orange-400">
 						Phiếu này sẽ cần cả trưởng phòng ban phê duyệt (2 cấp).
@@ -190,10 +191,17 @@
 							@blur="violationDateAttrs.onBlur?.()"
 						/>
 						<template v-if="violationDate && !errors.violationDate">
-							<p v-if="deadlinePassed" class="text-xs text-red-600 dark:text-red-400 font-medium">
-								❌ Đã quá hạn nộp phiếu cho ngày này (hạn: {{ deadlineDisplay }})
+							<p
+								v-if="deadlinePassed"
+								class="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400 font-medium"
+							>
+								<Icon name="heroicons:x-circle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+								Đã quá hạn nộp phiếu cho ngày này (hạn: {{ deadlineDisplay }})
 							</p>
-							<p v-else class="text-xs text-blue-600 dark:text-blue-400">⏰ Hạn nộp: {{ deadlineDisplay }}</p>
+							<p v-else class="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+								<Icon name="heroicons:clock" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+								Hạn nộp: {{ deadlineDisplay }}
+							</p>
 						</template>
 					</div>
 

@@ -141,7 +141,8 @@
 									{{ r?.fullName }}
 								</p>
 								<p v-if="r?.isRead && r?.readAt" class="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
-									<span>✓ Đã đọc lúc {{ formatReadAt(r?.readAt) }}</span>
+									<Icon name="heroicons:check-circle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+									<span>Đã đọc lúc {{ formatReadAt(r?.readAt) }}</span>
 								</p>
 								<p v-else class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
 									Chưa đọc

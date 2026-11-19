@@ -154,14 +154,19 @@
 								<p class="text-xs text-gray-500 dark:text-gray-400">
 									{{ violationRequest.assignedReviewer?.fullName ?? 'HR' }}
 								</p>
-								<p v-if="violationRequest.approvedL1At" class="text-xs text-green-600 dark:text-green-400 mt-0.5">
-									✓ Đã duyệt {{ formatDateTime(violationRequest.approvedL1At) }}
+								<p
+									v-if="violationRequest.approvedL1At"
+									class="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-0.5"
+								>
+									<Icon name="heroicons:check-circle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+									Đã duyệt {{ formatDateTime(violationRequest.approvedL1At) }}
 								</p>
 								<p
 									v-else-if="violationRequest.status === 'PENDING'"
-									class="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5"
+									class="inline-flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 mt-0.5"
 								>
-									⏳ Đang chờ duyệt
+									<Icon name="heroicons:clock" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+									Đang chờ duyệt
 								</p>
 							</div>
 						</div>
@@ -191,14 +196,19 @@
 								<p class="text-xs text-gray-500 dark:text-gray-400">
 									{{ violationRequest.approverL2?.fullName ?? 'Giám đốc' }}
 								</p>
-								<p v-if="violationRequest.status === 'APPROVED'" class="text-xs text-green-600 dark:text-green-400 mt-0.5">
-									✓ Đã duyệt {{ formatDateTime(violationRequest.reviewedAt) }}
+								<p
+									v-if="violationRequest.status === 'APPROVED'"
+									class="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-0.5"
+								>
+									<Icon name="heroicons:check-circle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+									Đã duyệt {{ formatDateTime(violationRequest.reviewedAt) }}
 								</p>
 								<p
 									v-else-if="violationRequest.status === 'PENDING_L2'"
-									class="text-xs text-orange-600 dark:text-orange-400 mt-0.5"
+									class="inline-flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 mt-0.5"
 								>
-									⏳ Đang chờ duyệt
+									<Icon name="heroicons:clock" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+									Đang chờ duyệt
 								</p>
 								<p v-else class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
 									Chờ cấp 1 duyệt trước
