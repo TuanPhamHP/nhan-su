@@ -359,7 +359,7 @@ Cùng request body. Trả **201** + envelope:
 ```jsonc
 {
   "title": "Xác nhận đơn nghỉ phép",
-  "confirmLevel": "L1_CREATE",          // "L1_CREATE" | "L2_DECIDE"
+  "confirmLevel": "L1_CREATE",          // "L1_CREATE" | "L2_DECIDE" | "L2_CHANGE"
   "fields": [
     { "name": "_employee", "label": "Người xin nghỉ", "type": "readonly", "required": false,
       "value": "Nguyễn Văn A", "source": "system" },
@@ -398,7 +398,12 @@ không nói gì — người dùng đổi thoải mái. **Đừng disable field 
 ### Quy tắc render khác
 
 - **`context` là dữ liệu do SERVER đọc từ DB**, không phải lời văn của model → render như panel số
-  liệu tin cậy. Với `L2_DECIDE` đây là nội dung thật của đơn đang được duyệt.
+  liệu tin cậy, với **mọi** `confirmLevel`. Với `L2_DECIDE` đây là nội dung thật của đơn đang được duyệt; với
+  `L2_CHANGE` (từ 19/11/2026: dời, huỷ lượt họp) là dữ liệu HIỆN TẠI của bản ghi sắp bị sửa hay huỷ (phòng,
+  giờ, chủ trì, tiêu đề nếu người xem được thấy). Đừng chỉ hiện panel khi `confirmLevel === 'L2_DECIDE'`.
+- **`confirmLevel` lạ thì vẫn render form như thường** (dùng `fields`, `context`, `warnings`, `submitLabel`):
+  server có thể thêm mức mới. Muốn đổi màu nút theo mức thì `L2_CHANGE` nên trông như thao tác sửa, huỷ (ví dụ
+  màu cảnh báo), khác nút "Gửi đơn".
 - **`warnings` phải hiện nổi bật** và **không được chặn submit**. Server cố tình cho phép gửi kèm
   cảnh báo (ví dụ vượt quỹ phép) — quyết định là của người dùng, không phải của client.
 - `successMessage` là câu hiện sau khi commit xong. Server **cũng tự lưu** nó thành message `SYSTEM`
@@ -476,6 +481,20 @@ Response **201**:
 
 `result` là **kiểu mở** (`unknown`). **Đừng bind chặt vào shape của nó** — hiện `message` cho người
 dùng, cần chi tiết đơn thì gọi [leave-requests.md](./leave-requests.md) như bình thường.
+
+`message` thường bằng `form.successMessage`. Từ 19/11/2026, tool nào cho người dùng đổi trong form chính thứ mà
+câu báo nêu (`office_bookRoom`, `office_changeBooking`, `office_cancelBooking`, `office_setSupplyLine`) thì server
+dựng `message` từ KẾT QUẢ thật, ví dụ "Đã đặt Phòng B (Văn phòng Hữu Nghị) 14:00–15:00 ngày 20/11/2026. …" dù form
+mở với Phòng A. Luôn hiện `message` của response.
+
+Key `payload` của bốn tool Hành chính văn phòng (đúng `name` của field trong form):
+
+| Tool | Key |
+|---|---|
+| `office_bookRoom` | `roomId`, `date`, `startTime` (`HH:mm`), `endTime` (`HH:mm`), `title`, `isPrivate` (`"true"`/`"false"`), `note` |
+| `office_changeBooking` | `bookingId`, `date`, `startTime`, `endTime`, `roomId` (server chỉ gửi phòng và giờ xuống service, key khác bị bỏ) |
+| `office_cancelBooking` | `bookingId`, `reason` (bắt buộc khi lượt không phải của mình; field có `requiredWhen` theo `bookingId`) |
+| `office_setSupplyLine` | `requestId`, `itemId`, `quantity` (số nguyên ≥ 1), `overQuotaReason`, `note` |
 
 ### Các trạng thái lỗi của confirm
 
@@ -942,7 +961,7 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `business-trip-request` | Đăng ký đi công tác (**có tool ghi**) | mọi role |
 | `business-trip-overview` | XEM đơn/chuyến công tác — chỉ đọc, thêm 12/10/2026 | mọi role (phần "ai đang đi công tác" chỉ `MANAGER` trở lên) |
 | `approval-queue` | Hàng chờ duyệt đơn (**có tool ghi**, `L2_DECIDE`) | `MANAGER` `HR` `ADMIN` `DIRECTOR` `CHIEF` |
-| `hr-directory` | Danh bạ, phòng ban | mọi role |
+| `hr-directory` | Danh bạ, phòng ban; "liên hệ ai ở phòng X" (trưởng phòng), thêm 20/11/2026 | mọi role |
 | `hr-org-overview` | Dashboard tổ chức | `MANAGER` `HR` `ADMIN` `DIRECTOR` |
 | `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm; giới thiệu chung về công ty (lĩnh vực, giờ làm việc, quy định chung) từ mô tả người vận hành viết, thêm 17/11/2026 | mọi role |
 | `request-history` | Tra đơn từ đã tạo (của mình; ADMIN, HR xem được của người khác) — chỉ đọc | mọi role |
@@ -953,14 +972,18 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `asset-value` | Giá trị còn lại, khấu hao, chi phí dịch vụ — chỉ đọc, cần quyền xem giá | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
 | `recruit-my` | Lịch phỏng vấn, phiếu đánh giá của tôi — chỉ đọc, thêm 16/11/2026 | mọi role |
 | `recruit-overview` | Tin đang tuyển, hồ sơ theo vòng, định biên, ứng viên, offer chờ duyệt, nguồn — chỉ đọc | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
+| `office-room-booking` | Phòng họp: phòng trống, lịch họp của tôi, đặt (**có tool ghi** `L1_CREATE`), dời và huỷ (**có tool ghi** `L2_CHANGE`) — thêm 19/11/2026 | mọi role |
+| `office-supply-my` | Văn phòng phẩm của phòng tôi: phiếu kỳ đang mở, hạn chót, định mức; ghi thêm, sửa số một mặt hàng (**có tool ghi** `L1_CREATE`) | mọi role |
+| `office-overview` | Tiến độ kỳ văn phòng phẩm, chi phí văn phòng phẩm theo phòng — chỉ đọc | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` (cần `office:supply:report`) |
 | `capabilities` | "Trợ lý làm được gì?" — trả lời về chính năng lực hệ thống, không gọi tool | mọi role |
 | `unsupported` | Việc có trên web nhưng trợ lý không làm trong chat (lương, BHXH, đổi mật khẩu, CCCD, **báo cáo/chi phí công tác**) | mọi role |
 | `fallback` | Không khớp chủ đề nào | mọi role |
 
-> Năm playbook `asset-*`, `recruit-*` thuộc hai module bán riêng (`ASSET`, `RECRUIT`). Công ty chưa bật module
-> thì router vẫn có thể vào playbook đó, nhưng không có tool `asset_*`/`recruit_*` nào, và trợ lý trả lời rằng
-> công ty chưa dùng module. Client không cần xử lý gì riêng; chỉ cần nhãn chủ đề cho các `playbookId` mới ở
-> màn thống kê, đánh giá.
+> Năm playbook `asset-*`, `recruit-*` thuộc hai module bán riêng (`ASSET`, `RECRUIT`), ba playbook `office-*`
+> thuộc module `OFFICE`. Công ty chưa bật module thì router vẫn có thể vào playbook đó, nhưng không có tool
+> `asset_*`/`recruit_*`/`office_*` nào, và trợ lý trả lời rằng công ty chưa dùng module. Module `OFFICE` ở chế
+> độ chỉ xem thì còn tool đọc, mất bốn tool ghi. Client không cần xử lý gì riêng; chỉ cần nhãn chủ đề cho các
+> `playbookId` mới ở màn thống kê, đánh giá.
 
 > ⚠️ `unsupported` **không còn** bao gồm việc ĐĂNG KÝ đi công tác — việc đó chuyển sang
 > `business-trip-request` ngày 29/09/2026. Client nào đang hiện chữ "vào /business-trips/create"
@@ -976,10 +999,14 @@ có bảng đầy đủ; lưu ý bảng đó viết tên theo dấu chấm ở m
 Muốn hiện "Đang tra quỹ phép…" thì map tên tool → nhãn tiếng Việt ở phía client, hoặc bỏ qua và chỉ
 hiện "Đang tra dữ liệu…".
 
-### Tool ghi — 7 cái, tất cả đều qua form xác nhận
+### Tool ghi — 11 cái, tất cả đều qua form xác nhận
 
 | Tool | Mức | Việc |
 |---|---|---|
+| `office_bookRoom` | `L1_CREATE` | Đặt phòng họp, người hỏi là người đặt và chủ trì, không mời người dự (mời tiếp trên web) |
+| `office_changeBooking` | `L2_CHANGE` | Dời lượt họp: đổi ngày, giờ, phòng. Panel `context` là lượt hiện tại |
+| `office_cancelBooking` | `L2_CHANGE` | Huỷ lượt họp; lượt của người khác bắt lý do (`requiredWhen` theo ô chọn lượt) |
+| `office_setSupplyLine` | `L1_CREATE` | Ghi thêm hoặc sửa số một mặt hàng trong phiếu văn phòng phẩm kỳ đang mở của phòng |
 | `leave_createRequest` | `L1_CREATE` | Đơn nghỉ phép (gồm cả đi muộn / về sớm tính theo phút) |
 | `overtime_createRequest` | `L1_CREATE` | Đơn tăng ca |
 | `makeup_createRequest` | `L1_CREATE` | Đơn bù công |
@@ -1015,6 +1042,16 @@ Client **không phải sửa gì**: không có endpoint hay loại sự kiện S
 và `HR`. Vai trò khác hỏi về đơn của một người cụ thể sẽ nhận câu trả lời từ chối dạng văn bản bình
 thường, không phải mã lỗi HTTP.
 
+### Tool đọc thêm ngày 20/11/2026 — gợi ý người liên hệ ở phòng ban khác
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `department_findHead` | `hr-directory`, `office-room-booking`, `office-supply-my` | Trưởng phòng của phòng ban người dùng nhắc tới ("tôi cần liên hệ ai ở bộ phận hành chính"): họ tên, mã nhân viên, chức vụ | mọi role |
+
+Trợ lý trả lời kiểu "Bạn có thể liên hệ Nguyễn Mai B (mã NV-0012), Trưởng phòng Hành chính nhân sự, để được hướng
+dẫn và giải quyết", không kèm email hay số điện thoại. Client **không phải sửa gì**: không có endpoint, sự kiện SSE
+hay `playbookId` mới. Client nào có bảng nhãn tên tool thì thêm `department_findHead` → "Đang tìm người liên hệ…".
+
 ### Tool đọc thêm ngày 16/11/2026 — module Quản lý tài sản và Tuyển dụng
 
 Mười bốn tool chỉ đọc, tên bắt đầu bằng `asset_` hoặc `recruit_`. Công ty chưa bật module thì tool đó không tồn
@@ -1039,6 +1076,27 @@ tại với trợ lý (không xuất hiện trong `toolsCalled`).
 
 Client **không phải sửa gì** ngoài nhãn chủ đề cho năm `playbookId` mới: bảng kết quả đi qua sự kiện `table`
 như các tool khác, không có endpoint hay sự kiện SSE mới.
+
+### Tool đọc, ghi Hành chính văn phòng — thêm 19/11/2026
+
+Chín tool tên bắt đầu bằng `office_` (module `OFFICE`): năm tool đọc, bốn tool ghi (bảng "Tool ghi" ở trên). Công
+ty chưa dùng module thì không tool nào tồn tại với trợ lý; module chỉ xem thì chỉ còn năm tool đọc.
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `office_findFreeRooms` | `office-room-booking` | Phòng trống theo ngày, giờ, số người, thiết bị; lượt đã đặt (giờ, người đặt). Lượt riêng tư người hỏi không liên quan chỉ hiện "Cuộc họp riêng tư" | mọi role |
+| `office_myBookings` | `office-room-booking` | Lịch họp của tôi (đặt, chủ trì, được mời), nhãn Đã đặt / Đang họp / Đã kết thúc / Đã huỷ, `bookingId` | mọi role |
+| `office_mySupplyRequest` | `office-supply-my` | Phiếu văn phòng phẩm kỳ đang mở của phòng tôi: hạn chót, còn sửa được không, dòng, định mức, ai sửa cuối. Đơn giá chỉ khi được xem chi phí | mọi role |
+| `office_periodProgress` | `office-overview` | Tiến độ kỳ: phòng chưa nhập, phiếu chờ chốt, chờ cấp, chờ nhận, nhận thiếu | vai trò quản lý + `office:supply:report`; trưởng phòng chỉ phòng mình |
+| `office_supplyCosts` | `office-overview` | Chi phí văn phòng phẩm theo tháng, phòng (số thực nhận × đơn giá kỳ, chưa gồm dự trù) | như trên |
+
+Phía client cần làm (bàn giao chi tiết: [`_fe-prompt-agent-office.md`](./_fe-prompt-agent-office.md)):
+
+1. Nhãn cho ba `playbookId` mới và chín tên tool mới (`status.tool`, `toolsCalled`).
+2. `confirmLevel` có thêm `L2_CHANGE`: render form như mọi mức, **hiện panel `context`** (lượt hiện tại).
+3. Câu báo sau khi xác nhận (`message` của `POST /agent/actions/:id/confirm`) với ba tool phòng họp, tool văn
+   phòng phẩm được dựng từ KẾT QUẢ thật (phòng, giờ người dùng đã chọn trong form), có thể khác `form.successMessage`.
+   Client hiện `message` của response, đừng hiện lại `form.successMessage`.
 
 ⚠️ **Về số lượt giải trình — đừng hiển thị như hạn mức.** Ngưỡng 5 KHÔNG chặn nộp phiếu;
 nó chỉ quyết phiếu tiếp theo cần 1 hay 2 cấp duyệt. Response có `hasHardLimit: false` và
@@ -1068,7 +1126,7 @@ lần nữa. Client không cần làm gì thêm.
 // types/ai-agent.types.ts
 
 export type RouterTier = 'RULE' | 'EMBEDDING' | 'LLM' | 'FALLBACK';
-export type ConfirmLevel = 'L1_CREATE' | 'L2_DECIDE';
+export type ConfirmLevel = 'L1_CREATE' | 'L2_DECIDE' | 'L2_CHANGE';
 export type AgentFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'readonly';
 /** NGUỒN của giá trị, KHÔNG phải quyền sửa. Xem mục "source và type là HAI chuyện khác nhau". */
 export type AgentFieldSource = 'llm' | 'system';
