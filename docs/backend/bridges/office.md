@@ -114,7 +114,7 @@ làm đổi phiếu, bảng tổng hợp, báo cáo của kỳ cũ.
 |---|---|---|
 | GET | `/v1/me/office/supply-requests` | Danh sách phiếu của phòng tôi, phiếu `OPEN` lên đầu (`SupplyRequestListItemDto[]`) |
 | GET | `/v1/me/office/supply-requests/:id` | Chi tiết (`SupplyRequestResponseDto`) |
-| POST | `/v1/me/office/supply-requests/:id/lines` | `{ itemId, requestedQty, overQuotaReason?, note? }` hoặc `{ customName, customUnit, requestedQty, note? }` |
+| POST | `/v1/me/office/supply-requests/:id/lines` | `{ itemId, requestedQty, overQuotaReason?, note? }` hoặc `{ customName, customUnit, requestedQty, note? }`. **Phiếu đã có mặt hàng đó thì cộng `requestedQty` vào dòng đang có** (20/11/2026), không còn 409; xem mục 4.2.1 |
 | PATCH | `/v1/me/office/supply-requests/:id/lines/:lineId` | `{ requestedQty?, overQuotaReason?, note?, customName?, customUnit? }` |
 | DELETE | `/v1/me/office/supply-requests/:id/lines/:lineId` | Xoá dòng (chỉ khi kỳ còn mở) |
 | POST | `/v1/me/office/supply-requests/:id/copy-previous` | "Lấy số tháng trước": `{ previousTitle, added, existing, skipped, skippedItems: [{ name, reason }], request }`. Chép cả dòng ngoài danh mục; không chép lý do vượt định mức (dòng vượt bị bỏ qua, nêu lý do). `existing` (UAT đợt C): mặt hàng phiếu đã có, không tính vào `skipped`. `previousTitle` null = chưa có kỳ trước. FE hiện toast: "Đã thêm {added} dòng từ {previousTitle}" + danh sách `skippedItems`; `added = 0` và `skipped = 0` thì "Phiếu đã có đủ các mặt hàng của {tháng}, không có gì để thêm." |
@@ -153,7 +153,8 @@ Mọi lệnh ghi dòng trả lại toàn bộ phiếu đã cập nhật, FE thay
   mà server vẫn có thể trả `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED` (câu nêu số đã xin): mở ô lý do. Giảm số về dưới
   định mức thì server tự bỏ lý do cũ.
 - Dòng ngoài danh mục: tên trùng mặt hàng có trong danh mục bị từ chối (`OFFICE_SUPPLY_LINE_IN_CATALOG`, câu nêu tên đúng
-  để FE gợi ý chọn trong danh sách); trùng tên và đơn vị với dòng khác của phiếu là `OFFICE_SUPPLY_LINE_EXISTS`. Cả hai
+  để FE gợi ý chọn trong danh sách); POST trùng tên và đơn vị với dòng ngoài danh mục đang có thì cộng số vào dòng đó, PATCH
+  đổi tên trùng dòng khác vẫn là `OFFICE_SUPPLY_LINE_EXISTS`. Cả hai
   so tên không phân biệt hoa thường, dấu tiếng Việt, dấu câu, ngoặc: "but bi note mau xanh" trùng "Bút bi (Note màu xanh)".
   Ô tìm mặt hàng phía FE cũng nên tìm không dấu ("but chi" ra "Bút chì gỗ").
 - Chặn bấm đúp nút thêm, xoá: hai lần gửi liền nhau, lần sau nhận 409 hoặc 404 (không còn 500).
@@ -162,6 +163,23 @@ Mọi lệnh ghi dòng trả lại toàn bộ phiếu đã cập nhật, FE thay
 - `previousQty`: gợi ý số kỳ trước. `updatedBy`: "sửa cuối bởi …" vì cả phòng cùng sửa. `updatedAt` của dòng là lúc phòng
   thêm, sửa dòng lần cuối: HCNS chốt, cấp hay phòng bấm nhận không đổi giờ này (UAT đợt B).
 - `unitPrice`, `amount`, `totalAmount` là `null` với người không có `office:supply:report` (nhân viên thường).
+
+### 4.2.1 Thêm lại mặt hàng phiếu đã có (20/11/2026)
+
+`POST .../lines` với mặt hàng phiếu đã có (cùng `itemId`, hoặc ngoài danh mục cùng tên và đơn vị, so không dấu, không hoa
+thường) **cộng `requestedQty` vào dòng đó**, trả phiếu như cũ (201, `SupplyRequestResponseDto`), số dòng không đổi.
+
+- Ô chọn mặt hàng cho chọn cả mặt hàng đã có. FE biết trước là cộng hay tạo bằng `lines` của phiếu đang mở, nên nói rõ
+  trước khi bấm ("Phiếu đang có 4 chiếc, bấm Thêm sẽ cộng vào") và sau khi bấm ("Đã cộng thêm 3 chiếc vào Bút bi…, nay 7
+  chiếc").
+- Định mức tính trên **tổng sau khi cộng**: số đang có của dòng + số gõ (+ số phòng đã xin ở văn phòng khác cùng tháng).
+  Nhắc lý do sớm ở FE thì so tổng này với `quota`, không chỉ số gõ. Thiếu lý do: 400
+  `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED`, câu nêu số đang có. Không gửi `overQuotaReason` thì server giữ lý do đang có
+  của dòng.
+- `note` mới nối sau ghi chú cũ bằng "; ", trùng thì giữ nguyên.
+- Dòng được cộng đổi `updatedBy`, `updatedAt` sang người vừa thêm.
+- Lỗi mới: tổng quá 100.000 hoặc ghi chú nối quá 500 ký tự là 400 `OFFICE_SUPPLY_LINE_INVALID`; 409
+  `OFFICE_SUPPLY_LINE_BUSY` rất hiếm (mục 6).
 
 ### 4.3 Quản lý kỳ (UI-02, `/management/office/supply-periods`)
 
@@ -362,8 +380,9 @@ Một lượt họp có ba hình thức, server suy ra rồi trả trong `mode` 
 | `OFFICE_SUPPLY_NOT_YOUR_DEPARTMENT` | 403 | Mở phiếu phòng khác | Về danh sách |
 | `OFFICE_SUPPLY_HR_ONLY_ITEM` | 403 | Thêm mặt hàng nhóm chỉ HCNS đặt | Ô chọn đã lọc sẵn, lỗi chỉ xảy ra khi dữ liệu cũ |
 | `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED` | 400 | Vượt định mức mà thiếu lý do | Mở ô lý do ở dòng đó |
-| `OFFICE_SUPPLY_LINE_EXISTS` | 409 | Thêm mặt hàng đã có trong phiếu | Cuộn tới dòng đang có |
-| `OFFICE_SUPPLY_LINE_INVALID` | 400 | Dòng ngoài danh mục thiếu tên hay đơn vị | Lỗi ở form |
+| `OFFICE_SUPPLY_LINE_EXISTS` | 409 | PATCH đổi tên dòng ngoài danh mục trùng dòng khác. POST thêm mặt hàng đã có không còn mã này: server cộng số (20/11/2026) | Lỗi ở ô tên |
+| `OFFICE_SUPPLY_LINE_BUSY` | 409 | Rất hiếm: người khác trong phòng sửa đúng dòng đó liên tục khi đang cộng số | Toast câu của server, tải lại phiếu |
+| `OFFICE_SUPPLY_LINE_INVALID` | 400 | Dòng ngoài danh mục thiếu tên hay đơn vị; cộng số quá 100.000; ghi chú nối vào ghi chú cũ quá 500 ký tự | Lỗi ở form, câu của server |
 | `OFFICE_SUPPLY_NOT_RECEIVER` | 403 | Không phải trưởng phòng, đầu mối bấm nhận | Ẩn nút theo `canReceive` |
 | `OFFICE_SUPPLY_RECEIVED_TOO_MANY` | 400 | Số nhận lớn hơn số chốt | Lỗi ở ô |
 | `OFFICE_SUPPLY_NOTHING_CHANGED` | 400 | "Sửa số thực nhận" mà không dòng nào đổi số hay ghi chú (UAT đợt B) | Toast câu của server; chỉ dòng đổi mới được đếm vào thông báo cho phòng |

@@ -14,6 +14,7 @@
 	} from '~/utils/office.utils';
 	import { formatDate, formatDateTime } from '~/utils/date';
 	import { OFFICE_PERMISSIONS } from '~/utils/permission';
+	import { searchKey } from '~/utils/text-search';
 	import type {
 		CopySkippedItem,
 		SupplyContact,
@@ -77,8 +78,6 @@
 	/** Hiện ô lý do khi máy chủ báo dòng vượt định mức mà chưa có lý do. */
 	const addNeedsReason = ref(false);
 	const addError = ref('');
-	/** Câu chỉ đường khi người dùng chọn một mặt hàng đã có dòng trong phiếu. */
-	const addItemNotice = ref('');
 
 	/** Ô số đang giữ chữ gõ sai, ví dụ "2,5" hay "5 hộp": chặn thêm dòng tới khi người dùng gõ lại. */
 	const addQtyInvalid = ref(false);
@@ -114,23 +113,35 @@
 	 */
 	const lineNeedsReason = reactive<Record<number, boolean>>({});
 
+	/** Dòng danh mục của phiếu theo mặt hàng, để biết thêm mặt hàng nào là cộng vào dòng đang có. */
+	const linesByItemId = computed(() => {
+		const map = new Map<number, SupplyLine>();
+		for (const line of current.value?.lines ?? []) if (line.itemId != null) map.set(line.itemId, line);
+		return map;
+	});
+
+	/** Đơn vị trong câu văn viết thường: "nay 17 chiếc", không phải "nay 17 Chiếc". */
+	function unitWord(unit: string | null | undefined): string {
+		return (unit ?? '').toLocaleLowerCase('vi');
+	}
+
 	/**
-	 * Mặt hàng còn chọn được, kèm định mức ngay trên nhãn.
+	 * Mọi mặt hàng của danh mục, kèm số phiếu đang có và định mức ngay trên nhãn.
 	 *
 	 * Định mức nằm ở ô chọn chứ không chỉ ở dòng đã thêm, vì người dùng cần biết trần của phòng
-	 * TRƯỚC khi gõ số, không phải sau khi bị máy chủ từ chối. Danh mục của màn này không có đơn
-	 * giá: nhân viên thường nhận `unitPrice` rỗng và giá không phải việc của họ.
+	 * TRƯỚC khi gõ số, không phải sau khi bị máy chủ từ chối. Mặt hàng phiếu đã có vẫn chọn được:
+	 * thêm nữa thì máy chủ cộng vào dòng đang có, nên nhãn nói luôn số đang có để người dùng gõ phần
+	 * cần thêm chứ không gõ lại cả tổng. Danh mục của màn này không có đơn giá: nhân viên thường
+	 * nhận `unitPrice` rỗng và giá không phải việc của họ.
 	 */
-	/** Mặt hàng đã có trong phiếu: vẫn hiện trong ô chọn, nhưng chọn vào thì chỉ được nhắc. */
-	const usedItemIds = computed(() => new Set((current.value?.lines ?? []).map(line => line.itemId).filter(Boolean)));
-
 	const itemOptions = computed(() =>
 		items.value.map(item => {
 			// TÊN MẶT HÀNG ĐỨNG TRƯỚC tên nhóm: ô chọn chỉ hiện một dòng và cắt phần đuôi, nên để
 			// nhóm lên trước thì trên điện thoại người dùng đọc được tên nhóm mà không thấy mặt hàng.
 			const parts = [`${item.name} (${item.unit})`];
+			const line = linesByItemId.value.get(item.id);
+			if (line) parts.push(`phiếu đang có ${line.requestedQty}`);
 			if (item.quota != null) parts.push(`định mức ${item.quota} ${item.unit} mỗi tháng`);
-			if (usedItemIds.value.has(item.id)) parts.push('đã có trong phiếu, sửa số ở dòng bên dưới');
 			if (item.groupName) parts.push(item.groupName);
 			return { value: item.id, label: parts.join(' · ') };
 		}),
@@ -139,29 +150,41 @@
 	/** Mặt hàng đang chọn ở form thêm dòng, để biết định mức và nhắc lý do ngay khi gõ vượt. */
 	const addItem = computed(() => items.value.find(item => item.id === addItemId.value) ?? null);
 
-	/**
-	 * Chọn mặt hàng ở ô danh mục.
-	 *
-	 * Mặt hàng đã có trong phiếu vẫn nằm trong danh sách để người dùng tìm thấy nó, nhưng chọn vào
-	 * thì chỉ nhận câu chỉ đường xuống dòng đang có: trước đây danh sách lọc chúng ra nên tìm một
-	 * mặt hàng vừa thêm lại ra "Không tìm thấy kết quả".
-	 */
+	/** Dòng phiếu đang có của mặt hàng đang chọn; có thì bấm Thêm là cộng vào dòng này. */
+	const addExistingLine = computed(() => (addItemId.value == null ? null : linesByItemId.value.get(addItemId.value) ?? null));
+
 	function pickItem(value: string | number) {
-		const id = Number(value);
-		const line = (current.value?.lines ?? []).find(l => l.itemId === id);
-		if (line) {
-			addItemId.value = null;
-			addItemNotice.value = `${line.name} đã có trong phiếu, bạn sửa số ở dòng bên dưới.`;
-			return;
-		}
-		addItemNotice.value = '';
-		addItemId.value = id;
+		addItemId.value = Number(value);
 		addError.value = '';
 	}
 
-	const addOverQuota = computed(() => {
+	/** Số phiếu sẽ có sau khi thêm: số đang có của dòng cộng số gõ, vì máy chủ tính định mức trên tổng này. */
+	const addTotal = computed(() => (addQty.value == null ? null : (addExistingLine.value?.requestedQty ?? 0) + addQty.value));
+
+	const addTotalOverQuota = computed(() => {
 		const quota = addItem.value?.quota;
-		return quota != null && addQty.value != null && addQty.value > quota;
+		return quota != null && addTotal.value != null && addTotal.value > quota;
+	});
+
+	/**
+	 * Cần nhập lý do trước khi gửi.
+	 *
+	 * Dòng đang có đã ghi lý do vượt định mức thì máy chủ giữ lý do đó khi cộng thêm, nên không bắt
+	 * người dùng gõ lại một lý do phòng đã có.
+	 */
+	const addOverQuota = computed(() => addTotalOverQuota.value && !addExistingLine.value?.overQuotaReason);
+
+	/** Câu nhắc lý do: mặt hàng đã có thì nói cả tổng, vì số gõ một mình có khi chưa vượt. */
+	const addOverQuotaMessage = computed(() => {
+		const item = addItem.value;
+		const line = addExistingLine.value;
+		if (!item || item.quota == null) return '';
+		// Định mức luôn ghi kèm ĐƠN VỊ: "vượt định mức 10" không nói 10 cái hay 10 hộp.
+		const quota = `${item.quota} ${unitWord(item.unit)} mỗi tháng của phòng`;
+		if (line && addQty.value != null) {
+			return `Phiếu đang có ${line.requestedQty}, thêm ${addQty.value} là ${addTotal.value}, vượt định mức ${quota}, bạn ghi lý do.`;
+		}
+		return `Số này vượt định mức ${quota}, bạn ghi lý do.`;
 	});
 
 	const canEdit = computed(() => !!current.value?.canEdit);
@@ -232,9 +255,13 @@
 		return `HCNS đã khoá kỳ này lúc ${formatDateTime(at)}, phiếu không sửa được nữa. Phòng còn thiếu thì báo HCNS tạo phiếu bổ sung.`;
 	});
 
-	/** Người dùng vừa sửa ô thì câu nhắc cũ hết đúng; câu vượt định mức thì ở lại cho tới khi số hạ. */
+	/**
+	 * Người dùng vừa sửa ô thì câu nhắc cũ hết đúng; câu vượt định mức thì ở lại cho tới khi số hạ,
+	 * và đổi theo số mới vì nó nêu cả tổng.
+	 */
 	watch([addItemId, addQty], () => {
 		if (!addOverQuota.value) addError.value = '';
+		else if (addNeedsReason.value) addError.value = addOverQuotaMessage.value;
 	});
 
 	/** Người của phòng tôi, để trưởng phòng chọn đầu mối. */
@@ -390,27 +417,32 @@
 		// Biết định mức từ danh mục thì nhắc ngay tại chỗ, khỏi phải gửi lên mới biết thiếu lý do.
 		if (addOverQuota.value && !addReason.value.trim()) {
 			addNeedsReason.value = true;
-			// Định mức luôn ghi kèm ĐƠN VỊ: "vượt định mức 10" không nói 10 cái hay 10 hộp.
-			addError.value = `Số này vượt định mức ${addItem.value?.quota} ${addItem.value?.unit} mỗi tháng của phòng, bạn ghi lý do.`;
+			addError.value = addOverQuotaMessage.value;
 			return;
 		}
+		// Cộng hay tạo mới thì biết trước bằng dòng đang có, để câu báo sau khi thêm nói đúng việc
+		// vừa xảy ra; người khác vừa thêm cùng mặt hàng thì máy chủ vẫn cộng, câu sau đó tự đúng lại
+		// vì đọc số từ phiếu máy chủ trả về.
+		const itemId = addItemId.value;
+		const qty = addQty.value;
 		working.value = true;
 		addError.value = '';
 		try {
-			afterWrite(
-				await service.addLine(requestId, {
-					itemId: addItemId.value,
-					requestedQty: addQty.value,
-					overQuotaReason: addReason.value.trim() || undefined,
-					note: addNote.value.trim() || undefined,
-				}),
-			);
+			const data = await service.addLine(requestId, {
+				itemId,
+				requestedQty: qty,
+				overQuotaReason: addReason.value.trim() || undefined,
+				note: addNote.value.trim() || undefined,
+			});
+			const before = linesByItemId.value.get(itemId);
+			afterWrite(data);
 			addItemId.value = null;
 			addQty.value = undefined;
 			addReason.value = '';
 			addNote.value = '';
 			addNeedsReason.value = false;
-			toast.success('Đã thêm dòng vào phiếu.');
+			const merged = before ? data.lines.find(l => l.id === before.id) : undefined;
+			toast.success(mergedMessage(merged, qty));
 		} catch (e) {
 			const code = officeErrorCode(e);
 			if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
@@ -418,17 +450,11 @@
 				// ô chọn nói chưa vượt, máy chủ vẫn có thể bắt ghi lý do: mở ô lý do kèm câu của nó.
 				addNeedsReason.value = true;
 				addError.value = officeErrorMessage(e, 'Số này vượt định mức của phòng, bạn ghi lý do.');
-			} else if (code === 'OFFICE_SUPPLY_LINE_EXISTS') {
-				// Người khác trong phòng vừa thêm đúng mặt hàng này: tải lại phiếu để dòng của họ
-				// hiện ra, nếu không thì câu "đã có trong phiếu" trỏ tới một dòng người dùng không
-				// thấy đâu cả. Câu nhắc đi vào `addItemNotice` vì nó ở lại sau khi ô chọn được dọn,
-				// còn `addError` thì tự tắt ngay khi ô chọn đổi giá trị.
-				addItemNotice.value = officeErrorMessage(
-					e,
-					'Mặt hàng này đã có trong phiếu, bạn sửa số ở dòng đang có.',
-				);
-				addItemId.value = null;
-				await openRequest(requestId);
+			} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
+				// Tổng sau khi cộng quá trần, hoặc ghi chú nối vào quá dài: câu của máy chủ nói rõ số.
+				addError.value = officeErrorMessage(e, 'Số hoặc ghi chú sau khi cộng vào dòng đang có vượt giới hạn.');
+			} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
+				await reloadAfterBusy(e, requestId);
 			} else if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG') {
 				// Người dùng gõ tay một thứ đã có sẵn: nói tên đúng và đẩy họ về ô chọn danh mục.
 				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong danh mục, bạn chọn trong danh sách.');
@@ -465,27 +491,33 @@
 			customError.value = 'Bạn nhập số lượng cần xin, ví dụ 2.';
 			return;
 		}
+		const name = customName.value.trim();
+		const unit = customUnit.value.trim();
+		const qty = customQty.value;
+		// Cùng tên và đơn vị với một dòng ngoài danh mục đang có (so không dấu, không hoa thường như
+		// máy chủ) thì máy chủ cộng vào dòng đó, nên câu báo cũng phải nói là cộng.
+		const before = (current.value?.lines ?? []).find(
+			l => l.itemId == null && searchKey(l.name) === searchKey(name) && searchKey(l.unit ?? '') === searchKey(unit),
+		);
 		working.value = true;
 		try {
-			afterWrite(
-				await service.addLine(requestId, {
-					customName: customName.value.trim(),
-					customUnit: customUnit.value.trim(),
-					requestedQty: customQty.value,
-				}),
-			);
+			const data = await service.addLine(requestId, { customName: name, customUnit: unit, requestedQty: qty });
+			afterWrite(data);
 			customName.value = '';
 			customUnit.value = '';
 			customQty.value = undefined;
 			showCustomForm.value = false;
-			toast.success('Đã thêm mặt hàng ngoài danh mục.');
+			const merged = before ? data.lines.find(l => l.id === before.id) : undefined;
+			toast.success(mergedMessage(merged, qty));
 		} catch (e) {
 			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG' || code === 'OFFICE_SUPPLY_LINE_EXISTS') {
-				// Câu của máy chủ nêu tên đúng trong danh mục, nên để ngay dưới ô tên tự gõ. Dòng đã
-				// có thì tải lại phiếu để người dùng thấy nó, giống đường thêm từ danh mục.
-				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có, bạn chọn trong danh sách ở trên.');
-				if (code === 'OFFICE_SUPPLY_LINE_EXISTS') await openRequest(requestId);
+			if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG') {
+				// Câu của máy chủ nêu tên đúng trong danh mục, nên để ngay dưới ô tên tự gõ.
+				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong danh mục, bạn chọn trong danh sách ở trên.');
+			} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
+				customError.value = officeErrorMessage(e, 'Số sau khi cộng vào dòng đang có vượt giới hạn.');
+			} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
+				await reloadAfterBusy(e, requestId);
 			} else {
 				toast.error(
 					officeErrorMessage(e, 'Chưa thêm được mặt hàng ngoài danh mục. Bạn kiểm tra lại tên và đơn vị.'),
@@ -494,6 +526,25 @@
 		} finally {
 			working.value = false;
 		}
+	}
+
+	/**
+	 * Câu báo sau khi thêm: cộng vào dòng đang có thì nói số vừa thêm và tổng mới, để người dùng
+	 * biết phiếu không mọc thêm dòng trùng mà dòng cũ đã tăng lên.
+	 */
+	function mergedMessage(merged: SupplyLine | undefined, qty: number): string {
+		if (!merged) return 'Đã thêm vào phiếu.';
+		const unit = unitWord(merged.unit);
+		return `Đã cộng thêm ${qty} ${unit} vào ${merged.name}, nay ${merged.requestedQty} ${unit}.`.replace(/\s+/g, ' ');
+	}
+
+	/**
+	 * Người khác đang sửa đúng dòng này liên tục nên máy chủ không cộng được: báo câu của máy chủ
+	 * và tải lại phiếu để người dùng thấy số mới nhất trước khi thử lại.
+	 */
+	async function reloadAfterBusy(error: unknown, requestId: number) {
+		toast.warning(officeErrorMessage(error, 'Dòng này đang được người khác sửa. Phiếu đã được tải lại, bạn thử lại.'));
+		await openRequest(requestId);
 	}
 
 	function lineDirty(line: SupplyLine): boolean {
@@ -891,6 +942,12 @@
 					class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
 				>
 					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Thêm mặt hàng</h2>
+					<!--
+						Mọi ô của hai hàng cao đúng 43px, bằng ô chọn mặt hàng: ô chọn là component dùng chung
+						có đệm riêng nên không sửa được ở đây, còn ô số, ô ghi chú và nút thì ép bằng class của
+						trang. `[&_input]` nhắm vào ô nhập NẰM TRONG `QtyInput`, vì class gắn lên component chỉ
+						rơi vào khung bọc của nó; câu nhắc gõ sai bên dưới ô số vẫn giữ chiều cao tự nhiên.
+					-->
 					<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_120px_1fr_auto] lg:items-start">
 						<UiSelectInput
 							:model-value="addItemId"
@@ -902,6 +959,7 @@
 						<QtyInput
 							v-model="addQty"
 							v-model:invalid="addQtyInvalid"
+							class="[&_input]:h-[43px]"
 							placeholder="Số lượng"
 							aria-label="Số lượng cần xin"
 							@save="addLine"
@@ -910,18 +968,29 @@
 							v-model="addNote"
 							type="text"
 							maxlength="500"
-							class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+							class="h-[43px] w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 							placeholder="Ghi chú (không bắt buộc)"
 						/>
 						<!-- Nút không bị xám: thiếu mặt hàng hay thiếu số thì câu nhắc hiện ngay dưới form. -->
-						<CommonAppButton variant="primary" :loading="working" @click="addLine">Thêm dòng</CommonAppButton>
+						<CommonAppButton variant="primary" class="h-[43px]" :loading="working" @click="addLine">Thêm</CommonAppButton>
 					</div>
+					<!--
+						Câu gợi ý màu xám trung tính: chọn mặt hàng đã có là việc bình thường, không phải lỗi,
+						nên không tô cam hay đỏ. Chỉ phần "cần ghi lý do" mới đổi màu, vì đó là việc phải làm.
+					-->
 					<p v-if="addItem" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+						<template v-if="addExistingLine">
+							Phiếu đang có {{ addExistingLine.requestedQty }} {{ unitWord(addExistingLine.unit) }}, bấm Thêm sẽ cộng
+							vào dòng này.
+						</template>
 						<template v-if="addItem.quota != null">
 							Định mức của phòng là {{ addItem.quota }} {{ addItem.unit }} mỗi tháng.
 							<span v-if="addOverQuota" class="text-amber-600 dark:text-amber-400">
-								Số bạn gõ vượt định mức nên cần ghi lý do.
+								{{ addExistingLine ? 'Tổng sau khi cộng' : 'Số bạn gõ' }} vượt định mức nên cần ghi lý do.
 							</span>
+							<template v-else-if="addTotalOverQuota">
+								Tổng sau khi cộng vượt định mức, dòng đã có lý do nên phiếu giữ lý do đó.
+							</template>
 						</template>
 						<template v-else>Mặt hàng này không giới hạn định mức.</template>
 					</p>
@@ -937,7 +1006,6 @@
 							placeholder="VD: Tháng này quyết toán, in nhiều"
 						/>
 					</div>
-					<p v-if="addItemNotice" class="mt-2 text-sm text-amber-700 dark:text-amber-300">{{ addItemNotice }}</p>
 					<p v-if="addError" class="mt-2 text-sm text-red-500">{{ addError }}</p>
 
 					<div class="mt-3">
@@ -956,7 +1024,7 @@
 									v-model="customName"
 									type="text"
 									maxlength="200"
-									class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+									class="h-[43px] w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									placeholder="Tên mặt hàng, VD: Pin 3A"
 									@input="customNameError = ''"
 								/>
@@ -967,7 +1035,7 @@
 									v-model="customUnit"
 									type="text"
 									maxlength="30"
-									class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+									class="h-[43px] w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									placeholder="Đơn vị, VD: Đôi"
 									@input="customUnitError = ''"
 								/>
@@ -976,11 +1044,12 @@
 							<QtyInput
 								v-model="customQty"
 								v-model:invalid="customQtyInvalid"
+								class="[&_input]:h-[43px]"
 								placeholder="Số lượng"
 								aria-label="Số lượng mặt hàng ngoài danh mục"
 								@save="addCustomLine"
 							/>
-							<CommonAppButton variant="outline" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
+							<CommonAppButton variant="outline" class="h-[43px]" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
 						</div>
 						<p v-if="customError" class="mt-2 text-sm text-red-500">{{ customError }}</p>
 					</div>
