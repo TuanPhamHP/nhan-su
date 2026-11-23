@@ -91,8 +91,8 @@ xem. Chữ "+ phạm vi" nghĩa là service lọc thêm theo phòng ban và hộ
 | POST | `/v1/recruitment/requisitions` | `recruitment:requisition:create` + phạm vi | | Tạo bản Nháp |
 | PATCH | `/v1/recruitment/requisitions/:id` | `recruitment:requisition:create`; người tạo hoặc `recruitment:manage` | | Chỉ khi Nháp hoặc Từ chối |
 | POST | `/v1/recruitment/requisitions/:id/jd` | Như trên | | `multipart/form-data`, trường `file` |
-| POST | `/v1/recruitment/requisitions/:id/submit` | Như trên | | Kiểm định biên, dựng bước duyệt, N-01 |
-| POST | `/v1/recruitment/requisitions/:id/approve` | `recruitment:read`; người duyệt đến lượt hoặc `ADMIN` | | |
+| POST | `/v1/recruitment/requisitions/:id/submit` | Như trên | | Dựng bước duyệt, N-01. Không kiểm định biên (từ 23/11/2026) |
+| POST | `/v1/recruitment/requisitions/:id/approve` | `recruitment:read`; người duyệt đến lượt hoặc `ADMIN` | | Bước cuối tự gom định biên, xem "Tự gom định biên" |
 | POST | `/v1/recruitment/requisitions/:id/reject` | Như trên | | Bắt buộc lý do |
 | POST | `/v1/recruitment/requisitions/:id/cancel` | `recruitment:requisition:create`; người tạo hoặc `recruitment:manage` | | Còn tin đang mở thì không huỷ được |
 | DELETE | `/v1/recruitment/requisitions/:id` | Như trên | | Xoá mềm bản Nháp (204) |
@@ -478,7 +478,7 @@ bảng này.
 | Enum | Hằng ở BE | Mã → nhãn |
 |---|---|---|
 | Trạng thái đề xuất định biên | `RECRUITMENT_PROPOSAL_STATUS_LABELS` | `DRAFT` Nháp · `PENDING` Chờ chốt · `REJECTED` Bị trả lại |
-| Loại thay đổi định biên | `RECRUITMENT_HEADCOUNT_CHANGE_TYPE_LABELS` | `PROPOSED` Đề xuất · `SUBMITTED` Gửi chốt · `CONFIRMED` Chốt · `REJECTED` Trả lại · `EDITED` Sửa số đã chốt · `WITHDRAWN` Rút đề xuất |
+| Loại thay đổi định biên | `RECRUITMENT_HEADCOUNT_CHANGE_TYPE_LABELS` | `PROPOSED` Đề xuất · `SUBMITTED` Gửi chốt · `CONFIRMED` Chốt · `REJECTED` Trả lại · `EDITED` Sửa số đã chốt · `WITHDRAWN` Rút đề xuất · `AUTO_FROM_REQUISITION` Tăng theo yêu cầu tuyển |
 | Lý do tuyển | `RECRUITMENT_REQUISITION_REASON_LABELS` | `REPLACEMENT` Thay thế · `ADDITIONAL` Bổ sung · `NEW_POSITION` Mở mới |
 | Loại hình lao động (dùng chung với module Nhân viên; yêu cầu tuyển và offer nhận mọi giá trị **trừ `PROBATION`**, thử việc khai riêng ở offer) | `EMPLOYMENT_TYPE_LABELS` | `FULL_TIME` Nhân viên chính thức · `PROBATION` Thử việc · `APPRENTICE` Học việc · `INTERN` Thực tập sinh · `PART_TIME` Bán thời gian · `CONTRACTOR` Cộng tác viên |
 | Trạng thái yêu cầu tuyển | `RECRUITMENT_REQUISITION_STATUS_LABELS` | `DRAFT` Nháp · `PENDING` Chờ duyệt · `APPROVED` Đã duyệt · `REJECTED` Từ chối · `RECRUITING` Đang tuyển · `FILLED` Đã đủ · `CANCELLED` Huỷ |
@@ -519,13 +519,11 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 `code`, `message` và `errors` (khi `errors` là mảng):
 
 ```json
-{ "success": false, "error": { "code": "RECRUIT_HEADCOUNT_EXCEEDED", "message": "Định biên còn trống 1, yêu cầu xin 2. Hãy giảm số lượng, hoặc đề xuất tăng định biên để Giám đốc chốt." } }
+{ "success": false, "error": { "code": "RECRUIT_REQUISITION_LOCKED", "message": "Yêu cầu đã được gửi" } }
 ```
 
 ⚠ Các trường thêm mà service gắn vào lỗi **không tới được FE**:
 
-- `RECRUIT_HEADCOUNT_EXCEEDED` và `RECRUIT_HEADCOUNT_NOT_CONFIRMED` có `available` ở service nhưng bị bỏ. Số còn
-  trống chỉ còn trong `message`; FE cần số thì gọi lại `GET /requisitions/availability`.
 - Lỗi phản hồi offer công khai có `state` ở service nhưng bị bỏ. FE suy trạng thái từ **hậu tố của `code`**:
   `RECRUIT_OFFER_LINK_EXPIRED` → `EXPIRED`, hoặc gọi lại `GET /public/offer-responses/:token`.
 - Lỗi điều khoản offer giữ được số `min`, `max` vì chúng nằm **trong từng phần tử của `errors`**:
@@ -622,10 +620,10 @@ Lỗi theo envelope chung, `message` là tiếng Việt hiển thị được ng
 | 409 | `RECRUIT_CATALOG_NAME_EXISTS` | Tên đã có trong danh mục |
 | 409 | `RECRUIT_EMAIL_NOT_PENDING` | Email đã gửi hoặc đã huỷ |
 | 409 | `RECRUIT_EMPLOYEE_ALREADY_LINKED` | Nhân viên đã gắn với một ứng viên khác |
-| 409 | `RECRUIT_HEADCOUNT_EXCEEDED` | Số lượng vượt định biên còn trống (BR-01), lúc gửi hoặc ở bất kỳ bước duyệt nào; số còn trống chỉ có trong `message` |
+| 409 | `RECRUIT_HEADCOUNT_EXCEEDED` | **Không còn trả từ 23/11/2026** (tự gom định biên). Trước đó: số lượng vượt định biên còn trống lúc gửi hoặc duyệt |
 | 409 | `RECRUIT_HEADCOUNT_EXISTS` | Đã có dòng định biên cho vị trí này trong năm |
 | 409 | `RECRUIT_HEADCOUNT_NEVER_CONFIRMED` | Dòng chưa từng chốt nên không có gì để rút; muốn bỏ thì xoá dòng |
-| 409 | `RECRUIT_HEADCOUNT_NOT_CONFIRMED` | Vị trí chưa có định biên Đã chốt của năm nên chưa gửi, chưa duyệt được |
+| 409 | `RECRUIT_HEADCOUNT_NOT_CONFIRMED` | **Không còn trả từ 23/11/2026** (tự gom định biên). Trước đó: vị trí chưa có định biên Đã chốt nên chưa gửi, chưa duyệt được |
 | 409 | `RECRUIT_HEADCOUNT_NOT_DRAFT` | Dòng không có bản nháp hay bản bị trả lại để gửi |
 | 409 | `RECRUIT_HEADCOUNT_NOT_PENDING` | Dòng không chờ chốt nên không trả lại được |
 | 409 | `RECRUIT_HEADCOUNT_NOTHING_TO_CONFIRM` | Dòng không có đề xuất để chốt |
@@ -681,8 +679,24 @@ Mã chung có thể gặp ở module này:
 
 Mỗi dòng là một cặp (năm, vị trí) và chứa hai số cùng lúc: số đã chốt (`confirmedQuantity`, đang có hiệu lực)
 và một đề xuất đang mở (`proposedQuantity` + `proposalStatus`). Số đã chốt giữ hiệu lực cho tới khi đề xuất mới
-được chốt (Q-21). Chỉ số đã chốt dùng để kiểm yêu cầu tuyển (BR-01); `confirmedQuantity: null` nghĩa là chưa
+được chốt (Q-21). Chỉ số đã chốt dùng để tính còn trống (BR-01); `confirmedQuantity: null` nghĩa là chưa
 từng chốt và còn trống tính là 0.
+
+**Tự gom định biên (23/11/2026, thay cho Q-01 chặn cứng).** Yêu cầu tuyển không còn bị chặn vì định biên, lúc
+gửi cũng như ở các bước duyệt. Khi người duyệt **bước cuối** bấm Duyệt (thường là HR), cùng transaction đó server:
+
+1. Khoá định biên (năm, vị trí), tính `cần = đang có + đang tuyển + quantity`. "Đang tuyển" ở mọi nơi **chỉ tính
+   yêu cầu đã duyệt** (`APPROVED`, `RECRUITING`), không tính yêu cầu khác còn chờ duyệt.
+2. Định biên đã chốt ≥ `cần` → không đổi gì.
+3. Thiếu → `confirmedQuantity = cần`; vị trí chưa có dòng định biên thì tạo dòng mới đã chốt. Lịch sử ghi
+   `AUTO_FROM_REQUISITION` ("Tăng theo yêu cầu tuyển"), `note` = `Tăng theo yêu cầu tuyển <mã>`, `actor` = người
+   duyệt. Đề xuất đang mở của dòng đó (nếu có) giữ nguyên.
+4. Người có `recruitment:headcount:confirm` (trừ người vừa duyệt) nhận N-19.
+
+Định biên chỉ tự tăng, không tự giảm: huỷ yêu cầu đã duyệt thì số đã chốt giữ nguyên, muốn giảm thì sửa tay. FE
+báo trước cho người tạo và người duyệt: `quantity` > `available` thì "Khi duyệt xong, định biên sẽ tăng thêm
+{quantity − max(available, 0)}". Vì `available` cũng chỉ trừ yêu cầu đã duyệt, đây đúng là số sẽ tăng nếu duyệt
+bước cuối ngay lúc đó; chỉ đổi nếu có yêu cầu khác được duyệt xong trước.
 
 Đề xuất (`RecruitmentProposalStatus`):
 
@@ -705,8 +719,8 @@ nhật ký hệ thống `recruitment.headcount_delete` giữ bản chụp, lý d
 | Đã chốt, **đang dùng** (`current` > 0 hoặc `requisitionCount` > 0) | Chỉ quyền chốt | Đề xuất không `PENDING`; **bắt buộc `reason`**, thiếu thì 400 `RECRUIT_REASON_REQUIRED` |
 
 Xoá dòng đang dùng thì: nhân viên đang làm không bị gì; yêu cầu đã duyệt hoặc đang tuyển chạy tiếp; yêu cầu
-nháp không gửi duyệt được và yêu cầu chờ duyệt không duyệt được (409 `RECRUIT_HEADCOUNT_NOT_CONFIRMED`) cho tới
-khi vị trí có định biên Đã chốt lại. Không gửi thông báo, giống khi sửa số đã chốt.
+nháp và yêu cầu chờ duyệt vẫn gửi, duyệt được; duyệt bước cuối sẽ tạo lại dòng định biên (tự gom). Không gửi
+thông báo, giống khi sửa số đã chốt.
 
 Đề xuất `PENDING` không sửa, rút hay xoá được, vì người chốt đã được báo phải xử lý (N-15). Người chốt chốt hoặc
 trả lại trước.
@@ -828,6 +842,7 @@ nhanh vẫn phải hỏi lý do vì BE bắt buộc `note`.
 | N-16 | `RECRUIT_HEADCOUNT_DECIDED` | Người đề xuất | Đề xuất được chốt hoặc bị trả lại | – | `/management/recruitment/headcount?year=YYYY` | `NAVIGATE_ONLY` |
 | N-17 | `RECRUIT_SUGGESTION` | HR phụ trách tin, trừ tác giả | Bình luận loại `SUGGEST_MOVE`, `SUGGEST_REJECT`, `SUGGEST_OFFER` | – | `/management/recruitment/candidates/:candidateId` | `NAVIGATE_ONLY` |
 | N-18 | `RECRUIT_JOB_AUTO_CLOSED` | HR phụ trách tin | Tin tự đóng vì qua hạn nộp (J-03) | – | `/management/recruitment/jobs/:id` | `NAVIGATE_ONLY` |
+| N-19 | `RECRUIT_HEADCOUNT_DECIDED` | ADMIN và người có `recruitment:headcount:confirm`, trừ người vừa duyệt | Duyệt bước cuối yêu cầu tuyển làm định biên tự tăng hoặc được tạo (23/11/2026) | – | `/management/recruitment/headcount?year=YYYY` | `NAVIGATE_ONLY` |
 
 - `refType` dùng các giá trị `recruitment_requisition`, `recruitment_offer`, `recruitment_job`,
   `recruitment_my_job`, `recruitment_candidate`, `recruitment_my_application`, `recruitment_my_interviews`,
@@ -854,7 +869,7 @@ export type RequisitionEmploymentType = Exclude<EmploymentType, 'PROBATION'>;
 
 export type RecruitmentProposalStatus = 'DRAFT' | 'PENDING' | 'REJECTED';
 export type HeadcountRowStatus = 'CONFIRMED' | 'DRAFT' | 'PENDING' | 'REJECTED' | 'NONE';
-export type RecruitmentHeadcountChangeType = 'PROPOSED' | 'SUBMITTED' | 'CONFIRMED' | 'REJECTED' | 'EDITED' | 'WITHDRAWN';
+export type RecruitmentHeadcountChangeType = 'PROPOSED' | 'SUBMITTED' | 'CONFIRMED' | 'REJECTED' | 'EDITED' | 'WITHDRAWN' | 'AUTO_FROM_REQUISITION';
 export type RecruitmentRequisitionReason = 'REPLACEMENT' | 'ADDITIONAL' | 'NEW_POSITION';
 export type RecruitmentRequisitionStatus =
   | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'RECRUITING' | 'FILLED' | 'CANCELLED';
@@ -1339,7 +1354,8 @@ export interface HeadcountChange {
 
 "Đang có" là nhân viên đang làm hoặc đang nghỉ phép ở đúng phòng và vị trí của dòng, trừ người đang được thay
 trong một yêu cầu thay thế còn mở, cộng offer đã đồng ý mà chưa thành nhân viên. "Đang tuyển" là phần còn thiếu
-của các yêu cầu `PENDING`, `APPROVED`, `RECRUITING` cùng năm và vị trí. BE tính khi đọc, không lưu.
+của các yêu cầu **đã duyệt** (`APPROVED`, `RECRUITING`) cùng năm và vị trí; yêu cầu chờ duyệt không còn tính từ
+23/11/2026 (tự gom định biên). BE tính khi đọc, không lưu.
 
 #### GET `/v1/recruitment/headcount-plans?year=&departmentId=`
 
@@ -1615,34 +1631,27 @@ sửa, riêng người có `recruitment:manage` tải được ở mọi trạng
 #### POST `/v1/recruitment/requisitions/:id/submit`
 
 Gửi duyệt, không có body. Cần `recruitment:requisition:create`, và là người tạo hoặc có `recruitment:manage`. BE
-kiểm định biên (BR-01), dựng bước duyệt theo mục "Luồng duyệt", tăng `round`, chuyển `PENDING` và gửi N-01 cho
-người duyệt bước 1. Response 201 là `Requisition`.
+dựng bước duyệt theo mục "Luồng duyệt", tăng `round`, chuyển `PENDING` và gửi N-01 cho người duyệt bước 1.
+Response 201 là `Requisition`. **Không kiểm định biên** (từ 23/11/2026): vị trí chưa có định biên hay xin quá phần
+còn trống vẫn gửi được, người duyệt bước cuối tự gom (mục "Tự gom định biên").
 
 Lỗi: 409 `RECRUIT_REQUISITION_LOCKED` (không ở `DRAFT`, `REJECTED`, vừa có người gửi, hoặc yêu cầu vừa bị sửa
-trong lúc gửi: FE tải lại rồi cho bấm lại);
-`RECRUIT_HEADCOUNT_NOT_CONFIRMED` (vị trí chưa có định biên Đã chốt của năm); `RECRUIT_HEADCOUNT_EXCEEDED`
-(`quantity` lớn hơn số còn trống, số còn trống chỉ có trong `message`).
+trong lúc gửi: FE tải lại rồi cho bấm lại).
 
-```json
-{ "success": false, "error": { "code": "RECRUIT_HEADCOUNT_EXCEEDED",
-  "message": "Định biên còn trống 1, yêu cầu xin 2. Hãy giảm số lượng, hoặc đề xuất tăng định biên để Giám đốc chốt." } }
-```
-
-`message` luôn bắt đầu bằng "Định biên còn trống X, yêu cầu xin Y." rồi mới tới câu gợi ý. FE không cần tách
-số từ chuỗi: `Requisition.available` đã có số còn trống (chưa tính chính yêu cầu), so với `quantity` là biết trước
-có bị chặn hay không.
+`Requisition.available` vẫn có số còn trống (chưa tính chính yêu cầu). FE so với `quantity` để báo trước "khi duyệt
+xong, định biên sẽ tăng thêm khoảng N", không khoá nút Gửi duyệt nữa.
 
 #### POST `/v1/recruitment/requisitions/:id/approve`
 
 Duyệt bước đang chờ. Cần `recruitment:read`; service kiểm người gọi là người duyệt đến lượt hoặc `ADMIN`. Body
-`{ note?: string }` (1–2000 ký tự). **Mọi bước** kiểm lại định biên, vì định biên có thể đã giảm từ lúc gửi; vượt
-thì 409 `RECRUIT_HEADCOUNT_EXCEEDED`, bước giữ nguyên chờ, `message` gợi ý người duyệt từ chối kèm lý do hoặc đề
-xuất tăng định biên. Qua ở bước cuối thì yêu cầu thành `APPROVED` và gửi N-02. Bước chưa cuối thì mở bước kế và
-gửi N-01 cho người duyệt kế. Response 201 là `Requisition`. Hộp duyệt trả sẵn
-`requisition.headcountAvailable`, nên FE cảnh báo được trước khi người duyệt bấm.
+`{ note?: string }` (1–2000 ký tự). Không bước nào bị chặn vì định biên. Bước chưa cuối thì mở bước kế và gửi N-01
+cho người duyệt kế. Bước cuối thì yêu cầu thành `APPROVED`, gửi N-02, và **tự gom định biên** trong cùng
+transaction: thiếu bao nhiêu thì số đã chốt tăng bấy nhiêu, chưa có dòng thì tạo mới, gửi N-19 (mục "Tự gom định
+biên"). Response 201 là `Requisition`. Hộp duyệt trả sẵn `requisition.headcountAvailable`, nên FE báo được trước
+"duyệt xong sẽ tăng định biên khoảng N" khi đó là bước cuối.
 
 Lỗi: 403 `RECRUIT_APPROVAL_NOT_YOUR_TURN`; 404 `RECRUIT_REQUISITION_NOT_FOUND`; 409 `RECRUIT_APPROVAL_NOT_PENDING`
-(không chờ duyệt, hoặc người khác vừa quyết), `RECRUIT_HEADCOUNT_NOT_CONFIRMED`, `RECRUIT_HEADCOUNT_EXCEEDED`.
+(không chờ duyệt, hoặc người khác vừa quyết).
 
 #### POST `/v1/recruitment/requisitions/:id/reject`
 
@@ -1681,7 +1690,7 @@ export interface RecruitInboxItem {
     createdBy: RecruitPersonRef;
     submittedAt: string | null;
     headcountAvailable: number;               // còn trống lúc này, chưa tính chính yêu cầu; có thể âm.
-                                              // < quantity thì bấm duyệt sẽ nhận 409 RECRUIT_HEADCOUNT_EXCEEDED
+                                              // < quantity thì duyệt bước cuối sẽ tự tăng định biên phần thiếu
   } | null;                                   // có khi type = REQUISITION
   offer: {
     id: number; code: string; version: number;

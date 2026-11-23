@@ -22,8 +22,8 @@
 	 * Hai điểm nghiệp vụ nằm hết trong form này:
 	 *
 	 * 1. **Còn trống bao nhiêu** đọc từ `GET /requisitions/availability` mỗi lần đổi vị trí
-	 *    hay ngày cần có người, vì năm định biên tính theo `neededBy`. Lỗi vượt định biên của
-	 *    BE không mang theo con số (bộ lọc lỗi cắt mất), nên con số phải có sẵn trên form.
+	 *    hay ngày cần có người, vì năm định biên tính theo `neededBy`. Thiếu chỗ không chặn gửi
+	 *    duyệt: duyệt xong bước cuối thì BE tự tăng (hoặc tự tạo) định biên phần thiếu.
 	 * 2. **Lý do Thay thế bắt buộc chọn nhân viên được thay**, và nhân viên đó phải đang ở
 	 *    đúng phòng và vị trí của yêu cầu.
 	 */
@@ -133,10 +133,14 @@
 		() => availability.value != null && availability.value.confirmed == null,
 	);
 
-	const exceedsAvailable = computed(() => {
+	/**
+	 * Phần xin nhiều hơn còn trống. Không chặn gì: duyệt xong bước cuối, BE tự tăng định biên
+	 * đúng phần thiếu tính lúc đó, nên con số ở đây chỉ là dự kiến.
+	 */
+	const shortfall = computed(() => {
 		const a = availability.value;
-		if (!a || a.confirmed == null) return false;
-		return Number(quantity.value) > a.available;
+		if (!a || a.confirmed == null) return 0;
+		return Math.max(Number(quantity.value) - Math.max(a.available, 0), 0);
 	});
 
 	// ─── Lưu ──────────────────────────────────────────────────────────────────────
@@ -233,8 +237,8 @@
 							v-if="positionId != null"
 							class="rounded-lg border px-3 py-2 sm:col-span-2"
 							:class="
-								noConfirmedPlan || exceedsAvailable
-									? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
+								noConfirmedPlan || shortfall > 0
+									? 'border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-900/20'
 									: 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/60'
 							"
 						>
@@ -245,19 +249,20 @@
 								{{ availabilityError }}
 							</p>
 							<template v-else-if="availability">
-								<p v-if="noConfirmedPlan" class="text-sm text-amber-800 dark:text-amber-200">
-									Vị trí này chưa có định biên Đã chốt của năm {{ planYear }}, nên lưu được bản nháp
-									nhưng chưa gửi duyệt được. Hãy chốt định biên trước.
+								<p v-if="noConfirmedPlan" class="text-sm text-sky-800 dark:text-sky-200">
+									Vị trí này chưa có định biên năm {{ planYear }}. Bạn vẫn gửi duyệt được, khi yêu cầu
+									được duyệt xong hệ thống sẽ tự tạo định biên.
 								</p>
 								<template v-else>
 									<p class="text-sm text-gray-700 dark:text-gray-300">
 										Định biên năm {{ planYear }} còn trống
-										<strong class="text-base">{{ availability.available }}</strong> người, trên tổng
+										<strong class="text-base">{{ Math.max(availability.available, 0) }}</strong> người, trên tổng
 										{{ availability.confirmed }} đã chốt, {{ availability.current }} đang có và
 										{{ availability.recruiting }} đang tuyển.
 									</p>
-									<p v-if="exceedsAvailable" class="mt-1 text-sm text-amber-800 dark:text-amber-200">
-										Số lượng đang nhập vượt phần còn trống, nên lúc gửi duyệt hệ thống sẽ từ chối.
+									<p v-if="shortfall > 0" class="mt-1 text-sm text-sky-800 dark:text-sky-200">
+										Số lượng xin nhiều hơn phần còn trống {{ shortfall }} người. Bạn vẫn gửi duyệt được,
+										khi yêu cầu được duyệt xong định biên sẽ tự tăng thêm khoảng {{ shortfall }} người.
 									</p>
 									<p v-if="reason === 'REPLACEMENT'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
 										Với lý do Thay thế, lúc gửi duyệt người được thay không bị tính vào "đang có",

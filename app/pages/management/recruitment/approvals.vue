@@ -99,13 +99,13 @@
 	);
 
 	/**
-	 * Vượt định biên thì bấm Duyệt chắc chắn nhận 409 `RECRUIT_HEADCOUNT_EXCEEDED` và bước vẫn
-	 * đứng nguyên, nên khoá nút ngay trên thẻ. Từ chối thì không kiểm định biên, vẫn bấm được —
-	 * và thường đó là việc người duyệt nên làm, nên không khoá theo.
+	 * Phần định biên dự kiến tự tăng khi yêu cầu được duyệt xong bước cuối. Không khoá nút Duyệt:
+	 * BE tự gom định biên lúc duyệt bước cuối, con số thật có thể nhỏ hơn số ở đây.
 	 */
-	function exceedsHeadcount(item: RecruitInboxItem): boolean {
+	function headcountShortfall(item: RecruitInboxItem): number {
 		const r = item.requisition;
-		return !!r && r.headcountAvailable < r.quantity;
+		if (!r) return 0;
+		return Math.max(r.quantity - Math.max(r.headcountAvailable, 0), 0);
 	}
 
 	function detailRoute(item: RecruitInboxItem): string {
@@ -224,17 +224,16 @@
 								</template>
 							</p>
 
-							<p v-if="item.requisition" class="text-xs text-gray-500 dark:text-gray-400">
-								Định biên còn trống {{ item.requisition.headcountAvailable }}, chưa tính yêu cầu này.
-							</p>
-
 							<p
-								v-if="exceedsHeadcount(item)"
-								class="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+								v-if="item.requisition && headcountShortfall(item) > 0"
+								class="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-800 dark:bg-sky-900/20 dark:text-sky-300"
 							>
-								Vượt định biên: xin {{ item.requisition?.quantity }}, còn trống
-								{{ item.requisition?.headcountAvailable }}. Duyệt sẽ bị chặn, nên hãy từ chối kèm lý
-								do, hoặc chốt thêm định biên cho vị trí này trước.
+								Xin {{ item.requisition.quantity }}, định biên còn trống
+								{{ Math.max(item.requisition.headcountAvailable, 0) }}. Duyệt xong bước cuối, định biên sẽ tự tăng
+								thêm khoảng {{ headcountShortfall(item) }} người.
+							</p>
+							<p v-else-if="item.requisition" class="text-xs text-gray-500 dark:text-gray-400">
+								Định biên còn trống {{ Math.max(item.requisition.headcountAvailable, 0) }}, chưa tính yêu cầu này.
 							</p>
 
 							<p
@@ -264,7 +263,6 @@
 									variant="primary"
 									size="sm"
 									:loading="deciding === item.stepId"
-									:disabled="exceedsHeadcount(item)"
 									@click="approve(item)"
 								>
 									Duyệt

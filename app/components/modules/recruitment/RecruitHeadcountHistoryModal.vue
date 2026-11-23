@@ -1,10 +1,14 @@
 <script setup lang="ts">
 	import { useRecruitmentService } from '~/services/recruitment.service';
-	import { recruitErrorMessage } from '~/utils/recruitment.utils';
+	import RecruitChip from '~/components/modules/recruitment/RecruitChip.vue';
+	import { HEADCOUNT_CHANGE_CLASS, recruitErrorMessage } from '~/utils/recruitment.utils';
 	import { formatDateTime } from '~/utils/date';
 	import type { HeadcountChange, HeadcountRow } from '~/types/recruitment.types';
 
-	/** Lịch sử thay đổi của một dòng định biên: đề xuất, gửi, chốt, trả lại, sửa. */
+	/**
+	 * Lịch sử thay đổi của một dòng định biên: đề xuất, gửi, chốt, trả lại, sửa, và tự tăng khi
+	 * một yêu cầu tuyển được duyệt xong (`note` của API ghi mã yêu cầu).
+	 */
 	const props = defineProps<{ row: HeadcountRow }>();
 
 	const emit = defineEmits<{ close: [] }>();
@@ -86,8 +90,12 @@
 							class="rounded-xl border border-gray-200 px-4 py-3 dark:border-gray-700"
 						>
 							<div class="flex flex-wrap items-center justify-between gap-2">
-								<p class="text-sm font-medium text-gray-900 dark:text-white">
-									{{ change.typeLabel }} · {{ quantityText(change) }}
+								<p class="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+									<RecruitChip
+										:label="change.typeLabel"
+										:tone="HEADCOUNT_CHANGE_CLASS[change.type] ?? HEADCOUNT_CHANGE_CLASS.EDITED"
+									/>
+									{{ quantityText(change) }}
 								</p>
 								<p class="text-xs text-gray-500 dark:text-gray-400">
 									{{ formatDateTime(change.createdAt) }}
