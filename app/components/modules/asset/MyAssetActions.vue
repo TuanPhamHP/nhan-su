@@ -22,6 +22,8 @@
 			loadingPdf?: 'assign' | 'return' | null;
 			/** Lớp thêm cho mỗi nút, VD chiều cao tối thiểu 44 px trên điện thoại. */
 			buttonClass?: string;
+			/** Gắn mốc cho hướng dẫn từng bước trỏ vào hai nút báo của thẻ này. */
+			tourReport?: boolean;
 		}>(),
 		{
 			canReportDamage: false,
@@ -33,6 +35,7 @@
 			returnLabel: 'Biên bản thu hồi',
 			loadingPdf: null,
 			buttonClass: '',
+			tourReport: false,
 		},
 	);
 
@@ -46,6 +49,7 @@
 	<div class="flex flex-wrap items-center gap-2">
 		<CommonAppButton
 			v-if="canReportDamage"
+			:data-tour="tourReport ? 'my-report' : undefined"
 			size="sm"
 			variant="outline"
 			:class="buttonClass"
@@ -55,6 +59,7 @@
 		</CommonAppButton>
 		<CommonAppButton
 			v-if="canReportLoss"
+			:data-tour="tourReport ? 'my-report' : undefined"
 			size="sm"
 			variant="outline"
 			:class="buttonClass"

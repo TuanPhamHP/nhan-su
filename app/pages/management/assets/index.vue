@@ -14,6 +14,7 @@
 	} from '~/utils/asset.utils';
 	import { formatDate } from '~/utils/date';
 	import { useAuthStore } from '~/stores/auth';
+	import { assetListTour } from '~/tours/asset-list';
 	import {
 		ASSET_KIND_LABELS,
 		ASSET_STATUS_LABELS,
@@ -31,7 +32,7 @@
 	const router = useRouter();
 	const toast = useToast();
 	const service = useAssetService();
-	const { canWrite } = useModuleAccess();
+	const { canWrite, canUse } = useModuleAccess();
 	const { hasPermission } = usePermissions();
 	const directoryStore = useDirectoryStore();
 	const { departments } = storeToRefs(directoryStore);
@@ -467,18 +468,34 @@
 		// Nhập file tự tạo loại mới, nên ô lọc loại cũng phải có loại đó ngay.
 		await Promise.all([loadTable(), overviewPanel.value?.reload(), loadCategories()]);
 	}
+
+	const pageDescription = computed(() =>
+		isDepartmentScoped.value
+			? 'Thiết bị và dịch vụ thuê bao của phòng bạn, kèm người đang giữ và trạng thái của từng cái.'
+			: 'Thiết bị và dịch vụ thuê bao của công ty, kèm người đang giữ và trạng thái của từng cái.',
+	);
+
+	// ─── Hướng dẫn từng bước ──────────────────────────────────────────────────────
+	// Tự hiện một lần khi danh sách đã tải xong, không lỗi và module dùng được.
+	usePageTour(
+		'asset-list',
+		() =>
+			assetListTour({
+				canManage: () => canManage.value,
+				isDepartmentScoped: () => isDepartmentScoped.value,
+				departmentName: () => user.value?.department?.name ?? null,
+				hasAssets: () => assets.value.length > 0,
+				expandOverview: () => overviewPanel.value?.expand(),
+				isFormOpen: () => showFormModal.value,
+				closeForm: () => (showFormModal.value = false),
+			}),
+		() => canUse('ASSET') && !loading.value && !loadError.value,
+	);
 </script>
 
 <template>
 	<div class="space-y-5 pb-40 sm:pb-24">
-		<div class="flex flex-wrap items-start justify-between gap-3">
-			<div>
-				<h1 class="text-xl font-bold text-gray-900 dark:text-white">Quản lý tài sản</h1>
-				<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-					{{ isDepartmentScoped ? 'Thiết bị và dịch vụ thuê bao của phòng bạn' : 'Thiết bị và dịch vụ thuê bao của công ty' }}
-				</p>
-			</div>
-			<div class="flex flex-wrap items-center gap-2">
+		<UiPageHeader title="Quản lý tài sản" :description="pageDescription" tour="asset-list">
 				<CommonAppButton
 					v-if="canPrintLabels"
 					variant="outline"
@@ -501,20 +518,20 @@
 				<CommonAppButton v-if="canManage" variant="outline" @click="showImportModal = true">
 					Nhập Excel
 				</CommonAppButton>
-				<CommonAppButton v-if="canManage" variant="primary" @click="showFormModal = true">
+				<CommonAppButton v-if="canManage" data-tour="asset-add" variant="primary" @click="showFormModal = true">
 					Thêm tài sản
 				</CommonAppButton>
-			</div>
-		</div>
+		</UiPageHeader>
 
 		<CommonAppModuleNotice module="ASSET" />
 
-		<AssetOverviewPanel ref="overviewPanel" @pick-status="onPickStatus" />
+		<AssetOverviewPanel ref="overviewPanel" data-tour="asset-overview" @pick-status="onPickStatus" />
 
 		<!-- Bộ lọc -->
 		<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
 			<p v-if="scopeText" class="mb-3 text-sm text-gray-600 dark:text-gray-400">{{ scopeText }}</p>
 			<div
+				data-tour="asset-filters"
 				class="grid grid-cols-1 gap-3 sm:grid-cols-2"
 				:class="isDepartmentScoped ? 'lg:grid-cols-4' : 'lg:grid-cols-5'"
 			>
@@ -610,7 +627,7 @@
 			</div>
 
 			<!-- Thẻ trên điện thoại: bảng bảy cột bóp vào 390 px thì chữ bẻ vụn và phải vuốt ngang (M4). -->
-			<ul v-else class="divide-y divide-gray-100 sm:hidden dark:divide-gray-800">
+			<ul v-else data-tour="asset-list" class="divide-y divide-gray-100 sm:hidden dark:divide-gray-800">
 				<li v-for="asset in assets" :key="asset.id" class="flex items-start">
 					<label
 						v-if="canPrintLabels"
@@ -657,7 +674,7 @@
 				</li>
 			</ul>
 
-			<div v-if="!loading && !loadError && assets.length" class="hidden overflow-x-auto sm:block">
+			<div v-if="!loading && !loadError && assets.length" data-tour="asset-list" class="hidden overflow-x-auto sm:block">
 				<table class="w-full text-sm">
 					<thead>
 						<tr class="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">

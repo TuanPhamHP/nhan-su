@@ -94,7 +94,12 @@
 
 	onMounted(load);
 
-	defineExpose({ reload });
+	/** Hướng dẫn từng bước gọi để mở lại phần này nếu người dùng đã thu gọn. */
+	function expand() {
+		open.value = true;
+	}
+
+	defineExpose({ reload, expand });
 
 	const moneyCards = computed(() => {
 		const d = data.value;

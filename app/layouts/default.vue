@@ -42,5 +42,6 @@ onMounted(() => {
 
 		<ClientOnly><CommonAppToastContainer /></ClientOnly>
 		<ClientOnly><CommonAppImageViewer /></ClientOnly>
+		<ClientOnly><UiTourOverlay /></ClientOnly>
 	</div>
 </template>

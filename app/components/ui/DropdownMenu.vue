@@ -14,6 +14,8 @@ const props = defineProps<{
 	 * ba chấm dọc như cũ, để mấy chỗ đang dùng không đổi hình.
 	 */
 	label?: string;
+	/** Gắn `data-tour` cho menu khi mở, để hướng dẫn từng bước trỏ được vào menu (menu nằm ở body). */
+	menuTour?: string;
 }>();
 
 const isOpen = ref(false);
@@ -134,6 +136,7 @@ onUnmounted(() => {
 				<div
 					v-if="isOpen"
 					ref="menuRef"
+					:data-tour="menuTour"
 					:style="menuStyle"
 					class="w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 overflow-hidden"
 				>

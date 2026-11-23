@@ -15,6 +15,7 @@
 		lowerFirst,
 	} from '~/utils/asset.utils';
 	import { formatDate, formatDateTime } from '~/utils/date';
+	import { assetMyTour } from '~/tours/asset-my';
 	import type {
 		Asset,
 		AssetAssignment,
@@ -350,12 +351,35 @@
 	}
 
 	const btnTouch = 'min-h-11 sm:min-h-0';
+
+	// ─── Hướng dẫn từng bước ──────────────────────────────────────────────────────
+	// Bước xác nhận và bước báo hỏng chỉ trỏ vào thẻ đầu tiên có nút đó, không ôm cả danh sách.
+	const firstPendingId = computed(() => data.value?.holding.find(a => canConfirm(a))?.id ?? null);
+	const firstReportId = computed(
+		() => data.value?.holding.find(a => canReportType(a, 'DAMAGE') || canReportType(a, 'LOSS'))?.id ?? null,
+	);
+
+	usePageTour(
+		'asset-my',
+		() =>
+			assetMyTour({
+				hasHolding: () => !!data.value?.holding.length,
+				hasPending: () => firstPendingId.value != null,
+				canReport: () => firstReportId.value != null,
+				showAssetsTab: () => (activeTab.value = 'assets'),
+			}),
+		() => !loading.value && !loadError.value,
+	);
 </script>
 
 <template>
 	<div class="space-y-5 pb-40 sm:pb-24">
 		<div>
-			<UiPageHeader title="Tài sản của tôi" description="Thiết bị được cấp phát cho bạn, báo hỏng và báo mất bạn đã gửi, cùng dịch vụ bạn phụ trách." />
+			<UiPageHeader
+				title="Tài sản của tôi"
+				description="Thiết bị được cấp phát cho bạn, báo hỏng và báo mất bạn đã gửi, cùng dịch vụ bạn phụ trách."
+				tour="asset-my"
+			/>
 		</div>
 
 		<CommonAppModuleNotice module="ASSET" />
@@ -432,7 +456,7 @@
 
 			<template v-else-if="data">
 				<!-- Đang giữ -->
-				<section>
+				<section data-tour="my-holding">
 					<h2 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">
 						Đang giữ
 						<span class="ml-1 text-xs font-normal text-gray-500">{{ data.holding.length }}</span>
@@ -496,7 +520,11 @@
 								</p>
 							</div>
 
-							<div v-if="canConfirm(a)" class="mt-3 flex flex-wrap gap-2">
+							<div
+								v-if="canConfirm(a)"
+								class="mt-3 flex flex-wrap gap-2"
+								:data-tour="a.id === firstPendingId ? 'my-confirm' : undefined"
+							>
 								<CommonAppButton size="sm" variant="primary" :class="btnTouch" @click="accepting = a">
 									Đã nhận
 								</CommonAppButton>
@@ -513,6 +541,7 @@
 
 							<MyAssetActions
 								class="mt-3"
+								:tour-report="a.id === firstReportId"
 								:button-class="btnTouch"
 								:can-report-damage="canReportType(a, 'DAMAGE')"
 								:can-report-loss="canReportType(a, 'LOSS')"

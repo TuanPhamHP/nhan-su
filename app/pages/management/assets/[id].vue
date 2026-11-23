@@ -24,6 +24,7 @@
 	} from '~/utils/asset.utils';
 	import { formatDate } from '~/utils/date';
 	import type { Asset, AssetDisposal, AssetMaintenanceType } from '~/types/asset.types';
+	import { assetDetailTour } from '~/tours/asset-detail';
 
 	definePageMeta({ title: 'Chi tiết tài sản' });
 
@@ -346,6 +347,25 @@
 	const clearKey = async () => {
 		asset.value = await service.clearLicenseKey(assetId.value);
 	};
+
+	// ─── Hướng dẫn từng bước ──────────────────────────────────────────────────────
+	// Menu Tác vụ là component dùng chung, không có hàm đóng từ ngoài: đóng bằng cách bấm lại nút
+	// của nó, đúng như người dùng làm.
+	function actionsTrigger() {
+		return document.querySelector<HTMLButtonElement>('[data-tour="asset-actions"] button[aria-haspopup]');
+	}
+
+	usePageTour(
+		'asset-detail',
+		() =>
+			assetDetailTour({
+				isService: () => isService.value,
+				canManage: () => canManage.value,
+				isMenuOpen: () => actionsTrigger()?.getAttribute('aria-expanded') === 'true',
+				closeMenu: () => actionsTrigger()?.click(),
+			}),
+		() => !loading.value && !loadError.value && !!asset.value,
+	);
 </script>
 
 <template>
@@ -383,12 +403,13 @@
 		<template v-else-if="asset">
 			<!-- Đầu trang -->
 			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div class="min-w-0">
+				<div class="min-w-0" data-tour="asset-detail-head">
 					<div class="flex flex-wrap items-center gap-2">
 						<h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ asset.name }}</h1>
 						<span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium" :class="ASSET_STATUS_CLASS[asset.status]">
 							{{ asset.statusLabel }}
 						</span>
+						<UiTourButton tour="asset-detail" />
 					</div>
 					<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
 						<span class="font-mono">{{ asset.code }}</span>
@@ -406,7 +427,13 @@
 					>
 						In tem
 					</CommonAppButton>
-					<UiDropdownMenu v-if="canManage" label="Tác vụ" :items="actionItems" />
+					<UiDropdownMenu
+						v-if="canManage"
+						data-tour="asset-actions"
+						menu-tour="asset-actions-menu"
+						label="Tác vụ"
+						:items="actionItems"
+					/>
 				</div>
 			</div>
 
@@ -463,7 +490,7 @@
 
 			<!-- Tab -->
 			<!-- Điện thoại: một hàng tab vuốt ngang thay vì bảy tab xếp ba hàng. -->
-			<div class="overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+			<div class="overflow-x-auto border-b border-gray-200 dark:border-gray-700" data-tour="asset-tabs">
 				<nav class="-mb-px flex gap-1 sm:flex-wrap">
 					<button
 						v-for="tab in tabs"
