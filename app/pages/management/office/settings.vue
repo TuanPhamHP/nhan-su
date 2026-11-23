@@ -151,8 +151,12 @@
 
 	const filterGroupId = ref<number | undefined>(undefined);
 
-	async function loadSupplies() {
-		loadingSupplies.value = true;
+	/**
+	 * `silent` nạp lại mà không hiện khung chờ: thêm nhanh từng mặt hàng trong một nhóm mà cả danh
+	 * sách nháy thành khung xám sau mỗi lần lưu thì người dùng mất chỗ đang gõ.
+	 */
+	async function loadSupplies(options: { silent?: boolean } = {}) {
+		if (!options.silent) loadingSupplies.value = true;
 		try {
 			const [groupList, itemList] = await Promise.all([
 				service.findSupplyGroups({ includeInactive: true }),
@@ -176,20 +180,102 @@
 		...groups.value.map(g => ({ value: g.id, label: g.name })),
 	]);
 
-	const visibleItems = computed(() =>
-		filterGroupId.value ? items.value.filter(i => i.groupId === filterGroupId.value) : items.value,
-	);
-
-	/** Mặt hàng xếp theo nhóm, giữ thứ tự máy chủ trả về trong từng nhóm. */
+	/**
+	 * Mặt hàng xếp theo nhóm, theo thứ tự nhóm và thứ tự mặt hàng máy chủ trả về.
+	 *
+	 * Nhóm chưa có mặt hàng nào vẫn hiện, vì nút thêm mặt hàng của nhóm nằm ngay trên khối của nó.
+	 */
 	const itemsByGroup = computed(() => {
-		const map = new Map<string, SupplyItem[]>();
-		for (const item of visibleItems.value) {
-			const list = map.get(item.groupName) ?? [];
+		const byGroup = new Map<number, SupplyItem[]>();
+		for (const item of items.value) {
+			const list = byGroup.get(item.groupId) ?? [];
 			list.push(item);
-			map.set(item.groupName, list);
+			byGroup.set(item.groupId, list);
 		}
-		return [...map.entries()].map(([groupName, groupItems]) => ({ groupName, items: groupItems }));
+		const sections = groups.value.map(g => ({
+			groupId: g.id,
+			groupName: g.name,
+			isActive: g.isActive,
+			items: byGroup.get(g.id) ?? [],
+		}));
+		return filterGroupId.value ? sections.filter(s => s.groupId === filterGroupId.value) : sections;
 	});
+
+	/**
+	 * Nhóm mặt hàng đang mở. Mặc định mọi nhóm đóng: danh mục có hàng chục mặt hàng, mở hết thì
+	 * người dùng phải cuộn qua cả trang mới tới được nhóm mình cần.
+	 */
+	const expandedGroupIds = ref(new Set<number>());
+
+	function isGroupOpen(groupId: number): boolean {
+		return expandedGroupIds.value.has(groupId);
+	}
+
+	function setGroupOpen(groupId: number, open: boolean) {
+		const next = new Set(expandedGroupIds.value);
+		if (open) next.add(groupId);
+		else next.delete(groupId);
+		expandedGroupIds.value = next;
+	}
+
+	/** Chọn một nhóm ở ô lọc là muốn xem nhóm đó, nên mở luôn nó. */
+	function onFilterGroup(value: unknown) {
+		filterGroupId.value = Number(value) || undefined;
+		if (filterGroupId.value) setGroupOpen(filterGroupId.value, true);
+	}
+
+	/**
+	 * Dòng thêm nhanh ngay trong khối của một nhóm, nên không phải chọn lại nhóm như ở form chung.
+	 *
+	 * Lưu xong dòng vẫn mở và xoá trắng để gõ tiếp mặt hàng sau, vì người dùng thường thêm một loạt
+	 * mặt hàng vào cùng một nhóm. Thứ tự hiện và trạng thái thì vẫn sửa ở form chung.
+	 */
+	const inlineGroupId = ref<number | null>(null);
+	const inlineItem = reactive({ name: '', unit: '', unitPrice: undefined as number | undefined });
+	const savingInline = ref(false);
+	const inlineNameError = ref('');
+	const inlineInputCls =
+		'w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
+
+	function focusInlineName() {
+		nextTick(() => document.getElementById('inline-item-name')?.focus());
+	}
+
+	function toggleInlineAdd(groupId: number) {
+		if (inlineGroupId.value === groupId) {
+			inlineGroupId.value = null;
+			return;
+		}
+		inlineGroupId.value = groupId;
+		inlineNameError.value = '';
+		Object.assign(inlineItem, { name: '', unit: '', unitPrice: undefined });
+		setGroupOpen(groupId, true);
+		focusInlineName();
+	}
+
+	async function saveInlineItem() {
+		const groupId = inlineGroupId.value;
+		const name = inlineItem.name.trim();
+		const unit = inlineItem.unit.trim();
+		if (!groupId || !name || !unit || savingInline.value) return;
+		savingInline.value = true;
+		inlineNameError.value = '';
+		try {
+			await service.createSupplyItem({ groupId, name, unit, unitPrice: inlineItem.unitPrice });
+			toast.success(`Đã thêm mặt hàng ${name}.`);
+			Object.assign(inlineItem, { name: '', unit: '', unitPrice: undefined });
+			await loadSupplies({ silent: true });
+			focusInlineName();
+		} catch (e) {
+			if (officeErrorCode(e) === 'OFFICE_SUPPLY_ITEM_EXISTS') {
+				inlineNameError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong nhóm.');
+			} else {
+				toast.error(officeErrorMessage(e, 'Chưa lưu được mặt hàng. Bạn thử lại sau ít phút.'));
+			}
+		} finally {
+			savingInline.value = false;
+		}
+	}
 
 	function openGroupCreate() {
 		editingGroup.value = null;
@@ -1001,8 +1087,8 @@
 					<table class="w-full text-sm">
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 							<tr v-for="group in groups" :key="group.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-								<td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ group.name }}</td>
-								<td class="px-4 py-3">
+								<td class="px-4 py-1.5 font-medium text-gray-900 dark:text-white">{{ group.name }}</td>
+								<td class="px-4 py-1.5">
 									<span
 										v-if="group.hrOnly"
 										data-testid="hr-only-badge"
@@ -1011,7 +1097,7 @@
 										Chỉ HCNS đặt
 									</span>
 								</td>
-								<td class="px-4 py-3">
+								<td class="px-4 py-1.5">
 									<span
 										v-if="!group.isActive"
 										class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
@@ -1019,10 +1105,15 @@
 										Ngừng dùng
 									</span>
 								</td>
-								<td class="px-4 py-3 text-right">
-									<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openGroupEdit(group)"
-										>Sửa</CommonAppButton
+								<td class="px-4 py-1.5 text-right">
+									<button
+										v-if="canEdit"
+										type="button"
+										class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+										@click="openGroupEdit(group)"
 									>
+										Sửa
+									</button>
 								</td>
 							</tr>
 						</tbody>
@@ -1048,7 +1139,7 @@
 								:options="groupFilterOptions"
 								placeholder="Tất cả nhóm"
 								search-placeholder="Tìm nhóm"
-								@update:model-value="filterGroupId = Number($event) || undefined"
+								@update:model-value="onFilterGroup"
 							/>
 						</div>
 					</div>
@@ -1127,42 +1218,154 @@
 					</div>
 				</div>
 
-				<div v-if="itemsByGroup.length" class="space-y-4">
+				<div v-if="itemsByGroup.length" class="space-y-3">
 					<section
 						v-for="group in itemsByGroup"
-						:key="group.groupName"
+						:key="group.groupId"
 						class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 					>
-						<h4
-							class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100"
+						<!-- Cả dòng tiêu đề là nút đóng mở, nút thêm mặt hàng đứng riêng ở bên phải. -->
+						<div
+							:class="[
+								'flex items-center justify-between gap-2 pr-3',
+								isGroupOpen(group.groupId) ? 'border-b border-gray-200 dark:border-gray-700' : '',
+							]"
 						>
-							{{ group.groupName }}
-							<span class="ml-1 text-xs font-normal text-gray-400">{{ group.items.length }} mặt hàng</span>
-						</h4>
-						<table class="w-full text-sm">
-							<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-								<tr v-for="item in group.items" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-									<td class="px-4 py-2.5 text-gray-900 dark:text-white">{{ item.name }}</td>
-									<td class="px-4 py-2.5 text-gray-600 dark:text-gray-300">{{ item.unit }}</td>
-									<td class="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">
-										{{ officeMoney(item.unitPrice) }}
-									</td>
-									<td class="px-4 py-2.5">
-										<span
-											v-if="!item.isActive"
-											class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-										>
-											Ngừng dùng
-										</span>
-									</td>
-									<td class="px-4 py-2.5 text-right">
-										<CommonAppButton v-if="canEdit" size="sm" variant="outline" @click="openItemEdit(item)"
-											>Sửa</CommonAppButton
-										>
-									</td>
-								</tr>
-							</tbody>
-						</table>
+							<button
+								type="button"
+								class="flex min-w-0 flex-1 items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/40"
+								:aria-expanded="isGroupOpen(group.groupId)"
+								@click="setGroupOpen(group.groupId, !isGroupOpen(group.groupId))"
+							>
+								<Icon
+									name="heroicons:chevron-right"
+									:class="[
+										'h-4 w-4 flex-shrink-0 text-gray-400 transition-transform',
+										isGroupOpen(group.groupId) ? 'rotate-90' : '',
+									]"
+									aria-hidden="true"
+								/>
+								<span class="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{{
+									group.groupName
+								}}</span>
+								<span class="flex-shrink-0 text-xs text-gray-400">{{ group.items.length }} mặt hàng</span>
+								<span
+									v-if="!group.isActive"
+									class="inline-flex flex-shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+								>
+									Ngừng dùng
+								</span>
+							</button>
+							<!-- Nhóm ngừng dùng không nhận mặt hàng mới, giống ô chọn nhóm của form chung. -->
+							<button
+								v-if="canEdit && group.isActive"
+								type="button"
+								:class="[
+									'inline-flex flex-shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+									inlineGroupId === group.groupId
+										? 'bg-brand-600 text-white hover:bg-brand-700'
+										: 'bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-900/30 dark:text-brand-300 dark:hover:bg-brand-900/50',
+								]"
+								@click="toggleInlineAdd(group.groupId)"
+							>
+								<Icon name="heroicons:plus" class="h-3.5 w-3.5" aria-hidden="true" />
+								Thêm mặt hàng
+							</button>
+						</div>
+
+						<div v-if="isGroupOpen(group.groupId)" class="overflow-x-auto">
+							<table class="w-full min-w-[40rem] table-fixed text-sm">
+								<colgroup>
+									<col />
+									<col class="w-28" />
+									<col class="w-36" />
+									<col class="w-28" />
+									<col class="w-24" />
+								</colgroup>
+								<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+									<!-- Enter là lưu, Esc là đóng dòng, để gõ liền một loạt mặt hàng không cần chuột. -->
+									<tr
+										v-if="inlineGroupId === group.groupId"
+										class="bg-brand-50/60 dark:bg-brand-900/10"
+										@keydown.enter.prevent="saveInlineItem"
+										@keydown.esc="inlineGroupId = null"
+									>
+										<td class="px-4 py-1.5 align-top">
+											<input
+												id="inline-item-name"
+												v-model="inlineItem.name"
+												type="text"
+												maxlength="255"
+												:class="inlineInputCls"
+												placeholder="Tên mặt hàng"
+											/>
+											<p v-if="inlineNameError" class="mt-1 text-xs text-red-500">{{ inlineNameError }}</p>
+										</td>
+										<td class="px-2 py-1.5 align-top">
+											<input
+												v-model="inlineItem.unit"
+												type="text"
+												maxlength="50"
+												:class="inlineInputCls"
+												placeholder="Đơn vị"
+											/>
+										</td>
+										<td class="px-2 py-1.5 align-top">
+											<UiNumberInput
+												v-model="inlineItem.unitPrice"
+												:min="0"
+												:input-class="inlineInputCls"
+												placeholder="Đơn giá"
+											/>
+										</td>
+										<td colspan="2" class="px-4 py-1.5 text-right align-top">
+											<div class="flex justify-end gap-2">
+												<CommonAppButton size="sm" variant="ghost" @click="inlineGroupId = null">Huỷ</CommonAppButton>
+												<CommonAppButton
+													size="sm"
+													variant="primary"
+													:disabled="!inlineItem.name.trim() || !inlineItem.unit.trim()"
+													:loading="savingInline"
+													@click="saveInlineItem"
+												>
+													Lưu
+												</CommonAppButton>
+											</div>
+										</td>
+									</tr>
+									<tr v-for="item in group.items" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+										<td class="truncate px-4 py-1.5 text-gray-900 dark:text-white">{{ item.name }}</td>
+										<td class="px-4 py-1.5 text-gray-600 dark:text-gray-300">{{ item.unit }}</td>
+										<td class="px-4 py-1.5 text-right text-gray-600 dark:text-gray-300">
+											{{ officeMoney(item.unitPrice) }}
+										</td>
+										<td class="px-4 py-1.5">
+											<span
+												v-if="!item.isActive"
+												class="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+											>
+												Ngừng dùng
+											</span>
+										</td>
+										<td class="px-4 py-1.5 text-right">
+											<button
+												v-if="canEdit"
+												type="button"
+												class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+												@click="openItemEdit(item)"
+											>
+												Sửa
+											</button>
+										</td>
+									</tr>
+									<tr v-if="!group.items.length && inlineGroupId !== group.groupId">
+										<td colspan="5" class="px-4 py-3 text-center text-sm text-gray-500 dark:text-gray-400">
+											Nhóm này chưa có mặt hàng nào.
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
 					</section>
 				</div>
 				<p

@@ -742,7 +742,7 @@
 
 <template>
 	<!-- `pb-24`: chừa chỗ cho nút trợ lý nổi ở góc dưới phải, nếu không nó đè lên dòng cuối trang. -->
-	<div class="space-y-5 pb-24">
+	<div class="space-y-3 pb-24">
 		<UiPageHeader
 			title="Văn phòng phẩm của phòng"
 			description="Cả phòng cùng nhập vào một phiếu cho mỗi kỳ và không có nút nộp: tới hạn chót phiếu tự khoá, nên bạn nhập sớm rồi vẫn sửa lại được."
@@ -753,7 +753,7 @@
 		<!-- Đầu mối của phòng -->
 		<section
 			v-if="contact"
-			class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+			class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
 		>
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
@@ -858,7 +858,7 @@
 					:key="req.id"
 					type="button"
 					:class="[
-						'rounded-xl border px-3 py-2 text-left text-sm transition-colors',
+						'rounded-lg border px-3 py-1.5 text-left text-sm transition-colors',
 						current?.id === req.id
 							? 'border-brand-500 bg-brand-50 dark:border-brand-500 dark:bg-brand-900/20'
 							: 'border-gray-200 bg-white hover:border-brand-300 dark:border-gray-700 dark:bg-gray-900',
@@ -885,8 +885,8 @@
 
 			<template v-else-if="current">
 				<!-- Thông tin phiếu -->
-				<section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-					<div class="flex flex-wrap items-start justify-between gap-3">
+				<section class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
 							<h2 class="font-semibold text-gray-900 dark:text-white">
 								{{ current.period.title }}
@@ -939,19 +939,19 @@
 				<!-- Thêm dòng -->
 				<section
 					v-if="canEdit"
-					class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+					class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
 				>
 					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Thêm mặt hàng</h2>
 					<!--
-						Mọi ô của hai hàng cao đúng 43px, bằng ô chọn mặt hàng: ô chọn là component dùng chung
-						có đệm riêng nên không sửa được ở đây, còn ô số, ô ghi chú và nút thì ép bằng class của
-						trang. `[&_input]` nhắm vào ô nhập NẰM TRONG `QtyInput`, vì class gắn lên component chỉ
-						rơi vào khung bọc của nó; câu nhắc gõ sai bên dưới ô số vẫn giữ chiều cao tự nhiên.
+						Mọi ô của hai hàng cao đúng 36px (`h-9`), bằng ô chọn mặt hàng cỡ `sm`. `[&_input]` nhắm
+						vào ô nhập NẰM TRONG `QtyInput`, vì class gắn lên component chỉ rơi vào khung bọc của nó;
+						câu nhắc gõ sai bên dưới ô số vẫn giữ chiều cao tự nhiên.
 					-->
-					<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_120px_1fr_auto] lg:items-start">
+					<div class="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-[1fr_110px_1fr_auto] lg:items-start">
 						<UiSelectInput
 							:model-value="addItemId"
 							:options="itemOptions"
+							size="sm"
 							placeholder="Chọn mặt hàng"
 							search-placeholder="Tìm mặt hàng, gõ không dấu cũng được"
 							@update:model-value="pickItem($event)"
@@ -959,7 +959,7 @@
 						<QtyInput
 							v-model="addQty"
 							v-model:invalid="addQtyInvalid"
-							class="[&_input]:h-[43px]"
+							class="[&_input]:h-9 [&_input]:py-1"
 							placeholder="Số lượng"
 							aria-label="Số lượng cần xin"
 							@save="addLine"
@@ -968,11 +968,11 @@
 							v-model="addNote"
 							type="text"
 							maxlength="500"
-							class="h-[43px] w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+							class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 							placeholder="Ghi chú (không bắt buộc)"
 						/>
 						<!-- Nút không bị xám: thiếu mặt hàng hay thiếu số thì câu nhắc hiện ngay dưới form. -->
-						<CommonAppButton variant="primary" class="h-[43px]" :loading="working" @click="addLine">Thêm</CommonAppButton>
+						<CommonAppButton variant="primary" class="h-9" :loading="working" @click="addLine">Thêm</CommonAppButton>
 					</div>
 					<!--
 						Câu gợi ý màu xám trung tính: chọn mặt hàng đã có là việc bình thường, không phải lỗi,
@@ -1008,23 +1008,26 @@
 					</div>
 					<p v-if="addError" class="mt-2 text-sm text-red-500">{{ addError }}</p>
 
-					<div class="mt-3">
-						<!-- `py-2`: chữ nhỏ mà không có đệm thì ô bấm chỉ cao hai mươi pixel, ngón tay không trúng. -->
+					<div class="mt-1">
+						<!--
+							`py-2` trên điện thoại: chữ nhỏ mà không có đệm thì ô bấm chỉ cao hai mươi pixel,
+							ngón tay không trúng. Màn lớn bấm bằng chuột nên thu lại cho gọn.
+						-->
 						<button
 							type="button"
-							class="py-2 text-sm text-brand-600 hover:underline dark:text-brand-400"
+							class="py-2 text-sm text-brand-600 hover:underline lg:py-1 dark:text-brand-400"
 							@click="showCustomForm = !showCustomForm"
 						>
 							{{ showCustomForm ? 'Thôi, không thêm mặt hàng ngoài danh mục' : 'Mặt hàng không có trong danh mục' }}
 						</button>
-						<div v-if="showCustomForm" class="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_120px_auto] lg:items-start">
+						<div v-if="showCustomForm" class="mt-1 grid grid-cols-1 gap-2 lg:grid-cols-[1fr_1fr_110px_auto] lg:items-start">
 							<div>
 								<!-- `maxlength` theo đúng giới hạn của API: 200 cho tên, 30 cho đơn vị. -->
 								<input
 									v-model="customName"
 									type="text"
 									maxlength="200"
-									class="h-[43px] w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+									class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									placeholder="Tên mặt hàng, VD: Pin 3A"
 									@input="customNameError = ''"
 								/>
@@ -1035,7 +1038,7 @@
 									v-model="customUnit"
 									type="text"
 									maxlength="30"
-									class="h-[43px] w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+									class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									placeholder="Đơn vị, VD: Đôi"
 									@input="customUnitError = ''"
 								/>
@@ -1044,12 +1047,12 @@
 							<QtyInput
 								v-model="customQty"
 								v-model:invalid="customQtyInvalid"
-								class="[&_input]:h-[43px]"
+								class="[&_input]:h-9 [&_input]:py-1"
 								placeholder="Số lượng"
 								aria-label="Số lượng mặt hàng ngoài danh mục"
 								@save="addCustomLine"
 							/>
-							<CommonAppButton variant="outline" class="h-[43px]" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
+							<CommonAppButton variant="outline" class="h-9" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
 						</div>
 						<p v-if="customError" class="mt-2 text-sm text-red-500">{{ customError }}</p>
 					</div>
@@ -1090,18 +1093,25 @@
 					:key="group.groupName"
 					class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 				>
-					<h3 class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100">
+					<h3
+						class="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-100"
+					>
 						{{ group.groupName }}
+						<span class="ml-1 text-xs font-normal text-gray-400">{{ group.lines.length }} dòng</span>
 					</h3>
 					<div class="divide-y divide-gray-100 dark:divide-gray-800">
-						<div v-for="line in group.lines" :key="line.id" class="p-4">
-							<div class="flex flex-wrap items-start justify-between gap-3">
-								<div class="min-w-0">
-									<p class="font-medium text-gray-900 dark:text-white">
-										{{ line.name }}
-										<span class="text-sm font-normal text-gray-500 dark:text-gray-400">· {{ line.unit || '—' }}</span>
+						<!--
+							Dòng phiếu giữ đệm mỏng và chữ cỡ nhỏ, ô số cao 32px: phiếu cả phòng thường có vài chục
+							dòng, mỗi dòng cao gấp rưỡi thì phải cuộn mãi mới thấy hết.
+						-->
+						<div v-for="line in group.lines" :key="line.id" class="px-4 py-2">
+							<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+								<div class="min-w-0 flex-1">
+									<p class="text-sm">
+										<span class="font-medium text-gray-900 dark:text-white">{{ line.name }}</span>
+										<span class="text-gray-500 dark:text-gray-400"> · {{ line.unit || '—' }}</span>
 									</p>
-									<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+									<p class="text-xs text-gray-500 dark:text-gray-400">
 										<!-- Định mức phải có đơn vị: "Định mức 10" không nói 10 cái hay 10 hộp. -->
 										<template v-if="line.quota != null">
 											Định mức {{ line.quota }} {{ line.unit || 'đơn vị' }} mỗi tháng ·
@@ -1159,10 +1169,11 @@
 									</p>
 								</div>
 
-								<div v-if="canEdit" class="flex flex-wrap items-start gap-2">
-									<div class="w-28">
+								<div v-if="canEdit" class="flex flex-wrap items-start gap-1.5">
+									<div class="w-24">
 										<QtyInput
 											v-model="editQty[line.id]"
+											class="[&_input]:h-8 [&_input]:py-1"
 											:max="100000"
 											:aria-label="`Số xin của ${line.name}`"
 											@update:invalid="lineQtyInvalid[line.id] = $event"
@@ -1192,7 +1203,7 @@
 							-->
 							<div
 								v-if="canEdit && (line.overQuota || lineNeedsReason[line.id] || editReason[line.id])"
-								class="mt-2"
+								class="mt-1"
 							>
 								<label class="block text-xs font-medium text-amber-700 dark:text-amber-400">
 									Lý do vượt định mức
@@ -1205,11 +1216,11 @@
 									placeholder="VD: Tháng này quyết toán, in nhiều"
 								/>
 							</div>
-							<p v-else-if="line.overQuota" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+							<p v-else-if="line.overQuota" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
 								Vượt định mức: {{ line.overQuotaReason || 'chưa ghi lý do' }}
 							</p>
 							<!-- Câu lỗi của dòng đứng riêng, nên nó không kéo theo ô lý do nào. -->
-							<p v-if="lineError[line.id]" class="mt-2 text-xs text-red-500">{{ lineError[line.id] }}</p>
+							<p v-if="lineError[line.id]" class="mt-1 text-xs text-red-500">{{ lineError[line.id] }}</p>
 						</div>
 					</div>
 				</section>
