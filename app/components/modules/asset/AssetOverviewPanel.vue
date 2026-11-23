@@ -26,6 +26,8 @@
 
 	const data = ref<AssetOverview | null>(null);
 	const loading = ref(true);
+	/** Đang tải lại sau khi trang danh sách lưu hoặc nhập tài sản, số cũ vẫn đang hiện. */
+	const refreshing = ref(false);
 	const loadError = ref<string | null>(null);
 	const open = ref(true);
 
@@ -48,13 +50,7 @@
 	async function load() {
 		loading.value = true;
 		loadError.value = null;
-		if (canSeeStocktakes.value) {
-			// Không chặn Tổng quan: lỗi ở đây chỉ làm mất dòng đợt đang mở.
-			service
-				.openStocktake()
-				.then(r => (openStocktake.value = r))
-				.catch(() => (openStocktake.value = null));
-		}
+		loadOpenStocktake();
 		try {
 			data.value = await service.overview();
 		} catch (e) {
@@ -65,7 +61,45 @@
 		}
 	}
 
+	function loadOpenStocktake() {
+		if (!canSeeStocktakes.value) return;
+		// Không chặn Tổng quan: lỗi ở đây chỉ làm mất dòng đợt đang mở.
+		service
+			.openStocktake()
+			.then(r => (openStocktake.value = r))
+			.catch(() => (openStocktake.value = null));
+	}
+
+	/**
+	 * Tải lại sau khi trang danh sách lưu một tài sản hoặc nhập xong một file.
+	 *
+	 * Khác `load()` ở chỗ giữ số cũ trên màn trong lúc chờ: người dùng vừa nhập trăm dòng thì
+	 * thấy khối Tổng quan chớp về khung xương rồi mới ra số mới là khó chịu, mà lần tải lại này
+	 * hỏng cũng không được xoá số đang đúng. Lỗi của lần tải lại chỉ cần im lặng vì bảng tài
+	 * sản bên dưới tải lại cùng lúc và đã có thông báo lỗi của riêng nó.
+	 */
+	async function reload() {
+		if (!data.value) return load();
+		refreshing.value = true;
+		loadOpenStocktake();
+		try {
+			data.value = await service.overview();
+			loadError.value = null;
+		} catch {
+			// giữ số cũ
+		} finally {
+			refreshing.value = false;
+		}
+	}
+
 	onMounted(load);
+
+	/** Hướng dẫn từng bước gọi để mở lại phần này nếu người dùng đã thu gọn. */
+	function expand() {
+		open.value = true;
+	}
+
+	defineExpose({ reload, expand });
 
 	const moneyCards = computed(() => {
 		const d = data.value;
@@ -110,7 +144,10 @@
 			@click="open = !open"
 		>
 			<div>
-				<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Tổng quan</h2>
+				<div class="flex items-center gap-2">
+					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Tổng quan</h2>
+					<span v-if="refreshing" class="text-xs text-gray-500 dark:text-gray-400">Đang cập nhật…</span>
+				</div>
 				<p v-if="data" class="text-sm text-gray-600 dark:text-gray-400">
 					Đang quản lý {{ data.physicalCount }} thiết bị và {{ data.serviceCount }} dịch vụ thuê bao, tính đến
 					ngày {{ formatDate(data.asOf) }}.

@@ -14,6 +14,7 @@
 	} from '~/utils/office.utils';
 	import { formatDate, formatDateTime } from '~/utils/date';
 	import { OFFICE_PERMISSIONS } from '~/utils/permission';
+	import { searchKey } from '~/utils/text-search';
 	import type {
 		CopySkippedItem,
 		SupplyContact,
@@ -77,8 +78,6 @@
 	/** Hiện ô lý do khi máy chủ báo dòng vượt định mức mà chưa có lý do. */
 	const addNeedsReason = ref(false);
 	const addError = ref('');
-	/** Câu chỉ đường khi người dùng chọn một mặt hàng đã có dòng trong phiếu. */
-	const addItemNotice = ref('');
 
 	/** Ô số đang giữ chữ gõ sai, ví dụ "2,5" hay "5 hộp": chặn thêm dòng tới khi người dùng gõ lại. */
 	const addQtyInvalid = ref(false);
@@ -99,7 +98,12 @@
 	/** Dòng kỳ trước không chép được, giữ trên màn vì toast tắt mất mà người dùng còn phải nhập lại. */
 	const copySkipped = ref<CopySkippedItem[]>([]);
 
-	/** Dòng đang sửa: số và lý do theo `lineId`, cùng cờ "đã sửa" để chỉ hiện nút Lưu khi cần. */
+	/**
+	 * Dòng đang sửa: số và lý do theo `lineId`, cùng cờ "đã sửa" để chỉ hiện nút Lưu khi cần.
+	 *
+	 * Ô số của dòng là PHẦN CỦA NGƯỜI ĐANG XEM, không phải tổng: một dòng do nhiều người cùng xin,
+	 * và mỗi người chỉ sửa phần mình. Tổng của dòng hiện ngay cạnh ô.
+	 */
 	const editQty = reactive<Record<number, number | undefined>>({});
 	const editReason = reactive<Record<number, string>>({});
 	const lineError = reactive<Record<number, string>>({});
@@ -114,23 +118,41 @@
 	 */
 	const lineNeedsReason = reactive<Record<number, boolean>>({});
 
+	/** Dòng đang mở bảng sửa phần của từng người; chỉ trưởng phòng, đầu mối (`canEditAllShares`) mở được. */
+	const shareEditLineId = ref<number | null>(null);
+	/** Số đang gõ cho phần của từng người ở dòng đang mở, theo `employeeId`. */
+	const shareEdits = reactive<Record<number, number | undefined>>({});
+	const shareEditInvalid = reactive<Record<number, boolean>>({});
+
+	/** Dòng danh mục của phiếu theo mặt hàng, để biết thêm mặt hàng nào là cộng vào dòng đang có. */
+	const linesByItemId = computed(() => {
+		const map = new Map<number, SupplyLine>();
+		for (const line of current.value?.lines ?? []) if (line.itemId != null) map.set(line.itemId, line);
+		return map;
+	});
+
+	/** Đơn vị trong câu văn viết thường: "nay 17 chiếc", không phải "nay 17 Chiếc". */
+	function unitWord(unit: string | null | undefined): string {
+		return (unit ?? '').toLocaleLowerCase('vi');
+	}
+
 	/**
-	 * Mặt hàng còn chọn được, kèm định mức ngay trên nhãn.
+	 * Mọi mặt hàng của danh mục, kèm số phiếu đang có và định mức ngay trên nhãn.
 	 *
 	 * Định mức nằm ở ô chọn chứ không chỉ ở dòng đã thêm, vì người dùng cần biết trần của phòng
-	 * TRƯỚC khi gõ số, không phải sau khi bị máy chủ từ chối. Danh mục của màn này không có đơn
-	 * giá: nhân viên thường nhận `unitPrice` rỗng và giá không phải việc của họ.
+	 * TRƯỚC khi gõ số, không phải sau khi bị máy chủ từ chối. Mặt hàng phiếu đã có vẫn chọn được:
+	 * thêm nữa thì máy chủ cộng vào dòng đang có, nên nhãn nói luôn số đang có để người dùng gõ phần
+	 * cần thêm chứ không gõ lại cả tổng. Danh mục của màn này không có đơn giá: nhân viên thường
+	 * nhận `unitPrice` rỗng và giá không phải việc của họ.
 	 */
-	/** Mặt hàng đã có trong phiếu: vẫn hiện trong ô chọn, nhưng chọn vào thì chỉ được nhắc. */
-	const usedItemIds = computed(() => new Set((current.value?.lines ?? []).map(line => line.itemId).filter(Boolean)));
-
 	const itemOptions = computed(() =>
 		items.value.map(item => {
 			// TÊN MẶT HÀNG ĐỨNG TRƯỚC tên nhóm: ô chọn chỉ hiện một dòng và cắt phần đuôi, nên để
 			// nhóm lên trước thì trên điện thoại người dùng đọc được tên nhóm mà không thấy mặt hàng.
 			const parts = [`${item.name} (${item.unit})`];
+			const line = linesByItemId.value.get(item.id);
+			if (line) parts.push(`phiếu đang có ${line.requestedQty}`);
 			if (item.quota != null) parts.push(`định mức ${item.quota} ${item.unit} mỗi tháng`);
-			if (usedItemIds.value.has(item.id)) parts.push('đã có trong phiếu, sửa số ở dòng bên dưới');
 			if (item.groupName) parts.push(item.groupName);
 			return { value: item.id, label: parts.join(' · ') };
 		}),
@@ -139,29 +161,41 @@
 	/** Mặt hàng đang chọn ở form thêm dòng, để biết định mức và nhắc lý do ngay khi gõ vượt. */
 	const addItem = computed(() => items.value.find(item => item.id === addItemId.value) ?? null);
 
-	/**
-	 * Chọn mặt hàng ở ô danh mục.
-	 *
-	 * Mặt hàng đã có trong phiếu vẫn nằm trong danh sách để người dùng tìm thấy nó, nhưng chọn vào
-	 * thì chỉ nhận câu chỉ đường xuống dòng đang có: trước đây danh sách lọc chúng ra nên tìm một
-	 * mặt hàng vừa thêm lại ra "Không tìm thấy kết quả".
-	 */
+	/** Dòng phiếu đang có của mặt hàng đang chọn; có thì bấm Thêm là cộng vào dòng này. */
+	const addExistingLine = computed(() => (addItemId.value == null ? null : linesByItemId.value.get(addItemId.value) ?? null));
+
 	function pickItem(value: string | number) {
-		const id = Number(value);
-		const line = (current.value?.lines ?? []).find(l => l.itemId === id);
-		if (line) {
-			addItemId.value = null;
-			addItemNotice.value = `${line.name} đã có trong phiếu, bạn sửa số ở dòng bên dưới.`;
-			return;
-		}
-		addItemNotice.value = '';
-		addItemId.value = id;
+		addItemId.value = Number(value);
 		addError.value = '';
 	}
 
-	const addOverQuota = computed(() => {
+	/** Số phiếu sẽ có sau khi thêm: số đang có của dòng cộng số gõ, vì máy chủ tính định mức trên tổng này. */
+	const addTotal = computed(() => (addQty.value == null ? null : (addExistingLine.value?.requestedQty ?? 0) + addQty.value));
+
+	const addTotalOverQuota = computed(() => {
 		const quota = addItem.value?.quota;
-		return quota != null && addQty.value != null && addQty.value > quota;
+		return quota != null && addTotal.value != null && addTotal.value > quota;
+	});
+
+	/**
+	 * Cần nhập lý do trước khi gửi.
+	 *
+	 * Dòng đang có đã ghi lý do vượt định mức thì máy chủ giữ lý do đó khi cộng thêm, nên không bắt
+	 * người dùng gõ lại một lý do phòng đã có.
+	 */
+	const addOverQuota = computed(() => addTotalOverQuota.value && !addExistingLine.value?.overQuotaReason);
+
+	/** Câu nhắc lý do: mặt hàng đã có thì nói cả tổng, vì số gõ một mình có khi chưa vượt. */
+	const addOverQuotaMessage = computed(() => {
+		const item = addItem.value;
+		const line = addExistingLine.value;
+		if (!item || item.quota == null) return '';
+		// Định mức luôn ghi kèm ĐƠN VỊ: "vượt định mức 10" không nói 10 cái hay 10 hộp.
+		const quota = `${item.quota} ${unitWord(item.unit)} mỗi tháng của phòng`;
+		if (line && addQty.value != null) {
+			return `Phiếu đang có ${line.requestedQty}, thêm ${addQty.value} là ${addTotal.value}, vượt định mức ${quota}, bạn ghi lý do.`;
+		}
+		return `Số này vượt định mức ${quota}, bạn ghi lý do.`;
 	});
 
 	const canEdit = computed(() => !!current.value?.canEdit);
@@ -232,9 +266,13 @@
 		return `HCNS đã khoá kỳ này lúc ${formatDateTime(at)}, phiếu không sửa được nữa. Phòng còn thiếu thì báo HCNS tạo phiếu bổ sung.`;
 	});
 
-	/** Người dùng vừa sửa ô thì câu nhắc cũ hết đúng; câu vượt định mức thì ở lại cho tới khi số hạ. */
+	/**
+	 * Người dùng vừa sửa ô thì câu nhắc cũ hết đúng; câu vượt định mức thì ở lại cho tới khi số hạ,
+	 * và đổi theo số mới vì nó nêu cả tổng.
+	 */
 	watch([addItemId, addQty], () => {
 		if (!addOverQuota.value) addError.value = '';
+		else if (addNeedsReason.value) addError.value = addOverQuotaMessage.value;
 	});
 
 	/** Người của phòng tôi, để trưởng phòng chọn đầu mối. */
@@ -267,12 +305,22 @@
 	function fillEdits(data: SupplyRequest) {
 		current.value = data;
 		for (const line of data.lines) {
-			editQty[line.id] = line.requestedQty;
+			editQty[line.id] = line.myQty;
 			editReason[line.id] = line.overQuotaReason ?? '';
 			delete lineError[line.id];
 			delete lineNeedsReason[line.id];
 			delete lineQtyInvalid[line.id];
 		}
+		// Bảng sửa phần đang mở thì nạp lại số mới; dòng đã bị xoá (rút hết phần) thì đóng bảng.
+		const shareLine = data.lines.find(l => l.id === shareEditLineId.value);
+		if (shareLine && data.canEditAllShares) fillShareEdits(shareLine);
+		else shareEditLineId.value = null;
+	}
+
+	function fillShareEdits(line: SupplyLine) {
+		for (const key of Object.keys(shareEdits)) delete shareEdits[Number(key)];
+		for (const key of Object.keys(shareEditInvalid)) delete shareEditInvalid[Number(key)];
+		for (const share of line.shares) shareEdits[share.employee.id] = share.qty;
 	}
 
 	async function openRequest(id: number): Promise<boolean> {
@@ -390,27 +438,32 @@
 		// Biết định mức từ danh mục thì nhắc ngay tại chỗ, khỏi phải gửi lên mới biết thiếu lý do.
 		if (addOverQuota.value && !addReason.value.trim()) {
 			addNeedsReason.value = true;
-			// Định mức luôn ghi kèm ĐƠN VỊ: "vượt định mức 10" không nói 10 cái hay 10 hộp.
-			addError.value = `Số này vượt định mức ${addItem.value?.quota} ${addItem.value?.unit} mỗi tháng của phòng, bạn ghi lý do.`;
+			addError.value = addOverQuotaMessage.value;
 			return;
 		}
+		// Cộng hay tạo mới thì biết trước bằng dòng đang có, để câu báo sau khi thêm nói đúng việc
+		// vừa xảy ra; người khác vừa thêm cùng mặt hàng thì máy chủ vẫn cộng, câu sau đó tự đúng lại
+		// vì đọc số từ phiếu máy chủ trả về.
+		const itemId = addItemId.value;
+		const qty = addQty.value;
 		working.value = true;
 		addError.value = '';
 		try {
-			afterWrite(
-				await service.addLine(requestId, {
-					itemId: addItemId.value,
-					requestedQty: addQty.value,
-					overQuotaReason: addReason.value.trim() || undefined,
-					note: addNote.value.trim() || undefined,
-				}),
-			);
+			const data = await service.addLine(requestId, {
+				itemId,
+				requestedQty: qty,
+				overQuotaReason: addReason.value.trim() || undefined,
+				note: addNote.value.trim() || undefined,
+			});
+			const before = linesByItemId.value.get(itemId);
+			afterWrite(data);
 			addItemId.value = null;
 			addQty.value = undefined;
 			addReason.value = '';
 			addNote.value = '';
 			addNeedsReason.value = false;
-			toast.success('Đã thêm dòng vào phiếu.');
+			const merged = before ? data.lines.find(l => l.id === before.id) : undefined;
+			toast.success(mergedMessage(merged, qty));
 		} catch (e) {
 			const code = officeErrorCode(e);
 			if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
@@ -418,17 +471,11 @@
 				// ô chọn nói chưa vượt, máy chủ vẫn có thể bắt ghi lý do: mở ô lý do kèm câu của nó.
 				addNeedsReason.value = true;
 				addError.value = officeErrorMessage(e, 'Số này vượt định mức của phòng, bạn ghi lý do.');
-			} else if (code === 'OFFICE_SUPPLY_LINE_EXISTS') {
-				// Người khác trong phòng vừa thêm đúng mặt hàng này: tải lại phiếu để dòng của họ
-				// hiện ra, nếu không thì câu "đã có trong phiếu" trỏ tới một dòng người dùng không
-				// thấy đâu cả. Câu nhắc đi vào `addItemNotice` vì nó ở lại sau khi ô chọn được dọn,
-				// còn `addError` thì tự tắt ngay khi ô chọn đổi giá trị.
-				addItemNotice.value = officeErrorMessage(
-					e,
-					'Mặt hàng này đã có trong phiếu, bạn sửa số ở dòng đang có.',
-				);
-				addItemId.value = null;
-				await openRequest(requestId);
+			} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
+				// Tổng sau khi cộng quá trần, hoặc ghi chú nối vào quá dài: câu của máy chủ nói rõ số.
+				addError.value = officeErrorMessage(e, 'Số hoặc ghi chú sau khi cộng vào dòng đang có vượt giới hạn.');
+			} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
+				await reloadAfterBusy(e, requestId);
 			} else if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG') {
 				// Người dùng gõ tay một thứ đã có sẵn: nói tên đúng và đẩy họ về ô chọn danh mục.
 				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong danh mục, bạn chọn trong danh sách.');
@@ -465,27 +512,33 @@
 			customError.value = 'Bạn nhập số lượng cần xin, ví dụ 2.';
 			return;
 		}
+		const name = customName.value.trim();
+		const unit = customUnit.value.trim();
+		const qty = customQty.value;
+		// Cùng tên và đơn vị với một dòng ngoài danh mục đang có (so không dấu, không hoa thường như
+		// máy chủ) thì máy chủ cộng vào dòng đó, nên câu báo cũng phải nói là cộng.
+		const before = (current.value?.lines ?? []).find(
+			l => l.itemId == null && searchKey(l.name) === searchKey(name) && searchKey(l.unit ?? '') === searchKey(unit),
+		);
 		working.value = true;
 		try {
-			afterWrite(
-				await service.addLine(requestId, {
-					customName: customName.value.trim(),
-					customUnit: customUnit.value.trim(),
-					requestedQty: customQty.value,
-				}),
-			);
+			const data = await service.addLine(requestId, { customName: name, customUnit: unit, requestedQty: qty });
+			afterWrite(data);
 			customName.value = '';
 			customUnit.value = '';
 			customQty.value = undefined;
 			showCustomForm.value = false;
-			toast.success('Đã thêm mặt hàng ngoài danh mục.');
+			const merged = before ? data.lines.find(l => l.id === before.id) : undefined;
+			toast.success(mergedMessage(merged, qty));
 		} catch (e) {
 			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG' || code === 'OFFICE_SUPPLY_LINE_EXISTS') {
-				// Câu của máy chủ nêu tên đúng trong danh mục, nên để ngay dưới ô tên tự gõ. Dòng đã
-				// có thì tải lại phiếu để người dùng thấy nó, giống đường thêm từ danh mục.
-				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có, bạn chọn trong danh sách ở trên.');
-				if (code === 'OFFICE_SUPPLY_LINE_EXISTS') await openRequest(requestId);
+			if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG') {
+				// Câu của máy chủ nêu tên đúng trong danh mục, nên để ngay dưới ô tên tự gõ.
+				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong danh mục, bạn chọn trong danh sách ở trên.');
+			} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
+				customError.value = officeErrorMessage(e, 'Số sau khi cộng vào dòng đang có vượt giới hạn.');
+			} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
+				await reloadAfterBusy(e, requestId);
 			} else {
 				toast.error(
 					officeErrorMessage(e, 'Chưa thêm được mặt hàng ngoài danh mục. Bạn kiểm tra lại tên và đơn vị.'),
@@ -496,51 +549,167 @@
 		}
 	}
 
-	function lineDirty(line: SupplyLine): boolean {
-		return editQty[line.id] !== line.requestedQty || (editReason[line.id] ?? '') !== (line.overQuotaReason ?? '');
+	/**
+	 * Câu báo sau khi thêm: cộng vào dòng đang có thì nói số vừa thêm và tổng mới, để người dùng
+	 * biết phiếu không mọc thêm dòng trùng mà dòng cũ đã tăng lên.
+	 */
+	function mergedMessage(merged: SupplyLine | undefined, qty: number): string {
+		if (!merged) return 'Đã thêm vào phiếu.';
+		const unit = unitWord(merged.unit);
+		return `Đã cộng thêm ${qty} ${unit} vào phần của bạn ở ${merged.name}, dòng nay ${merged.requestedQty} ${unit}.`.replace(
+			/\s+/g,
+			' ',
+		);
 	}
 
+	// ─── Phần của từng người trên một dòng ──────────────────────────────────────────
+
+	/** "Bạn 4 · Đỗ Hồng Hạnh 12": ai xin bao nhiêu trong tổng của dòng. */
+	function sharesLabel(line: SupplyLine): string {
+		return line.shares.map(s => `${s.isMine ? 'Bạn' : s.employee.fullName} ${s.qty}`).join(' · ');
+	}
+
+	function hasOtherShares(line: SupplyLine): boolean {
+		return line.shares.some(s => !s.isMine);
+	}
+
+	/**
+	 * Xoá cả dòng là xoá luôn phần của mọi người, nên chỉ trưởng phòng, đầu mối hoặc người duy nhất
+	 * có phần mới xoá được; người khác rút phần của mình.
+	 */
+	function canDeleteLine(line: SupplyLine): boolean {
+		return !!current.value?.canEditAllShares || !hasOtherShares(line);
+	}
+
+	/** Tổng của dòng nếu phần của `employeeId` đổi thành `qty`; định mức tính trên tổng này. */
+	function totalWithShare(line: SupplyLine, employeeId: number | undefined, qty: number): number {
+		const currentQty = line.shares.find(s => s.employee.id === employeeId)?.qty ?? 0;
+		return line.requestedQty - currentQty + qty;
+	}
+
+	/** Tổng xem trước khi đang gõ phần của mình; ô trống thì giữ tổng hiện tại. */
+	function previewTotal(line: SupplyLine): number {
+		const qty = editQty[line.id];
+		return qty == null || lineQtyInvalid[line.id] ? line.requestedQty : totalWithShare(line, user.value?.id, qty);
+	}
+
+	/**
+	 * Lỗi chung của các lệnh ghi phần: định mức thì mở ô lý do của dòng, kỳ khoá hoặc dữ liệu cũ thì
+	 * tải lại phiếu, còn lại báo câu của máy chủ.
+	 */
+	async function handleShareError(e: unknown, line: SupplyLine, requestId: number) {
+		const code = officeErrorCode(e);
+		if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
+			lineNeedsReason[line.id] = true;
+			lineError[line.id] = officeErrorMessage(e, 'Tổng của dòng vượt định mức của phòng, bạn ghi lý do.');
+		} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
+			lineError[line.id] = officeErrorMessage(e, 'Số này chưa hợp lệ, bạn kiểm tra lại.');
+		} else if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
+			toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
+			await openRequest(requestId);
+		} else if (code === 'OFFICE_SUPPLY_SHARE_FORBIDDEN' || code === 'OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES') {
+			toast.warning(officeErrorMessage(e, 'Bạn chỉ sửa được phần của mình.'));
+			await openRequest(requestId);
+		} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
+			await reloadAfterBusy(e, requestId);
+		} else if (!(await reloadIfStale(e, requestId))) {
+			toast.error(officeErrorMessage(e, 'Chưa lưu được dòng này. Bạn thử lại sau ít phút.'));
+		}
+	}
+
+	function withdrawShare(line: SupplyLine) {
+		editQty[line.id] = 0;
+		saveLine(line);
+	}
+
+	function toggleShareEdit(line: SupplyLine) {
+		if (shareEditLineId.value === line.id) {
+			shareEditLineId.value = null;
+			return;
+		}
+		shareEditLineId.value = line.id;
+		fillShareEdits(line);
+	}
+
+	function shareDirty(line: SupplyLine, employeeId: number): boolean {
+		return shareEdits[employeeId] !== line.shares.find(s => s.employee.id === employeeId)?.qty;
+	}
+
+	/** Trưởng phòng, đầu mối đặt phần của một người đã có phần; 0 là rút phần của người đó. */
+	async function saveShare(line: SupplyLine, employeeId: number) {
+		const requestId = current.value?.id;
+		const qty = shareEdits[employeeId];
+		if (!requestId || working.value || qty == null || shareEditInvalid[employeeId]) return;
+		const total = totalWithShare(line, employeeId, qty);
+		if (line.quota != null && total > line.quota && !editReason[line.id]?.trim()) {
+			lineNeedsReason[line.id] = true;
+			lineError[line.id] = `Tổng của dòng sẽ là ${total}, vượt định mức ${line.quota} ${unitWord(line.unit)} mỗi tháng của phòng, bạn ghi lý do.`;
+			return;
+		}
+		const name = line.shares.find(s => s.employee.id === employeeId)?.employee.fullName ?? 'người này';
+		working.value = true;
+		delete lineError[line.id];
+		try {
+			afterWrite(
+				await service.setLineShare(requestId, line.id, employeeId, {
+					qty,
+					overQuotaReason: editReason[line.id]?.trim() || undefined,
+				}),
+			);
+			toast.success(qty === 0 ? `Đã rút phần của ${name} ở ${line.name}.` : `Đã lưu phần của ${name} ở ${line.name}.`);
+		} catch (e) {
+			await handleShareError(e, line, requestId);
+		} finally {
+			working.value = false;
+		}
+	}
+
+	/**
+	 * Người khác đang sửa đúng dòng này liên tục nên máy chủ không cộng được: báo câu của máy chủ
+	 * và tải lại phiếu để người dùng thấy số mới nhất trước khi thử lại.
+	 */
+	async function reloadAfterBusy(error: unknown, requestId: number) {
+		toast.warning(officeErrorMessage(error, 'Dòng này đang được người khác sửa. Phiếu đã được tải lại, bạn thử lại.'));
+		await openRequest(requestId);
+	}
+
+	function lineDirty(line: SupplyLine): boolean {
+		return editQty[line.id] !== line.myQty || (editReason[line.id] ?? '') !== (line.overQuotaReason ?? '');
+	}
+
+	/** Lưu phần của người đang xem trên dòng; 0 là rút phần, phần cuối cùng bị rút thì dòng biến mất. */
 	async function saveLine(line: SupplyLine) {
 		const requestId = current.value?.id;
+		const me = user.value?.id;
 		const qty = editQty[line.id];
-		if (!requestId || working.value) return;
+		if (!requestId || !me || working.value) return;
 		if (lineQtyInvalid[line.id]) {
 			lineError[line.id] = QTY_INTEGER_MESSAGE;
 			return;
 		}
 		if (qty == null) {
-			lineError[line.id] = 'Ô số lượng đang trống. Bạn nhập số, hoặc bấm Xoá nếu phòng không cần mặt hàng này.';
+			lineError[line.id] = 'Ô phần của bạn đang trống. Bạn nhập số, hoặc 0 để rút phần của bạn.';
 			return;
 		}
-		// Định mức của dòng thì máy chủ đã gửi kèm, nên chỗ này chặn được ngay không cần gọi API.
-		if (line.quota != null && qty > line.quota && !editReason[line.id]?.trim()) {
+		// Định mức tính trên tổng của dòng sau khi đổi phần, máy chủ đã gửi kèm nên chặn được ngay.
+		const total = totalWithShare(line, me, qty);
+		if (line.quota != null && total > line.quota && !editReason[line.id]?.trim()) {
 			lineNeedsReason[line.id] = true;
-			lineError[line.id] = `Số này vượt định mức ${line.quota} ${line.unit || 'đơn vị'} mỗi tháng của phòng, bạn ghi lý do.`;
+			lineError[line.id] = `Tổng của dòng sẽ là ${total}, vượt định mức ${line.quota} ${unitWord(line.unit)} mỗi tháng của phòng, bạn ghi lý do.`;
 			return;
 		}
 		working.value = true;
 		delete lineError[line.id];
 		try {
 			afterWrite(
-				await service.updateLine(requestId, line.id, {
-					requestedQty: qty,
+				await service.setLineShare(requestId, line.id, me, {
+					qty,
 					overQuotaReason: editReason[line.id]?.trim() || undefined,
 				}),
 			);
-			toast.success(`Đã lưu dòng ${line.name}.`);
+			toast.success(qty === 0 ? `Đã rút phần của bạn ở ${line.name}.` : `Đã lưu phần của bạn ở ${line.name}.`);
 		} catch (e) {
-			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
-				lineNeedsReason[line.id] = true;
-				lineError[line.id] = officeErrorMessage(e, 'Số này vượt định mức của phòng, bạn ghi lý do.');
-			} else if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
-				toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
-				await openRequest(requestId);
-			} else if (await reloadIfStale(e, requestId)) {
-				return;
-			} else {
-				toast.error(officeErrorMessage(e, 'Chưa lưu được dòng này. Bạn thử lại sau ít phút.'));
-			}
+			await handleShareError(e, line, requestId);
 		} finally {
 			working.value = false;
 		}
@@ -599,7 +768,8 @@
 			deleteTarget.value = null;
 			toast.success(`Đã xoá dòng ${line.name}.`);
 		} catch (e) {
-			if (officeErrorCode(e) === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
+			const code = officeErrorCode(e);
+			if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED' || code === 'OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES') {
 				toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
 				deleteTarget.value = null;
 				await openRequest(requestId);
@@ -691,7 +861,7 @@
 
 <template>
 	<!-- `pb-24`: chừa chỗ cho nút trợ lý nổi ở góc dưới phải, nếu không nó đè lên dòng cuối trang. -->
-	<div class="space-y-5 pb-24">
+	<div class="space-y-3 pb-24">
 		<UiPageHeader
 			title="Văn phòng phẩm của phòng"
 			description="Cả phòng cùng nhập vào một phiếu cho mỗi kỳ và không có nút nộp: tới hạn chót phiếu tự khoá, nên bạn nhập sớm rồi vẫn sửa lại được."
@@ -702,7 +872,7 @@
 		<!-- Đầu mối của phòng -->
 		<section
 			v-if="contact"
-			class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+			class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
 		>
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
@@ -807,7 +977,7 @@
 					:key="req.id"
 					type="button"
 					:class="[
-						'rounded-xl border px-3 py-2 text-left text-sm transition-colors',
+						'rounded-lg border px-3 py-1.5 text-left text-sm transition-colors',
 						current?.id === req.id
 							? 'border-brand-500 bg-brand-50 dark:border-brand-500 dark:bg-brand-900/20'
 							: 'border-gray-200 bg-white hover:border-brand-300 dark:border-gray-700 dark:bg-gray-900',
@@ -834,8 +1004,8 @@
 
 			<template v-else-if="current">
 				<!-- Thông tin phiếu -->
-				<section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-					<div class="flex flex-wrap items-start justify-between gap-3">
+				<section class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
 							<h2 class="font-semibold text-gray-900 dark:text-white">
 								{{ current.period.title }}
@@ -888,13 +1058,19 @@
 				<!-- Thêm dòng -->
 				<section
 					v-if="canEdit"
-					class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+					class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
 				>
 					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Thêm mặt hàng</h2>
-					<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_120px_1fr_auto] lg:items-start">
+					<!--
+						Mọi ô của hai hàng cao đúng 36px (`h-9`), bằng ô chọn mặt hàng cỡ `sm`. `[&_input]` nhắm
+						vào ô nhập NẰM TRONG `QtyInput`, vì class gắn lên component chỉ rơi vào khung bọc của nó;
+						câu nhắc gõ sai bên dưới ô số vẫn giữ chiều cao tự nhiên.
+					-->
+					<div class="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-[1fr_110px_1fr_auto] lg:items-start">
 						<UiSelectInput
 							:model-value="addItemId"
 							:options="itemOptions"
+							size="sm"
 							placeholder="Chọn mặt hàng"
 							search-placeholder="Tìm mặt hàng, gõ không dấu cũng được"
 							@update:model-value="pickItem($event)"
@@ -902,6 +1078,7 @@
 						<QtyInput
 							v-model="addQty"
 							v-model:invalid="addQtyInvalid"
+							class="[&_input]:h-9 [&_input]:py-1"
 							placeholder="Số lượng"
 							aria-label="Số lượng cần xin"
 							@save="addLine"
@@ -910,18 +1087,29 @@
 							v-model="addNote"
 							type="text"
 							maxlength="500"
-							class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+							class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 							placeholder="Ghi chú (không bắt buộc)"
 						/>
 						<!-- Nút không bị xám: thiếu mặt hàng hay thiếu số thì câu nhắc hiện ngay dưới form. -->
-						<CommonAppButton variant="primary" :loading="working" @click="addLine">Thêm dòng</CommonAppButton>
+						<CommonAppButton variant="primary" class="h-9" :loading="working" @click="addLine">Thêm</CommonAppButton>
 					</div>
+					<!--
+						Câu gợi ý màu xám trung tính: chọn mặt hàng đã có là việc bình thường, không phải lỗi,
+						nên không tô cam hay đỏ. Chỉ phần "cần ghi lý do" mới đổi màu, vì đó là việc phải làm.
+					-->
 					<p v-if="addItem" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+						<template v-if="addExistingLine">
+							Phiếu đang có {{ addExistingLine.requestedQty }} {{ unitWord(addExistingLine.unit) }}, bấm Thêm sẽ cộng
+							vào dòng này.
+						</template>
 						<template v-if="addItem.quota != null">
 							Định mức của phòng là {{ addItem.quota }} {{ addItem.unit }} mỗi tháng.
 							<span v-if="addOverQuota" class="text-amber-600 dark:text-amber-400">
-								Số bạn gõ vượt định mức nên cần ghi lý do.
+								{{ addExistingLine ? 'Tổng sau khi cộng' : 'Số bạn gõ' }} vượt định mức nên cần ghi lý do.
 							</span>
+							<template v-else-if="addTotalOverQuota">
+								Tổng sau khi cộng vượt định mức, dòng đã có lý do nên phiếu giữ lý do đó.
+							</template>
 						</template>
 						<template v-else>Mặt hàng này không giới hạn định mức.</template>
 					</p>
@@ -937,26 +1125,28 @@
 							placeholder="VD: Tháng này quyết toán, in nhiều"
 						/>
 					</div>
-					<p v-if="addItemNotice" class="mt-2 text-sm text-amber-700 dark:text-amber-300">{{ addItemNotice }}</p>
 					<p v-if="addError" class="mt-2 text-sm text-red-500">{{ addError }}</p>
 
-					<div class="mt-3">
-						<!-- `py-2`: chữ nhỏ mà không có đệm thì ô bấm chỉ cao hai mươi pixel, ngón tay không trúng. -->
+					<div class="mt-1">
+						<!--
+							`py-2` trên điện thoại: chữ nhỏ mà không có đệm thì ô bấm chỉ cao hai mươi pixel,
+							ngón tay không trúng. Màn lớn bấm bằng chuột nên thu lại cho gọn.
+						-->
 						<button
 							type="button"
-							class="py-2 text-sm text-brand-600 hover:underline dark:text-brand-400"
+							class="py-2 text-sm text-brand-600 hover:underline lg:py-1 dark:text-brand-400"
 							@click="showCustomForm = !showCustomForm"
 						>
 							{{ showCustomForm ? 'Thôi, không thêm mặt hàng ngoài danh mục' : 'Mặt hàng không có trong danh mục' }}
 						</button>
-						<div v-if="showCustomForm" class="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_120px_auto] lg:items-start">
+						<div v-if="showCustomForm" class="mt-1 grid grid-cols-1 gap-2 lg:grid-cols-[1fr_1fr_110px_auto] lg:items-start">
 							<div>
 								<!-- `maxlength` theo đúng giới hạn của API: 200 cho tên, 30 cho đơn vị. -->
 								<input
 									v-model="customName"
 									type="text"
 									maxlength="200"
-									class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+									class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									placeholder="Tên mặt hàng, VD: Pin 3A"
 									@input="customNameError = ''"
 								/>
@@ -967,7 +1157,7 @@
 									v-model="customUnit"
 									type="text"
 									maxlength="30"
-									class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+									class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									placeholder="Đơn vị, VD: Đôi"
 									@input="customUnitError = ''"
 								/>
@@ -976,11 +1166,12 @@
 							<QtyInput
 								v-model="customQty"
 								v-model:invalid="customQtyInvalid"
+								class="[&_input]:h-9 [&_input]:py-1"
 								placeholder="Số lượng"
 								aria-label="Số lượng mặt hàng ngoài danh mục"
 								@save="addCustomLine"
 							/>
-							<CommonAppButton variant="outline" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
+							<CommonAppButton variant="outline" class="h-9" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
 						</div>
 						<p v-if="customError" class="mt-2 text-sm text-red-500">{{ customError }}</p>
 					</div>
@@ -1021,24 +1212,35 @@
 					:key="group.groupName"
 					class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 				>
-					<h3 class="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:text-gray-100">
+					<h3
+						class="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-100"
+					>
 						{{ group.groupName }}
+						<span class="ml-1 text-xs font-normal text-gray-400">{{ group.lines.length }} dòng</span>
 					</h3>
 					<div class="divide-y divide-gray-100 dark:divide-gray-800">
-						<div v-for="line in group.lines" :key="line.id" class="p-4">
-							<div class="flex flex-wrap items-start justify-between gap-3">
-								<div class="min-w-0">
-									<p class="font-medium text-gray-900 dark:text-white">
-										{{ line.name }}
-										<span class="text-sm font-normal text-gray-500 dark:text-gray-400">· {{ line.unit || '—' }}</span>
+						<!--
+							Dòng phiếu giữ đệm mỏng và chữ cỡ nhỏ, ô số cao 32px: phiếu cả phòng thường có vài chục
+							dòng, mỗi dòng cao gấp rưỡi thì phải cuộn mãi mới thấy hết.
+						-->
+						<div v-for="line in group.lines" :key="line.id" class="px-4 py-2">
+							<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+								<div class="min-w-0 flex-1">
+									<p class="text-sm">
+										<span class="font-medium text-gray-900 dark:text-white">{{ line.name }}</span>
+										<span class="text-gray-500 dark:text-gray-400"> · {{ line.unit || '—' }}</span>
 									</p>
-									<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+									<p class="text-xs text-gray-500 dark:text-gray-400">
 										<!-- Định mức phải có đơn vị: "Định mức 10" không nói 10 cái hay 10 hộp. -->
 										<template v-if="line.quota != null">
 											Định mức {{ line.quota }} {{ line.unit || 'đơn vị' }} mỗi tháng ·
 										</template>
 										<template v-if="line.previousQty != null">kỳ trước {{ line.previousQty }} · </template>
 										sửa cuối bởi {{ line.updatedBy.fullName }} lúc {{ formatDateTime(line.updatedAt) }}
+									</p>
+									<!-- Ai xin bao nhiêu trong tổng; phiếu bổ sung do HCNS nhập thay phòng nên không có phần. -->
+									<p v-if="line.shares.length" class="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
+										Đăng ký: {{ sharesLabel(line) }}
 									</p>
 									<p v-if="line.note" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ghi chú: {{ line.note }}</p>
 
@@ -1090,12 +1292,22 @@
 									</p>
 								</div>
 
-								<div v-if="canEdit" class="flex flex-wrap items-start gap-2">
-									<div class="w-28">
+								<!--
+									Ô số là phần của người đang xem; tổng của dòng đứng ngay trước ô và đổi theo số đang
+									gõ, để người dùng thấy mình chỉ đổi phần mình chứ không đổi số của cả phòng.
+								-->
+								<div v-if="canEdit" class="flex flex-wrap items-start gap-1.5">
+									<span class="pt-1.5 text-xs text-gray-500 dark:text-gray-400">
+										Tổng
+										<span class="font-semibold text-gray-800 dark:text-gray-100">{{ previewTotal(line) }}</span>
+										· phần của bạn
+									</span>
+									<div class="w-20">
 										<QtyInput
 											v-model="editQty[line.id]"
+											class="[&_input]:h-8 [&_input]:py-1"
 											:max="100000"
-											:aria-label="`Số xin của ${line.name}`"
+											:aria-label="`Phần của bạn ở ${line.name}`"
 											@update:invalid="lineQtyInvalid[line.id] = $event"
 											@save="saveLine(line)"
 											@leave="saveLineIfDirty(line)"
@@ -1110,9 +1322,70 @@
 									>
 										Lưu
 									</CommonAppButton>
+									<CommonAppButton
+										v-if="current.canEditAllShares && hasOtherShares(line)"
+										size="sm"
+										variant="ghost"
+										@click="toggleShareEdit(line)"
+									>
+										{{ shareEditLineId === line.id ? 'Đóng' : 'Sửa phần' }}
+									</CommonAppButton>
 									<!-- Xoá luôn hỏi lại: nút Xoá nằm sát nút Lưu, trên điện thoại rất dễ bấm trượt. -->
-									<CommonAppButton size="sm" variant="ghost" :loading="working" @click="deleteTarget = line">
+									<CommonAppButton
+										v-if="canDeleteLine(line)"
+										size="sm"
+										variant="ghost"
+										:loading="working"
+										@click="deleteTarget = line"
+									>
 										Xoá
+									</CommonAppButton>
+									<CommonAppButton
+										v-else-if="line.myQty > 0"
+										size="sm"
+										variant="ghost"
+										:loading="working"
+										@click="withdrawShare(line)"
+									>
+										Rút phần của tôi
+									</CommonAppButton>
+								</div>
+							</div>
+
+							<!-- Trưởng phòng, đầu mối sửa phần của từng người đã đăng ký; 0 là rút phần người đó. -->
+							<div
+								v-if="canEdit && shareEditLineId === line.id"
+								class="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/40"
+							>
+								<p class="text-xs text-gray-500 dark:text-gray-400">
+									Sửa phần của từng người. Nhập 0 để rút phần của người đó.
+								</p>
+								<div
+									v-for="share in line.shares"
+									:key="share.employee.id"
+									class="mt-1.5 flex flex-wrap items-start gap-1.5"
+								>
+									<span class="min-w-0 flex-1 truncate pt-1.5 text-sm text-gray-800 dark:text-gray-100">
+										{{ share.isMine ? 'Bạn' : share.employee.fullName }}
+									</span>
+									<div class="w-20">
+										<QtyInput
+											v-model="shareEdits[share.employee.id]"
+											class="[&_input]:h-8 [&_input]:py-1"
+											:max="100000"
+											:aria-label="`Phần của ${share.employee.fullName} ở ${line.name}`"
+											@update:invalid="shareEditInvalid[share.employee.id] = $event"
+											@save="saveShare(line, share.employee.id)"
+										/>
+									</div>
+									<CommonAppButton
+										v-if="shareDirty(line, share.employee.id)"
+										size="sm"
+										variant="primary"
+										:loading="working"
+										@click="saveShare(line, share.employee.id)"
+									>
+										Lưu
 									</CommonAppButton>
 								</div>
 							</div>
@@ -1123,7 +1396,7 @@
 							-->
 							<div
 								v-if="canEdit && (line.overQuota || lineNeedsReason[line.id] || editReason[line.id])"
-								class="mt-2"
+								class="mt-1"
 							>
 								<label class="block text-xs font-medium text-amber-700 dark:text-amber-400">
 									Lý do vượt định mức
@@ -1136,11 +1409,11 @@
 									placeholder="VD: Tháng này quyết toán, in nhiều"
 								/>
 							</div>
-							<p v-else-if="line.overQuota" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+							<p v-else-if="line.overQuota" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
 								Vượt định mức: {{ line.overQuotaReason || 'chưa ghi lý do' }}
 							</p>
 							<!-- Câu lỗi của dòng đứng riêng, nên nó không kéo theo ô lý do nào. -->
-							<p v-if="lineError[line.id]" class="mt-2 text-xs text-red-500">{{ lineError[line.id] }}</p>
+							<p v-if="lineError[line.id]" class="mt-1 text-xs text-red-500">{{ lineError[line.id] }}</p>
 						</div>
 					</div>
 				</section>

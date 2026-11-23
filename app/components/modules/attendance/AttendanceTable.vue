@@ -168,13 +168,15 @@
 								v-if="record.workType === 'ONLINE_APPROVED'"
 								class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
 							>
-								🏠 Online
+								<Icon name="heroicons:home" class="w-3 h-3 mr-0.5" aria-hidden="true" />
+								Online
 							</span>
 							<span
 								v-else-if="record.workType === 'ONLINE_T7'"
 								class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
 							>
-								🖥️ T7 Online
+								<Icon name="heroicons:computer-desktop" class="w-3 h-3 mr-0.5" aria-hidden="true" />
+								T7 Online
 							</span>
 						</div>
 					</td>
@@ -230,10 +232,19 @@
 					<!-- Flags -->
 					<td class="px-4 py-3 text-center whitespace-nowrap">
 						<div class="flex items-center justify-center gap-1">
-							<span v-if="record.isManual" class="text-base leading-none cursor-default" title="Đã chỉnh sửa thủ công">
-								✏️
-							</span>
-							<span v-if="record.isLocked" class="text-base leading-none cursor-default" title="Đã bị khóa"> 🔒 </span>
+							<!-- Hai cờ này chỉ có icon, nên `title` là chỗ duy nhất nói nghĩa: giữ nguyên câu. -->
+							<Icon
+								v-if="record.isManual"
+								name="heroicons:pencil-square"
+								class="w-4 h-4 text-amber-500 dark:text-amber-400"
+								title="Đã chỉnh sửa thủ công"
+							/>
+							<Icon
+								v-if="record.isLocked"
+								name="heroicons:lock-closed"
+								class="w-4 h-4 text-gray-500 dark:text-gray-400"
+								title="Đã bị khóa"
+							/>
 						</div>
 					</td>
 

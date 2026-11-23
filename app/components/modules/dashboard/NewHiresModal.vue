@@ -140,10 +140,11 @@ function formatJoinDate(iso: string) {
 							<span class="text-xs text-gray-400">{{ employees.length }} nhân viên</span>
 							<NuxtLink
 								to="/management/employees?sort=joinDate"
-								class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+								class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
 								@click="emit('close')"
 							>
-								Xem trong danh sách →
+								Xem trong danh sách
+								<Icon name="heroicons:arrow-right" class="w-3.5 h-3.5" aria-hidden="true" />
 							</NuxtLink>
 						</div>
 					</div>

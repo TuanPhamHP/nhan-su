@@ -7,6 +7,7 @@
 				isOpen && $style.selectTriggerOpen,
 				error && $style.selectTriggerError,
 				disabled && $style.selectTriggerDisabled,
+				size === 'sm' && $style.selectTriggerSm,
 			]"
 			tabindex="0"
 			@click="!disabled && openDropdown()"
@@ -98,9 +99,12 @@
 		searchPlaceholder?: string;
 		error?: boolean;
 		disabled?: boolean;
+		/** `sm` cao 36px, cho form nằm gọn trên một hàng với ô nhập `h-9`. */
+		size?: 'md' | 'sm';
 	}
 
 	const props = withDefaults(defineProps<Props>(), {
+		size: 'md',
 		placeholder: 'Chọn...',
 		searchPlaceholder: 'Tìm kiếm...',
 	});
@@ -278,6 +282,10 @@
 
 	.selectTriggerOpen {
 		border-color: $color-primary;
+	}
+
+	.selectTriggerSm {
+		padding: 0.4375rem 0.75rem;
 	}
 
 	.selectTriggerError {

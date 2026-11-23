@@ -254,6 +254,16 @@ export interface SupplyLine {
 	createdBy: OfficePersonRef;
 	updatedBy: OfficePersonRef;
 	updatedAt: string;
+	/** Phần đăng ký của từng người, tổng bằng `requestedQty`. Rỗng ở phiếu bổ sung do HCNS nhập thay phòng. */
+	shares: SupplyLineShare[];
+	/** Phần của người đang xem; 0 khi họ chưa đăng ký dòng này. */
+	myQty: number;
+}
+
+export interface SupplyLineShare {
+	employee: OfficePersonRef;
+	qty: number;
+	isMine: boolean;
 }
 
 export interface SupplyRequest {
@@ -270,6 +280,8 @@ export interface SupplyRequest {
 	canEdit: boolean;
 	/** Cờ của máy chủ: hiện nút Đã nhận. */
 	canReceive: boolean;
+	/** Cờ của máy chủ: trưởng phòng hoặc đầu mối, sửa được phần của mọi người và xoá được cả dòng. */
+	canEditAllShares: boolean;
 	/** Từ lúc này HCNS được ghi đã giao thay; `null` là chưa tới lúc. */
 	proxyAllowedAt: string | null;
 	totalAmount: number | null;
@@ -311,6 +323,12 @@ export interface UpdateSupplyLineBody {
 	note?: string;
 	customName?: string;
 	customUnit?: string;
+}
+
+/** Đặt phần của một người trên dòng; `qty` 0 là rút phần. */
+export interface SetSupplyLineShareBody {
+	qty: number;
+	overQuotaReason?: string;
 }
 
 export interface CopySkippedItem {
@@ -536,8 +554,11 @@ export interface RoomGridRoom {
 }
 
 export interface RoomGrid {
-	/** `YYYY-MM-DD`. */
+	/** `YYYY-MM-DD`; xem theo khoảng ngày thì bằng `fromDate`. */
 	date: string;
+	/** Ngày đầu và ngày cuối của khoảng xem, tính cả hai đầu; xem một ngày thì cả hai bằng `date`. */
+	fromDate: string;
+	toDate: string;
 	site: OfficeSite;
 	rooms: RoomGridRoom[];
 }

@@ -53,8 +53,13 @@ const isOvernight = computed(() => formatDate(props.request.startTime) !== forma
 			<div class="flex flex-col items-end gap-1 flex-shrink-0">
 				<div class="flex items-center gap-1.5">
 					<OvertimeStatusBadge :status="request.status" />
-					<span class="text-xs text-gray-400 dark:text-gray-500">
-						{{ request.workMode === 'OFFLINE' ? '🏢' : '🏠' }}
+					<!-- Hình thức làm việc: icon kèm `title`, vì ô này hẹp nên không đủ chỗ cho chữ. -->
+					<span class="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+						<Icon
+							:name="request.workMode === 'OFFLINE' ? 'heroicons:building-office-2' : 'heroicons:home'"
+							class="w-3.5 h-3.5"
+							:title="request.workMode === 'OFFLINE' ? 'Tại văn phòng' : 'Online'"
+						/>
 						<template v-if="request.finalWorkMode && request.finalWorkMode !== request.workMode">
 							→ {{ request.finalWorkMode === 'ONLINE' ? 'Online' : 'VP' }}
 						</template>

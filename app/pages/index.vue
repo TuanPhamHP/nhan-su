@@ -32,11 +32,13 @@
 	const greeting = computed(() => {
 		const h = now.getHours();
 		const name = firstName.value;
-		if (h >= 5 && h < 11) return `Chào buổi sáng, ${name}! ☀️`;
-		if (h >= 11 && h < 13) return `Chào buổi trưa, ${name}! 🌤`;
-		if (h >= 13 && h < 18) return `Chào buổi chiều, ${name}! 👋`;
-		if (h >= 18) return `Chào buổi tối, ${name}! 🌙`;
-		return `Làm việc muộn vậy, ${name}? 🌙`;
+		// Lời chào trước đây kết thúc bằng emoji thời tiết. Bỏ từ 19/11/2026: emoji mỗi máy vẽ một
+		// kiểu, trình đọc màn hình đọc thành "mặt trời sau mây", mà câu chào đã đủ thân thiện.
+		if (h >= 5 && h < 11) return `Chào buổi sáng, ${name}!`;
+		if (h >= 11 && h < 13) return `Chào buổi trưa, ${name}!`;
+		if (h >= 13 && h < 18) return `Chào buổi chiều, ${name}!`;
+		if (h >= 18) return `Chào buổi tối, ${name}!`;
+		return `Làm việc muộn vậy, ${name}?`;
 	});
 
 	const todayFormatted = computed(() => format(now, "EEEE, dd 'tháng' MM, yyyy", { locale: vi }));

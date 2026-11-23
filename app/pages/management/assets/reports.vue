@@ -488,7 +488,12 @@
 					</label>
 					<div class="sm:col-span-1">
 						<p class="mb-1 text-xs text-gray-500 dark:text-gray-400">Loại tài sản</p>
-						<UiSelect v-model="filterCategory" :options="categoryOptions" />
+						<UiSelect
+							v-model="filterCategory"
+							:options="categoryOptions"
+							searchable
+							search-placeholder="Tìm loại tài sản"
+						/>
 					</div>
 					<div>
 						<p class="mb-1 text-xs text-gray-500 dark:text-gray-400">Phân loại kế toán</p>

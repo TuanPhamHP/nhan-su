@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { matchesSearch } from '~/utils/text-search';
+
 export interface SelectOption {
 	value: string | number | undefined;
 	label: string;
@@ -14,8 +16,14 @@ const props = withDefaults(
 		error?: string;
 		hint?: string;
 		id?: string;
+		/**
+		 * Mở danh sách thì có thêm ô tìm ở đầu. Chỉ bật cho ô có nhiều lựa chọn, ví dụ bộ lọc
+		 * loại tài sản hay phòng ban; ô ba bốn lựa chọn thì ô tìm chỉ làm rối.
+		 */
+		searchable?: boolean;
+		searchPlaceholder?: string;
 	}>(),
-	{ placeholder: 'Chọn...' },
+	{ placeholder: 'Chọn...', searchable: false, searchPlaceholder: 'Tìm…' },
 );
 
 const emit = defineEmits<{
@@ -26,6 +34,8 @@ const emit = defineEmits<{
 const isOpen = ref(false);
 const triggerRef = ref<HTMLElement>();
 const listRef = ref<HTMLElement>();
+const searchInputRef = ref<HTMLInputElement>();
+const searchQuery = ref('');
 const dropdownStyle = ref<Record<string, string>>({});
 const inputId = computed(() => props.id ?? `ui-select-${Math.random().toString(36).slice(2)}`);
 
@@ -46,16 +56,53 @@ const selectedLabel = computed(() => {
 	return matched?.label ?? null;
 });
 
+// ─── Search (chỉ khi `searchable`) ────────────────────────────────────────────
+
+/**
+ * Các lựa chọn thật sự khớp từ khoá, chưa ghim lựa chọn rỗng. Enter chọn dòng đầu của danh
+ * sách này, nên nó phải phản ánh đúng những gì người dùng vừa gõ.
+ */
+const matchedOptions = computed(() => {
+	if (!props.searchable || !searchQuery.value.trim()) return props.options;
+	return props.options.filter(o => matchesSearch(o.label, searchQuery.value));
+});
+
+/**
+ * Các lựa chọn hiện ra. Lựa chọn giá trị rỗng ("Tất cả…") luôn được ghim lại dù gõ gì, vì nó
+ * là cách bỏ lọc: gõ một từ không khớp rồi mất luôn đường về danh sách đầy đủ là bẫy.
+ */
+const visibleOptions = computed(() => {
+	if (!props.searchable || !searchQuery.value.trim()) return props.options;
+	return props.options.filter(o => isEmpty(o.value) || matchesSearch(o.label, searchQuery.value));
+});
+
+/** Đã gõ từ khoá mà không lựa chọn nào khớp. */
+const noMatch = computed(() => !!searchQuery.value.trim() && matchedOptions.value.length === 0);
+
+function selectFirstMatch() {
+	if (!searchQuery.value.trim()) return;
+	const first = matchedOptions.value[0];
+	if (first) select(first.value);
+}
+
 // ─── Dropdown control ─────────────────────────────────────────────────────────
 
 function open() {
 	if (props.disabled) return;
+	// Đang mở sẵn thì chỉ đưa con trỏ về ô tìm: bấm lại vào nút không được xoá chữ đang gõ.
+	if (isOpen.value) {
+		searchInputRef.value?.focus();
+		return;
+	}
 	updatePosition();
+	searchQuery.value = '';
 	isOpen.value = true;
+	if (props.searchable) nextTick(() => searchInputRef.value?.focus());
 }
 
 function close() {
 	isOpen.value = false;
+	searchQuery.value = '';
 	emit('blur');
 }
 
@@ -80,6 +127,7 @@ function handleClickOutside(e: MouseEvent) {
 	const t = e.target as Node;
 	if (!triggerRef.value?.contains(t) && !listRef.value?.contains(t)) {
 		isOpen.value = false;
+		searchQuery.value = '';
 	}
 }
 
@@ -151,35 +199,62 @@ onUnmounted(() => {
 					v-if="isOpen"
 					ref="listRef"
 					:style="dropdownStyle"
-					class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 max-h-60 overflow-y-auto"
+					class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-60 overflow-y-auto"
 				>
-					<button
-						v-for="opt in options"
-						:key="String(opt.value)"
-						type="button"
-						:class="[
-							'w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2',
-							optionMatches(opt.value, modelValue)
-								? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-medium'
-								: isEmpty(opt.value)
-									? 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-									: 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50',
-						]"
-						@click="select(opt.value)"
+					<!--
+						Ô tìm dính trên cùng khi cuộn, nên nó nằm ngoài khối có `py-1` của danh sách:
+						để trong khối đó thì lúc cuộn, các dòng chạy qua khoảng đệm 4px phía trên.
+					-->
+					<div
+						v-if="searchable"
+						class="sticky top-0 z-10 border-b border-gray-100 bg-white p-2 dark:border-gray-700 dark:bg-gray-800"
 					>
-						<svg
-							v-if="optionMatches(opt.value, modelValue)"
-							class="w-3.5 h-3.5 text-brand-600 dark:text-brand-400 flex-shrink-0"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							stroke-width="2.5"
+						<input
+							ref="searchInputRef"
+							v-model="searchQuery"
+							type="text"
+							autocomplete="off"
+							:placeholder="searchPlaceholder"
+							:aria-label="searchPlaceholder"
+							class="block w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:ring-brand-800"
+							@keydown.esc.prevent.stop="close"
+							@keydown.enter.prevent.stop="selectFirstMatch"
+						/>
+					</div>
+
+					<div class="py-1">
+						<button
+							v-for="opt in visibleOptions"
+							:key="String(opt.value)"
+							type="button"
+							:class="[
+								'w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2',
+								optionMatches(opt.value, modelValue)
+									? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-medium'
+									: isEmpty(opt.value)
+										? 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+										: 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50',
+							]"
+							@click="select(opt.value)"
 						>
-							<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-						</svg>
-						<span v-else class="w-3.5 flex-shrink-0" />
-						{{ opt.label }}
-					</button>
+							<svg
+								v-if="optionMatches(opt.value, modelValue)"
+								class="w-3.5 h-3.5 text-brand-600 dark:text-brand-400 flex-shrink-0"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2.5"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+							</svg>
+							<span v-else class="w-3.5 flex-shrink-0" />
+							{{ opt.label }}
+						</button>
+
+						<p v-if="noMatch" class="px-3 py-2 text-sm text-gray-400 dark:text-gray-500">
+							Không tìm thấy kết quả
+						</p>
+					</div>
 				</div>
 			</Transition>
 		</Teleport>

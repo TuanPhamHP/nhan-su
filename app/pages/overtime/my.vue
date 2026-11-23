@@ -217,7 +217,11 @@ onMounted(fetchRequests);
 			v-if="pendingLocationCheck.length && canWrite('OVERTIME')"
 			class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-3"
 		>
-			<span class="text-xl">📍</span>
+			<Icon
+				name="heroicons:map-pin"
+				class="w-6 h-6 flex-shrink-0 text-blue-500 dark:text-blue-400"
+				aria-hidden="true"
+			/>
 			<div class="flex-1 min-w-0">
 				<p class="text-sm font-medium text-blue-800 dark:text-blue-300">Cần xác nhận vị trí OT</p>
 				<p class="text-xs text-blue-600 dark:text-blue-400">
@@ -225,10 +229,11 @@ onMounted(fetchRequests);
 				</p>
 			</div>
 			<button
-				class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 whitespace-nowrap"
+				class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 whitespace-nowrap"
 				@click="openDetail(pendingLocationCheck[0]!)"
 			>
-				Xác nhận ngay →
+				Xác nhận ngay
+				<Icon name="heroicons:arrow-right" class="w-3.5 h-3.5" aria-hidden="true" />
 			</button>
 		</div>
 
@@ -396,7 +401,8 @@ onMounted(fetchRequests);
 							<!-- Địa điểm -->
 							<td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
 								<span v-if="req.location" class="inline-flex items-center gap-1">
-									<span>📍</span>{{ req.location.name }}
+									<Icon name="heroicons:map-pin" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+									{{ req.location.name }}
 								</span>
 								<span v-else class="text-gray-400">—</span>
 							</td>

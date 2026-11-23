@@ -114,10 +114,11 @@ làm đổi phiếu, bảng tổng hợp, báo cáo của kỳ cũ.
 |---|---|---|
 | GET | `/v1/me/office/supply-requests` | Danh sách phiếu của phòng tôi, phiếu `OPEN` lên đầu (`SupplyRequestListItemDto[]`) |
 | GET | `/v1/me/office/supply-requests/:id` | Chi tiết (`SupplyRequestResponseDto`) |
-| POST | `/v1/me/office/supply-requests/:id/lines` | `{ itemId, requestedQty, overQuotaReason?, note? }` hoặc `{ customName, customUnit, requestedQty, note? }` |
-| PATCH | `/v1/me/office/supply-requests/:id/lines/:lineId` | `{ requestedQty?, overQuotaReason?, note?, customName?, customUnit? }` |
-| DELETE | `/v1/me/office/supply-requests/:id/lines/:lineId` | Xoá dòng (chỉ khi kỳ còn mở) |
-| POST | `/v1/me/office/supply-requests/:id/copy-previous` | "Lấy số tháng trước": `{ previousTitle, added, existing, skipped, skippedItems: [{ name, reason }], request }`. Chép cả dòng ngoài danh mục; không chép lý do vượt định mức (dòng vượt bị bỏ qua, nêu lý do). `existing` (UAT đợt C): mặt hàng phiếu đã có, không tính vào `skipped`. `previousTitle` null = chưa có kỳ trước. FE hiện toast: "Đã thêm {added} dòng từ {previousTitle}" + danh sách `skippedItems`; `added = 0` và `skipped = 0` thì "Phiếu đã có đủ các mặt hàng của {tháng}, không có gì để thêm." |
+| POST | `/v1/me/office/supply-requests/:id/lines` | `{ itemId, requestedQty, overQuotaReason?, note? }` hoặc `{ customName, customUnit, requestedQty, note? }`. **Phiếu đã có mặt hàng đó thì cộng `requestedQty` vào dòng đang có** (20/11/2026), không còn 409; xem mục 4.2.1. Số gửi lên cộng vào **phần của người gửi** (mục 4.2.2) |
+| PUT | `/v1/me/office/supply-requests/:id/lines/:lineId/shares/:employeeId` | **Mới (20/11/2026).** `{ qty, overQuotaReason? }`: đặt phần của một người trên dòng, `qty: 0` là rút phần. Ai cũng đặt được phần của mình; trưởng phòng và đầu mối đặt được phần của người **đã có phần**. Xem mục 4.2.2 |
+| PATCH | `/v1/me/office/supply-requests/:id/lines/:lineId` | `{ requestedQty?, overQuotaReason?, note?, customName?, customUnit? }`. `requestedQty` vẫn là **tổng của dòng**: phần của người gửi = tổng mới − phần của người khác; tổng nhỏ hơn phần người khác là 400 `OFFICE_SUPPLY_SHARE_BELOW_OTHERS`. Web mới dùng PUT ở trên; PATCH giữ cho mobile và trợ lý |
+| DELETE | `/v1/me/office/supply-requests/:id/lines/:lineId` | Xoá dòng (chỉ khi kỳ còn mở), xoá luôn phần của mọi người. Dòng còn phần của người khác thì chỉ trưởng phòng, đầu mối xoá được (403 `OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES`); người khác rút phần mình bằng PUT `qty: 0` |
+| POST | `/v1/me/office/supply-requests/:id/copy-previous` | "Lấy số tháng trước": `{ previousTitle, added, existing, skipped, skippedItems: [{ name, reason }], request }`. Chép cả dòng ngoài danh mục; không chép lý do vượt định mức (dòng vượt bị bỏ qua, nêu lý do). `existing` (UAT đợt C): mặt hàng phiếu đã có, không tính vào `skipped`. `previousTitle` null = chưa có kỳ trước. FE hiện toast: "Đã thêm {added} dòng từ {previousTitle}" + danh sách `skippedItems`; `added = 0` và `skipped = 0` thì "Phiếu đã có đủ các mặt hàng của {tháng}, không có gì để thêm." Mỗi dòng chép sang là phần của người bấm |
 | POST | `/v1/me/office/supply-requests/:id/receive` | Trưởng phòng, đầu mối: `{ lines: [{ lineId, receivedQty, receivedNote? }] }`; dòng không gửi coi như nhận đủ số đã chốt |
 | GET | `/v1/me/office/supply-items` | Mặt hàng cho ô chọn: đang dùng, **bỏ nhóm chỉ HCNS đặt**, kèm `quota` (định mức tháng của phòng tôi, null = không giới hạn) để hiện cạnh ô số trước khi gõ |
 | GET, PUT | `/v1/me/office/supply-contact` | Đầu mối của phòng; PUT `{ employeeId \| null }` chỉ trưởng phòng |
@@ -134,14 +135,17 @@ Mọi lệnh ghi dòng trả lại toàn bộ phiếu đã cập nhật, FE thay
   "department": { "id": 4, "name": "Tài chính - Kế toán" },
   "sequence": 0, "isSupplement": false, "note": null,
   "status": "OPEN", "statusLabel": "Đang nhập",
-  "canEdit": true, "canReceive": false, "proxyAllowedAt": null, "totalAmount": null,
+  "canEdit": true, "canReceive": false, "canEditAllShares": false, "proxyAllowedAt": null, "totalAmount": null,
   "lines": [
     { "id": 101, "itemId": 12, "isCustom": false, "name": "Bút bi (Note màu xanh)", "unit": "Chiếc",
       "groupName": "Bút (Note màu) & các loại gim", "requestedQty": 12, "quota": null, "overQuota": false,
       "overQuotaReason": null, "note": "Bút gel", "finalQty": null, "finalNote": null, "receivedQty": null,
       "receivedNote": null, "unitPrice": null, "amount": null, "previousQty": 10,
       "createdBy": { "id": 20, "fullName": "Nguyễn Văn A" }, "updatedBy": { "id": 21, "fullName": "Trần Thị B" },
-      "updatedAt": "2026-11-20T03:00:00.000Z" }
+      "updatedAt": "2026-11-20T03:00:00.000Z",
+      "shares": [ { "employee": { "id": 20, "fullName": "Nguyễn Văn A" }, "qty": 4, "isMine": false },
+                  { "employee": { "id": 21, "fullName": "Trần Thị B" }, "qty": 8, "isMine": true } ],
+      "myQty": 8 }
   ]
 }
 ```
@@ -153,7 +157,8 @@ Mọi lệnh ghi dòng trả lại toàn bộ phiếu đã cập nhật, FE thay
   mà server vẫn có thể trả `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED` (câu nêu số đã xin): mở ô lý do. Giảm số về dưới
   định mức thì server tự bỏ lý do cũ.
 - Dòng ngoài danh mục: tên trùng mặt hàng có trong danh mục bị từ chối (`OFFICE_SUPPLY_LINE_IN_CATALOG`, câu nêu tên đúng
-  để FE gợi ý chọn trong danh sách); trùng tên và đơn vị với dòng khác của phiếu là `OFFICE_SUPPLY_LINE_EXISTS`. Cả hai
+  để FE gợi ý chọn trong danh sách); POST trùng tên và đơn vị với dòng ngoài danh mục đang có thì cộng số vào dòng đó, PATCH
+  đổi tên trùng dòng khác vẫn là `OFFICE_SUPPLY_LINE_EXISTS`. Cả hai
   so tên không phân biệt hoa thường, dấu tiếng Việt, dấu câu, ngoặc: "but bi note mau xanh" trùng "Bút bi (Note màu xanh)".
   Ô tìm mặt hàng phía FE cũng nên tìm không dấu ("but chi" ra "Bút chì gỗ").
 - Chặn bấm đúp nút thêm, xoá: hai lần gửi liền nhau, lần sau nhận 409 hoặc 404 (không còn 500).
@@ -162,6 +167,49 @@ Mọi lệnh ghi dòng trả lại toàn bộ phiếu đã cập nhật, FE thay
 - `previousQty`: gợi ý số kỳ trước. `updatedBy`: "sửa cuối bởi …" vì cả phòng cùng sửa. `updatedAt` của dòng là lúc phòng
   thêm, sửa dòng lần cuối: HCNS chốt, cấp hay phòng bấm nhận không đổi giờ này (UAT đợt B).
 - `unitPrice`, `amount`, `totalAmount` là `null` với người không có `office:supply:report` (nhân viên thường).
+
+### 4.2.1 Thêm lại mặt hàng phiếu đã có (20/11/2026)
+
+`POST .../lines` với mặt hàng phiếu đã có (cùng `itemId`, hoặc ngoài danh mục cùng tên và đơn vị, so không dấu, không hoa
+thường) **cộng `requestedQty` vào dòng đó**, trả phiếu như cũ (201, `SupplyRequestResponseDto`), số dòng không đổi.
+
+- Ô chọn mặt hàng cho chọn cả mặt hàng đã có. FE biết trước là cộng hay tạo bằng `lines` của phiếu đang mở, nên nói rõ
+  trước khi bấm ("Phiếu đang có 4 chiếc, bấm Thêm sẽ cộng vào") và sau khi bấm ("Đã cộng thêm 3 chiếc vào Bút bi…, nay 7
+  chiếc").
+- Định mức tính trên **tổng sau khi cộng**: số đang có của dòng + số gõ (+ số phòng đã xin ở văn phòng khác cùng tháng).
+  Nhắc lý do sớm ở FE thì so tổng này với `quota`, không chỉ số gõ. Thiếu lý do: 400
+  `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED`, câu nêu số đang có. Không gửi `overQuotaReason` thì server giữ lý do đang có
+  của dòng.
+- `note` mới nối sau ghi chú cũ bằng "; ", trùng thì giữ nguyên.
+- Dòng được cộng đổi `updatedBy`, `updatedAt` sang người vừa thêm.
+- Lỗi mới: tổng quá 100.000 hoặc ghi chú nối quá 500 ký tự là 400 `OFFICE_SUPPLY_LINE_INVALID`; 409
+  `OFFICE_SUPPLY_LINE_BUSY` rất hiếm (mục 6).
+
+### 4.2.2 Phần đăng ký của từng người (20/11/2026)
+
+Một dòng do nhiều người trong phòng cùng xin, nên server ghi **phần của từng người**: `requestedQty` của dòng luôn bằng
+tổng `shares[].qty`. Phiếu bổ sung do HCNS nhập thay phòng nên `shares` rỗng và `myQty` là 0: FE ẩn phần chia khi
+`shares` rỗng.
+
+- `shares`: `[{ employee: { id, fullName }, qty, isMine }]`, theo thứ tự người xin trước. `myQty`: phần của người đang
+  xem, 0 khi chưa có phần.
+- `canEditAllShares` (cấp phiếu): người xem là trưởng phòng hoặc đầu mối đang hợp lệ của phòng. Dùng cờ này, đừng tự
+  suy từ vai trò.
+- **Ô số trên dòng sửa phần của mình**, gọi `PUT .../shares/{id của mình}` với `qty` mới; hiện tổng của dòng bên cạnh
+  ("Tổng 16, phần của bạn 4"). Người chưa có phần đặt được phần của mình như vậy, tương đương thêm mặt hàng.
+- **Rút phần:** `qty: 0`. Rút phần mình không có thì server trả phiếu như cũ. Phần cuối cùng bị rút thì dòng bị xoá.
+- **Trưởng phòng, đầu mối** (`canEditAllShares`) sửa được phần của từng người đã có phần. Đặt phần cho người chưa có phần
+  là 404 `OFFICE_SUPPLY_SHARE_NOT_FOUND`: không ai đăng ký thay người khác.
+- Nhân viên sửa phần người khác: 403 `OFFICE_SUPPLY_SHARE_FORBIDDEN`. Nhân viên xoá dòng còn phần người khác: 403
+  `OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES` (câu nêu tên và phần từng người); FE hiện "Rút phần của tôi" thay cho Xoá dòng
+  khi dòng còn phần người khác và người xem không có `canEditAllShares`.
+- Định mức và trần 100.000 tính trên **tổng của dòng sau khi đổi**, như POST: thiếu lý do là 400
+  `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED`, quá trần là 400 `OFFICE_SUPPLY_LINE_INVALID`.
+- Mỗi lần đổi phần ghi nhật ký `office.supply_line.share_update` (phần cũ, phần mới, tổng cũ, tổng mới); rút phần cuối
+  ghi `office.supply_line.delete`.
+- Dữ liệu cũ: mỗi dòng của phiếu chính có trước 20/11/2026 được gán một phần cho người tạo dòng, bằng tổng của dòng.
+- Trợ lý AI: "sửa số bút thành 5" đổi **phần của người hỏi** thành 5, không đổi tổng; form xác nhận hiện "16 chiếc, phần
+  của bạn 4".
 
 ### 4.3 Quản lý kỳ (UI-02, `/management/office/supply-periods`)
 
@@ -252,9 +300,10 @@ tính vào `amount`: hiện cảnh báo nhỏ.
 | Method | Path | Ai | Ghi chú |
 |---|---|---|---|
 | GET | `/v1/office/room-bookings?siteId=1&date=2026-11-20` | Mọi nhân viên | Lịch một ngày (`RoomGridResponseDto`) |
+| GET | `/v1/office/room-bookings?siteId=1&from_date=2026-11-16&to_date=2026-11-22` | Mọi nhân viên | **Lịch theo khoảng ngày** (View Tuần gọi một lần thay vì 7 lần). Tính cả hai đầu, tối đa 31 ngày; cùng shape `RoomGridResponseDto`, mỗi phòng có `bookings` của cả khoảng (xếp theo giờ bắt đầu), FE tự chia theo ngày bằng `startAt` (giờ VN). Response có thêm `fromDate`, `toDate` (`date` = `fromDate`). `now` vẫn chỉ tính trong hôm nay và chỉ có khi khoảng chứa hôm nay. Thiếu một trong hai, `to_date` trước `from_date`, quá 31 ngày: 400 `OFFICE_DATE_INVALID` |
 | GET | `/v1/office/room-bookings/:id` | Mọi nhân viên | |
-| POST | `/v1/office/room-bookings` | Mọi nhân viên | `{ roomId, startAt, endAt, title, note?, isPrivate?, organizerId?, attendeeIds?: number[] }`. Giờ ISO **có múi giờ** (`Z` hoặc `+07:00`), server làm tròn xuống phút |
-| PATCH | `/v1/office/room-bookings/:id` | Người tạo, chủ trì, `office:booking:manage` | Dời giờ, đổi phòng, sửa tiêu đề, ghi chú (`""` hoặc null là xoá), người dự (thay toàn bộ), `organizerId` (đổi chủ trì). Lượt đang diễn ra: đổi `endAt` được (kéo dài, kết thúc sớm), giữ nguyên `startAt`. Lượt đã kết thúc: 409 PAST |
+| POST | `/v1/office/room-bookings` | Mọi nhân viên | `{ roomId?, meetingUrl?, startAt, endAt, title, note?, isPrivate?, organizerId?, attendeeIds?: number[] }`. Bỏ `roomId` là **họp online** (mục 5.1). Giờ ISO **có múi giờ** (`Z` hoặc `+07:00`), server làm tròn xuống phút |
+| PATCH | `/v1/office/room-bookings/:id` | Người tạo, chủ trì, `office:booking:manage` | Dời giờ, đổi phòng (`roomId: null` là chuyển sang họp online, trả phòng), thêm, đổi, bỏ link họp (`meetingUrl`, `""` hoặc null là bỏ), sửa tiêu đề, ghi chú (`""` hoặc null là xoá), người dự (thay toàn bộ), `organizerId` (đổi chủ trì). Lượt đang diễn ra: đổi `endAt` được (kéo dài, kết thúc sớm), giữ nguyên `startAt`. Lượt đã kết thúc: 409 PAST |
 | POST | `/v1/office/room-bookings/:id/cancel` | như trên | `{ reason? }`, huỷ lượt người khác thì `reason` bắt buộc; lượt đã kết thúc: 409 PAST; đang diễn ra vẫn huỷ được |
 | GET | `/v1/me/office/room-bookings?from=2026-11-20&to=2026-11-27` | Mọi nhân viên | Lượt tôi tạo, chủ trì, được mời (tối đa 3 tháng) |
 
@@ -307,7 +356,45 @@ tính vào `amount`: hiện cảnh báo nhỏ.
   được).
 - Thông báo khi sửa: người dự mới nhận lời mời; người bị bớt nhận "không còn trong danh sách" (lượt riêng tư không nêu
   tiêu đề); chủ trì cũ, chủ trì mới nhận câu riêng; người còn lại và người đặt hộ nhận báo dời nêu cũ và mới. Chỉ sửa
-  tiêu đề, ghi chú thì không báo ai.
+  tiêu đề, ghi chú thì không báo ai; chỉ thêm, đổi, bỏ link họp thì báo link (mục 5.1).
+
+### 5.1 Họp online, họp kết hợp (19/11/2026)
+
+Một lượt họp có ba hình thức, server suy ra rồi trả trong `mode` (không gửi lên):
+
+| `mode` | `modeLabel` | Khi nào |
+|---|---|---|
+| `IN_PERSON` | Tại phòng | Có `roomId`, không có `meetingUrl` |
+| `HYBRID` | Kết hợp phòng và online | Có `roomId` và `meetingUrl` |
+| `ONLINE` | Online | Không có `roomId` (link có hay chưa đều được, gắn sau khi cần) |
+
+- **Tạo họp online:** POST không gửi `roomId` (hoặc gửi null, `""`). Không giữ phòng nên không bao giờ trùng giờ với ai
+  (hai cuộc online cùng giờ đều được), không hiện trên lịch phòng (`GET /office/room-bookings?siteId&date`), chỉ hiện ở
+  "Lịch của tôi" (`GET /me/office/room-bookings`) và khi mở theo id. Response có `room: null`, `officeSite: null`.
+- **Link họp (`meetingUrl`):** chỉ `http://` hoặc `https://`, tối đa 500 ký tự, server cắt khoảng trắng hai đầu. Sai dạng
+  trả 400 mã kiểm dữ liệu chung, câu "Link họp online chưa đúng dạng đường dẫn, ví dụ https://congty.vn." (chặn cả
+  `javascript:`). Gắn lúc tạo hoặc PATCH sau; PATCH `meetingUrl: ""` hoặc null là bỏ link.
+- **Chuyển hình thức:** PATCH `roomId: null` là trả phòng, chuyển sang họp online (phòng trống ngay cho người khác). PATCH
+  `roomId: <id>` cho lượt online là giữ phòng, có kiểm trùng giờ (409 như đặt mới).
+- **Riêng tư:** link họp coi như nội dung, giấu như `title`: người xem `detailsVisible=false` (kể cả HCNS) nhận
+  `meetingUrl: null` và gửi `meetingUrl` là 403, dù giá trị giống hệt. `mode` vẫn trả cho mọi người. Nhật ký hệ thống chỉ ghi
+  có link hay không (`hasMeetingUrl`), không bao giờ ghi link.
+- **Thông báo:** câu nêu nơi họp theo hình thức: "tại Phòng họp tầng 3 (Văn phòng Hữu Nghị)", "tại …, kết hợp online" hoặc
+  "online". Email mời họp, giao chủ trì có dòng "Địa điểm" (tên phòng hoặc "Họp online") và "Link họp" khi có link. Chỉ
+  thêm, đổi link thì người trong cuộc họp nhận thông báo kèm email có link mới; bỏ link chỉ báo trong app. Đổi giờ hay nơi
+  họp cùng lúc với link thì một thông báo đổi giờ, đổi nơi họp kèm câu về link. Nhắc họp (N-06) có link thì nhắc "Link họp có
+  trong chi tiết cuộc họp"; họp online chưa có link thì nhắc "Cuộc họp chưa có link họp online".
+- Web, mobile: nút "Vào họp" mở `meetingUrl` ở tab mới (`target="_blank" rel="noopener noreferrer"`), chỉ hiện khi
+  `meetingUrl` khác null.
+
+```json
+// RoomBookingResponseDto, họp online có link
+{
+  "id": 41, "room": null, "officeSite": null, "mode": "ONLINE", "modeLabel": "Online",
+  "meetingUrl": "https://zoom.us/j/1234567890",
+  "startAt": "2026-11-20T02:00:00.000Z", "endAt": "2026-11-20T03:00:00.000Z", "title": "Giao ban online", "...": "..."
+}
+```
 
 ---
 
@@ -323,8 +410,13 @@ tính vào `amount`: hiện cảnh báo nhỏ.
 | `OFFICE_SUPPLY_NOT_YOUR_DEPARTMENT` | 403 | Mở phiếu phòng khác | Về danh sách |
 | `OFFICE_SUPPLY_HR_ONLY_ITEM` | 403 | Thêm mặt hàng nhóm chỉ HCNS đặt | Ô chọn đã lọc sẵn, lỗi chỉ xảy ra khi dữ liệu cũ |
 | `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED` | 400 | Vượt định mức mà thiếu lý do | Mở ô lý do ở dòng đó |
-| `OFFICE_SUPPLY_LINE_EXISTS` | 409 | Thêm mặt hàng đã có trong phiếu | Cuộn tới dòng đang có |
-| `OFFICE_SUPPLY_LINE_INVALID` | 400 | Dòng ngoài danh mục thiếu tên hay đơn vị | Lỗi ở form |
+| `OFFICE_SUPPLY_LINE_EXISTS` | 409 | PATCH đổi tên dòng ngoài danh mục trùng dòng khác. POST thêm mặt hàng đã có không còn mã này: server cộng số (20/11/2026) | Lỗi ở ô tên |
+| `OFFICE_SUPPLY_LINE_BUSY` | 409 | Rất hiếm: người khác trong phòng sửa đúng dòng đó liên tục khi đang cộng số | Toast câu của server, tải lại phiếu |
+| `OFFICE_SUPPLY_LINE_INVALID` | 400 | Dòng ngoài danh mục thiếu tên hay đơn vị; cộng số hay đặt phần làm tổng quá 100.000; ghi chú nối vào ghi chú cũ quá 500 ký tự | Lỗi ở form, câu của server |
+| `OFFICE_SUPPLY_SHARE_FORBIDDEN` | 403 | Nhân viên sửa phần của người khác (mục 4.2.2) | Ô phần người khác chỉ mở khi `canEditAllShares` |
+| `OFFICE_SUPPLY_SHARE_NOT_FOUND` | 404 | Trưởng phòng, đầu mối đặt phần cho người chưa có phần trên dòng | Tải lại phiếu |
+| `OFFICE_SUPPLY_SHARE_BELOW_OTHERS` | 400 | PATCH tổng của dòng nhỏ hơn phần người khác đã xin (câu nêu tên, phần) | Toast câu của server |
+| `OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES` | 403 | Nhân viên xoá dòng còn phần người khác (câu nêu tên, phần) | Hiện "Rút phần của tôi" thay nút xoá |
 | `OFFICE_SUPPLY_NOT_RECEIVER` | 403 | Không phải trưởng phòng, đầu mối bấm nhận | Ẩn nút theo `canReceive` |
 | `OFFICE_SUPPLY_RECEIVED_TOO_MANY` | 400 | Số nhận lớn hơn số chốt | Lỗi ở ô |
 | `OFFICE_SUPPLY_NOTHING_CHANGED` | 400 | "Sửa số thực nhận" mà không dòng nào đổi số hay ghi chú (UAT đợt B) | Toast câu của server; chỉ dòng đổi mới được đếm vào thông báo cho phòng |
@@ -380,7 +472,9 @@ Làm hai màn cho mọi nhân viên, cùng API với web:
    nút "Lấy số tháng trước", thêm dòng ngoài danh mục, đếm ngược tới `period.lockAt`. Phiếu `ISSUED` có nút Đã nhận khi
    `canReceive`.
 2. **Đặt phòng họp:** chọn văn phòng (nhớ lần chọn trước), ngày (mặc định hôm nay), lịch phòng theo giờ, chạm ô trống để
-   đặt nhanh (tiêu đề, giờ kết thúc mặc định +60 phút). Tab "Lịch của tôi" dùng `GET /me/office/room-bookings`.
+   đặt nhanh (tiêu đề, giờ kết thúc mặc định +60 phút). Tab "Lịch của tôi" dùng `GET /me/office/room-bookings`, hiện cả
+   cuộc họp online (nhãn `modeLabel`, nút "Vào họp" khi có `meetingUrl`). Nút "Tạo cuộc họp online" mở form không có ô
+   phòng (mục 5.1).
 
 Deep link theo mục 7. Màn quản lý (mở kỳ, chốt, cấp, cài đặt, báo cáo) chỉ có trên web.
 
@@ -407,3 +501,13 @@ Deep link theo mục 7. Màn quản lý (mở kỳ, chốt, cấp, cài đặt, 
 | W15 | HR chốt lại phiếu đã cấp (đổi số, ghi lý do); sửa số thực nhận phiếu đã nhận | Số mới hiện ở phiếu và bảng tổng hợp; trưởng phòng nhận thông báo; kỳ đã đóng thì nút bị ẩn |
 | W16 | "Lấy số tháng trước" có dòng vượt định mức, dòng ngoài danh mục | Toast nêu số dòng đã thêm và từng dòng bỏ qua kèm lý do |
 | W17 | Nhân viên mở ô chọn mặt hàng, danh mục | Không có cột đơn giá |
+| W18 | Tạo cuộc họp online không link, mời người dự; sau đó thêm link | Không chọn phòng; người dự nhận lời mời "… online, …", rồi thông báo "đã có link họp online" kèm email; nút "Vào họp" mở tab mới |
+| W19 | Đặt phòng kèm link (kết hợp); đổi link; bỏ link | Nhãn "Kết hợp phòng và online"; lịch phòng vẫn hiện lượt; thông báo đổi, bỏ link |
+| W20 | Chuyển cuộc họp tại phòng sang online; chuyển online về phòng đang bận | Phòng trống ngay trên lịch; chuyển về phòng bận báo trùng giờ, giữ form |
+| W21 | Gõ link sai (`zoom.us/j/1` thiếu https, `javascript:…`) | Lỗi ở ô link, câu tiếng Việt |
+| W22 | HCNS mở cuộc họp riêng tư có link mình không dự | Không thấy link, form không có ô link |
+| W23 | A thêm 4 bút, B thêm 12 bút cùng phòng | Dòng hiện tổng 16 và "A 4 · B 12"; ô số của B hiện 12 |
+| W24 | B sửa phần mình thành 10, rồi rút phần | Tổng 14, rồi 4; B rút xong không còn trong danh sách phần |
+| W25 | Nhân viên mở dòng có phần người khác | Không sửa được phần người khác; nút "Rút phần của tôi" thay cho Xoá dòng |
+| W26 | Trưởng phòng hoặc đầu mối sửa phần của A, xoá dòng | Sửa được từng phần; xoá dòng xoá luôn mọi phần |
+| W27 | Phiếu bổ sung | Không hiện phần chia |

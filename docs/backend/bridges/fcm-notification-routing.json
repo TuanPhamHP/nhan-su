@@ -346,7 +346,7 @@
       "webUrl": "/business-trips?id={id}",
       "trigger": "Approver duyệt (hoặc HR nộp hộ không chọn người duyệt → auto-approve)",
       "recipients": ["owner", "hr"],
-      "note": "HR/ADMIN đang làm việc nhận bản riêng tiêu đề '📌 Đơn công tác cần xử lý' để kịp đặt xe/vé — in-app + FCM, KHÔNG có email. Chủ đơn nếu chính là HR thì chỉ nhận bản owner.",
+      "note": "HR/ADMIN đang làm việc nhận bản riêng tiêu đề 'Đơn công tác cần xử lý' để kịp đặt xe/vé — in-app + FCM, KHÔNG có email. Chủ đơn nếu chính là HR thì chỉ nhận bản owner.",
       "frequency": "real-time"
     },
 
@@ -642,7 +642,7 @@
       "params": { "id": "refId" },
       "webUrl": "/general-requests?id={refId}",
       "trigger": "Tới lượt duyệt (gửi, qua bước, được chuyển, duyệt thay theo uỷ quyền, được đổi người duyệt); người theo dõi khi phiếu được gửi lần đầu (lô 4a)",
-      "recipients": ["người đang giữ lượt duyệt", "người theo dõi (bản 📌 Thông tin)"],
+      "recipients": ["người đang giữ lượt duyệt", "người theo dõi (bản Thông tin:)"],
       "frequency": "real-time",
       "note": "Bản cho người duyệt có actionType APPROVE_REJECT: approveEndpoint PATCH /v1/general-requests/{id}/approve, rejectEndpoint PATCH .../reject body { rejectNote }. Bản 📌 cho người theo dõi là NAVIGATE_ONLY"
     },

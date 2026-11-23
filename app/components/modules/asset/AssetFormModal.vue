@@ -435,13 +435,13 @@
 					</div>
 
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-						<div class="space-y-1 sm:col-span-2">
+						<div class="space-y-1 sm:col-span-2" data-tour="asset-form-main">
 							<label :class="labelCls">Tên tài sản <span class="text-red-500">*</span></label>
 							<input v-model="name" v-bind="nameAttrs" type="text" :class="inputCls" placeholder="VD: MacBook Pro 14 M3" />
 							<p v-if="errors.name" class="text-xs text-red-500">{{ errors.name }}</p>
 						</div>
 
-						<div class="space-y-1">
+						<div class="space-y-1" data-tour="asset-form-main">
 							<label :class="labelCls">Loại tài sản <span class="text-red-500">*</span></label>
 							<UiSelectInput
 								v-model="categoryId"

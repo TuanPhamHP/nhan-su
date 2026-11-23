@@ -399,7 +399,10 @@ onMounted(() => {
 							</div>
 						</div>
 						<div v-if="createdForEmployeeName" class="flex items-center justify-between text-xs">
-							<span class="text-green-600 dark:text-green-400">✓ Chủ đơn: <strong>{{ createdForEmployeeName }}</strong></span>
+							<span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+								<Icon name="heroicons:check-circle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+								Chủ đơn: <strong>{{ createdForEmployeeName }}</strong>
+							</span>
 							<button type="button" class="text-gray-500 hover:text-red-500" @click="clearCreatedFor">Xoá lựa chọn</button>
 						</div>
 					</div>
@@ -486,11 +489,17 @@ onMounted(() => {
 								<div class="flex gap-2">
 									<label class="flex items-center gap-1.5 flex-1 px-3 py-2 rounded-lg border cursor-pointer transition-colors" :class="route.desiredTimeType === 'ARRIVAL' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
 										<input v-model="route.desiredTimeType" value="ARRIVAL" type="radio" class="sr-only" />
-										<span class="text-sm">📍 Cần có mặt lúc</span>
+										<span class="inline-flex items-center gap-1 text-sm">
+											<Icon name="heroicons:map-pin" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+											Cần có mặt lúc
+										</span>
 									</label>
 									<label class="flex items-center gap-1.5 flex-1 px-3 py-2 rounded-lg border cursor-pointer transition-colors" :class="route.desiredTimeType === 'PICKUP' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
 										<input v-model="route.desiredTimeType" value="PICKUP" type="radio" class="sr-only" />
-										<span class="text-sm">🚗 Cần xe đón lúc</span>
+										<span class="inline-flex items-center gap-1 text-sm">
+											<Icon name="mdi:car" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+											Cần xe đón lúc
+										</span>
 									</label>
 								</div>
 							</div>
@@ -619,8 +628,12 @@ onMounted(() => {
 							</div>
 						</div>
 
-						<p v-if="selectedApproverName" class="text-xs text-green-600 dark:text-green-400">
-							✓ Đã chọn: <strong>{{ selectedApproverName }}</strong>
+						<p
+							v-if="selectedApproverName"
+							class="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400"
+						>
+							<Icon name="heroicons:check-circle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+							Đã chọn: <strong>{{ selectedApproverName }}</strong>
 						</p>
 					</template>
 				</div>

@@ -15,6 +15,12 @@
 		message: ChatMsg;
 		/** Module chỉ xem: không xác nhận form hay chấm điểm được nữa. */
 		readOnly?: boolean;
+		/**
+		 * Khung hẹp như cửa sổ chat nhanh: avatar, đệm và cỡ chữ nhỏ lại, form cũng thu gọn.
+		 * Cỡ của trang Trợ lý đặt cho khung rộng; giữ nguyên trong khung 400px thì một form nghỉ
+		 * phép dài hơn hai màn hình và người dùng phải cuộn mới thấy nút xác nhận.
+		 */
+		compact?: boolean;
 	}>();
 
 	const emit = defineEmits<{
@@ -81,28 +87,39 @@
 		</p>
 	</div>
 
-	<div v-else :class="['group flex w-full gap-3 animate-fade-in', isUser ? 'justify-end' : 'justify-start']">
+	<div
+		v-else
+		:class="[
+			'group flex w-full animate-fade-in',
+			compact ? 'gap-2' : 'gap-3',
+			isUser ? 'justify-end' : 'justify-start',
+		]"
+	>
 		<!-- Lỗi thì vẫn dùng icon cảnh báo; bình thường là mascot (ảnh tự đủ tương phản
 		     trên cả nền sáng lẫn tối nên không cần đĩa nền phía sau) -->
 		<div
 			v-if="!isUser && message.error"
-			class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 shadow-sm dark:bg-red-500/20 dark:text-red-300"
+			:class="[
+				'flex shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 shadow-sm dark:bg-red-500/20 dark:text-red-300',
+				compact ? 'h-6 w-6' : 'h-8 w-8',
+			]"
 		>
-			<Icon name="heroicons:exclamation-triangle" class="h-4 w-4" />
+			<Icon name="heroicons:exclamation-triangle" :class="compact ? 'h-3.5 w-3.5' : 'h-4 w-4'" />
 		</div>
 		<img
 			v-else-if="!isUser"
 			:src="agentAvatar"
 			alt=""
 			draggable="false"
-			class="h-8 w-8 shrink-0 object-contain select-none"
+			:class="['shrink-0 object-contain select-none', compact ? 'h-6 w-6' : 'h-8 w-8']"
 		/>
 
 		<div
 			:class="[
-				'flex min-w-0 flex-col gap-1.5',
+				'flex min-w-0 flex-col',
+				compact ? 'gap-1' : 'gap-1.5',
 				// Form cần chỗ để điền — bong bóng chữ thì hẹp cho dễ đọc
-				message.pending ? 'w-full max-w-xl' : 'max-w-[85%]',
+				message.pending ? 'w-full max-w-xl' : compact ? 'max-w-[88%]' : 'max-w-[85%]',
 				isUser ? 'items-end' : 'items-start',
 			]"
 		>
@@ -116,7 +133,8 @@
 			<div
 				v-if="hasBubble"
 				:class="[
-					'min-w-0 max-w-full px-4 py-3 text-sm leading-relaxed break-words shadow-sm',
+					'min-w-0 max-w-full break-words shadow-sm',
+					compact ? 'px-3 py-2 text-[13px] leading-normal' : 'px-4 py-3 text-sm leading-relaxed',
 					isUser
 						? 'rounded-2xl rounded-br-md bg-[var(--color-accent)] text-white'
 						: message.error
@@ -170,6 +188,7 @@
 			<AgentActionForm
 				v-if="message.pending && !readOnly"
 				:pending="message.pending"
+				:compact="compact"
 				@confirm="emit('confirm', message.pending!.pendingActionId, $event)"
 				@cancel="emit('cancel', message.pending!.pendingActionId)"
 			/>

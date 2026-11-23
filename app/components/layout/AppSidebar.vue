@@ -210,7 +210,7 @@
 			'flex flex-col border-r overflow-hidden',
 			'fixed top-0 bottom-0 left-0 z-30 lg:static lg:z-auto',
 			'transition-transform lg:transition-[width] duration-300 ease-in-out',
-			isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0 lg:w-16',
+			isOpen ? 'translate-x-0 w-60' : '-translate-x-full lg:translate-x-0 lg:w-16',
 		]"
 		:style="{
 			backgroundColor: 'var(--color-sidebar-bg)',
@@ -229,7 +229,7 @@
 					khung chỉ cố định chiều cao và để `object-contain` tự thu. Lúc thanh bên thu gọn thì
 					khung hẹp lại theo đúng chiều rộng còn lại, logo nhỏ đi chứ không bị cắt.
 
-					Công ty có logo thì chữ "8Hours - Solution" nhường chỗ: ô này rộng 224px, mà một
+					Công ty có logo thì chữ "8Hours - Solution" nhường chỗ: ô này rộng 208px, mà một
 					logo ngang cao 32px đã chiếm quá nửa, để cả hai thì chữ bị cắt mất đuôi. Logo công
 					ty vốn đã mang tên họ, nên đứng một mình vẫn đủ nghĩa.
 				-->
@@ -251,7 +251,7 @@
 						leave-from-class="opacity-100"
 						leave-to-class="opacity-0"
 					>
-						<span v-if="isOpen" class="text-sm font-bold whitespace-nowrap"> 8Hours - Solution </span>
+						<span v-if="isOpen" class="text-[13px] font-bold whitespace-nowrap"> 8Hours - Solution </span>
 					</Transition>
 				</template>
 			</div>
@@ -265,7 +265,7 @@
 					:key="item.route"
 					:to="item.route"
 					:class="[
-						'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+						'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium',
 						!isOpen && 'justify-center px-2',
 						isActive(item) && 'is-active',
 					]"
@@ -295,7 +295,7 @@
 				<button
 					v-if="isOpen && currentApp.label"
 					type="button"
-					class="w-full flex items-center gap-2 px-2 mb-1 py-1 rounded-lg text-left hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+					class="w-full flex items-center gap-1.5 px-2 mb-1 py-1 rounded-lg text-left hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 					title="Đổi phân hệ"
 					@click="uiStore.toggleLauncher()"
 				>
@@ -307,7 +307,7 @@
 							<path stroke-linecap="round" stroke-linejoin="round" :d="currentApp.icon" />
 						</svg>
 					</span>
-					<span class="text-[10px] font-semibold uppercase tracking-widest opacity-70 whitespace-nowrap flex-1">
+					<span class="text-[10px] font-semibold uppercase tracking-widest opacity-70 truncate min-w-0 flex-1">
 						{{ currentApp.label }}
 					</span>
 					<svg class="w-3 h-3 opacity-50 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -324,7 +324,7 @@
 						:to="item.route"
 						:data-tour="item.dataTour"
 						:class="[
-							'nav-item group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+							'nav-item group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium',
 							!isOpen && 'justify-center px-2',
 							isActive(item) && 'is-active',
 						]"
@@ -379,7 +379,7 @@
 							:to="item.route"
 							:data-tour="item.dataTour"
 							:class="[
-								'nav-item group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+								'nav-item group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium',
 								!isOpen && 'justify-center px-2',
 								isActive(item) && 'is-active',
 							]"
@@ -426,7 +426,7 @@
 						:key="app.code"
 						:to="app.home"
 						:class="[
-							'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+							'nav-item group flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium',
 							!isOpen && 'justify-center px-2',
 						]"
 						@mouseenter="!isOpen && showTooltip($event, app.label)"
@@ -454,7 +454,7 @@
 						type="button"
 						:data-locked-sidebar-app="app.code"
 						:class="[
-							'nav-item group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium opacity-60',
+							'nav-item group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium opacity-60',
 							!isOpen && 'justify-center px-2',
 						]"
 						@mouseenter="!isOpen && showTooltip($event, `${app.label} — ${app.lockBadge}`)"
@@ -502,14 +502,7 @@
 		<!-- User Info Bottom -->
 		<div class="border-t p-3 flex-shrink-0" :style="{ borderColor: 'var(--color-border-theme)' }">
 			<div class="flex items-center gap-3 min-w-0">
-				<div
-					class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-					:style="{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }"
-				>
-					<span class="text-xs font-semibold">
-						{{ user?.fullName?.charAt(0)?.toUpperCase() ?? '?' }}
-					</span>
-				</div>
+				<CommonAppAvatar :src="user?.avatarUrl" :name="user?.fullName" size="sm" />
 				<Transition
 					enter-active-class="transition-opacity duration-200"
 					enter-from-class="opacity-0"
@@ -519,8 +512,8 @@
 					leave-to-class="opacity-0"
 				>
 					<div v-if="isOpen" class="flex-1 min-w-0">
-						<p class="text-xs font-medium truncate">{{ user?.fullName }}</p>
-						<p class="text-xs opacity-70 truncate">{{ userRoleLabel }}</p>
+						<p class="text-[11px] font-medium truncate">{{ user?.fullName }}</p>
+						<p class="text-[11px] opacity-70 truncate">{{ userRoleLabel }}</p>
 					</div>
 				</Transition>
 			</div>

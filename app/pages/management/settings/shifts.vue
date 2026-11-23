@@ -913,21 +913,24 @@
 							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
 							title="Cron tự ghi PRESENT, không cho check-in thủ công"
 						>
-							🖥️ Online
+							<Icon name="heroicons:computer-desktop" class="w-3 h-3" aria-hidden="true" />
+							Online
 						</span>
 						<span
 							v-else-if="!shift.requiresLocationCheck"
 							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
 							title="Check-in thủ công nhưng không kiểm tra GPS"
 						>
-							🌐 Không GPS
+							<Icon name="heroicons:globe-alt" class="w-3 h-3" aria-hidden="true" />
+							Không GPS
 						</span>
 						<span
 							v-else
 							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
 							title="Check-in thủ công + validate GPS"
 						>
-							📍 GPS
+							<Icon name="heroicons:map-pin" class="w-3 h-3" aria-hidden="true" />
+							GPS
 						</span>
 						<span
 							v-if="!shift.requireCheckIn"
@@ -945,10 +948,11 @@
 						</span>
 						<span
 							v-if="hasCustomWindow(shift)"
-							class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+							class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
 							:title="customWindowTooltip(shift)"
 						>
-							⚙️ Khung giờ tùy chỉnh
+							<Icon name="heroicons:cog-6-tooth" class="w-3 h-3" aria-hidden="true" />
+							Khung giờ tùy chỉnh
 						</span>
 					</div>
 
@@ -1074,7 +1078,10 @@
 			<div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
 				<div class="flex items-center justify-between gap-4">
 					<div>
-						<h3 class="font-medium text-blue-900 dark:text-blue-200">🖥️ Làm việc online Thứ 7</h3>
+						<h3 class="inline-flex items-center gap-1.5 font-medium text-blue-900 dark:text-blue-200">
+							<Icon name="heroicons:computer-desktop" class="w-4 h-4" aria-hidden="true" />
+							Làm việc online Thứ 7
+						</h3>
 						<p class="text-sm text-blue-700 dark:text-blue-400 mt-1">
 							Nhân viên được chọn sẽ được tự động ghi nhận PRESENT mỗi T7 mà không cần chấm công GPS.
 						</p>
@@ -1146,13 +1153,7 @@
 										title="Gán ca theo khoảng ngày"
 										@click="openEmpOverrideModal(emp)"
 									>
-										<div
-											class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0"
-										>
-											<span class="text-xs font-bold text-brand-700 dark:text-brand-400">{{
-												emp.fullName.charAt(0)
-											}}</span>
-										</div>
+										<CommonAppAvatar :src="emp.avatarUrl" :name="emp.fullName" size="sm" />
 										<div class="min-w-0">
 											<p class="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[120px]">
 												{{ emp.fullName }}
@@ -1173,7 +1174,10 @@
 										@click="openCellModal(emp, date)"
 									>
 										<template v-if="getSchedule(emp.id, date)?.isOnline">
-											<span class="block">🖥️ Online</span>
+											<span class="flex items-center justify-center gap-1">
+												<Icon name="heroicons:computer-desktop" class="w-3 h-3" aria-hidden="true" />
+												Online
+											</span>
 										</template>
 										<template v-else-if="getSchedule(emp.id, date)?.shift">
 											<span class="block truncate">{{ getSchedule(emp.id, date)!.shift!.name }}</span>
@@ -1567,9 +1571,10 @@
 												<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-in</p>
 												<p
 													v-if="!requireCheckIn"
-													class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
+													class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
 												>
-													⚠️ Nhân viên không cần check-in cho ca này
+													<Icon name="heroicons:exclamation-triangle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+													Nhân viên không cần check-in cho ca này
 												</p>
 											</div>
 										</label>
@@ -1584,9 +1589,10 @@
 												<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Yêu cầu check-out</p>
 												<p
 													v-if="!requireCheckOut"
-													class="text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
+													class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mt-0.5 leading-snug"
 												>
-													⚠️ Nhân viên không cần check-out cho ca này
+													<Icon name="heroicons:exclamation-triangle" class="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+													Nhân viên không cần check-out cho ca này
 												</p>
 											</div>
 										</label>
@@ -1798,13 +1804,7 @@
 					class="bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-sm"
 				>
 					<div class="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-						<div
-							class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0"
-						>
-							<span class="text-sm font-bold text-brand-700 dark:text-brand-400">{{
-								empOverrideTarget.fullName.charAt(0)
-							}}</span>
-						</div>
+						<CommonAppAvatar :src="empOverrideTarget.avatarUrl" :name="empOverrideTarget.fullName" size="sm" />
 						<div>
 							<p class="text-sm font-semibold text-gray-900 dark:text-white">{{ empOverrideTarget.fullName }}</p>
 							<p class="text-xs text-gray-400 dark:text-gray-500">Gán ca theo khoảng ngày</p>

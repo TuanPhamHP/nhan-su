@@ -21,6 +21,8 @@
 		title: string;
 		/** Câu giải thích; bỏ trống thì không có dấu hỏi nào cả. */
 		description?: string;
+		/** Mã tour của trang (`usePageTour`); có thì hiện nút Hướng dẫn cạnh tiêu đề. */
+		tour?: string;
 	}>();
 
 	const open = ref(false);
@@ -110,6 +112,8 @@
 					/>
 				</svg>
 			</button>
+
+			<UiTourButton v-if="tour" :tour="tour" />
 
 			<!--
 				Hộp giải thích nằm DƯỚI tiêu đề và ở lớp trên cùng, nhưng không chặn chuột: người dùng

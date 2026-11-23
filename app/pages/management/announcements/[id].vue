@@ -141,15 +141,6 @@
 		}
 	}
 
-	function initials(name: string): string {
-		return name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(-2)
-			.map(w => w.charAt(0).toUpperCase())
-			.join('');
-	}
-
 	onMounted(load);
 </script>
 
@@ -184,7 +175,11 @@
 			v-else-if="notFound || !announcement || !config"
 			class="p-16 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3"
 		>
-			<p class="text-4xl">🔍</p>
+			<Icon
+				name="heroicons:magnifying-glass"
+				class="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600"
+				aria-hidden="true"
+			/>
 			<p class="text-base font-semibold text-gray-800 dark:text-gray-200">
 				Không tìm thấy thông báo
 			</p>
@@ -225,15 +220,11 @@
 				<div class="flex items-start justify-between gap-4 flex-wrap">
 					<div class="flex items-center gap-3.5 min-w-0">
 						<!-- Sender Avatar -->
-						<div class="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-sm flex-shrink-0 select-none overflow-hidden">
-							<img
-								v-if="announcement.createdBy.avatarUrl"
-								:src="announcement.createdBy.avatarUrl"
-								:alt="announcement.createdBy.fullName"
-								class="w-full h-full object-cover"
-							/>
-							<span v-else>{{ initials(announcement.createdBy.fullName) }}</span>
-						</div>
+						<CommonAppAvatar
+							:src="announcement.createdBy.avatarUrl"
+							:name="announcement.createdBy.fullName"
+							size="lg"
+						/>
 
 						<div class="min-w-0">
 							<!-- Name & Role -->
@@ -248,7 +239,7 @@
 								<span
 									class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium"
 								>
-									<span>{{ config.icon }}</span>
+									<Icon :name="config.icon" class="w-3.5 h-3.5" aria-hidden="true" />
 									<span>{{ config.label }}</span>
 								</span>
 								<span class="text-xs text-gray-500 dark:text-gray-400">

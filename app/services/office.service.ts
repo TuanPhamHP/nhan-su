@@ -44,6 +44,7 @@ import type {
 	UpdateSupplyGroupBody,
 	UpdateSupplyItemBody,
 	UpdateSupplyLineBody,
+	SetSupplyLineShareBody,
 	UpdateSupplyPeriodBody,
 } from '~/types/office.types';
 
@@ -317,6 +318,19 @@ export const useOfficeService = () => {
 			return res.data;
 		},
 
+		/**
+		 * Lịch phòng của một khoảng ngày, tính cả hai đầu, tối đa 31 ngày.
+		 *
+		 * Mỗi phòng mang `bookings` của cả khoảng, xếp theo giờ bắt đầu; trang tự chia theo ngày bằng
+		 * `startAt` giờ Việt Nam. `now` chỉ có khi khoảng chứa hôm nay.
+		 */
+		async roomGridRange(siteId: number, fromDate: string, toDate: string): Promise<RoomGrid> {
+			const res = await authFetch<ApiResponse<RoomGrid>>('/v1/office/room-bookings', {
+				params: { siteId, from_date: fromDate, to_date: toDate },
+			});
+			return res.data;
+		},
+
 		async findBooking(id: number): Promise<RoomBooking> {
 			const res = await authFetch<ApiResponse<RoomBooking>>(`/v1/office/room-bookings/${id}`);
 			return res.data;
@@ -370,6 +384,20 @@ export const useOfficeService = () => {
 			const res = await authFetch<ApiResponse<SupplyRequest>>(
 				`/v1/me/office/supply-requests/${requestId}/lines/${lineId}`,
 				{ method: 'PATCH', body },
+			);
+			return res.data;
+		},
+
+		/** Đặt phần của một người trên dòng; dòng hết phần thì máy chủ xoá dòng. */
+		async setLineShare(
+			requestId: number,
+			lineId: number,
+			employeeId: number,
+			body: SetSupplyLineShareBody,
+		): Promise<SupplyRequest> {
+			const res = await authFetch<ApiResponse<SupplyRequest>>(
+				`/v1/me/office/supply-requests/${requestId}/lines/${lineId}/shares/${employeeId}`,
+				{ method: 'PUT', body },
 			);
 			return res.data;
 		},

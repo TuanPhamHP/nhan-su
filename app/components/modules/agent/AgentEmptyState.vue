@@ -2,7 +2,18 @@
 	import agentAvatar from '~/assets/icons/ONGO_AI_BOT.png';
 	import type { AgentSuggestion } from '~/types/agent.types';
 
-	defineProps<{ suggestions: AgentSuggestion[] }>();
+	withDefaults(
+		defineProps<{
+			suggestions: AgentSuggestion[];
+			/**
+			 * Khung hẹp như cửa sổ chat nhanh: giữ cỡ nhỏ và xếp gợi ý một cột ở mọi màn hình.
+			 * Không có cờ này thì từ `sm:` ba thẻ gợi ý chia ba cột trong khung rộng 400px, mỗi
+			 * thẻ chỉ còn chừng một trăm pixel và câu hỏi gãy thành bốn, năm dòng.
+			 */
+			compact?: boolean;
+		}>(),
+		{ compact: false },
+	);
 
 	const emit = defineEmits<{ pick: [label: string] }>();
 </script>
@@ -20,19 +31,19 @@
 			:src="agentAvatar"
 			alt=""
 			draggable="false"
-			class="h-14 w-14 object-contain select-none sm:h-20 sm:w-20"
+			:class="['h-14 w-14 object-contain select-none', compact ? '' : 'sm:h-20 sm:w-20']"
 		/>
 
 		<div class="space-y-1">
-			<h3 class="text-base font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
+			<h3 :class="['text-base font-semibold text-gray-900 dark:text-gray-50', compact ? '' : 'sm:text-xl']">
 				Hỏi gì cũng được về nhân sự
 			</h3>
-			<p class="text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+			<p :class="['text-xs text-gray-500 dark:text-gray-400', compact ? '' : 'sm:text-sm']">
 				Trợ lý chỉ xem được dữ liệu mà bạn có quyền xem.
 			</p>
 		</div>
 
-		<div class="grid w-full max-w-3xl gap-2 sm:grid-cols-3 sm:gap-3">
+		<div :class="['grid w-full gap-2', compact ? '' : 'max-w-3xl sm:grid-cols-3 sm:gap-3']">
 			<button
 				v-for="s in suggestions"
 				:key="s.label"

@@ -811,7 +811,7 @@ nhanh vẫn phải hỏi lý do vì BE bắt buộc `note`.
 | Mã | `NotificationType` | Người nhận | Khi nào | Email | `targetUrl` | `actionType` |
 |---|---|---|---|---|---|---|
 | N-01 | `RECRUIT_REQUISITION_APPROVAL_NEEDED` | Người duyệt đến lượt; bước theo vai trò thì mọi người đang làm có vai trò đó (bước `DIRECTOR` gửi cả `CHIEF`) | Gửi duyệt, bước trước vừa duyệt xong, nhắc lúc 09:00 sau 3 ngày (J-08) | ✓ | `/management/recruitment/requisitions/:id` | `APPROVE_REJECT` |
-| N-02 | `RECRUIT_REQUISITION_DECIDED` | Người tạo; mọi HR đang làm (dạng "📌 Thông tin"), trừ người vừa quyết | Duyệt xong bước cuối, hoặc bị từ chối ở bất kỳ bước nào | – | `/management/recruitment/requisitions/:id` | `NAVIGATE_ONLY` |
+| N-02 | `RECRUIT_REQUISITION_DECIDED` | Người tạo; mọi HR đang làm (dạng "Thông tin:"), trừ người vừa quyết | Duyệt xong bước cuối, hoặc bị từ chối ở bất kỳ bước nào | – | `/management/recruitment/requisitions/:id` | `NAVIGATE_ONLY` |
 | N-03 | `RECRUIT_NEW_APPLICATIONS` | HR phụ trách tin; thành viên hội đồng bật `notifyNewApplications` | Gom hồ sơ mới trong giờ qua, phút thứ 5 mỗi giờ (J-09) | – | Vai trò quản lý: `/management/recruitment/jobs/:id`; EMPLOYEE: `/recruitment/jobs/:id` | `NAVIGATE_ONLY` |
 | N-04 | `RECRUIT_INTERVIEW_ASSIGNED` khi được giao; `RECRUIT_INTERVIEW_UPDATED` khi đổi lịch hoặc huỷ | Từng người phỏng vấn | Đặt, đổi, huỷ lịch phỏng vấn | ✓ kèm `.ics` | `/recruitment/my-interviews` | `NAVIGATE_ONLY` |
 | N-05 | `RECRUIT_SCORECARD_DUE` | Người đánh giá | HR yêu cầu đánh giá; phiếu chưa nộp quá 24 giờ sau buổi (J-01) | – | `/recruitment/my-interviews` | `NAVIGATE_ONLY` |

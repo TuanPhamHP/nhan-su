@@ -49,8 +49,9 @@ const chartOptions = {
 	<div v-if="hasData" class="flex flex-col h-full gap-2">
 		<div class="flex items-center justify-between text-xs">
 			<span class="text-gray-500">Tuổi trung bình: <strong class="text-gray-800 dark:text-gray-200">{{ averageAge ?? '—' }}</strong></span>
-			<span v-if="lowCoverage" class="text-amber-600 dark:text-amber-400">
-				⚠️ {{ ageDataCoverage }}/{{ totalEmployees }} đã cập nhật
+			<span v-if="lowCoverage" class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+				<Icon name="heroicons:exclamation-triangle" class="w-3.5 h-3.5" aria-hidden="true" />
+				{{ ageDataCoverage }}/{{ totalEmployees }} đã cập nhật
 			</span>
 		</div>
 		<div class="relative flex-1">
@@ -63,6 +64,12 @@ const chartOptions = {
 		</svg>
 		<p class="text-sm text-center">Chưa có dữ liệu</p>
 		<p class="text-xs text-center">HR cần cập nhật ngày sinh nhân viên</p>
-		<NuxtLink to="/management/employees" class="text-xs text-brand-600 dark:text-brand-400 hover:underline mt-1">Cập nhật ngay →</NuxtLink>
+		<NuxtLink
+			to="/management/employees"
+			class="inline-flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:underline mt-1"
+		>
+			Cập nhật ngay
+			<Icon name="heroicons:arrow-right" class="w-3.5 h-3.5" aria-hidden="true" />
+		</NuxtLink>
 	</div>
 </template>

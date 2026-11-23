@@ -215,7 +215,8 @@ const onSubmit = handleSubmit(async values => {
 								rel="noopener"
 								class="inline-flex items-center gap-1 h-16 px-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-brand-600 dark:text-brand-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
 							>
-								📄 File {{ idx + 1 }}
+								<Icon name="heroicons:document" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+								File {{ idx + 1 }}
 							</a>
 							<button
 								v-if="isDraft"
@@ -245,7 +246,10 @@ const onSubmit = handleSubmit(async values => {
 							@click="attachmentInput?.click()"
 						>
 							<span v-if="uploadingAttachments">Đang upload…</span>
-							<span v-else>📎 Thêm file đính kèm</span>
+							<span v-else class="inline-flex items-center gap-1.5">
+								<Icon name="heroicons:paper-clip" class="w-4 h-4" aria-hidden="true" />
+								Thêm file đính kèm
+							</span>
 						</button>
 						<p class="text-xs text-gray-400 mt-1">
 							JPG, PNG, PDF, DOCX · tối đa 10MB/file · tối đa {{ MAX_ATTACHMENTS }} files
