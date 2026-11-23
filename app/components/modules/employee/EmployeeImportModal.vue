@@ -55,6 +55,9 @@
 		passportType: 'Loại hộ chiếu',
 		passportIssuedDate: 'Ngày cấp hộ chiếu',
 		passportExpiryDate: 'Ngày hết hạn hộ chiếu',
+		bankName: 'Ngân hàng',
+		bankAccountNumber: 'Số tài khoản',
+		bankAccountHolder: 'Chủ tài khoản',
 	};
 
 	function fieldLabel(field: ImportEmployeesRowField | null): string {
@@ -153,7 +156,7 @@
 								<div class="flex-1 min-w-0">
 									<h4 class="text-sm font-semibold text-gray-900 dark:text-white">Tải file mẫu</h4>
 									<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-										File gồm 27 cột. Dữ liệu bắt đầu từ dòng 2.
+										File gồm 27 cột. Dòng 2 là dòng ví dụ, bạn xoá dòng này rồi điền từ dòng 2.
 									</p>
 									<ul class="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400 list-disc list-inside">
 										<li>
@@ -177,6 +180,10 @@
 											Ba cột <strong>Ngân hàng</strong>, <strong>Số tài khoản</strong> và
 											<strong>Chủ tài khoản</strong> (cột Y–AA) là tuỳ chọn, nhưng điền một ô thì phải có cả ngân hàng và
 											số tài khoản.
+										</li>
+										<li>
+											Ngày ghi kiểu 15/01/2024 hoặc 2024-01-15. Các ô đã để sẵn kiểu Text để giữ số 0 ở đầu số điện
+											thoại, CCCD và số tài khoản, bạn đừng đổi kiểu ô.
 										</li>
 										<li>File mẫu 24 cột của bản trước vẫn nhập được, chỉ là không có thông tin ngân hàng.</li>
 									</ul>

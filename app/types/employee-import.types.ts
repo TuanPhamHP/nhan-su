@@ -39,7 +39,10 @@ export type ImportEmployeesRowField =
 	| 'passportFullName'
 	| 'passportType'
 	| 'passportIssuedDate'
-	| 'passportExpiryDate';
+	| 'passportExpiryDate'
+	| 'bankName'
+	| 'bankAccountNumber'
+	| 'bankAccountHolder';
 
 export interface ImportEmployeesRowError {
 	row: number;

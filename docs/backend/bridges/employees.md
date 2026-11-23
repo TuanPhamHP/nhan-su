@@ -613,6 +613,30 @@ FE nên đổi nhãn cột A trong hướng dẫn nhập thành "Mã nhân viên
 Nhập **hợp đồng** (`/v1/contracts/import`, cột mã nhân viên) và **tài sản** (`/v1/asset-imports`, cột
 người sử dụng) cũng nhận mã cũ, nên file HR soạn trước lần đánh lại mã vẫn nhập được.
 
+**Đọc ô dễ tính hơn (23/11/2026).** Người dùng báo điền file mẫu rồi nhập thì lỗi ở số điện thoại, CCCD
+và ngày: ô để kiểu General nên Excel tự đổi `0984111222` thành số `984111222`, còn ngày kiểu Việt
+`15/01/2024` có máy giữ là chữ. Server giờ nhận như sau, contract (field, mã lỗi) không đổi:
+
+| Cột | Server nhận thêm | Lưu |
+|---|---|---|
+| D Số điện thoại | Ô kiểu số, dấu cách, chấm, gạch, ngoặc, đầu `+84`/`84` | `0984111222` (thêm lại số 0 Excel đã bỏ) |
+| N Số CCCD | Ô kiểu số 11 chữ số, dấu cách, chấm, gạch | `030096001234` (CCCD luôn bắt đầu bằng 0) |
+| Mọi cột ngày | `dd/MM/yyyy`, `d/M/yyyy`, gạch hoặc chấm thay gạch chéo, ô Date, số ngày của Excel | Ngày UTC |
+
+Lỗi mới hoặc đổi câu chữ, FE hiện nguyên `message` trong bảng lỗi:
+
+| Trường hợp | `field` | `message` |
+|---|---|---|
+| Ngày sai kiểu (`15/01/24`, chữ) | cột ngày | `Ngày sai định dạng, ghi kiểu 15/01/2024 hoặc 2024-01-15` |
+| Ngày không có thật (`31/02/2024`) | cột ngày | `Ngày không có thật, kiểm tra lại ngày và tháng` |
+| Ô số tài khoản kiểu số | `bankAccountNumber` | `Ô số tài khoản đang là kiểu số nên Excel có thể đã bỏ số 0 ở đầu. Bạn đổi ô sang kiểu Text rồi gõ lại số tài khoản.` |
+| Còn dòng ví dụ của file mẫu (email `a.nv@gmail.com`, tên `Nguyễn Văn A`) | `null` | `Đây là dòng ví dụ có sẵn trong file mẫu. Bạn xoá dòng này rồi nhập lại.` (chỉ một lỗi cho dòng đó) |
+| Phòng ban chưa có | `departmentName` | `Chưa có phòng ban "<tên>". Bạn tạo phòng ban này trước, hoặc sửa tên cho khớp với phòng ban đã có.` |
+
+Số tài khoản không được tự thêm số 0 như SĐT, CCCD vì không biết số 0 đầu có hay không; lưu sai thì
+lương chuyển nhầm, nên server báo lỗi. File mẫu (FE `public/import-templates/employees-import-template.xlsx`)
+phải để sẵn các cột chữ, số và ngày ở kiểu Text để Excel không đổi gì.
+
 ---
 
 ## Composable — useEmployees
