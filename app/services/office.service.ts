@@ -44,6 +44,7 @@ import type {
 	UpdateSupplyGroupBody,
 	UpdateSupplyItemBody,
 	UpdateSupplyLineBody,
+	SetSupplyLineShareBody,
 	UpdateSupplyPeriodBody,
 } from '~/types/office.types';
 
@@ -383,6 +384,20 @@ export const useOfficeService = () => {
 			const res = await authFetch<ApiResponse<SupplyRequest>>(
 				`/v1/me/office/supply-requests/${requestId}/lines/${lineId}`,
 				{ method: 'PATCH', body },
+			);
+			return res.data;
+		},
+
+		/** Đặt phần của một người trên dòng; dòng hết phần thì máy chủ xoá dòng. */
+		async setLineShare(
+			requestId: number,
+			lineId: number,
+			employeeId: number,
+			body: SetSupplyLineShareBody,
+		): Promise<SupplyRequest> {
+			const res = await authFetch<ApiResponse<SupplyRequest>>(
+				`/v1/me/office/supply-requests/${requestId}/lines/${lineId}/shares/${employeeId}`,
+				{ method: 'PUT', body },
 			);
 			return res.data;
 		},

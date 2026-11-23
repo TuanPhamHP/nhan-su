@@ -114,10 +114,11 @@ làm đổi phiếu, bảng tổng hợp, báo cáo của kỳ cũ.
 |---|---|---|
 | GET | `/v1/me/office/supply-requests` | Danh sách phiếu của phòng tôi, phiếu `OPEN` lên đầu (`SupplyRequestListItemDto[]`) |
 | GET | `/v1/me/office/supply-requests/:id` | Chi tiết (`SupplyRequestResponseDto`) |
-| POST | `/v1/me/office/supply-requests/:id/lines` | `{ itemId, requestedQty, overQuotaReason?, note? }` hoặc `{ customName, customUnit, requestedQty, note? }`. **Phiếu đã có mặt hàng đó thì cộng `requestedQty` vào dòng đang có** (20/11/2026), không còn 409; xem mục 4.2.1 |
-| PATCH | `/v1/me/office/supply-requests/:id/lines/:lineId` | `{ requestedQty?, overQuotaReason?, note?, customName?, customUnit? }` |
-| DELETE | `/v1/me/office/supply-requests/:id/lines/:lineId` | Xoá dòng (chỉ khi kỳ còn mở) |
-| POST | `/v1/me/office/supply-requests/:id/copy-previous` | "Lấy số tháng trước": `{ previousTitle, added, existing, skipped, skippedItems: [{ name, reason }], request }`. Chép cả dòng ngoài danh mục; không chép lý do vượt định mức (dòng vượt bị bỏ qua, nêu lý do). `existing` (UAT đợt C): mặt hàng phiếu đã có, không tính vào `skipped`. `previousTitle` null = chưa có kỳ trước. FE hiện toast: "Đã thêm {added} dòng từ {previousTitle}" + danh sách `skippedItems`; `added = 0` và `skipped = 0` thì "Phiếu đã có đủ các mặt hàng của {tháng}, không có gì để thêm." |
+| POST | `/v1/me/office/supply-requests/:id/lines` | `{ itemId, requestedQty, overQuotaReason?, note? }` hoặc `{ customName, customUnit, requestedQty, note? }`. **Phiếu đã có mặt hàng đó thì cộng `requestedQty` vào dòng đang có** (20/11/2026), không còn 409; xem mục 4.2.1. Số gửi lên cộng vào **phần của người gửi** (mục 4.2.2) |
+| PUT | `/v1/me/office/supply-requests/:id/lines/:lineId/shares/:employeeId` | **Mới (20/11/2026).** `{ qty, overQuotaReason? }`: đặt phần của một người trên dòng, `qty: 0` là rút phần. Ai cũng đặt được phần của mình; trưởng phòng và đầu mối đặt được phần của người **đã có phần**. Xem mục 4.2.2 |
+| PATCH | `/v1/me/office/supply-requests/:id/lines/:lineId` | `{ requestedQty?, overQuotaReason?, note?, customName?, customUnit? }`. `requestedQty` vẫn là **tổng của dòng**: phần của người gửi = tổng mới − phần của người khác; tổng nhỏ hơn phần người khác là 400 `OFFICE_SUPPLY_SHARE_BELOW_OTHERS`. Web mới dùng PUT ở trên; PATCH giữ cho mobile và trợ lý |
+| DELETE | `/v1/me/office/supply-requests/:id/lines/:lineId` | Xoá dòng (chỉ khi kỳ còn mở), xoá luôn phần của mọi người. Dòng còn phần của người khác thì chỉ trưởng phòng, đầu mối xoá được (403 `OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES`); người khác rút phần mình bằng PUT `qty: 0` |
+| POST | `/v1/me/office/supply-requests/:id/copy-previous` | "Lấy số tháng trước": `{ previousTitle, added, existing, skipped, skippedItems: [{ name, reason }], request }`. Chép cả dòng ngoài danh mục; không chép lý do vượt định mức (dòng vượt bị bỏ qua, nêu lý do). `existing` (UAT đợt C): mặt hàng phiếu đã có, không tính vào `skipped`. `previousTitle` null = chưa có kỳ trước. FE hiện toast: "Đã thêm {added} dòng từ {previousTitle}" + danh sách `skippedItems`; `added = 0` và `skipped = 0` thì "Phiếu đã có đủ các mặt hàng của {tháng}, không có gì để thêm." Mỗi dòng chép sang là phần của người bấm |
 | POST | `/v1/me/office/supply-requests/:id/receive` | Trưởng phòng, đầu mối: `{ lines: [{ lineId, receivedQty, receivedNote? }] }`; dòng không gửi coi như nhận đủ số đã chốt |
 | GET | `/v1/me/office/supply-items` | Mặt hàng cho ô chọn: đang dùng, **bỏ nhóm chỉ HCNS đặt**, kèm `quota` (định mức tháng của phòng tôi, null = không giới hạn) để hiện cạnh ô số trước khi gõ |
 | GET, PUT | `/v1/me/office/supply-contact` | Đầu mối của phòng; PUT `{ employeeId \| null }` chỉ trưởng phòng |
@@ -134,14 +135,17 @@ Mọi lệnh ghi dòng trả lại toàn bộ phiếu đã cập nhật, FE thay
   "department": { "id": 4, "name": "Tài chính - Kế toán" },
   "sequence": 0, "isSupplement": false, "note": null,
   "status": "OPEN", "statusLabel": "Đang nhập",
-  "canEdit": true, "canReceive": false, "proxyAllowedAt": null, "totalAmount": null,
+  "canEdit": true, "canReceive": false, "canEditAllShares": false, "proxyAllowedAt": null, "totalAmount": null,
   "lines": [
     { "id": 101, "itemId": 12, "isCustom": false, "name": "Bút bi (Note màu xanh)", "unit": "Chiếc",
       "groupName": "Bút (Note màu) & các loại gim", "requestedQty": 12, "quota": null, "overQuota": false,
       "overQuotaReason": null, "note": "Bút gel", "finalQty": null, "finalNote": null, "receivedQty": null,
       "receivedNote": null, "unitPrice": null, "amount": null, "previousQty": 10,
       "createdBy": { "id": 20, "fullName": "Nguyễn Văn A" }, "updatedBy": { "id": 21, "fullName": "Trần Thị B" },
-      "updatedAt": "2026-11-20T03:00:00.000Z" }
+      "updatedAt": "2026-11-20T03:00:00.000Z",
+      "shares": [ { "employee": { "id": 20, "fullName": "Nguyễn Văn A" }, "qty": 4, "isMine": false },
+                  { "employee": { "id": 21, "fullName": "Trần Thị B" }, "qty": 8, "isMine": true } ],
+      "myQty": 8 }
   ]
 }
 ```
@@ -180,6 +184,32 @@ thường) **cộng `requestedQty` vào dòng đó**, trả phiếu như cũ (20
 - Dòng được cộng đổi `updatedBy`, `updatedAt` sang người vừa thêm.
 - Lỗi mới: tổng quá 100.000 hoặc ghi chú nối quá 500 ký tự là 400 `OFFICE_SUPPLY_LINE_INVALID`; 409
   `OFFICE_SUPPLY_LINE_BUSY` rất hiếm (mục 6).
+
+### 4.2.2 Phần đăng ký của từng người (20/11/2026)
+
+Một dòng do nhiều người trong phòng cùng xin, nên server ghi **phần của từng người**: `requestedQty` của dòng luôn bằng
+tổng `shares[].qty`. Phiếu bổ sung do HCNS nhập thay phòng nên `shares` rỗng và `myQty` là 0: FE ẩn phần chia khi
+`shares` rỗng.
+
+- `shares`: `[{ employee: { id, fullName }, qty, isMine }]`, theo thứ tự người xin trước. `myQty`: phần của người đang
+  xem, 0 khi chưa có phần.
+- `canEditAllShares` (cấp phiếu): người xem là trưởng phòng hoặc đầu mối đang hợp lệ của phòng. Dùng cờ này, đừng tự
+  suy từ vai trò.
+- **Ô số trên dòng sửa phần của mình**, gọi `PUT .../shares/{id của mình}` với `qty` mới; hiện tổng của dòng bên cạnh
+  ("Tổng 16, phần của bạn 4"). Người chưa có phần đặt được phần của mình như vậy, tương đương thêm mặt hàng.
+- **Rút phần:** `qty: 0`. Rút phần mình không có thì server trả phiếu như cũ. Phần cuối cùng bị rút thì dòng bị xoá.
+- **Trưởng phòng, đầu mối** (`canEditAllShares`) sửa được phần của từng người đã có phần. Đặt phần cho người chưa có phần
+  là 404 `OFFICE_SUPPLY_SHARE_NOT_FOUND`: không ai đăng ký thay người khác.
+- Nhân viên sửa phần người khác: 403 `OFFICE_SUPPLY_SHARE_FORBIDDEN`. Nhân viên xoá dòng còn phần người khác: 403
+  `OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES` (câu nêu tên và phần từng người); FE hiện "Rút phần của tôi" thay cho Xoá dòng
+  khi dòng còn phần người khác và người xem không có `canEditAllShares`.
+- Định mức và trần 100.000 tính trên **tổng của dòng sau khi đổi**, như POST: thiếu lý do là 400
+  `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED`, quá trần là 400 `OFFICE_SUPPLY_LINE_INVALID`.
+- Mỗi lần đổi phần ghi nhật ký `office.supply_line.share_update` (phần cũ, phần mới, tổng cũ, tổng mới); rút phần cuối
+  ghi `office.supply_line.delete`.
+- Dữ liệu cũ: mỗi dòng của phiếu chính có trước 20/11/2026 được gán một phần cho người tạo dòng, bằng tổng của dòng.
+- Trợ lý AI: "sửa số bút thành 5" đổi **phần của người hỏi** thành 5, không đổi tổng; form xác nhận hiện "16 chiếc, phần
+  của bạn 4".
 
 ### 4.3 Quản lý kỳ (UI-02, `/management/office/supply-periods`)
 
@@ -382,7 +412,11 @@ Một lượt họp có ba hình thức, server suy ra rồi trả trong `mode` 
 | `OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED` | 400 | Vượt định mức mà thiếu lý do | Mở ô lý do ở dòng đó |
 | `OFFICE_SUPPLY_LINE_EXISTS` | 409 | PATCH đổi tên dòng ngoài danh mục trùng dòng khác. POST thêm mặt hàng đã có không còn mã này: server cộng số (20/11/2026) | Lỗi ở ô tên |
 | `OFFICE_SUPPLY_LINE_BUSY` | 409 | Rất hiếm: người khác trong phòng sửa đúng dòng đó liên tục khi đang cộng số | Toast câu của server, tải lại phiếu |
-| `OFFICE_SUPPLY_LINE_INVALID` | 400 | Dòng ngoài danh mục thiếu tên hay đơn vị; cộng số quá 100.000; ghi chú nối vào ghi chú cũ quá 500 ký tự | Lỗi ở form, câu của server |
+| `OFFICE_SUPPLY_LINE_INVALID` | 400 | Dòng ngoài danh mục thiếu tên hay đơn vị; cộng số hay đặt phần làm tổng quá 100.000; ghi chú nối vào ghi chú cũ quá 500 ký tự | Lỗi ở form, câu của server |
+| `OFFICE_SUPPLY_SHARE_FORBIDDEN` | 403 | Nhân viên sửa phần của người khác (mục 4.2.2) | Ô phần người khác chỉ mở khi `canEditAllShares` |
+| `OFFICE_SUPPLY_SHARE_NOT_FOUND` | 404 | Trưởng phòng, đầu mối đặt phần cho người chưa có phần trên dòng | Tải lại phiếu |
+| `OFFICE_SUPPLY_SHARE_BELOW_OTHERS` | 400 | PATCH tổng của dòng nhỏ hơn phần người khác đã xin (câu nêu tên, phần) | Toast câu của server |
+| `OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES` | 403 | Nhân viên xoá dòng còn phần người khác (câu nêu tên, phần) | Hiện "Rút phần của tôi" thay nút xoá |
 | `OFFICE_SUPPLY_NOT_RECEIVER` | 403 | Không phải trưởng phòng, đầu mối bấm nhận | Ẩn nút theo `canReceive` |
 | `OFFICE_SUPPLY_RECEIVED_TOO_MANY` | 400 | Số nhận lớn hơn số chốt | Lỗi ở ô |
 | `OFFICE_SUPPLY_NOTHING_CHANGED` | 400 | "Sửa số thực nhận" mà không dòng nào đổi số hay ghi chú (UAT đợt B) | Toast câu của server; chỉ dòng đổi mới được đếm vào thông báo cho phòng |
@@ -472,3 +506,8 @@ Deep link theo mục 7. Màn quản lý (mở kỳ, chốt, cấp, cài đặt, 
 | W20 | Chuyển cuộc họp tại phòng sang online; chuyển online về phòng đang bận | Phòng trống ngay trên lịch; chuyển về phòng bận báo trùng giờ, giữ form |
 | W21 | Gõ link sai (`zoom.us/j/1` thiếu https, `javascript:…`) | Lỗi ở ô link, câu tiếng Việt |
 | W22 | HCNS mở cuộc họp riêng tư có link mình không dự | Không thấy link, form không có ô link |
+| W23 | A thêm 4 bút, B thêm 12 bút cùng phòng | Dòng hiện tổng 16 và "A 4 · B 12"; ô số của B hiện 12 |
+| W24 | B sửa phần mình thành 10, rồi rút phần | Tổng 14, rồi 4; B rút xong không còn trong danh sách phần |
+| W25 | Nhân viên mở dòng có phần người khác | Không sửa được phần người khác; nút "Rút phần của tôi" thay cho Xoá dòng |
+| W26 | Trưởng phòng hoặc đầu mối sửa phần của A, xoá dòng | Sửa được từng phần; xoá dòng xoá luôn mọi phần |
+| W27 | Phiếu bổ sung | Không hiện phần chia |

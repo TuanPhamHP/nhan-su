@@ -98,7 +98,12 @@
 	/** Dòng kỳ trước không chép được, giữ trên màn vì toast tắt mất mà người dùng còn phải nhập lại. */
 	const copySkipped = ref<CopySkippedItem[]>([]);
 
-	/** Dòng đang sửa: số và lý do theo `lineId`, cùng cờ "đã sửa" để chỉ hiện nút Lưu khi cần. */
+	/**
+	 * Dòng đang sửa: số và lý do theo `lineId`, cùng cờ "đã sửa" để chỉ hiện nút Lưu khi cần.
+	 *
+	 * Ô số của dòng là PHẦN CỦA NGƯỜI ĐANG XEM, không phải tổng: một dòng do nhiều người cùng xin,
+	 * và mỗi người chỉ sửa phần mình. Tổng của dòng hiện ngay cạnh ô.
+	 */
 	const editQty = reactive<Record<number, number | undefined>>({});
 	const editReason = reactive<Record<number, string>>({});
 	const lineError = reactive<Record<number, string>>({});
@@ -112,6 +117,12 @@
 	 * quan gì.
 	 */
 	const lineNeedsReason = reactive<Record<number, boolean>>({});
+
+	/** Dòng đang mở bảng sửa phần của từng người; chỉ trưởng phòng, đầu mối (`canEditAllShares`) mở được. */
+	const shareEditLineId = ref<number | null>(null);
+	/** Số đang gõ cho phần của từng người ở dòng đang mở, theo `employeeId`. */
+	const shareEdits = reactive<Record<number, number | undefined>>({});
+	const shareEditInvalid = reactive<Record<number, boolean>>({});
 
 	/** Dòng danh mục của phiếu theo mặt hàng, để biết thêm mặt hàng nào là cộng vào dòng đang có. */
 	const linesByItemId = computed(() => {
@@ -294,12 +305,22 @@
 	function fillEdits(data: SupplyRequest) {
 		current.value = data;
 		for (const line of data.lines) {
-			editQty[line.id] = line.requestedQty;
+			editQty[line.id] = line.myQty;
 			editReason[line.id] = line.overQuotaReason ?? '';
 			delete lineError[line.id];
 			delete lineNeedsReason[line.id];
 			delete lineQtyInvalid[line.id];
 		}
+		// Bảng sửa phần đang mở thì nạp lại số mới; dòng đã bị xoá (rút hết phần) thì đóng bảng.
+		const shareLine = data.lines.find(l => l.id === shareEditLineId.value);
+		if (shareLine && data.canEditAllShares) fillShareEdits(shareLine);
+		else shareEditLineId.value = null;
+	}
+
+	function fillShareEdits(line: SupplyLine) {
+		for (const key of Object.keys(shareEdits)) delete shareEdits[Number(key)];
+		for (const key of Object.keys(shareEditInvalid)) delete shareEditInvalid[Number(key)];
+		for (const share of line.shares) shareEdits[share.employee.id] = share.qty;
 	}
 
 	async function openRequest(id: number): Promise<boolean> {
@@ -535,7 +556,112 @@
 	function mergedMessage(merged: SupplyLine | undefined, qty: number): string {
 		if (!merged) return 'Đã thêm vào phiếu.';
 		const unit = unitWord(merged.unit);
-		return `Đã cộng thêm ${qty} ${unit} vào ${merged.name}, nay ${merged.requestedQty} ${unit}.`.replace(/\s+/g, ' ');
+		return `Đã cộng thêm ${qty} ${unit} vào phần của bạn ở ${merged.name}, dòng nay ${merged.requestedQty} ${unit}.`.replace(
+			/\s+/g,
+			' ',
+		);
+	}
+
+	// ─── Phần của từng người trên một dòng ──────────────────────────────────────────
+
+	/** "Bạn 4 · Đỗ Hồng Hạnh 12": ai xin bao nhiêu trong tổng của dòng. */
+	function sharesLabel(line: SupplyLine): string {
+		return line.shares.map(s => `${s.isMine ? 'Bạn' : s.employee.fullName} ${s.qty}`).join(' · ');
+	}
+
+	function hasOtherShares(line: SupplyLine): boolean {
+		return line.shares.some(s => !s.isMine);
+	}
+
+	/**
+	 * Xoá cả dòng là xoá luôn phần của mọi người, nên chỉ trưởng phòng, đầu mối hoặc người duy nhất
+	 * có phần mới xoá được; người khác rút phần của mình.
+	 */
+	function canDeleteLine(line: SupplyLine): boolean {
+		return !!current.value?.canEditAllShares || !hasOtherShares(line);
+	}
+
+	/** Tổng của dòng nếu phần của `employeeId` đổi thành `qty`; định mức tính trên tổng này. */
+	function totalWithShare(line: SupplyLine, employeeId: number | undefined, qty: number): number {
+		const currentQty = line.shares.find(s => s.employee.id === employeeId)?.qty ?? 0;
+		return line.requestedQty - currentQty + qty;
+	}
+
+	/** Tổng xem trước khi đang gõ phần của mình; ô trống thì giữ tổng hiện tại. */
+	function previewTotal(line: SupplyLine): number {
+		const qty = editQty[line.id];
+		return qty == null || lineQtyInvalid[line.id] ? line.requestedQty : totalWithShare(line, user.value?.id, qty);
+	}
+
+	/**
+	 * Lỗi chung của các lệnh ghi phần: định mức thì mở ô lý do của dòng, kỳ khoá hoặc dữ liệu cũ thì
+	 * tải lại phiếu, còn lại báo câu của máy chủ.
+	 */
+	async function handleShareError(e: unknown, line: SupplyLine, requestId: number) {
+		const code = officeErrorCode(e);
+		if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
+			lineNeedsReason[line.id] = true;
+			lineError[line.id] = officeErrorMessage(e, 'Tổng của dòng vượt định mức của phòng, bạn ghi lý do.');
+		} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
+			lineError[line.id] = officeErrorMessage(e, 'Số này chưa hợp lệ, bạn kiểm tra lại.');
+		} else if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
+			toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
+			await openRequest(requestId);
+		} else if (code === 'OFFICE_SUPPLY_SHARE_FORBIDDEN' || code === 'OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES') {
+			toast.warning(officeErrorMessage(e, 'Bạn chỉ sửa được phần của mình.'));
+			await openRequest(requestId);
+		} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
+			await reloadAfterBusy(e, requestId);
+		} else if (!(await reloadIfStale(e, requestId))) {
+			toast.error(officeErrorMessage(e, 'Chưa lưu được dòng này. Bạn thử lại sau ít phút.'));
+		}
+	}
+
+	function withdrawShare(line: SupplyLine) {
+		editQty[line.id] = 0;
+		saveLine(line);
+	}
+
+	function toggleShareEdit(line: SupplyLine) {
+		if (shareEditLineId.value === line.id) {
+			shareEditLineId.value = null;
+			return;
+		}
+		shareEditLineId.value = line.id;
+		fillShareEdits(line);
+	}
+
+	function shareDirty(line: SupplyLine, employeeId: number): boolean {
+		return shareEdits[employeeId] !== line.shares.find(s => s.employee.id === employeeId)?.qty;
+	}
+
+	/** Trưởng phòng, đầu mối đặt phần của một người đã có phần; 0 là rút phần của người đó. */
+	async function saveShare(line: SupplyLine, employeeId: number) {
+		const requestId = current.value?.id;
+		const qty = shareEdits[employeeId];
+		if (!requestId || working.value || qty == null || shareEditInvalid[employeeId]) return;
+		const total = totalWithShare(line, employeeId, qty);
+		if (line.quota != null && total > line.quota && !editReason[line.id]?.trim()) {
+			lineNeedsReason[line.id] = true;
+			lineError[line.id] = `Tổng của dòng sẽ là ${total}, vượt định mức ${line.quota} ${unitWord(line.unit)} mỗi tháng của phòng, bạn ghi lý do.`;
+			return;
+		}
+		const name = line.shares.find(s => s.employee.id === employeeId)?.employee.fullName ?? 'người này';
+		working.value = true;
+		delete lineError[line.id];
+		try {
+			afterWrite(
+				await service.setLineShare(requestId, line.id, employeeId, {
+					qty,
+					overQuotaReason: editReason[line.id]?.trim() || undefined,
+				}),
+			);
+			toast.success(qty === 0 ? `Đã rút phần của ${name} ở ${line.name}.` : `Đã lưu phần của ${name} ở ${line.name}.`);
+		} catch (e) {
+			await handleShareError(e, line, requestId);
+		} finally {
+			working.value = false;
+		}
 	}
 
 	/**
@@ -548,50 +674,42 @@
 	}
 
 	function lineDirty(line: SupplyLine): boolean {
-		return editQty[line.id] !== line.requestedQty || (editReason[line.id] ?? '') !== (line.overQuotaReason ?? '');
+		return editQty[line.id] !== line.myQty || (editReason[line.id] ?? '') !== (line.overQuotaReason ?? '');
 	}
 
+	/** Lưu phần của người đang xem trên dòng; 0 là rút phần, phần cuối cùng bị rút thì dòng biến mất. */
 	async function saveLine(line: SupplyLine) {
 		const requestId = current.value?.id;
+		const me = user.value?.id;
 		const qty = editQty[line.id];
-		if (!requestId || working.value) return;
+		if (!requestId || !me || working.value) return;
 		if (lineQtyInvalid[line.id]) {
 			lineError[line.id] = QTY_INTEGER_MESSAGE;
 			return;
 		}
 		if (qty == null) {
-			lineError[line.id] = 'Ô số lượng đang trống. Bạn nhập số, hoặc bấm Xoá nếu phòng không cần mặt hàng này.';
+			lineError[line.id] = 'Ô phần của bạn đang trống. Bạn nhập số, hoặc 0 để rút phần của bạn.';
 			return;
 		}
-		// Định mức của dòng thì máy chủ đã gửi kèm, nên chỗ này chặn được ngay không cần gọi API.
-		if (line.quota != null && qty > line.quota && !editReason[line.id]?.trim()) {
+		// Định mức tính trên tổng của dòng sau khi đổi phần, máy chủ đã gửi kèm nên chặn được ngay.
+		const total = totalWithShare(line, me, qty);
+		if (line.quota != null && total > line.quota && !editReason[line.id]?.trim()) {
 			lineNeedsReason[line.id] = true;
-			lineError[line.id] = `Số này vượt định mức ${line.quota} ${line.unit || 'đơn vị'} mỗi tháng của phòng, bạn ghi lý do.`;
+			lineError[line.id] = `Tổng của dòng sẽ là ${total}, vượt định mức ${line.quota} ${unitWord(line.unit)} mỗi tháng của phòng, bạn ghi lý do.`;
 			return;
 		}
 		working.value = true;
 		delete lineError[line.id];
 		try {
 			afterWrite(
-				await service.updateLine(requestId, line.id, {
-					requestedQty: qty,
+				await service.setLineShare(requestId, line.id, me, {
+					qty,
 					overQuotaReason: editReason[line.id]?.trim() || undefined,
 				}),
 			);
-			toast.success(`Đã lưu dòng ${line.name}.`);
+			toast.success(qty === 0 ? `Đã rút phần của bạn ở ${line.name}.` : `Đã lưu phần của bạn ở ${line.name}.`);
 		} catch (e) {
-			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
-				lineNeedsReason[line.id] = true;
-				lineError[line.id] = officeErrorMessage(e, 'Số này vượt định mức của phòng, bạn ghi lý do.');
-			} else if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
-				toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
-				await openRequest(requestId);
-			} else if (await reloadIfStale(e, requestId)) {
-				return;
-			} else {
-				toast.error(officeErrorMessage(e, 'Chưa lưu được dòng này. Bạn thử lại sau ít phút.'));
-			}
+			await handleShareError(e, line, requestId);
 		} finally {
 			working.value = false;
 		}
@@ -650,7 +768,8 @@
 			deleteTarget.value = null;
 			toast.success(`Đã xoá dòng ${line.name}.`);
 		} catch (e) {
-			if (officeErrorCode(e) === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
+			const code = officeErrorCode(e);
+			if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED' || code === 'OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES') {
 				toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
 				deleteTarget.value = null;
 				await openRequest(requestId);
@@ -1119,6 +1238,10 @@
 										<template v-if="line.previousQty != null">kỳ trước {{ line.previousQty }} · </template>
 										sửa cuối bởi {{ line.updatedBy.fullName }} lúc {{ formatDateTime(line.updatedAt) }}
 									</p>
+									<!-- Ai xin bao nhiêu trong tổng; phiếu bổ sung do HCNS nhập thay phòng nên không có phần. -->
+									<p v-if="line.shares.length" class="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
+										Đăng ký: {{ sharesLabel(line) }}
+									</p>
 									<p v-if="line.note" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ghi chú: {{ line.note }}</p>
 
 									<!--
@@ -1169,13 +1292,22 @@
 									</p>
 								</div>
 
+								<!--
+									Ô số là phần của người đang xem; tổng của dòng đứng ngay trước ô và đổi theo số đang
+									gõ, để người dùng thấy mình chỉ đổi phần mình chứ không đổi số của cả phòng.
+								-->
 								<div v-if="canEdit" class="flex flex-wrap items-start gap-1.5">
-									<div class="w-24">
+									<span class="pt-1.5 text-xs text-gray-500 dark:text-gray-400">
+										Tổng
+										<span class="font-semibold text-gray-800 dark:text-gray-100">{{ previewTotal(line) }}</span>
+										· phần của bạn
+									</span>
+									<div class="w-20">
 										<QtyInput
 											v-model="editQty[line.id]"
 											class="[&_input]:h-8 [&_input]:py-1"
 											:max="100000"
-											:aria-label="`Số xin của ${line.name}`"
+											:aria-label="`Phần của bạn ở ${line.name}`"
 											@update:invalid="lineQtyInvalid[line.id] = $event"
 											@save="saveLine(line)"
 											@leave="saveLineIfDirty(line)"
@@ -1190,9 +1322,70 @@
 									>
 										Lưu
 									</CommonAppButton>
+									<CommonAppButton
+										v-if="current.canEditAllShares && hasOtherShares(line)"
+										size="sm"
+										variant="ghost"
+										@click="toggleShareEdit(line)"
+									>
+										{{ shareEditLineId === line.id ? 'Đóng' : 'Sửa phần' }}
+									</CommonAppButton>
 									<!-- Xoá luôn hỏi lại: nút Xoá nằm sát nút Lưu, trên điện thoại rất dễ bấm trượt. -->
-									<CommonAppButton size="sm" variant="ghost" :loading="working" @click="deleteTarget = line">
+									<CommonAppButton
+										v-if="canDeleteLine(line)"
+										size="sm"
+										variant="ghost"
+										:loading="working"
+										@click="deleteTarget = line"
+									>
 										Xoá
+									</CommonAppButton>
+									<CommonAppButton
+										v-else-if="line.myQty > 0"
+										size="sm"
+										variant="ghost"
+										:loading="working"
+										@click="withdrawShare(line)"
+									>
+										Rút phần của tôi
+									</CommonAppButton>
+								</div>
+							</div>
+
+							<!-- Trưởng phòng, đầu mối sửa phần của từng người đã đăng ký; 0 là rút phần người đó. -->
+							<div
+								v-if="canEdit && shareEditLineId === line.id"
+								class="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/40"
+							>
+								<p class="text-xs text-gray-500 dark:text-gray-400">
+									Sửa phần của từng người. Nhập 0 để rút phần của người đó.
+								</p>
+								<div
+									v-for="share in line.shares"
+									:key="share.employee.id"
+									class="mt-1.5 flex flex-wrap items-start gap-1.5"
+								>
+									<span class="min-w-0 flex-1 truncate pt-1.5 text-sm text-gray-800 dark:text-gray-100">
+										{{ share.isMine ? 'Bạn' : share.employee.fullName }}
+									</span>
+									<div class="w-20">
+										<QtyInput
+											v-model="shareEdits[share.employee.id]"
+											class="[&_input]:h-8 [&_input]:py-1"
+											:max="100000"
+											:aria-label="`Phần của ${share.employee.fullName} ở ${line.name}`"
+											@update:invalid="shareEditInvalid[share.employee.id] = $event"
+											@save="saveShare(line, share.employee.id)"
+										/>
+									</div>
+									<CommonAppButton
+										v-if="shareDirty(line, share.employee.id)"
+										size="sm"
+										variant="primary"
+										:loading="working"
+										@click="saveShare(line, share.employee.id)"
+									>
+										Lưu
 									</CommonAppButton>
 								</div>
 							</div>
