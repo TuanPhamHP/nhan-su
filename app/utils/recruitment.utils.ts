@@ -4,6 +4,7 @@ import type {
 	RecruitmentApplicationStatus,
 	RecruitmentApprovalStepStatus,
 	RecruitmentEmailStatus,
+	RecruitmentHeadcountChangeType,
 	RecruitmentInterviewStatus,
 	RecruitmentJobStatus,
 	RecruitmentOfferStatus,
@@ -121,6 +122,17 @@ export const HEADCOUNT_STATUS_CLASS: Record<HeadcountRowStatus, string> = {
 	PENDING: AMBER,
 	REJECTED: ROSE,
 	NONE: SLATE,
+};
+
+/** Chip loại thay đổi trong lịch sử định biên. Tự tăng theo yêu cầu tuyển là thông tin, nên xanh dương. */
+export const HEADCOUNT_CHANGE_CLASS: Record<RecruitmentHeadcountChangeType, string> = {
+	PROPOSED: GRAY,
+	SUBMITTED: AMBER,
+	CONFIRMED: GREEN,
+	REJECTED: ROSE,
+	EDITED: GRAY,
+	WITHDRAWN: SLATE,
+	AUTO_FROM_REQUISITION: BLUE,
 };
 
 export const APPROVAL_STEP_CLASS: Record<RecruitmentApprovalStepStatus, string> = {
@@ -391,7 +403,7 @@ export function headcountDeleteConsequences(): string[] {
 	return [
 		'Nhân viên đang làm ở vị trí này không bị ảnh hưởng gì.',
 		'Yêu cầu tuyển đã duyệt hoặc đang tuyển vẫn chạy tiếp.',
-		'Yêu cầu nháp sẽ không gửi duyệt được và yêu cầu chờ duyệt sẽ không duyệt được, cho tới khi vị trí có định biên Đã chốt lại.',
+		'Yêu cầu nháp và yêu cầu chờ duyệt vẫn gửi, duyệt được. Khi một yêu cầu được duyệt xong, định biên của vị trí sẽ được tạo lại.',
 		'Lịch sử thay đổi của dòng bị xoá theo; nhật ký hệ thống vẫn giữ bản chụp kèm lý do bạn nhập.',
 	];
 }
@@ -407,7 +419,7 @@ export function overCommittedExplanation(row: HeadcountRowActionInput): string {
 	const used = row.current + row.recruiting;
 	return (
 		`Đang dùng ${used} trên ${row.confirmedQuantity ?? 0} đã chốt. ` +
-		'Yêu cầu đã duyệt giữ nguyên, yêu cầu mới bị chặn.'
+		'Yêu cầu đã duyệt vẫn chạy tiếp, yêu cầu mới duyệt xong sẽ tự tăng định biên.'
 	);
 }
 

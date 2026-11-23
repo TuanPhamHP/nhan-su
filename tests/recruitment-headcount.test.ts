@@ -125,7 +125,7 @@ describe('canDeleteHeadcountRow', () => {
 describe('overCommittedExplanation', () => {
 	it('đếm cả người đang có lẫn chỉ tiêu đang tuyển', () => {
 		expect(overCommittedExplanation(row({ confirmedQuantity: 6, current: 5, recruiting: 3 }))).toBe(
-			'Đang dùng 8 trên 6 đã chốt. Yêu cầu đã duyệt giữ nguyên, yêu cầu mới bị chặn.',
+			'Đang dùng 8 trên 6 đã chốt. Yêu cầu đã duyệt vẫn chạy tiếp, yêu cầu mới duyệt xong sẽ tự tăng định biên.',
 		);
 	});
 

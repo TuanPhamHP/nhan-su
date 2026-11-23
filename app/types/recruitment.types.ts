@@ -37,7 +37,8 @@ export type RecruitmentHeadcountChangeType =
 	| 'CONFIRMED'
 	| 'REJECTED'
 	| 'EDITED'
-	| 'WITHDRAWN';
+	| 'WITHDRAWN'
+	| 'AUTO_FROM_REQUISITION';
 
 export type RecruitmentRequisitionReason = 'REPLACEMENT' | 'ADDITIONAL' | 'NEW_POSITION';
 export type RecruitmentRequisitionStatus =
@@ -548,8 +549,7 @@ export interface RecruitInboxItem {
 		submittedAt: string | null;
 		/**
 		 * Còn trống lúc này, chưa trừ chính yêu cầu này, nên có thể âm. Nhỏ hơn `quantity` thì
-		 * bấm Duyệt sẽ nhận 409 `RECRUIT_HEADCOUNT_EXCEEDED` và bước vẫn đứng nguyên chờ, vì vậy
-		 * hộp duyệt cảnh báo trước thay vì để người duyệt bấm vào một nút chắc chắn lỗi.
+		 * duyệt xong bước cuối định biên tự tăng phần thiếu, hộp duyệt báo trước con số dự kiến.
 		 */
 		headcountAvailable: number;
 	} | null;

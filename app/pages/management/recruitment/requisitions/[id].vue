@@ -53,11 +53,10 @@
 
 	// ─── Định biên (BR-01) ────────────────────────────────────────────────────────
 	//
-	// `item.available` đã đủ để biết yêu cầu có vượt hay không, nhưng không phân biệt được hai
-	// trường hợp khác nhau hẳn về cách xử lý: vị trí CHƯA TỪNG chốt định biên (phải đi đề xuất
-	// định biên trước) và đã chốt nhưng hết chỗ (giảm số lượng là gửi được). `confirmed` chỉ có
-	// ở `/requisitions/availability`, nên gọi thêm một lần cho những trạng thái mà con số này
-	// còn đổi được điều gì: Nháp, Bị từ chối và Chờ duyệt.
+	// Định biên không còn chặn gửi hay duyệt: duyệt xong bước cuối thì BE tự tăng định biên phần
+	// thiếu, chưa có dòng thì tự tạo. Trang chỉ báo trước điều đó. `item.available` đủ để tính
+	// phần thiếu, còn `confirmed` (chỉ có ở `/requisitions/availability`) cho biết vị trí đã có
+	// định biên chưa, nên gọi thêm một lần cho Nháp, Bị từ chối và Chờ duyệt.
 
 	const availability = ref<Availability | null>(null);
 
@@ -73,46 +72,46 @@
 			});
 		} catch {
 			// Người duyệt ngoài phạm vi phòng ban nhận 403 ở đây. Vẫn còn `item.available` để
-			// cảnh báo vượt, chỉ không nói được là "chưa chốt" hay "đã chốt nhưng hết chỗ".
+			// báo phần thiếu, chỉ không nói được là vị trí đã có định biên hay chưa.
 		}
 	}
 
 	watch(item, loadAvailability);
 
-	/** Vị trí chưa từng chốt định biên của năm: gửi duyệt sẽ nhận `RECRUIT_HEADCOUNT_NOT_CONFIRMED`. */
+	/** Vị trí chưa có định biên của năm: duyệt xong bước cuối BE sẽ tự tạo. */
 	const headcountNotConfirmed = computed(() => availability.value?.confirmed === null);
 
-	/** Số lượng xin nhiều hơn phần còn trống: gửi duyệt hoặc duyệt sẽ nhận `RECRUIT_HEADCOUNT_EXCEEDED`. */
-	const headcountExceeded = computed(() => {
+	/** Phần dự kiến tăng thêm khi duyệt xong; con số thật tính lúc duyệt bước cuối. */
+	const headcountShortfall = computed(() => {
 		const r = item.value;
-		if (!r || r.available == null) return false;
-		return r.quantity > r.available;
+		if (!r || r.available == null) return 0;
+		return Math.max(r.quantity - Math.max(r.available, 0), 0);
 	});
 
-	/**
-	 * Câu ngắn trên đầu khối cảnh báo, và câu khuyên bên dưới. Tách làm hai để khối không đọc
-	 * lại chính tiêu đề của nó, còn `title` của nút bị khoá thì ghép cả hai lại.
-	 */
-	const headcountBlockTitle = computed(() => {
+	/** Câu thông tin về định biên, null khi đủ chỗ hay trạng thái không còn liên quan. */
+	const headcountInfo = computed(() => {
 		const r = item.value;
-		if (!r) return null;
-		if (headcountNotConfirmed.value) return `Vị trí chưa có định biên Đã chốt năm ${r.year}`;
-		if (headcountExceeded.value) return `Vượt định biên: xin ${r.quantity}, còn trống ${r.available}`;
+		if (!r || !['DRAFT', 'REJECTED', 'PENDING'].includes(r.status)) return null;
+		const pending = r.status === 'PENDING';
+		if (headcountNotConfirmed.value) {
+			return {
+				title: `Vị trí này chưa có định biên năm ${r.year}`,
+				body: pending
+					? 'Khi yêu cầu được duyệt xong, hệ thống sẽ tự tạo định biên.'
+					: 'Bạn vẫn gửi duyệt được, khi yêu cầu được duyệt xong hệ thống sẽ tự tạo định biên.',
+			};
+		}
+		if (headcountShortfall.value > 0) {
+			const n = headcountShortfall.value;
+			return {
+				title: `Xin ${r.quantity}, định biên còn trống ${Math.max(r.available ?? 0, 0)}`,
+				body: pending
+					? `Duyệt xong bước cuối, định biên sẽ tự tăng thêm khoảng ${n} người.`
+					: `Bạn vẫn gửi duyệt được, khi duyệt xong định biên sẽ tự tăng thêm khoảng ${n} người.`,
+			};
+		}
 		return null;
 	});
-
-	const headcountBlockAdvice = computed(() => {
-		const r = item.value;
-		if (!r || !headcountBlockTitle.value) return null;
-		if (headcountNotConfirmed.value) {
-			return `Chưa chốt định biên cho ${r.position.name} thì chưa gửi duyệt được. Hãy đề xuất định biên cho vị trí này rồi chờ người có quyền chốt.`;
-		}
-		return 'Hãy giảm số lượng, hoặc đề xuất tăng định biên để người có quyền chốt quyết định.';
-	});
-
-	const headcountBlockReason = computed(() =>
-		headcountBlockTitle.value ? `${headcountBlockTitle.value}. ${headcountBlockAdvice.value}` : null,
-	);
 
 	const headcountLink = computed(
 		() => `/management/recruitment/headcount?year=${item.value?.year ?? new Date().getFullYear()}`,
@@ -122,10 +121,7 @@
 	const editable = computed(
 		() => !!item.value && ['DRAFT', 'REJECTED'].includes(item.value.status) && canEditOwn.value,
 	);
-	// Nút Gửi duyệt vẫn HIỆN khi vượt định biên, chỉ bị khoá kèm lý do: ẩn đi thì người dùng đi
-	// tìm nút, còn khoá kèm lý do thì họ biết phải sửa gì.
 	const canSubmit = computed(() => editable.value);
-	const submitBlocked = computed(() => canSubmit.value && !!headcountBlockReason.value);
 	const canCancel = computed(
 		() => !!item.value && !['CANCELLED', 'FILLED'].includes(item.value.status) && canEditOwn.value,
 	);
@@ -284,8 +280,6 @@
 						v-if="canSubmit"
 						variant="primary"
 						:loading="acting"
-						:disabled="submitBlocked"
-						:title="headcountBlockReason ?? undefined"
 						@click="submit"
 					>
 						Gửi duyệt
@@ -301,12 +295,6 @@
 						v-if="item.canApprove && writable"
 						variant="primary"
 						:loading="acting"
-						:disabled="headcountExceeded"
-						:title="
-							headcountExceeded
-								? `Vượt định biên: xin ${item.quantity}, còn trống ${item.available}. Duyệt sẽ bị chặn.`
-								: undefined
-						"
 						@click="approve"
 					>
 						Duyệt
@@ -324,52 +312,28 @@
 			</div>
 
 			<!--
-				Cảnh báo định biên. Ba lớp, nặng dần:
-				- bị chặn (chưa chốt, hoặc xin quá phần còn trống) thì khối màu hổ phách;
-				- Chờ duyệt mà vượt thì nói rõ bấm Duyệt sẽ bị chặn, vì định biên có thể đã
-				  giảm sau lúc gửi;
-				- còn lại chỉ là một dòng cho biết còn trống bao nhiêu.
+				Thông tin định biên, không chặn gì: chưa có định biên hay xin quá phần còn trống thì
+				khối xanh báo trước định biên sẽ tự tạo hoặc tự tăng; đủ chỗ thì chỉ một dòng còn trống.
 			-->
 			<div
-				v-if="headcountBlockReason && (item.status === 'DRAFT' || item.status === 'REJECTED')"
-				class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20"
+				v-if="headcountInfo"
+				class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-800 dark:bg-sky-900/20"
 			>
 				<div class="flex items-start gap-3">
-					<svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+					<svg class="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 					</svg>
 					<div class="min-w-0">
-						<p class="text-sm font-semibold text-amber-900 dark:text-amber-200">
-							{{ headcountBlockTitle }}
-						</p>
-						<p class="mt-1 text-sm text-amber-800 dark:text-amber-300">{{ headcountBlockAdvice }}</p>
+						<p class="text-sm font-semibold text-sky-900 dark:text-sky-200">{{ headcountInfo.title }}</p>
+						<p class="mt-1 text-sm text-sky-800 dark:text-sky-300">{{ headcountInfo.body }}</p>
 						<NuxtLink
 							:to="headcountLink"
-							class="mt-2 inline-block text-sm font-medium text-amber-900 underline dark:text-amber-200"
+							class="mt-2 inline-block text-sm font-medium text-sky-900 underline dark:text-sky-200"
 						>
 							Mở bảng định biên năm {{ item.year }}
 						</NuxtLink>
 					</div>
 				</div>
-			</div>
-
-			<div
-				v-else-if="item.status === 'PENDING' && item.canApprove && headcountExceeded"
-				class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20"
-			>
-				<p class="text-sm font-semibold text-amber-900 dark:text-amber-200">
-					Vượt định biên: xin {{ item.quantity }}, còn trống {{ item.available }}
-				</p>
-				<p class="mt-1 text-sm text-amber-800 dark:text-amber-300">
-					Định biên đã giảm so với lúc gửi, nên bấm Duyệt sẽ bị chặn. Hãy từ chối kèm lý do, hoặc
-					chốt thêm định biên cho vị trí này trước khi duyệt.
-				</p>
-				<NuxtLink
-					:to="headcountLink"
-					class="mt-2 inline-block text-sm font-medium text-amber-900 underline dark:text-amber-200"
-				>
-					Mở bảng định biên năm {{ item.year }}
-				</NuxtLink>
 			</div>
 
 			<div
@@ -381,8 +345,7 @@
 						Chưa đọc được phần còn trống của định biên cho yêu cầu này.
 					</template>
 					<template v-else>
-						Định biên còn trống <strong>{{ item.available }}</strong> người, chưa tính yêu cầu này.
-						Gửi duyệt mà số lượng vượt phần còn trống thì hệ thống từ chối.
+						Định biên còn trống <strong>{{ Math.max(item.available, 0) }}</strong> người, chưa tính yêu cầu này.
 					</template>
 				</p>
 			</div>
