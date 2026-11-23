@@ -1,5 +1,5 @@
 <script setup lang="ts">
-	import { REQUEST_PERMISSIONS } from '~/utils/permission';
+	import { FACE_PERMISSIONS, REQUEST_PERMISSIONS } from '~/utils/permission';
 	import type { UserRole } from '~/types/auth.types';
 
 	/**
@@ -21,8 +21,11 @@
 		route: string;
 		icon: string;
 		tag: string;
-		/** Thẻ chỉ hiện với người có quyền này; vắng là mọi người vào được trang Cài đặt đều thấy. */
-		permission?: string;
+		/**
+		 * Thẻ chỉ hiện với người có quyền này (mảng là có một trong các quyền); vắng là mọi người vào
+		 * được trang Cài đặt đều thấy.
+		 */
+		permission?: string | string[];
 		/**
 		 * Thẻ chỉ hiện với các vai trò hệ thống này. Dùng cho màn mà máy chủ gác bằng vai trò chứ
 		 * không bằng mã quyền, để trưởng bộ phận vào Cài đặt không thấy thẻ bấm vào là 403.
@@ -46,6 +49,14 @@
 			icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
 			tag: 'Chấm công',
 			roles: ['ADMIN', 'HR'],
+		},
+		{
+			label: 'Chấm công bằng khuôn mặt',
+			description: 'Bật tắt cho cả công ty, xem ai đã đăng ký khuôn mặt và xoá để nhân viên đăng ký lại.',
+			route: '/management/settings/face-attendance',
+			icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z',
+			tag: 'Chấm công',
+			permission: [FACE_PERMISSIONS.setting, FACE_PERMISSIONS.manage],
 		},
 		{
 			label: 'Loại giấy tờ',

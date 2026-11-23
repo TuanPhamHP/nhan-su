@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import type { AttendanceRecordDetail, AttendanceStatus } from '~/types/attendance.types';
 	import { formatShiftDisplay, formatVNTime, formatMinutes } from '~/utils/attendance.utils';
+	import { faceReviewLabel } from '~/utils/attendance-face.utils';
 	import AttendancePhoto from '~/components/modules/attendance/AttendancePhoto.vue';
 
 	const props = defineProps<{
@@ -191,6 +192,14 @@
 								(Muộn {{ formatMinutes(record.lateMinutes) }})
 							</span>
 						</div>
+						<!-- Khuôn mặt không khớp mà nhân viên vẫn xác nhận: để HR xem lại. Khớp thì không cần chip. -->
+						<span
+							v-if="faceReviewLabel(record, 'in')"
+							class="mt-1 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+							data-testid="face-chip"
+						>
+							{{ faceReviewLabel(record, 'in') }}
+						</span>
 					</td>
 
 					<!-- Check-out -->
@@ -203,6 +212,13 @@
 								(Sớm {{ formatMinutes(record.earlyMinutes) }})
 							</span>
 						</div>
+						<span
+							v-if="faceReviewLabel(record, 'out')"
+							class="mt-1 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+							data-testid="face-chip"
+						>
+							{{ faceReviewLabel(record, 'out') }}
+						</span>
 					</td>
 
 					<!-- Trạng thái -->

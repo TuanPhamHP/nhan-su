@@ -7,27 +7,40 @@ import type {
 	QueryAttendanceParams,
 } from '~/types/attendance.types';
 
+interface CheckPhotoParams {
+	latitude: number;
+	longitude: number;
+	photo: File;
+	confirmFaceMismatch?: boolean;
+}
+
 export const useAttendanceService = () => {
 	const authFetch = useAuthFetch();
 
+	/**
+	 * `confirmFaceMismatch` chỉ gửi khi nhân viên bấm "Vẫn xác nhận" sau lỗi khuôn mặt, dạng chuỗi
+	 * `"true"`; lần chụp đầu không gửi trường này.
+	 */
+	function attendanceForm(params: CheckPhotoParams): FormData {
+		const formData = new FormData();
+		formData.append('photo', params.photo);
+		formData.append('latitude', String(params.latitude));
+		formData.append('longitude', String(params.longitude));
+		if (params.confirmFaceMismatch) formData.append('confirmFaceMismatch', 'true');
+		return formData;
+	}
+
 	return {
-		async checkIn(params: { latitude: number; longitude: number; photo: File }): Promise<AttendanceRecordDetail> {
-			const formData = new FormData();
-			formData.append('photo', params.photo);
-			formData.append('latitude', String(params.latitude));
-			formData.append('longitude', String(params.longitude));
+		async checkIn(params: CheckPhotoParams): Promise<AttendanceRecordDetail> {
 			const res = await authFetch<ApiResponse<AttendanceRecordDetail>>('/v1/attendance/check-in', {
 				method: 'POST',
-				body: formData,
+				body: attendanceForm(params),
 			});
 			return res.data;
 		},
 
-		async checkOut(params: { latitude: number; longitude: number; photo: File }): Promise<AttendanceRecordDetail> {
-			const formData = new FormData();
-			formData.append('photo', params.photo);
-			formData.append('latitude', String(params.latitude));
-			formData.append('longitude', String(params.longitude));
+		async checkOut(params: CheckPhotoParams): Promise<AttendanceRecordDetail> {
+			const formData = attendanceForm(params);
 			const res = await authFetch<ApiResponse<AttendanceRecordDetail>>('/v1/attendance/check-out', {
 				method: 'POST',
 				body: formData,

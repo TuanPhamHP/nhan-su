@@ -8,6 +8,7 @@ export * from './check-in-location.service';
 export * from './work-shift.service';
 export * from './shift-schedule.service';
 export * from './attendance.service';
+export * from './attendance-face.service';
 export * from './makeup-attendance.service';
 export * from './public-holiday.service';
 export * from './leave-request.service';

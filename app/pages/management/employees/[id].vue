@@ -11,6 +11,7 @@
 		type UpdateEmployeeDto,
 	} from '~/types/employee.types';
 	import type { UserRole } from '~/types/auth.types';
+	import { FACE_PERMISSIONS } from '~/utils/permission';
 	import { usePositionService } from '~/services/position.service';
 	import { useEmployeeService } from '~/services/employee.service';
 	import type { PositionSummary } from '~/types/position.types';
@@ -19,6 +20,7 @@
 	import EmployeeSocialInsurance from '~/components/modules/employee/EmployeeSocialInsurance.vue';
 	import EmployeeCitizenId from '~/components/modules/employee/EmployeeCitizenId.vue';
 	import EmployeePassport from '~/components/modules/employee/EmployeePassport.vue';
+	import EmployeeFace from '~/components/modules/employee/EmployeeFace.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 	import EmployeeAssets from '~/components/modules/asset/EmployeeAssets.vue';
 	import EmployeeExtraProfile from '~/components/modules/employee/EmployeeExtraProfile.vue';
@@ -80,6 +82,8 @@
 	// Tab Tài sản thuộc module ASSET: công ty chưa mở thì ẩn, kể cả với ADMIN.
 	const canReadAssets = computed(() => canUse('ASSET') && hasPermission('asset:read'));
 	const canManageAssets = computed(() => canWrite('ASSET') && hasPermission('asset:manage'));
+	// Khuôn mặt chấm công ở tab Định danh: xem ảnh đăng ký và xoá để nhân viên đăng ký lại.
+	const canManageFace = computed(() => hasPermission(FACE_PERMISSIONS.manage));
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, terminate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -1021,6 +1025,11 @@
 			<div v-else-if="activeTab === 'identity'" class="space-y-6">
 				<EmployeeCitizenId :employee-id="id" />
 				<EmployeePassport :employee-id="id" />
+				<EmployeeFace
+					v-if="canManageFace"
+					:employee-id="id"
+					:employee-name="currentEmployee?.fullName ?? 'nhân viên này'"
+				/>
 			</div>
 
 			<!-- Tab: Tài sản -->

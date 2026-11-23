@@ -55,6 +55,14 @@ export const OFFICE_PERMISSIONS = {
 	bookingManage: 'office:booking:manage',
 } as const;
 
+/** Chấm công bằng khuôn mặt (`docs/backend/bridges/attendance.md` mục cuối). */
+export const FACE_PERMISSIONS = {
+	/** Bật tắt cho cả công ty; mặc định chỉ ADMIN. */
+	setting: 'attendance:face:setting',
+	/** Xem danh sách, ảnh đăng ký và xoá để nhân viên đăng ký lại (HR). */
+	manage: 'attendance:face:manage',
+} as const;
+
 /**
  * Vai trò có phạm vi tài sản toàn công ty khi có `asset:read` (khớp `FULL_SCOPE_ROLES` ở BE,
  * `asset-scope.util.ts`). Trưởng phòng chỉ xem tài sản của phòng mình nên không có ở đây.
