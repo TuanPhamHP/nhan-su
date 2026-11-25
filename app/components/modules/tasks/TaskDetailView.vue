@@ -11,7 +11,18 @@
 	import { useDirectoryStore } from '~/stores/directory';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
-	import type { TaskAction, TaskAttachment, TaskDetail, TaskListItem, TaskPriority, TaskStatus } from '~/types/tasks.types';
+	import type {
+		TaskAction,
+		TaskAttachment,
+		TaskDependency,
+		TaskDetail,
+		TaskGroup,
+		TaskListItem,
+		TaskPriority,
+		TaskProjectRole,
+		TaskSprint,
+		TaskStatus,
+	} from '~/types/tasks.types';
 	import {
 		ACTION_LABELS,
 		DUE_TONE_CLASS,
@@ -22,6 +33,7 @@
 		dueTone,
 		primaryActions,
 		shortDate,
+		TASK_HINTS,
 		taskDueText,
 		taskErrorInfo,
 		taskFileSize,
@@ -307,6 +319,130 @@
 		emit('openTask', child.code);
 	}
 
+	// ─── Lô 2: nhóm việc, đợt ────────────────────────────────────────────────
+	// Ai đổi được nhóm, đợt: thành viên dự án vai Quản lý, Thành viên và ADMIN (bridge mục 12.3). Máy chủ
+	// không trả cờ riêng cho việc này nên khung hỏi vai của người xem trong dự án; người không là thành
+	// viên (trưởng phòng xem qua Việc của phòng) nhận 404 và chỉ thấy chữ.
+	const projectInfo = ref<{ id: number; myRole: TaskProjectRole | null; useSprints: boolean } | null>(null);
+	const projectGroups = ref<TaskGroup[]>([]);
+	const projectSprints = ref<TaskSprint[]>([]);
+	let loadedProjectId: number | null = null;
+	async function loadProjectBits(t: TaskDetail) {
+		const pid = t.project && !t.parent ? t.project.id : null;
+		if (pid === loadedProjectId) return;
+		loadedProjectId = pid;
+		projectInfo.value = null;
+		projectGroups.value = [];
+		projectSprints.value = [];
+		if (!pid) return;
+		try {
+			const p = await service.getProject(pid);
+			if (loadedProjectId !== pid) return;
+			projectInfo.value = { id: p.id, myRole: p.myRole, useSprints: p.useSprints };
+			const [groups, sprints] = await Promise.all([
+				service.listGroups(pid),
+				p.useSprints ? service.listSprints(pid) : Promise.resolve([] as TaskSprint[]),
+			]);
+			if (loadedProjectId !== pid) return;
+			projectGroups.value = groups;
+			projectSprints.value = sprints;
+		} catch {
+			// Không là thành viên dự án: giữ chữ, không cho chọn.
+		}
+	}
+	watch(task, t => {
+		if (t) loadProjectBits(t);
+	});
+	const isAdmin = computed(() => authStore.user?.role === 'ADMIN');
+	const canContribute = computed(
+		() => !readOnly.value && (isAdmin.value || projectInfo.value?.myRole === 'MANAGER' || projectInfo.value?.myRole === 'MEMBER'),
+	);
+	const editableGroups = computed(() => projectGroups.value.filter(g => !g.archived));
+	const openSprints = computed(() => projectSprints.value.filter(s => s.status !== 'CLOSED'));
+	const canEditPlacement = computed(() => canContribute.value && !!task.value && task.value.status !== 'CANCELLED');
+
+	async function onGroup(value: string) {
+		const t = task.value;
+		const groupId = value ? Number(value) : null;
+		if (!t || (t.group?.id ?? null) === groupId) return;
+		handle(await actions.updateFields(t, { groupId }));
+	}
+	async function onSprint(value: string) {
+		const t = task.value;
+		const sprintId = value ? Number(value) : null;
+		if (!t || (t.sprint?.id ?? null) === sprintId) return;
+		handle(await actions.updateFields(t, { sprintId }));
+	}
+
+	// ─── Lô 2: phụ thuộc ─────────────────────────────────────────────────────
+	// Ai nối: người giao, người thực hiện, quản lý dự án, trưởng phòng của người giao (gần đúng cờ
+	// `addSubtask`), hoặc thành viên dự án vai Quản lý, Thành viên. Máy chủ vẫn kiểm từng lần.
+	const canLinkDeps = computed(
+		() => !readOnly.value && !!task.value && task.value.status !== 'CANCELLED' && (task.value.permissions.addSubtask || canContribute.value),
+	);
+	const addingDep = ref(false);
+	const depQuery = ref('');
+	const depResults = ref<TaskListItem[]>([]);
+	const depSearching = ref(false);
+	let depTimer: ReturnType<typeof setTimeout> | null = null;
+	watch(depQuery, q => {
+		if (depTimer) clearTimeout(depTimer);
+		depTimer = setTimeout(() => searchDeps(q), 300);
+	});
+	async function searchDeps(q: string) {
+		const t = task.value;
+		if (!t) return;
+		depSearching.value = true;
+		try {
+			const res = await service.list({
+				q: q.trim() || undefined,
+				projectId: t.project?.id,
+				status: 'TODO,IN_PROGRESS,IN_REVIEW,DONE',
+				sort: 'dueDate',
+				limit: 8,
+			});
+			const taken = new Set([t.id, ...t.blockers.map(b => b.id)]);
+			depResults.value = res.data.filter(x => !taken.has(x.id));
+		} catch {
+			depResults.value = [];
+		} finally {
+			depSearching.value = false;
+		}
+	}
+	function openDepPicker() {
+		addingDep.value = !addingDep.value;
+		if (addingDep.value) {
+			depQuery.value = '';
+			searchDeps('');
+		}
+	}
+	async function addBlocker(b: TaskListItem) {
+		const t = task.value;
+		if (!t) return;
+		try {
+			setTask(await service.addDependency(t.id, b.id));
+			toast.success(`Việc này chờ ${b.code}`);
+			addingDep.value = false;
+			activityRef.value?.reload();
+		} catch (err) {
+			toast.error(taskErrorInfo(err).message);
+		}
+	}
+	async function removeDep(dep: TaskDependency, side: 'blocker' | 'blocking') {
+		const t = task.value;
+		if (!t) return;
+		try {
+			if (side === 'blocker') await service.removeDependency(t.id, dep.id);
+			else await service.removeDependency(dep.id, t.id);
+			toast.success('Đã gỡ nối');
+			await load(true);
+			if (task.value) emit('changed', task.value);
+			activityRef.value?.reload();
+		} catch (err) {
+			toast.error(taskErrorInfo(err).message);
+		}
+	}
+
 	const composerId = `task-composer-${Math.random().toString(36).slice(2, 10)}`;
 	const subtaskDone = computed(() => task.value?.subtasks ?? { total: 0, done: 0, points: 0 });
 	defineExpose({ reload: () => load(true) });
@@ -394,6 +530,10 @@
 					<TaskStatusBadge :status="task.status" :label="task.statusLabel" />
 					<span v-if="task.overdue" class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Quá hạn</span>
 					<span v-if="task.returnCount" class="text-xs text-gray-500 dark:text-gray-400">đã trả lại {{ task.returnCount }} lần</span>
+					<span v-if="task.recurrenceId" class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Việc định kỳ</span>
+					<span v-if="task.group" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">{{ task.group.name }}</span>
+					<span v-if="task.sprint" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{{ task.sprint.name }}</span>
+					<span v-if="task.dependencies?.late" class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Việc phải chờ đang trễ</span>
 					<div class="ml-auto flex flex-wrap items-center gap-2" data-tour="task-primary">
 						<CommonAppButton
 							v-for="(a, i) in primary"
@@ -552,9 +692,59 @@
 								<dt class="text-xs text-gray-500 dark:text-gray-400">Dự án</dt>
 								<dd class="mt-1 text-gray-900 dark:text-gray-100">{{ task.project.name }}</dd>
 							</div>
+							<div v-if="task.project && !task.parent && (task.group || projectGroups.length)">
+								<dt class="text-xs text-gray-500 dark:text-gray-400" :title="TASK_HINTS.group">Nhóm việc</dt>
+								<dd class="mt-1">
+									<select
+										v-if="canEditPlacement && projectGroups.length"
+										:value="task.group?.id ?? ''"
+										aria-label="Nhóm việc"
+										data-testid="task-detail-group"
+										class="w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+										@change="e => onGroup((e.target as HTMLSelectElement).value)"
+									>
+										<option value="">Chưa có nhóm</option>
+										<option v-if="task.group && !editableGroups.some(g => g.id === task!.group!.id)" :value="task.group.id" disabled>
+											{{ task.group.name }} (đã cất)
+										</option>
+										<option v-for="g in editableGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+									</select>
+									<span v-else class="text-gray-900 dark:text-gray-100" data-testid="task-detail-group-text">{{ task.group?.name ?? 'Chưa có nhóm' }}</span>
+								</dd>
+							</div>
+							<div v-if="task.project && !task.parent && (task.sprint || projectInfo?.useSprints)">
+								<dt class="text-xs text-gray-500 dark:text-gray-400" :title="TASK_HINTS.sprint">Đợt</dt>
+								<dd class="mt-1">
+									<select
+										v-if="canEditPlacement && projectInfo?.useSprints"
+										:value="task.sprint?.id ?? ''"
+										aria-label="Đợt"
+										data-testid="task-detail-sprint"
+										class="w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+										@change="e => onSprint((e.target as HTMLSelectElement).value)"
+									>
+										<option value="">Việc chờ xếp</option>
+										<option v-if="task.sprint && task.sprint.status === 'CLOSED'" :value="task.sprint.id" disabled>{{ task.sprint.name }} (đã đóng)</option>
+										<option v-for="sp in openSprints" :key="sp.id" :value="sp.id">{{ sp.name }} ({{ sp.statusLabel.toLowerCase() }})</option>
+									</select>
+									<span v-else class="text-gray-900 dark:text-gray-100">{{ task.sprint ? `${task.sprint.name} (${task.sprint.statusLabel.toLowerCase()})` : 'Việc chờ xếp' }}</span>
+									<span v-if="task.sprintMoveCount" class="mt-0.5 block text-[11px] text-orange-700 dark:text-orange-400">chuyển đợt {{ task.sprintMoveCount }} lần</span>
+									<span v-if="task.addedAfterSprintStart" class="mt-0.5 block text-[11px] text-gray-500">thêm vào khi đợt đã chạy</span>
+								</dd>
+							</div>
 							<div>
 								<dt class="text-xs text-gray-500 dark:text-gray-400">Nguồn</dt>
-								<dd class="mt-1 text-gray-700 dark:text-gray-300">{{ task.sourceLabel }}</dd>
+								<dd class="mt-1 text-gray-700 dark:text-gray-300">
+									<NuxtLink
+										v-if="task.recurrenceId"
+										:to="`/cong-viec/dinh-ky?id=${task.recurrenceId}`"
+										class="inline-flex items-center gap-1 rounded bg-teal-50 px-1.5 py-0.5 text-xs text-teal-700 hover:underline dark:bg-teal-900/30 dark:text-teal-300"
+										data-testid="task-detail-recurring"
+									>
+										<Icon name="heroicons:arrow-path" class="h-3.5 w-3.5" />{{ task.sourceLabel }}
+									</NuxtLink>
+									<template v-else>{{ task.sourceLabel }}</template>
+								</dd>
 							</div>
 						</dl>
 					</aside>
@@ -623,6 +813,92 @@
 									@created="onSubtaskCreated"
 								/>
 							</div>
+						</section>
+
+						<!-- Phụ thuộc (lô 2) -->
+						<section v-if="!task.parent" aria-label="Phụ thuộc" data-testid="task-dependencies">
+							<div class="flex items-center justify-between">
+								<h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+									Phụ thuộc
+									<span class="cursor-help text-xs font-normal text-gray-400" :title="TASK_HINTS.dependency" aria-label="Phụ thuộc là gì">ⓘ</span>
+								</h3>
+								<button
+									v-if="canLinkDeps"
+									type="button"
+									class="text-xs text-brand-600 hover:underline dark:text-brand-400"
+									data-testid="task-dep-add"
+									@click="openDepPicker"
+								>
+									Thêm việc phải chờ
+								</button>
+							</div>
+							<div v-if="addingDep" class="mt-2 space-y-1.5 rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+								<input
+									v-model="depQuery"
+									type="search"
+									placeholder="Tìm theo tiêu đề hoặc số hiệu"
+									aria-label="Tìm việc phải chờ"
+									class="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+								/>
+								<p v-if="depSearching" class="text-xs text-gray-500">Đang tìm…</p>
+								<p v-else-if="!depResults.length" class="text-xs text-gray-500">Không có việc nào khớp.</p>
+								<ul v-else class="max-h-56 overflow-y-auto">
+									<li v-for="r in depResults" :key="r.id">
+										<button
+											type="button"
+											class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:hover:bg-gray-800"
+											:data-testid="`task-dep-option-${r.code}`"
+											@click="addBlocker(r)"
+										>
+											<span class="text-xs font-semibold text-gray-500">{{ r.code }}</span>
+											<span class="min-w-0 flex-1 truncate text-gray-800 dark:text-gray-200">{{ r.title }}</span>
+											<span class="text-xs text-gray-500">hạn {{ shortDate(r.dueDate, today) }}</span>
+										</button>
+									</li>
+								</ul>
+							</div>
+							<p v-if="!task.blockers.length && !task.blocking.length && !addingDep" class="mt-2 text-sm text-gray-400">Việc này không chờ việc nào.</p>
+							<ul v-if="task.blockers.length" class="mt-2 space-y-1" data-testid="task-blockers">
+								<li v-for="d in task.blockers" :key="`b${d.id}`" class="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm" :class="d.late ? 'border-rose-200 bg-rose-50/60 dark:border-rose-800 dark:bg-rose-900/10' : 'border-gray-200 dark:border-gray-700'">
+									<span v-if="d.late" class="h-2 w-2 shrink-0 rounded-full bg-rose-500" title="Việc trước đang trễ" />
+									<span class="shrink-0 text-gray-500 dark:text-gray-400">Chờ việc</span>
+									<button
+										v-if="d.visible"
+										type="button"
+										class="min-w-0 flex-1 truncate text-left text-gray-900 hover:underline dark:text-gray-100"
+										@click="emit('openTask', d.code)"
+									>
+										<span class="font-semibold">{{ d.code }}</span> {{ d.title }}
+									</button>
+									<span v-else class="min-w-0 flex-1 truncate text-gray-500" title="Bạn không xem được việc này">{{ d.code }}</span>
+									<TaskStatusBadge :status="d.status" :label="d.statusLabel" />
+									<button v-if="canLinkDeps" type="button" class="text-gray-400 hover:text-rose-600" :aria-label="`Gỡ nối với ${d.code}`" @click="removeDep(d, 'blocker')">
+										<Icon name="heroicons:x-mark" class="h-4 w-4" />
+									</button>
+								</li>
+							</ul>
+							<p v-if="task.blockers.some(b => b.late)" class="mt-1 text-xs text-rose-600 dark:text-rose-400">
+								Việc phải chờ đang trễ hoặc có hạn muộn hơn ngày bắt đầu của việc này. Hệ thống chỉ cảnh báo, không tự dời ngày.
+							</p>
+							<ul v-if="task.blocking.length" class="mt-2 space-y-1" data-testid="task-blocking">
+								<li v-for="d in task.blocking" :key="`a${d.id}`" class="flex items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm dark:border-gray-700">
+									<span v-if="d.late" class="h-2 w-2 shrink-0 rounded-full bg-rose-500" title="Việc này đang làm trễ việc sau" />
+									<span class="shrink-0 text-gray-500 dark:text-gray-400">Việc</span>
+									<button
+										v-if="d.visible"
+										type="button"
+										class="min-w-0 flex-1 truncate text-left text-gray-900 hover:underline dark:text-gray-100"
+										@click="emit('openTask', d.code)"
+									>
+										<span class="font-semibold">{{ d.code }}</span> {{ d.title }}
+									</button>
+									<span v-else class="min-w-0 flex-1 truncate text-gray-500" title="Bạn không xem được việc này">{{ d.code }}</span>
+									<span class="shrink-0 text-gray-500 dark:text-gray-400">đang chờ việc này</span>
+									<button v-if="canLinkDeps" type="button" class="text-gray-400 hover:text-rose-600" :aria-label="`Gỡ nối với ${d.code}`" @click="removeDep(d, 'blocking')">
+										<Icon name="heroicons:x-mark" class="h-4 w-4" />
+									</button>
+								</li>
+							</ul>
 						</section>
 
 						<!-- Danh sách kiểm tra -->

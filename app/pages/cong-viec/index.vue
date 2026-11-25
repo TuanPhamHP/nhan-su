@@ -18,6 +18,10 @@
 	 * UI-01 Việc của tôi. Nhóm Quá hạn, Hôm nay, Sắp tới 7 ngày, Sau đó; khối Chờ tôi nghiệm thu nổi
 	 * trên cùng; thẻ Tôi giao, Tôi theo dõi; nút thao tác chính ngay trên dòng; bảng việc riêng (thứ
 	 * tự kéo thả chỉ của mình, `board=my`).
+	 *
+	 * Lô 2: đường dẫn có `assigneeIds=<id>` (thông báo `TASK_OFFBOARDING_OPEN` khi một người nghỉ việc còn
+	 * việc đang mở) thì trang hiện việc đang mở của người đó trong phạm vi người xem, để giao lại bằng
+	 * nút Đổi người thực hiện. Hệ thống không tự chuyển việc.
 	 */
 	useHead({ title: 'Việc của tôi' });
 
@@ -43,7 +47,13 @@
 		const t = String(route.query.tab ?? 'my');
 		return t === 'assigned' || t === 'watching' ? t : 'my';
 	});
-	const mode = computed<'list' | 'board'>(() => (route.query.mode === 'board' ? 'board' : 'list'));
+	/** Id người nghỉ việc từ thông báo cảnh báo nghỉ việc (một id). */
+	const offboardId = computed<number | null>(() => {
+		const n = Number(String(route.query.assigneeIds ?? '').split(',')[0]);
+		return Number.isInteger(n) && n > 0 ? n : null;
+	});
+	const offboardName = ref('');
+	const mode = computed<'list' | 'board'>(() => (route.query.mode === 'board' && !offboardId.value ? 'board' : 'list'));
 	function setQuery(patch: Record<string, string | undefined>) {
 		const query = { ...route.query, ...patch };
 		for (const [k, v] of Object.entries(query)) if (v === undefined) delete query[k];
@@ -90,7 +100,8 @@
 		try {
 			const next = more ? page.value + 1 : 1;
 			const res = await service.list({
-				view: tab.value as TaskView,
+				view: offboardId.value ? undefined : (tab.value as TaskView),
+				assigneeIds: offboardId.value ? String(offboardId.value) : undefined,
 				status: openStatuses,
 				sort: 'dueDate',
 				q: String(route.query.q ?? '') || undefined,
@@ -100,7 +111,11 @@
 			tasks.value = more ? [...tasks.value, ...res.data] : res.data;
 			total.value = res.meta.total;
 			page.value = next;
-			if (!more && !res.data.length && !route.query.q) {
+			if (offboardId.value) {
+				const name = res.data.find(t => t.assignee.id === offboardId.value)?.assignee.fullName;
+				if (name) offboardName.value = name;
+				doneCount.value = 1;
+			} else if (!more && !res.data.length && !route.query.q) {
 				// Phân biệt "chưa có việc" với "đã xong hết": hỏi xem đã từng có việc hoàn thành chưa.
 				const done = await service.list({ view: tab.value as TaskView, status: 'DONE', limit: 1 });
 				doneCount.value = done.meta.total;
@@ -130,13 +145,13 @@
 	}
 
 	function reload(silent = false) {
-		if (tab.value === 'my') loadReview();
+		if (tab.value === 'my' && !offboardId.value) loadReview();
 		if (mode.value === 'board') loadBoard(silent);
 		else loadList(false, silent);
 		approvalStore.fetchCounts();
 	}
 
-	watch(() => [tab.value, mode.value, route.query.q, route.query.cancelled], () => reload());
+	watch(() => [tab.value, mode.value, route.query.q, route.query.cancelled, offboardId.value], () => reload());
 	onMounted(() => {
 		if (canUse('TASKS')) reload();
 		else loading.value = false;
@@ -195,8 +210,10 @@
 		};
 		replace(tasks.value);
 		replace(review.value);
-		// Việc đã xong hay huỷ rời khỏi danh sách việc đang mở.
-		if (updated.status === 'DONE' || updated.status === 'CANCELLED') {
+		// Việc đã xong hay huỷ (hoặc đã giao lại cho người khác, ở danh sách việc của người nghỉ) rời
+		// khỏi danh sách việc đang mở.
+		const leftOffboard = !!offboardId.value && updated.assignee.id !== offboardId.value;
+		if (updated.status === 'DONE' || updated.status === 'CANCELLED' || leftOffboard) {
 			const before = tasks.value.length;
 			tasks.value = tasks.value.filter(t => t.id !== updated.id);
 			if (tasks.value.length < before) total.value = Math.max(0, total.value - 1);
@@ -256,6 +273,7 @@
 		return doneCount.value ? 'done' : 'none';
 	});
 	const emptyText = computed(() => {
+		if (offboardId.value) return { title: 'Không còn việc đang mở nào', desc: 'Mọi việc của người này đã được giao lại hoặc đã xong.', action: '' };
 		if (emptyKind.value === 'filtered') return { title: 'Không có việc khớp bộ lọc', desc: 'Bạn thử từ khoá khác.', action: 'Xoá bộ lọc' };
 		if (emptyKind.value === 'done') {
 			if (tab.value === 'my') return { title: 'Bạn đã xong hết việc', desc: 'Không còn việc nào đang mở. Nghỉ tay một chút nhé.', action: '' };
@@ -293,9 +311,23 @@
 
 		<CommonAppModuleNotice module="TASKS" />
 
+		<!-- Việc đang mở của người nghỉ việc (thông báo TASK_OFFBOARDING_OPEN) -->
+		<section
+			v-if="offboardId"
+			class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+			data-testid="task-offboard-banner"
+		>
+			<p class="font-semibold">Việc đang mở của {{ offboardName || 'người nghỉ việc' }}</p>
+			<p class="mt-0.5">
+				Người này đã nghỉ việc. Bạn giao lại từng việc cho người khác bằng nút Đổi người thực hiện trong menu ba chấm hoặc khung chi tiết.
+				Hệ thống không tự chuyển việc.
+			</p>
+			<NuxtLink to="/cong-viec" class="mt-1 inline-block font-medium text-brand-700 hover:underline dark:text-brand-300">Về Việc của tôi</NuxtLink>
+		</section>
+
 		<!-- Chờ tôi nghiệm thu -->
 		<section
-			v-if="tab === 'my' && review.length"
+			v-if="tab === 'my' && review.length && !offboardId"
 			class="rounded-xl border border-violet-200 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-900/10"
 			data-tour="task-review"
 			data-testid="task-review-block"
@@ -325,7 +357,7 @@
 
 		<!-- Thẻ và chế độ xem -->
 		<div class="flex flex-wrap items-center gap-2">
-			<div class="flex rounded-lg bg-gray-100 p-0.5 text-sm dark:bg-gray-800" role="tablist" aria-label="Nhóm việc">
+			<div v-if="!offboardId" class="flex rounded-lg bg-gray-100 p-0.5 text-sm dark:bg-gray-800" role="tablist" aria-label="Nhóm việc">
 				<button
 					v-for="t in TABS"
 					:key="t.key"
@@ -339,7 +371,7 @@
 					{{ t.label }}
 				</button>
 			</div>
-			<div class="flex rounded-lg bg-gray-100 p-0.5 text-sm dark:bg-gray-800" role="tablist" aria-label="Chế độ xem">
+			<div v-if="!offboardId" class="flex rounded-lg bg-gray-100 p-0.5 text-sm dark:bg-gray-800" role="tablist" aria-label="Chế độ xem">
 				<button
 					type="button"
 					role="tab"
@@ -447,7 +479,7 @@
 							:task="t"
 							:today="today"
 							:active="panel.code.value === t.code"
-							:show-assignee="tab !== 'my'"
+							:show-assignee="tab !== 'my' || !!offboardId"
 							:read-only="readOnly"
 							:busy="false"
 							@open="panel.open(t.code)"
@@ -465,7 +497,7 @@
 				</div>
 			</div>
 			<TaskQuickCreate
-				v-if="!readOnly && tab !== 'watching'"
+				v-if="!readOnly && tab !== 'watching' && !offboardId"
 				:default-assignee-id="tab === 'my' ? (authStore.user?.id ?? null) : null"
 				@created="onQuickCreated"
 			/>

@@ -23,7 +23,11 @@
 		reorder: boolean;
 		activeCode?: string | null;
 		disabled?: boolean;
+		/** Giới hạn số thẻ của cột (lô 2); vượt thì đầu cột báo đỏ, vẫn thả được. */
+		wipLimit?: number | null;
 	}>();
+
+	const overLimit = computed(() => props.wipLimit != null && props.total > props.wipLimit);
 
 	const emit = defineEmits<{
 		dragStart: [id: number];
@@ -68,8 +72,18 @@
 				<span class="h-2 w-2 rounded-full" :class="HEADER_DOT[status]" aria-hidden="true" />
 				{{ label }}
 			</h3>
-			<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-300">{{ total }}</span>
+			<span
+				class="rounded-full px-2 py-0.5 text-xs font-medium"
+				:class="overLimit ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-white text-gray-600 dark:bg-gray-900 dark:text-gray-300'"
+				:title="wipLimit != null ? `Giới hạn ${wipLimit} thẻ` : undefined"
+				:data-testid="`column-count-${status}`"
+			>
+				{{ total }}<template v-if="wipLimit != null">/{{ wipLimit }}</template>
+			</span>
 		</header>
+		<p v-if="overLimit" class="mx-3 mb-2 text-xs text-rose-600 dark:text-rose-400" data-testid="column-wip-over">
+			Vượt giới hạn {{ wipLimit }} thẻ, nên làm xong bớt trước khi nhận thêm.
+		</p>
 
 		<p
 			v-if="blockedReason"

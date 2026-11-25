@@ -36,8 +36,9 @@ export interface NavItem {
 	/**
 	 * Điều kiện hiện mục lấy từ dữ liệu máy chủ chứ không từ vai trò hay quyền. `taskDepartments`:
 	 * chỉ hiện khi `GET /v1/tasks/scope` cho biết người này xem mọi việc hoặc làm trưởng phòng.
+	 * `taskReports`: báo cáo công việc, hiện cho ADMIN, người có `task:report`, trưởng phòng, quản lý dự án.
 	 */
-	showWhen?: 'taskDepartments';
+	showWhen?: 'taskDepartments' | 'taskReports';
 	/**
 	 * `personal` = màn hình dữ liệu của CHÍNH người đang đăng nhập (`/attendance/my`,
 	 * `/users/leave-requests`…), ai cũng xem được kể cả quản lý. Bỏ trống = màn hình quản

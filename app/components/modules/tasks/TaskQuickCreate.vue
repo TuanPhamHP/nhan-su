@@ -23,8 +23,19 @@
 			defaultDueDate?: string | null;
 			placeholder?: string;
 			disabled?: boolean;
+			/** Lô 2: nhóm việc, đợt điền sẵn (dòng tạo nhanh cuối nhóm, cuối đợt). */
+			groupId?: number | null;
+			sprintId?: number | null;
 		}>(),
-		{ placeholder: 'Thêm việc, gõ tiêu đề rồi Enter', projectId: null, parentId: null, defaultAssigneeId: null, defaultDueDate: null },
+		{
+			placeholder: 'Thêm việc, gõ tiêu đề rồi Enter',
+			projectId: null,
+			parentId: null,
+			defaultAssigneeId: null,
+			defaultDueDate: null,
+			groupId: null,
+			sprintId: null,
+		},
 	);
 
 	const emit = defineEmits<{ created: [task: TaskDetail] }>();
@@ -108,6 +119,8 @@
 					points: values.points,
 					projectId: props.parentId ? undefined : (props.projectId ?? undefined),
 					parentId: props.parentId ?? undefined,
+					groupId: !props.parentId && props.projectId && props.groupId ? props.groupId : undefined,
+					sprintId: !props.parentId && props.projectId && props.sprintId ? props.sprintId : undefined,
 				});
 				toast.success(`Đã tạo ${created.code}`);
 				resetForm({

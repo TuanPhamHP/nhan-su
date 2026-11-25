@@ -3,7 +3,7 @@
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
-	import type { TaskDetail, TaskListItem, TaskPriority, TaskStatus } from '~/types/tasks.types';
+	import type { TaskDetail, TaskGroup as TaskGroupData, TaskListItem, TaskPriority, TaskStatus } from '~/types/tasks.types';
 	import {
 		BOARD_STATUSES,
 		DUE_TONE_CLASS,
@@ -21,7 +21,7 @@
 	 * Đổi hạn có lý do; ô không có quyền hiện chữ thường kèm lý do khi rê chuột. Nhóm thu gọn được,
 	 * đầu nhóm có số việc và tổng điểm, trạng thái thu gọn nhớ trong trình duyệt.
 	 */
-	export type TaskGroupBy = 'status' | 'assignee' | 'due' | 'none';
+	export type TaskGroupBy = 'status' | 'assignee' | 'due' | 'taskGroup' | 'none';
 
 	const props = withDefaults(
 		defineProps<{
@@ -34,8 +34,12 @@
 			/** Khoá nhớ nhóm đang thu gọn. */
 			storageKey: string;
 			disabled?: boolean;
+			/** Lô 2: nhóm việc của dự án; có thì thêm cột Nhóm, sửa ngay trên ô khi `canEditGroup`. */
+			taskGroups?: TaskGroupData[];
+			/** Thành viên dự án vai Quản lý, Thành viên (ADMIN); Người xem chỉ thấy chữ. */
+			canEditGroup?: boolean;
 		}>(),
-		{ showProject: false, activeCode: null, quickCreate: null, disabled: false },
+		{ showProject: false, activeCode: null, quickCreate: null, disabled: false, taskGroups: () => [], canEditGroup: false },
 	);
 
 	const emit = defineEmits<{
@@ -61,6 +65,8 @@
 		label: string;
 		tasks: TaskListItem[];
 		defaultAssigneeId: number | null;
+		/** Nhóm việc điền sẵn cho dòng tạo nhanh cuối nhóm. */
+		groupId?: number | null;
 	}
 
 	const groups = computed<Group[]>(() => {
@@ -82,6 +88,20 @@
 				tasks: g[k],
 				defaultAssigneeId: null,
 			})).filter(x => x.tasks.length);
+		}
+		if (props.groupBy === 'taskGroup') {
+			const out: Group[] = props.taskGroups
+				.filter(g => !g.archived || list.some(t => t.group?.id === g.id))
+				.map(g => ({
+					key: `tg-${g.id}`,
+					label: g.archived ? `${g.name} (đã cất)` : g.name,
+					tasks: list.filter(t => t.group?.id === g.id),
+					defaultAssigneeId: null,
+					groupId: g.archived ? null : g.id,
+				}));
+			const none = list.filter(t => !t.group);
+			if (none.length) out.push({ key: 'tg-none', label: 'Chưa có nhóm', tasks: none, defaultAssigneeId: null, groupId: null });
+			return out;
 		}
 		const byPerson = new Map<number, Group>();
 		for (const t of list) {
@@ -165,13 +185,28 @@
 	const NO_REASSIGN = 'Chỉ người giao, quản lý dự án hoặc trưởng phòng của người giao đổi được người thực hiện.';
 	const NO_DUE = 'Chỉ người giao, quản lý dự án hoặc trưởng phòng của người giao đổi được hạn.';
 	const NO_STATUS = 'Bạn không chuyển được việc này sang trạng thái nào khác.';
+	const NO_GROUP = 'Chỉ quản lý dự án và thành viên đổi được nhóm việc. Người xem chỉ xem.';
+
+	const showGroupCol = computed(() => props.taskGroups.length > 0);
+	const cols = computed(() => 8 + (props.showProject ? 1 : 0) + (showGroupCol.value ? 1 : 0));
+	const activeGroups = computed(() => props.taskGroups.filter(g => !g.archived));
+
+	/** Đổi nhóm ngay trên ô: hiện lạc quan, máy chủ từ chối thì trả về như cũ (`PATCH /tasks/:id`). */
+	async function onGroup(task: TaskListItem, value: string) {
+		const groupId = value ? Number(value) : null;
+		if ((task.group?.id ?? null) === groupId) return;
+		const before = task;
+		const g = props.taskGroups.find(x => x.id === groupId);
+		replaceRow({ ...task, group: g ? { id: g.id, name: g.name } : null });
+		handle(await actions.updateFields(before, { groupId }), before);
+	}
 
 	const groupPoints = (g: Group) => g.tasks.reduce((s, t) => s + t.points, 0);
 </script>
 
 <template>
 	<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" data-testid="task-list">
-		<table class="w-full text-sm" :class="showProject ? 'min-w-[68rem]' : 'min-w-[58rem]'">
+		<table class="w-full text-sm" :class="showProject || showGroupCol ? 'min-w-[70rem]' : 'min-w-[58rem]'">
 			<thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
 				<tr>
 					<th class="w-24 px-3 py-2">Số hiệu</th>
@@ -181,6 +216,7 @@
 					<th class="w-40 px-3 py-2">Trạng thái</th>
 					<th class="w-32 px-3 py-2">Ưu tiên</th>
 					<th class="w-16 px-3 py-2 text-right">Điểm</th>
+					<th v-if="showGroupCol" class="w-40 px-3 py-2">Nhóm việc</th>
 					<th v-if="showProject" class="w-40 px-3 py-2">Dự án</th>
 					<th class="w-10 px-2 py-2"><span class="sr-only">Thao tác</span></th>
 				</tr>
@@ -188,7 +224,7 @@
 			<template v-for="g in groups" :key="g.key">
 				<tbody>
 					<tr v-if="groupBy !== 'none'" class="sticky top-0 z-10 bg-white dark:bg-gray-900">
-						<th :colspan="showProject ? 9 : 8" class="border-t border-gray-100 px-3 py-2 text-left dark:border-gray-800">
+						<th :colspan="cols" class="border-t border-gray-100 px-3 py-2 text-left dark:border-gray-800">
 							<button
 								type="button"
 								class="flex items-center gap-2 rounded text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-gray-100"
@@ -215,7 +251,17 @@
 						:class="activeCode === t.code ? 'bg-brand-50/60 dark:bg-brand-900/20' : ''"
 						:data-task-code="t.code"
 					>
-						<td class="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t.code }}</td>
+						<td class="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+							<span class="inline-flex items-center gap-1">
+								<span
+									v-if="t.dependencies?.late"
+									class="h-2 w-2 rounded-full bg-rose-500"
+									title="Việc này đang chờ một việc bị trễ"
+									data-testid="task-late-dot"
+								/>
+								{{ t.code }}
+							</span>
+						</td>
 						<td class="px-3 py-2">
 							<button
 								type="button"
@@ -225,6 +271,7 @@
 								{{ t.title }}
 							</button>
 							<span v-if="t.parent" class="ml-1 text-xs text-gray-400">· việc con của {{ t.parent.title ?? t.parent.code }}</span>
+							<span v-if="t.recurrenceId" class="ml-1 rounded bg-teal-50 px-1 text-[11px] text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Định kỳ</span>
 						</td>
 						<td class="px-3 py-2">
 							<button
@@ -284,6 +331,23 @@
 						<td class="px-3 py-2 text-right text-gray-700 dark:text-gray-200">
 							{{ t.points }}<span v-if="t.subtasks.total" class="text-xs text-gray-400"> +{{ t.subtasks.points }}</span>
 						</td>
+						<td v-if="showGroupCol" class="px-3 py-2">
+							<select
+								v-if="canEditGroup && !disabled && !t.parent && t.status !== 'CANCELLED'"
+								:value="t.group?.id ?? ''"
+								class="w-36 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+								:aria-label="`Nhóm việc ${t.code}`"
+								:data-testid="`task-group-select-${t.code}`"
+								@change="e => onGroup(t, (e.target as HTMLSelectElement).value)"
+							>
+								<option value="">Chưa có nhóm</option>
+								<option v-if="t.group && !activeGroups.some(g => g.id === t.group!.id)" :value="t.group.id" disabled>{{ t.group.name }} (đã cất)</option>
+								<option v-for="g in activeGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+							</select>
+							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="t.parent ? 'Việc con theo nhóm của việc cha.' : NO_GROUP" :data-testid="`task-group-text-${t.code}`">
+								{{ t.group?.name ?? '—' }}
+							</span>
+						</td>
 						<td v-if="showProject" class="max-w-[10rem] truncate px-3 py-2 text-xs text-gray-500 dark:text-gray-400" :title="t.project?.name">
 							{{ t.project?.name ?? 'Việc lẻ' }}
 						</td>
@@ -298,9 +362,10 @@
 						</td>
 					</tr>
 					<tr v-if="quickCreate && !disabled">
-						<td :colspan="showProject ? 9 : 8" class="px-3 py-2">
+						<td :colspan="cols" class="px-3 py-2">
 							<TaskQuickCreate
 								:project-id="quickCreate.projectId"
+								:group-id="g.groupId ?? null"
 								:default-assignee-id="g.defaultAssigneeId ?? quickCreate.defaultAssigneeId"
 								@created="t => { rows.push(t); emit('created', t); }"
 							/>

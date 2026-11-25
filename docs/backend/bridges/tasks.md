@@ -1,9 +1,10 @@
-# Bridge: Công việc và KPI (`TASKS`), lô 1
+# Bridge: Công việc và KPI (`TASKS`), lô 1 và lô 2
 
 Cho web `nhan-su` và mobile. Thiết kế: `docs/modules/18-tasks.md`. Phiếu yêu cầu: `docs/templates/tasks/quan-ly-cong-viec.md`.
 Lô 1 là **lõi công việc**: dự án và thành viên, công việc và việc con, danh sách kiểm tra, vòng đời và nghiệm thu, đổi hạn,
 huỷ, người theo dõi, bình luận nhắc tên, file, Việc của tôi, danh sách, bảng việc kéo thả, thông báo N-01 đến N-08, nhắc hạn
-J-02, J-03 và kênh thời gian thực `/tasks`. Nhóm việc, đợt, việc định kỳ, phụ thuộc, báo cáo ở lô 2; KPI ở lô 3.
+J-02, J-03 và kênh thời gian thực `/tasks`. **Lô 2** (mục 12 trở đi): nhóm việc, đợt và việc chờ xếp, việc định kỳ, phụ
+thuộc và biểu đồ tiến độ, lịch, báo cáo tiến độ và xuất Excel, cảnh báo nghỉ việc, dự án mẫu. KPI ở lô 3.
 
 Mọi response bọc `{ success, data }` (danh sách thêm `meta { page, limit, total, totalPages }`), lỗi là
 `{ success: false, error: { code, message, details? } }` như các module khác. `message` là câu tiếng Việt đời thường, hiện
@@ -21,8 +22,8 @@ thẳng cho người dùng được.
   Web thêm `TASKS` vào `ModuleCode`, `MODULE_ROUTES` (`/cong-viec`), thêm `tsk` vào `APP_MODULES` và bỏ `TSK`, `PER` khỏi
   `PLANNED_MODULES`; mobile thêm `tsk` vào bảng mã → màn hình. Công ty chưa được cấp thì ô khoá.
 - **Không có permission cho thao tác thường** (Q-07, Q-20): ai cũng giao việc cho bất kỳ ai, ai cũng tạo dự án. Server quyết
-  theo vai trên từng việc và trả sẵn cho giao diện (mục 3). Mã `task:report` (DIRECTOR mặc định, ADMIN luôn có) dành cho
-  báo cáo toàn công ty ở lô 2; lô 1 chưa có route nào dùng.
+  theo vai trên từng việc và trả sẵn cho giao diện (mục 3). Mã `task:report` (DIRECTOR mặc định, ADMIN luôn có) mở báo cáo
+  mọi phòng (mục 16).
 
 ### 1.1 Ai xem được việc (thiết kế mục 3.1)
 
@@ -480,3 +481,309 @@ Lấy từ phiếu S-01 đến S-05 và thiết kế T-01 đến T-08:
 11. T-08: công ty ở chế độ chỉ xem: xem, lọc được; nút ghi ẩn hoặc báo lỗi 403 có câu.
 12. Mọi vai: ADMIN, HR (như nhân viên), DIRECTOR (xem mọi việc), MANAGER (trưởng phòng), EMPLOYEE; trạng thái rỗng, đang tải,
     lỗi; phân trang; màn 390 điểm ảnh.
+
+---
+
+# Lô 2 (26/11/2026)
+
+Thiết kế: `docs/modules/18-tasks.md` mục 2.2, 2.5, 4.5–4.7, 10, 17 (bảng gap, kịch bản), 16 (chỗ code khác thiết kế). Mọi
+route mới gắn `@RequireModule('TASKS')`: chỉ xem thì GET dùng được, POST/PATCH/DELETE 403 `MODULE_READ_ONLY`. Phạm vi xem việc
+vẫn là mục 1.1; không route nào lộ việc người gọi không xem được.
+
+## 12. Thay đổi ở dữ liệu lô 1
+
+### 12.1 Dòng việc (`TaskListItemDto`) thêm
+
+```json
+{
+  "group": { "id": 4, "name": "Giai đoạn 1" },
+  "sprint": { "id": 2, "name": "Đợt 3", "status": "ACTIVE", "statusLabel": "Đang chạy" },
+  "recurrenceId": null,
+  "sprintMoveCount": 1,
+  "addedAfterSprintStart": false,
+  "dependencies": { "blockers": 1, "blocking": 0, "late": true }
+}
+```
+
+- `group`, `sprint` null khi không có. Trong dự án bật đợt, việc cấp trên `sprint: null` là **việc chờ xếp**.
+- `dependencies.late: true` thì hiện **dấu đỏ** trên thẻ, dòng: có việc phải chờ đang trễ (quá hạn mà chưa báo xong, hoặc hạn
+  muộn hơn ngày bắt đầu của việc này). Chỉ cảnh báo, không chặn, không tự dời ngày (mục 4.5).
+- `recurrenceId` khác null: việc sinh từ việc định kỳ, `source: "RECURRING"`, `sourceLabel: "Việc định kỳ"`.
+
+### 12.2 Chi tiết (`TaskDetailDto`) thêm
+
+```json
+{
+  "blockers": [{ "id": 40, "code": "HQ-11", "title": "Khảo sát kho bãi", "status": "IN_PROGRESS", "statusLabel": "Đang làm",
+                 "startDate": "2026-11-27", "dueDate": "2026-11-30", "visible": true, "late": false }],
+  "blocking": []
+}
+```
+
+`blockers`: việc này phải chờ (việc trước). `blocking`: việc đang chờ việc này (việc sau). Người xem không xem được việc ở đầu
+kia thì `title: null`, `visible: false` (chỉ hiện số hiệu). `late` ở `blockers` là việc trước trễ so với việc này; ở
+`blocking` là việc này trễ so với việc sau.
+
+### 12.3 Tạo, sửa việc; lọc
+
+- `POST /tasks` nhận thêm `groupId`, `sprintId` (chỉ việc cấp trên trong dự án). Thêm vào đợt đang chạy thì
+  `addedAfterSprintStart: true`.
+- `PATCH /tasks/:id` nhận thêm `groupId`, `sprintId`; gửi `null` để bỏ nhóm, đưa về việc chờ xếp. Có `version` như mọi sửa
+  khác. Ai: thành viên dự án vai Quản lý, Thành viên, ADMIN (Người xem 403). Sự kiện `GROUP_CHANGED`, `SPRINT_CHANGED`
+  (`payload { from, to }` là id).
+- Lỗi: `TASK_GROUP_INVALID` (việc con, việc lẻ, nhóm dự án khác, nhóm đã cất), `TASK_SPRINT_INVALID` (việc con, việc lẻ, đợt
+  dự án khác, đợt đã đóng), `TASK_SPRINT_DISABLED` (dự án chưa bật đợt).
+- `GET /tasks`, `/tasks/board`, `/tasks/timeline`, `/tasks/calendar` nhận thêm `groupId`, `sprintId`, `recurrenceId`,
+  `backlog=true` (việc chờ xếp: việc cấp trên chưa đóng, chưa vào đợt, của dự án bật đợt; dùng kèm `projectId`).
+
+### 12.4 Dự án
+
+`TaskProjectDto` thêm `useSprints`, `isSample`, `wipLimits` (`{ TODO?, IN_PROGRESS?, IN_REVIEW? }` hoặc null).
+`PATCH /task-projects/:id` nhận thêm `useSprints` (tắt khi đang có đợt chạy → 409 `TASK_SPRINT_STATE_INVALID`) và `wipLimits`
+(số 1–999 mỗi cột, `null` để bỏ; chỉ để cảnh báo, server không chặn kéo thẻ).
+
+## 13. Nhóm việc (F-14) và đợt (F-12)
+
+| Method | Path | Body | Ai |
+|---|---|---|---|
+| GET | `/v1/task-projects/:id/groups` | | Thành viên, ADMIN, DIRECTOR |
+| POST | `/v1/task-projects/:id/groups` | `{ name, sortOrder? }` | Quản lý dự án, ADMIN |
+| PATCH | `/v1/task-projects/:id/groups/:groupId` | `{ name?, sortOrder?, archived? }` | Quản lý dự án, ADMIN |
+| GET | `/v1/task-projects/:id/sprints` | | Thành viên, ADMIN, DIRECTOR |
+| POST | `/v1/task-projects/:id/sprints` | `{ name, goal?, startDate, endDate }` | Quản lý dự án, ADMIN |
+| PATCH | `/v1/task-projects/:id/sprints/:sprintId` | `{ name?, goal?, startDate?, endDate? }` | Như trên, đợt chưa đóng |
+| POST | `/v1/task-projects/:id/sprints/:sprintId/start` | | Như trên |
+| POST | `/v1/task-projects/:id/sprints/:sprintId/close` | `{ moveTo?: 'next' \| 'new' \| 'backlog', newSprint? }` | Như trên |
+
+```json
+// Nhóm việc
+{ "id": 4, "projectId": 2, "name": "Giai đoạn 1", "sortOrder": 1, "archived": false,
+  "taskCount": 8, "doneCount": 5, "points": 21 }
+// Đợt
+{ "id": 2, "projectId": 2, "name": "Đợt 3", "goal": null, "startDate": "2026-12-01", "endDate": "2026-12-14",
+  "status": "ACTIVE", "statusLabel": "Đang chạy", "startedAt": "…", "closedAt": null,
+  "taskCounts": { "TODO": 2, "IN_PROGRESS": 1, "IN_REVIEW": 1, "DONE": 4, "CANCELLED": 0 },
+  "points": { "TODO": 5, "IN_PROGRESS": 3, "IN_REVIEW": 2, "DONE": 13, "CANCELLED": 0 }, "totalPoints": 23 }
+// Đóng đợt (201)
+{ "sprint": { /* đợt vừa đóng */ }, "movedTo": { /* đợt nhận việc */ } , "moved": ["HQ-12", "HQ-15"] }
+```
+
+- Nhóm việc: `taskCount`, `doneCount`, `points` chỉ đếm việc cấp trên chưa huỷ ("5/8 xong" ở tổng quan). Cất nhóm
+  (`archived: true`) thì việc cũ giữ nhóm, không thêm việc mới vào được; nhóm đã cất xếp cuối danh sách. Tên trùng trong dự án →
+  409 `TASK_GROUP_NAME_EXISTS`. Không có xoá nhóm.
+- Đợt: trạng thái `PLANNED` (Chưa bắt đầu), `ACTIVE` (Đang chạy), `CLOSED` (Đã đóng). Mỗi dự án tối đa **một** đợt đang chạy:
+  bắt đầu khi đã có đợt chạy → 409 `TASK_SPRINT_ALREADY_ACTIVE` (hai người bấm cùng lúc thì người sau nhận lỗi này, T-10). Bắt
+  đầu đợt đang chạy hay đã đóng, đóng đợt chưa chạy hay đã đóng, sửa đợt đã đóng → 409 `TASK_SPRINT_STATE_INVALID`.
+- Đóng đợt: việc cấp trên **chưa Hoàn thành** (kể cả Chờ nghiệm thu) chuyển tới `next` (đợt chưa bắt đầu có ngày bắt đầu sớm
+  nhất), `new` (đợt mới tạo từ `newSprint { name, goal?, startDate, endDate }`, trạng thái Chưa bắt đầu) hoặc `backlog` (về việc
+  chờ xếp). Không gửi `moveTo`: `next` nếu có đợt kế, không thì `backlog`. `next` mà không có đợt kế, `new` thiếu `newSprint` →
+  400 `TASK_SPRINT_INVALID`. Mỗi việc bị chuyển `sprintMoveCount + 1`, `version + 1` (socket `task.changed kind: 'sprint'`).
+  Hộp Đóng đợt nên liệt kê việc chưa xong bằng `GET /tasks?sprintId=<id>&status=TODO,IN_PROGRESS,IN_REVIEW&topLevel=true`.
+- Đợt có `points` theo trạng thái cho đầu đợt; `totalPoints` không tính việc huỷ.
+
+## 14. Việc định kỳ (F-11)
+
+| Method | Path | Body | Ai |
+|---|---|---|---|
+| GET | `/v1/task-recurrences` | `isActive`, `projectId`, `assigneeId`, `page`, `limit` (≤100, mặc định 50) | Quy tắc mình đặt, làm, nghiệm thu, quy tắc thuộc dự án mình là Quản lý dự án; ADMIN, DIRECTOR mọi quy tắc |
+| POST | `/v1/task-recurrences` | Xem dưới | Ai cũng đặt được; người đặt là người giao |
+| GET | `/v1/task-recurrences/:id` | | Như GET danh sách; người khác 404 `TASK_RECURRENCE_NOT_FOUND` |
+| PATCH | `/v1/task-recurrences/:id` | Như POST, mọi trường tuỳ chọn, không đổi dự án; `endDate: null` để bỏ | Người đặt, Quản lý dự án của dự án đó, ADMIN (người làm 403). Quy tắc thuộc dự án: người sửa phải còn là Quản lý hoặc Thành viên dự án (403 `TASK_PROJECT_NOT_CONTRIBUTOR`) |
+| POST | `/v1/task-recurrences/:id/pause`, `/resume` | | Như PATCH (dừng không cần là thành viên; chạy lại thì cần). J-01 tự dừng quy tắc của dự án khi người giao không còn là Quản lý, Thành viên dự án (`pausedReason`) |
+
+```json
+POST /v1/task-recurrences
+{ "title": "Nộp báo cáo thuế tháng", "assigneeId": 6, "points": 3,
+  "frequency": "MONTHLY", "dayOfMonth": 20, "leadDays": 3, "startDate": "2026-12-01",
+  "reviewerId": 5, "priority": "HIGH", "projectId": 2, "watcherIds": [8], "checklist": ["Đối chiếu sổ"],
+  "interval": 1, "endDate": null }
+```
+
+| `frequency` | Nhãn | Trường bắt buộc |
+|---|---|---|
+| `WEEKLY` | Hằng tuần | `weekdays` (1 thứ Hai … 7 Chủ nhật, ít nhất một) |
+| `MONTHLY` | Hằng tháng | `dayOfMonth` 1–31 |
+| `QUARTERLY` | Hằng quý | `dayOfMonth`, `monthOfPeriod` 1–3 (tháng thứ mấy trong quý) |
+| `YEARLY` | Hằng năm | `dayOfMonth`, `monthOfPeriod` 1–12 |
+
+- `interval` 1–12 (mỗi n tuần, tháng, quý, năm, đếm từ tuần, tháng, quý, năm chứa `startDate`). `leadDays` 0–60: việc xuất hiện
+  từ ngày hạn trừ số ngày này. Ngày 31 ở tháng ngắn lấy **ngày cuối tháng** (tháng 2 ra 28 hoặc 29, T-12).
+- Trả về: mọi trường trên, `frequencyLabel`, `priorityLabel`, `project`, `assigner`/`assignee`/`reviewer` (kèm `inactive`),
+  `nextDueDate` (hạn lần sinh kế), `nextAppearDate` (ngày việc kế xuất hiện), `lastDueDate`, `isActive`, `pausedReason` (lý do
+  hệ thống tự dừng: "Người thực hiện đã nghỉ việc", "Dự án đã đóng", "Đã hết lịch"…; null khi người dùng dừng), `upcoming`
+  (tối đa 5 hạn sắp tới, rỗng khi đã dừng), `taskCount` (số việc đã sinh), `canManage`.
+- J-01 06:00 mỗi sáng sinh việc (mục 8 của `docs/cron-jobs.md`): việc mới `source: RECURRING`, `recurrenceId`, người giao là người
+  đặt, `startDate` là ngày xuất hiện, `originalDueDate`, `dueDate` là hạn; người thực hiện nhận thông báo "Việc định kỳ … đã đến
+  kỳ". Không chờ việc kỳ trước xong (BR-08). Danh sách việc đã sinh: `GET /tasks?recurrenceId=<id>`.
+- Sửa chỉ có hiệu lực từ lần sinh sau, việc đã sinh giữ nguyên. Đổi lịch thì lần kế tính lại từ hôm nay và không sinh lại hạn
+  đã sinh. Chạy lại (`resume`) cũng tính từ hôm nay, không sinh bù lần đã qua lúc dừng.
+- Lỗi: `TASK_RECURRENCE_INVALID` (thiếu thứ, ngày, tháng; khoảng lặp sai; ngày kết thúc trước ngày bắt đầu; không còn lần nào),
+  `TASK_POINTS_REQUIRED`, `TASK_PERSON_INVALID`, `TASK_REVIEWER_INVALID`, `TASK_DATE_INVALID`, `TASK_PROJECT_CLOSED`,
+  `TASK_PROJECT_NOT_FOUND`, 403 người xem dự án, 409 `TASK_RECURRENCE_STATE_INVALID` (dừng khi đã dừng, chạy khi đang chạy,
+  chạy lại quy tắc hết lịch).
+
+## 15. Phụ thuộc, biểu đồ tiến độ, lịch (F-15)
+
+| Method | Path | Body / query | Trả |
+|---|---|---|---|
+| POST | `/v1/tasks/:id/dependencies` | `{ blockerId }`: việc `:id` (việc sau) chờ `blockerId` (việc trước) | 201 `TaskDetailDto` của việc sau |
+| DELETE | `/v1/tasks/:id/dependencies/:blockerId` | | 204 |
+| GET | `/v1/tasks/timeline` | Lọc như danh sách + `from`, `to` (bắt buộc, tối đa 370 ngày) | `{ from, to, tasks: TaskListItemDto[], links: [{ blockerId, blockedId, late }], truncated }` |
+| GET | `/v1/tasks/calendar` | Lọc như danh sách + `from`, `to` (bắt buộc, tối đa 62 ngày) | `{ from, to, tasks: TaskListItemDto[], truncated }` |
+
+- Nối phụ thuộc: người giao, người thực hiện, quản lý dự án, trưởng phòng của người giao của việc sau, hoặc thành viên dự án vai
+  Quản lý, Thành viên (kéo chấm trên biểu đồ). Người nối phải xem được cả hai việc (việc trước không xem được → 404
+  `TASK_NOT_VISIBLE`, không lộ tiêu đề). Người xem dự án → 403. Không đổi `version`; socket `task.changed kind: 'dependency'`
+  cho cả hai việc.
+- Lỗi: vòng (A chờ B rồi B chờ A, hay vòng dài hơn) → 400 `TASK_DEPENDENCY_CYCLE` (T-09); tự nối, việc sau đã hoàn thành
+  hoặc đã huỷ, việc trước đã huỷ → 400 `TASK_DEPENDENCY_INVALID`; nối trùng → 409 `TASK_DEPENDENCY_EXISTS`; gỡ nối không có →
+  404 `TASK_DEPENDENCY_NOT_FOUND`.
+- Biểu đồ tiến độ: việc có khoảng [`startDate`, `dueDate`] giao với [`from`, `to`]; việc không có ngày bắt đầu thì chỉ xét hạn
+  (vẽ một chấm ở hạn). Xếp theo ngày bắt đầu, hạn. `links` chỉ gồm đường nối giữa các việc có trong `tasks`; `late: true` vẽ
+  đường đỏ. Vạch hạn ban đầu dùng `originalDueDate` khi `dueChangeCount > 0`. Tay cầm kéo đổi hạn chỉ hiện khi
+  `permissions.changeDue`; thả thì mở hộp Đổi hạn (`POST /tasks/:id/due-date`, bắt buộc lý do). Gom theo nhóm việc dùng
+  `group` của từng việc.
+- Lịch: việc có hạn trong khoảng, xếp theo hạn rồi ưu tiên. Cả hai: Đã huỷ ẩn trừ khi lọc `status`; tối đa 500 việc
+  (`truncated: true` khi còn nữa, gợi ý người dùng lọc hẹp hơn). Khoảng sai → 400 `TASK_DATE_INVALID`.
+
+## 16. Báo cáo (F-10, F-18, RP-01..RP-03)
+
+| Method | Path | Query | Trả |
+|---|---|---|---|
+| GET | `/v1/task-reports/progress` | `from`, `to` (bắt buộc, ≤370 ngày), `departmentId?`, `projectId?`, `groupId?`, `assigneeIds?` | `ProgressReportDto` |
+| GET | `/v1/task-reports/progress/tasks` | Như trên + `metric` (bắt buộc), `assigneeId?`, `page`, `limit` (≤200) | `TaskListItemDto[]` + `meta` |
+| GET | `/v1/task-reports/progress/export` | Như `progress` | File `.xlsx` |
+| GET | `/v1/task-reports/overdue` | `departmentId?`, `projectId?`, `groupId?`, `assigneeIds?`, `page`, `limit` (≤200) | `(TaskListItemDto + daysOverdue)[]` + `meta` |
+| GET | `/v1/task-reports/overdue/export` | Như trên (không phân trang, tối đa 5.000 dòng) | File `.xlsx` |
+| GET | `/v1/task-reports/project/:id` | | `ProjectOverviewDto` |
+
+**Ai xem được** (progress, overdue, export): người có `task:report` (DIRECTOR mặc định) hoặc ADMIN: mọi phòng; trưởng phòng: phòng
+mình quản lý (mặc định mọi phòng mình quản lý, xin phòng khác → 403); quản lý dự án: khi lọc đúng `projectId` dự án mình quản
+lý. Người khác (kể cả HR không có `task:report`) → 403 `TASK_REPORT_FORBIDDEN`. Lọc phòng theo **phòng của người thực hiện lúc
+giao việc**. Mọi số chỉ gồm việc người gọi xem được (mục 1.1) và không gồm dự án mẫu. Tổng quan dự án: thành viên dự án, ADMIN,
+DIRECTOR (người khác 404).
+
+```json
+// ProgressReportDto
+{ "from": "2026-11-01", "to": "2026-11-30",
+  "scope": { "departmentNames": ["Kế toán"], "projectId": null, "projectName": null },
+  "rows": [{ "person": { "id": 6, "fullName": "Đỗ Minh Đức", "avatarUrl": null, "employeeCode": "NV002",
+                         "departmentName": "Kế toán", "inactive": false },
+             "counts": { "assigned": 10, "cancelled": 1, "done": 7, "onTimeOriginal": 6, "onTimeCurrent": 8,
+                         "overdueOpen": 1, "returned": 2, "points": 21, "quality": 4.2, "qualityCount": 5,
+                         "onTimeOriginalPct": 66.7, "onTimeCurrentPct": 88.9, "donePct": 77.8 } }],
+  "total": { /* cùng dạng counts, cộng mọi dòng */ } }
+```
+
+| Ô (`metric`) | Cách tính (mục 4.7, BR-20) |
+|---|---|
+| `assigned` Được giao | Việc cấp trên, người khác giao, hạn ban đầu trong khoảng (gồm cả việc đã huỷ) |
+| `cancelled` Đã huỷ | Được giao và đã huỷ (hiện riêng, BR-07) |
+| `done` Hoàn thành | Được giao, chưa huỷ, đã nghiệm thu |
+| `onTimeOriginal` | Được giao, chưa huỷ, ngày báo xong lần đầu (giờ Việt Nam) không sau hạn ban đầu |
+| `onTimeCurrent` | Như trên, so với hạn hiện tại |
+| `overdueOpen` Quá hạn còn mở | Được giao, chưa huỷ, đang Chưa làm hoặc Đang làm, hạn đã qua tại cuối ngày `to` (khoảng chưa hết thì tại hôm nay) |
+| `returned` Bị trả lại | Được giao, chưa huỷ, đã bị trả lại hoặc mở lại ít nhất một lần |
+| `points` Khối lượng | Tổng điểm việc cấp trên người khác giao **nghiệm thu trong khoảng** (BR-21) |
+| `quality` Chất lượng | Trung bình điểm chất lượng của các việc ở ô `points` có chấm (`qualityCount` là số việc có chấm) |
+
+Các tỷ lệ `…Pct` chia cho `assigned - cancelled`, null khi mẫu số 0. Việc tự giao, việc con, việc dự án mẫu không vào báo cáo.
+
+**Bấm số ra danh sách (T-13):** `GET /task-reports/progress/tasks?…&metric=onTimeOriginal&assigneeId=6` (bỏ `assigneeId` cho dòng
+tổng) trả đúng các việc làm nên con số: `meta.total` bằng con số ở mọi ô; riêng `points` là các việc làm nên tổng điểm (cộng
+`points` của danh sách ra con số), `quality` là các việc có chấm.
+
+**Excel:** file `bao-cao-tien-do-cong-viec-<from>_<to>.xlsx` (STT, Mã NV, Họ tên, Phòng, rồi đúng các cột trên kèm hai cột tỷ lệ,
+dòng Tổng cuối) và `viec-qua-han-<ngày>.xlsx` (Số hiệu, Tiêu đề, Dự án, Người thực hiện, Người giao, Hạn, Hạn ban đầu, Số ngày quá
+hạn, Trạng thái, Ưu tiên). Tải như các file Excel khác (`authFetch` với `responseType: 'blob'`). Không có cột nào về lương.
+
+```json
+// ProjectOverviewDto (GET /task-reports/project/:id)
+{ "project": { /* TaskProjectDto */ },
+  "statusCounts": { "TODO": 4, "IN_PROGRESS": 3, "IN_REVIEW": 1, "DONE": 10, "CANCELLED": 0 },
+  "overdue": 2,
+  "groups": [{ "id": 4, "name": "Giai đoạn 1", "taskCount": 8, "doneCount": 5, "points": 21, "archived": false, … }],
+  "byAssignee": [{ "person": { … }, "open": 4, "overdue": 1 }],
+  "activeSprint": { /* đợt đang chạy hoặc null */ } }
+```
+
+Số trong tổng quan dự án chỉ đếm việc cấp trên.
+
+## 17. Dự án mẫu (D-Q4)
+
+| Method | Path | Ai |
+|---|---|---|
+| POST | `/v1/task-projects/sample` | Mọi người, mỗi người một dự án mẫu (lần hai → 409 `TASK_SAMPLE_EXISTS`, `error.details.projectId`) |
+| DELETE | `/v1/task-projects/:id` | Người tạo dự án mẫu, ADMIN; chỉ dự án mẫu (dự án thật → 400 `TASK_PROJECT_NOT_SAMPLE`; người khác → 403). Dự án mẫu đã có thành viên khác, việc giao cho người khác, bình luận hay file của người khác → 409 `TASK_SAMPLE_HAS_OTHERS` (đóng dự án thay vì xoá) |
+
+Dự án mẫu (`isSample: true`, mã `MAU`, hoặc `MAUA`… khi đã có) gồm hai nhóm việc, sáu việc (một việc con, bốn đường nối phụ
+thuộc, ngày trải trong 15 ngày tới) đều giao cho chính người tạo, nên không ai khác nhận thông báo. Không vào báo cáo và KPI.
+Xoá là **xoá hẳn** dự án cùng mọi việc, bình luận, file của nó (dự án thật thì đóng, không xoá). Màn danh sách dự án rỗng (UI-03)
+hiện nút "Tạo dự án mẫu"; dự án mẫu hiện nhãn "Dự án mẫu" và nút Xoá dự án cho người tạo.
+
+## 18. Cảnh báo nghỉ việc
+
+Khi HR cho một người nghỉ (`POST /employees/:id/terminate`), nếu người đó còn việc đang mở (Chưa làm, Đang làm, Chờ nghiệm thu)
+mà họ làm hoặc nghiệm thu: trưởng phòng của người nghỉ nhận thông báo cho những việc đó mà trưởng phòng xem được (mục 1.1; việc người nghỉ chỉ nghiệm thu ở phòng, dự án khác thì không), người giao từng việc nhận thông báo cho
+việc mình giao (trong app và email liệt kê từng việc). `type: 'TASK_OFFBOARDING_OPEN'`, `category: 'TASK'`, `refType:
+'task_offboarding'`, `refId` là **id người nghỉ**, `targetUrl: '/cong-viec?assigneeIds=<id>'`. Web mở danh sách việc với
+`GET /tasks?assigneeIds=<id>&status=TODO,IN_PROGRESS,IN_REVIEW` để người nhận giao lại (đổi người ở `PATCH /tasks/:id`). Hệ
+thống không tự chuyển việc. Module tắt thì không cảnh báo; việc định kỳ của người nghỉ tự dừng ở lượt J-01 kế tiếp
+(`pausedReason`).
+
+## 19. Thông báo, socket lô 2
+
+| `type` | Khi | Người nhận |
+|---|---|---|
+| `TASK_ASSIGNED` (tiêu đề "Việc định kỳ … đã đến kỳ") | J-01 sinh việc định kỳ | Người thực hiện |
+| `TASK_OFFBOARDING_OPEN` | Cho nghỉ người còn việc mở | Trưởng phòng của người nghỉ, người giao |
+
+Socket `task.changed` thêm `kind: 'dependency'` (nối, gỡ phụ thuộc) và `kind: 'sprint'` (việc đổi đợt khi đóng đợt). Việc định kỳ
+vừa sinh phát `kind: 'created'`.
+
+## 20. Mã lỗi lô 2
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `TASK_GROUP_NOT_FOUND` | 404 | Nhóm không có trong dự án |
+| `TASK_GROUP_NAME_EXISTS` | 409 | Tên nhóm trùng trong dự án |
+| `TASK_GROUP_INVALID` | 400 | Gắn nhóm cho việc con, việc lẻ; nhóm dự án khác; nhóm đã cất |
+| `TASK_SPRINT_NOT_FOUND` | 404 | Đợt không có trong dự án |
+| `TASK_SPRINT_DISABLED` | 400 | Dự án chưa bật đợt |
+| `TASK_SPRINT_ALREADY_ACTIVE` | 409 | Đã có đợt đang chạy (T-10) |
+| `TASK_SPRINT_STATE_INVALID` | 409 | Bắt đầu, đóng, sửa đợt sai trạng thái; tắt đợt khi đang có đợt chạy |
+| `TASK_SPRINT_INVALID` | 400 | Đưa việc con, việc lẻ vào đợt; đợt dự án khác, đã đóng; đóng đợt `next` không có đợt kế, `new` thiếu `newSprint` |
+| `TASK_RECURRENCE_NOT_FOUND` | 404 | Không có, hoặc không liên quan |
+| `TASK_RECURRENCE_INVALID` | 400 | Quy tắc lặp sai, không còn lần nào |
+| `TASK_RECURRENCE_STATE_INVALID` | 409 | Dừng khi đã dừng, chạy khi đang chạy, chạy lại khi hết lịch |
+| `TASK_DEPENDENCY_CYCLE` | 400 | Nối thành vòng (T-09) |
+| `TASK_DEPENDENCY_INVALID` | 400 | Tự nối; việc sau đã đóng; việc trước đã huỷ |
+| `TASK_DEPENDENCY_EXISTS` | 409 | Nối trùng |
+| `TASK_DEPENDENCY_NOT_FOUND` | 404 | Gỡ nối không có |
+| `TASK_REPORT_FORBIDDEN` | 403 | Không đủ phạm vi xem báo cáo (mục 16) |
+| `TASK_SAMPLE_EXISTS` | 409 | Đã có dự án mẫu; `details.projectId` |
+| `TASK_PROJECT_NOT_SAMPLE` | 400 | Xoá dự án thật |
+| `TASK_SAMPLE_HAS_OTHERS` | 409 | Xoá dự án mẫu đã có dữ liệu của người khác |
+
+## 21. Kịch bản phải thử trên web (P4 lô 2)
+
+Lấy từ phiếu S-06..S-08, thiết kế T-09..T-13 và `docs/modules/18-tasks.md` mục 17.2:
+
+1. F-14: quản lý dự án tạo hai nhóm, giao việc vào nhóm, đổi nhóm trên danh sách; tổng quan dự án hiện "x/y xong" mỗi nhóm; cất
+   nhóm thì không chọn được khi tạo việc; người xem dự án không đổi được nhóm.
+2. F-12, S-08: bật đợt ở cài đặt dự án; màn Việc chờ xếp và Đợt; kéo việc vào đợt (hoặc menu Đưa vào đợt); bắt đầu đợt (hai
+   trình duyệt bấm cùng lúc → một bên báo lỗi, T-10); đóng đợt còn 2 việc chưa xong → hộp liệt kê 2 việc và nơi chuyển, chúng
+   sang đợt kế, thẻ hiện "chuyển đợt 1 lần"; tắt đợt khi đang chạy báo lỗi có câu.
+3. F-11, S-06, T-12: đặt "ngày 31 hằng tháng" thấy các hạn sắp tới có 28 hoặc 29/02; dừng, chạy lại; người thực hiện thấy việc
+   định kỳ xuất hiện đúng ngày báo trước, có nhãn "Việc định kỳ".
+4. F-15, T-09: kéo chấm nối B chờ A trên biểu đồ tiến độ; nối A chờ B báo lỗi vòng; việc trước trễ thì đường nối đỏ, thẻ việc sau
+   có dấu đỏ; người không có quyền đổi hạn không thấy tay cầm; màn hẹp thay biểu đồ bằng danh sách theo hạn.
+5. Lịch: tháng hiện việc theo hạn, đổi tháng, lọc theo người, dự án.
+6. F-10, S-07, T-13: trưởng phòng mở báo cáo tháng phòng mình; bấm từng ô số ra danh sách đúng bằng số; xin phòng khác bị chặn
+   có câu; DIRECTOR thấy mọi phòng; nhân viên thường không thấy menu báo cáo (hoặc 403 có câu).
+7. F-18: xuất Excel tiến độ và việc quá hạn, mở file thấy đúng các cột đang xem.
+8. D-Q4: danh sách dự án rỗng có nút Tạo dự án mẫu; mở dự án mẫu thử đủ bốn chế độ xem; xoá dự án mẫu; dự án mẫu không vào báo cáo.
+9. Cảnh báo nghỉ việc: thông báo "Cần giao lại việc của …" mở đúng danh sách việc của người nghỉ.
+10. Chỉ xem: báo cáo, tiến độ, lịch xem được; nút tạo nhóm, đợt, việc định kỳ, nối phụ thuộc, dự án mẫu ẩn hoặc báo 403 có câu.
+11. Mọi vai: ADMIN, HR, DIRECTOR, MANAGER (trưởng phòng), EMPLOYEE; rỗng, đang tải, lỗi; màn 390 điểm ảnh.
+

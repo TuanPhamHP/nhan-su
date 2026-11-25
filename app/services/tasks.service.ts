@@ -10,18 +10,32 @@ import type {
 	TaskActivityKind,
 	TaskAttachment,
 	TaskBoard,
+	TaskCalendar,
 	TaskChecklistItem,
 	TaskComment,
 	TaskDetail,
+	TaskGroup,
 	TaskListItem,
 	TaskListQuery,
+	TaskOverdueItem,
+	TaskProgressMetric,
+	TaskProgressReport,
 	TaskProject,
 	TaskProjectDetail,
 	TaskProjectMember,
+	TaskProjectOverview,
 	TaskProjectRole,
 	TaskProjectStatus,
+	TaskRecurrence,
+	TaskRecurrenceBody,
+	TaskReportQuery,
 	TaskScope,
 	TaskSignedUrl,
+	TaskSprint,
+	TaskSprintBody,
+	TaskSprintCloseResult,
+	TaskSprintMoveTo,
+	TaskTimeline,
 	TransitionTaskBody,
 	UpdateTaskBody,
 	UpdateTaskProjectBody,
@@ -268,6 +282,190 @@ export const useTasksService = () => {
 
 		async removeProjectMember(id: number, employeeId: number): Promise<void> {
 			await authFetch<void>(`/v1/task-projects/${id}/members/${employeeId}`, { method: 'DELETE' });
+		},
+
+		// ─── Lô 2: dự án mẫu ────────────────────────────────────────────────────
+
+		/** Mỗi người một dự án mẫu; lần hai 409 `TASK_SAMPLE_EXISTS` kèm `details.projectId`. */
+		async createSampleProject(): Promise<TaskProjectDetail> {
+			const res = await authFetch<ApiResponse<TaskProjectDetail>>('/v1/task-projects/sample', { method: 'POST' });
+			return res.data;
+		},
+
+		/** Chỉ dự án mẫu. Có dữ liệu người khác → 409 `TASK_SAMPLE_HAS_OTHERS`. */
+		async deleteProject(id: number): Promise<void> {
+			await authFetch<void>(`/v1/task-projects/${id}`, { method: 'DELETE' });
+		},
+
+		// ─── Lô 2: nhóm việc ────────────────────────────────────────────────────
+
+		async listGroups(projectId: number): Promise<TaskGroup[]> {
+			const res = await authFetch<ApiResponse<TaskGroup[]>>(`/v1/task-projects/${projectId}/groups`);
+			return res.data;
+		},
+
+		async createGroup(projectId: number, body: { name: string; sortOrder?: number }): Promise<TaskGroup> {
+			const res = await authFetch<ApiResponse<TaskGroup>>(`/v1/task-projects/${projectId}/groups`, { method: 'POST', body });
+			return res.data;
+		},
+
+		async updateGroup(
+			projectId: number,
+			groupId: number,
+			body: { name?: string; sortOrder?: number; archived?: boolean },
+		): Promise<TaskGroup> {
+			const res = await authFetch<ApiResponse<TaskGroup>>(`/v1/task-projects/${projectId}/groups/${groupId}`, {
+				method: 'PATCH',
+				body,
+			});
+			return res.data;
+		},
+
+		// ─── Lô 2: đợt ──────────────────────────────────────────────────────────
+
+		async listSprints(projectId: number): Promise<TaskSprint[]> {
+			const res = await authFetch<ApiResponse<TaskSprint[]>>(`/v1/task-projects/${projectId}/sprints`);
+			return res.data;
+		},
+
+		async createSprint(projectId: number, body: TaskSprintBody): Promise<TaskSprint> {
+			const res = await authFetch<ApiResponse<TaskSprint>>(`/v1/task-projects/${projectId}/sprints`, { method: 'POST', body });
+			return res.data;
+		},
+
+		async updateSprint(projectId: number, sprintId: number, body: Partial<TaskSprintBody>): Promise<TaskSprint> {
+			const res = await authFetch<ApiResponse<TaskSprint>>(`/v1/task-projects/${projectId}/sprints/${sprintId}`, {
+				method: 'PATCH',
+				body,
+			});
+			return res.data;
+		},
+
+		async startSprint(projectId: number, sprintId: number): Promise<TaskSprint> {
+			const res = await authFetch<ApiResponse<TaskSprint>>(`/v1/task-projects/${projectId}/sprints/${sprintId}/start`, {
+				method: 'POST',
+			});
+			return res.data;
+		},
+
+		async closeSprint(
+			projectId: number,
+			sprintId: number,
+			body: { moveTo?: TaskSprintMoveTo; newSprint?: TaskSprintBody },
+		): Promise<TaskSprintCloseResult> {
+			const res = await authFetch<ApiResponse<TaskSprintCloseResult>>(
+				`/v1/task-projects/${projectId}/sprints/${sprintId}/close`,
+				{ method: 'POST', body },
+			);
+			return res.data;
+		},
+
+		// ─── Lô 2: việc định kỳ ─────────────────────────────────────────────────
+
+		async listRecurrences(query: {
+			isActive?: boolean;
+			projectId?: number;
+			assigneeId?: number;
+			page?: number;
+			limit?: number;
+		}): Promise<{ data: TaskRecurrence[]; meta: PaginatedMeta }> {
+			const res = await authFetch<ListResponse<TaskRecurrence>>('/v1/task-recurrences', { params: cleanQuery(query) });
+			return { data: res.data, meta: res.meta };
+		},
+
+		async getRecurrence(id: number): Promise<TaskRecurrence> {
+			const res = await authFetch<ApiResponse<TaskRecurrence>>(`/v1/task-recurrences/${id}`);
+			return res.data;
+		},
+
+		async createRecurrence(body: TaskRecurrenceBody): Promise<TaskRecurrence> {
+			const res = await authFetch<ApiResponse<TaskRecurrence>>('/v1/task-recurrences', { method: 'POST', body });
+			return res.data;
+		},
+
+		/** Không đổi dự án; `endDate: null` để bỏ ngày kết thúc. */
+		async updateRecurrence(id: number, body: Partial<Omit<TaskRecurrenceBody, 'projectId'>>): Promise<TaskRecurrence> {
+			const res = await authFetch<ApiResponse<TaskRecurrence>>(`/v1/task-recurrences/${id}`, { method: 'PATCH', body });
+			return res.data;
+		},
+
+		async pauseRecurrence(id: number): Promise<TaskRecurrence> {
+			const res = await authFetch<ApiResponse<TaskRecurrence>>(`/v1/task-recurrences/${id}/pause`, { method: 'POST' });
+			return res.data;
+		},
+
+		async resumeRecurrence(id: number): Promise<TaskRecurrence> {
+			const res = await authFetch<ApiResponse<TaskRecurrence>>(`/v1/task-recurrences/${id}/resume`, { method: 'POST' });
+			return res.data;
+		},
+
+		// ─── Lô 2: phụ thuộc, biểu đồ tiến độ, lịch ─────────────────────────────
+
+		/** Việc `id` (việc sau) chờ `blockerId` (việc trước). Trả chi tiết việc sau. */
+		async addDependency(id: number, blockerId: number): Promise<TaskDetail> {
+			const res = await authFetch<ApiResponse<TaskDetail>>(`/v1/tasks/${id}/dependencies`, {
+				method: 'POST',
+				body: { blockerId },
+			});
+			return res.data;
+		},
+
+		async removeDependency(id: number, blockerId: number): Promise<void> {
+			await authFetch<void>(`/v1/tasks/${id}/dependencies/${blockerId}`, { method: 'DELETE' });
+		},
+
+		/** `from`, `to` bắt buộc, tối đa 370 ngày. */
+		async timeline(query: TaskListQuery & { from: string; to: string }): Promise<TaskTimeline> {
+			const res = await authFetch<ApiResponse<TaskTimeline>>('/v1/tasks/timeline', { params: cleanQuery(query) });
+			return res.data;
+		},
+
+		/** `from`, `to` bắt buộc, tối đa 62 ngày. */
+		async calendar(query: TaskListQuery & { from: string; to: string }): Promise<TaskCalendar> {
+			const res = await authFetch<ApiResponse<TaskCalendar>>('/v1/tasks/calendar', { params: cleanQuery(query) });
+			return res.data;
+		},
+
+		// ─── Lô 2: báo cáo ──────────────────────────────────────────────────────
+
+		async progressReport(query: TaskReportQuery): Promise<TaskProgressReport> {
+			const res = await authFetch<ApiResponse<TaskProgressReport>>('/v1/task-reports/progress', {
+				params: cleanQuery(query),
+			});
+			return res.data;
+		},
+
+		/** Danh sách việc làm nên một ô số (T-13); bỏ `assigneeId` cho dòng tổng. */
+		async progressTasks(
+			query: TaskReportQuery & { metric: TaskProgressMetric; assigneeId?: number; page?: number; limit?: number },
+		): Promise<{ data: TaskListItem[]; meta: PaginatedMeta }> {
+			const res = await authFetch<ListResponse<TaskListItem>>('/v1/task-reports/progress/tasks', {
+				params: cleanQuery(query),
+			});
+			return { data: res.data, meta: res.meta };
+		},
+
+		async overdueReport(
+			query: TaskReportQuery & { page?: number; limit?: number },
+		): Promise<{ data: TaskOverdueItem[]; meta: PaginatedMeta }> {
+			const res = await authFetch<ListResponse<TaskOverdueItem>>('/v1/task-reports/overdue', {
+				params: cleanQuery(query),
+			});
+			return { data: res.data, meta: res.meta };
+		},
+
+		exportProgress(query: TaskReportQuery): Promise<Blob> {
+			return authFetch<Blob>('/v1/task-reports/progress/export', { params: cleanQuery(query), responseType: 'blob' });
+		},
+
+		exportOverdue(query: TaskReportQuery): Promise<Blob> {
+			return authFetch<Blob>('/v1/task-reports/overdue/export', { params: cleanQuery(query), responseType: 'blob' });
+		},
+
+		/** Tổng quan dự án: thành viên, ADMIN, DIRECTOR; người khác 404. */
+		async projectOverview(id: number): Promise<TaskProjectOverview> {
+			const res = await authFetch<ApiResponse<TaskProjectOverview>>(`/v1/task-reports/project/${id}`);
+			return res.data;
 		},
 	};
 };

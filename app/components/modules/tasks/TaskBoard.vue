@@ -3,7 +3,7 @@
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
 	import type { SortableDropEvent } from '~/composables/useSortableList';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
-	import type { TaskBoard, TaskDetail, TaskListItem, TaskStatus } from '~/types/tasks.types';
+	import type { TaskBoard, TaskDetail, TaskListItem, TaskStatus, TaskWipLimits } from '~/types/tasks.types';
 	import { BOARD_STATUSES, STATUS_LABELS, vnToday } from '~/utils/tasks.utils';
 
 	/**
@@ -26,8 +26,10 @@
 			quickCreate?: { projectId?: number | null; defaultAssigneeId?: number | null } | null;
 			activeCode?: string | null;
 			disabled?: boolean;
+			/** Lô 2: giới hạn số thẻ mỗi cột của dự án, chỉ để cảnh báo. */
+			wipLimits?: TaskWipLimits | null;
 		}>(),
-		{ showCancelled: false, quickCreate: null, activeCode: null, disabled: false },
+		{ showCancelled: false, quickCreate: null, activeCode: null, disabled: false, wipLimits: null },
 	);
 
 	const emit = defineEmits<{
@@ -230,6 +232,7 @@
 			:reorder="reorder"
 			:active-code="activeCode"
 			:disabled="disabled"
+			:wip-limit="wipLimits?.[col.status as keyof TaskWipLimits] ?? null"
 			@drag-start="onDragStart"
 			@drag-end="dragging = null"
 			@drop="onDrop"

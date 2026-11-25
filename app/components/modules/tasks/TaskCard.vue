@@ -48,7 +48,16 @@
 		@contextmenu="onContextMenu"
 	>
 		<div class="flex items-start justify-between gap-2">
-			<span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ task.code }}</span>
+			<span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+				<span
+					v-if="task.dependencies?.late"
+					class="h-2 w-2 rounded-full bg-rose-500"
+					title="Việc này đang chờ một việc bị trễ"
+					data-testid="task-late-dot"
+				/>
+				{{ task.code }}
+				<span v-if="task.recurrenceId" class="rounded bg-teal-50 px-1 font-normal text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Định kỳ</span>
+			</span>
 			<TaskCardMenu
 				ref="menuRef"
 				:task="task"
@@ -91,10 +100,12 @@
 		</div>
 
 		<div class="mt-2 flex items-center justify-between gap-2">
-			<span v-if="task.dueChangeCount" class="text-[11px] text-amber-700 dark:text-amber-400">
-				đã đổi hạn {{ task.dueChangeCount }} lần
+			<span class="flex flex-col text-[11px]">
+				<span v-if="task.dueChangeCount" class="text-amber-700 dark:text-amber-400">đã đổi hạn {{ task.dueChangeCount }} lần</span>
+				<span v-if="task.sprintMoveCount" class="text-orange-700 dark:text-orange-400" data-testid="task-sprint-moves">
+					chuyển đợt {{ task.sprintMoveCount }} lần
+				</span>
 			</span>
-			<span v-else />
 			<CommonAppAvatar
 				:src="task.assignee.avatarUrl"
 				:name="task.assignee.fullName"

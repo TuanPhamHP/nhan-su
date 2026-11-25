@@ -32,12 +32,13 @@ export function useAppModules() {
 		catalogApps.value.length > 0 ? mergeAppCatalog(APP_MODULES, catalogApps.value) : appsWithoutCatalog(APP_MODULES),
 	);
 
-	const { hasDepartmentView } = useTaskScope();
+	const { hasDepartmentView, hasReportScope } = useTaskScope();
 
 	function canSeeItem(item: NavItem): boolean {
 		if (item.module && !canUse(item.module)) return false;
 		// Việc của phòng chỉ có nghĩa với trưởng phòng và người xem mọi việc (`NavItem.showWhen`).
 		if (item.showWhen === 'taskDepartments' && !hasDepartmentView.value) return false;
+		if (item.showWhen === 'taskReports' && !hasReportScope.value && !hasPermission('task:report')) return false;
 		return canSeeItemIgnoringModule(item);
 	}
 

@@ -6,12 +6,14 @@
 	import { taskErrorInfo } from '~/utils/tasks.utils';
 
 	/**
-	 * UI-03 Danh sách dự án: dự án mình là thành viên (ADMIN, Giám đốc thấy mọi dự án). Nút Tạo dự án
-	 * mẫu để lô 2, lô 1 chỉ có trạng thái rỗng thường.
+	 * UI-03 Danh sách dự án: dự án mình là thành viên (ADMIN, Giám đốc thấy mọi dự án). Trạng thái rỗng có
+	 * thêm nút Tạo dự án mẫu (D-Q4): dự án thử sẵn hai nhóm, sáu việc giao cho chính mình. Mỗi người một
+	 * dự án mẫu; bấm lần hai thì máy chủ trả 409 kèm id dự án mẫu đang có, trang mở luôn dự án đó.
 	 */
 	useHead({ title: 'Dự án' });
 
 	const service = useTasksService();
+	const toast = useToast();
 	const router = useRouter();
 	const { canUse, canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
@@ -52,6 +54,30 @@
 	});
 
 	const showForm = ref(false);
+
+	const creatingSample = ref(false);
+	async function createSample() {
+		creatingSample.value = true;
+		try {
+			const p = await service.createSampleProject();
+			toast.success(`Đã tạo dự án mẫu ${p.code}`);
+			router.push(`/cong-viec/du-an/${p.code}`);
+		} catch (err) {
+			const info = taskErrorInfo(err);
+			const existing = (err as { data?: { error?: { details?: { projectId?: number } } } })?.data?.error?.details?.projectId;
+			if (info.code === 'TASK_SAMPLE_EXISTS' && existing) {
+				toast.info(info.message);
+				try {
+					const p = await service.getProject(existing);
+					router.push(`/cong-viec/du-an/${p.code}`);
+				} catch {
+					// không mở được thì chỉ báo câu
+				}
+			} else toast.error(info.message);
+		} finally {
+			creatingSample.value = false;
+		}
+	}
 	function onSaved(p: TaskProjectDetail) {
 		showForm.value = false;
 		router.push(`/cong-viec/du-an/${p.code}`);
@@ -119,8 +145,13 @@
 			title="Bạn chưa ở trong dự án nào"
 			description="Tạo dự án khi có nhiều việc cùng một mục tiêu, ví dụ thông quan một lô hàng hay chốt sổ tháng."
 			:action-label="readOnly ? undefined : 'Tạo dự án'"
+			:secondary-label="readOnly ? undefined : creatingSample ? 'Đang tạo…' : 'Tạo dự án mẫu'"
 			@action="showForm = true"
+			@secondary="!creatingSample && createSample()"
 		/>
+		<p v-if="!loading && !loadError && !projects.length && !filtered && !readOnly" class="-mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
+			Dự án mẫu có sẵn nhóm việc, việc con và việc phải chờ để bạn thử đủ bốn cách xem. Thử xong thì xoá.
+		</p>
 		<ul v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="project-list">
 			<li v-for="p in projects" :key="p.id">
 				<NuxtLink
@@ -128,7 +159,10 @@
 					class="block h-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900"
 				>
 					<div class="flex items-center justify-between gap-2">
-						<span class="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">{{ p.code }}</span>
+						<span class="flex items-center gap-1.5">
+							<span class="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">{{ p.code }}</span>
+							<span v-if="p.isSample" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Mẫu</span>
+						</span>
 						<span
 							class="rounded-full px-2 py-0.5 text-xs"
 							:class="p.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'"

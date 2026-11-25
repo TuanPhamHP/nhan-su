@@ -67,6 +67,7 @@ import { isManagementRole } from '~/utils/role';
  *
  * Công việc lô 1 (module `TASKS`) không rẽ theo vai trò: mọi người nhận mở cùng trang chi tiết việc.
  * | task                      | /cong-viec/:refId (trang nhận cả id số lẫn số hiệu) |
+ * | task_offboarding          | /cong-viec?assigneeIds=:refId (refId là id người nghỉ) |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -240,6 +241,11 @@ export function resolveNotificationRoute(
 		// tự đổi đường dẫn sang số hiệu. `targetUrl` máy chủ dựng sẵn cũng trỏ đúng trang này.
 		case 'task':
 			return id ? `/cong-viec/${id}` : '/cong-viec';
+
+		// Lô 2 `TASK_OFFBOARDING_OPEN`: `refId` là id NGƯỜI NGHỈ, không phải id việc. Trang Việc của tôi
+		// đọc `assigneeIds` trên đường dẫn và hiện việc đang mở của người đó để giao lại.
+		case 'task_offboarding':
+			return id ? `/cong-viec?assigneeIds=${id}` : '/cong-viec';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

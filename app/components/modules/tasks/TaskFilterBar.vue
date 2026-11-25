@@ -1,5 +1,5 @@
 <script setup lang="ts">
-	import type { TaskFilterState } from '~/composables/useTaskFilters';
+	import type { TaskFilterState, TaskViewMode } from '~/composables/useTaskFilters';
 	import { BOARD_STATUSES, PRIORITY_LABELS, STATUS_LABELS } from '~/utils/tasks.utils';
 
 	/**
@@ -11,9 +11,19 @@
 		state: TaskFilterState;
 		people: Array<{ id: number; fullName: string }>;
 		isDefault: boolean;
-		/** Ẩn nút chuyển Danh sách/Bảng việc (màn chỉ có một chế độ). */
+		/** Ẩn nút chuyển chế độ xem (màn chỉ có một chế độ). */
 		hideMode?: boolean;
+		/** Lô 2: nhóm việc, đợt của dự án; có thì hiện ô lọc tương ứng. */
+		taskGroups?: Array<{ id: number; name: string; archived?: boolean }>;
+		sprints?: Array<{ id: number; name: string; statusLabel: string }> | null;
 	}>();
+
+	const MODES: Array<{ key: TaskViewMode; label: string; icon: string; tour?: string }> = [
+		{ key: 'list', label: 'Danh sách', icon: 'heroicons:list-bullet' },
+		{ key: 'board', label: 'Bảng việc', icon: 'heroicons:view-columns', tour: 'task-board-tab' },
+		{ key: 'timeline', label: 'Tiến độ', icon: 'heroicons:chart-bar', tour: 'task-timeline-tab' },
+		{ key: 'calendar', label: 'Lịch', icon: 'heroicons:calendar-days' },
+	];
 	const emit = defineEmits<{ reset: [] }>();
 
 	const qDraft = ref(props.state.q);
@@ -49,12 +59,24 @@
 		{ value: '', label: 'Mọi người thực hiện' },
 		...props.people.map(p => ({ value: String(p.id), label: p.fullName })),
 	]);
-	const groupOptions = [
+	const groupOptions = computed(() => [
 		{ value: 'status', label: 'Nhóm theo trạng thái' },
 		{ value: 'assignee', label: 'Nhóm theo người làm' },
 		{ value: 'due', label: 'Nhóm theo hạn' },
+		...(props.taskGroups?.length ? [{ value: 'taskGroup', label: 'Nhóm theo nhóm việc' }] : []),
 		{ value: 'none', label: 'Không nhóm' },
-	];
+	]);
+	const taskGroupOptions = computed(() => [
+		{ value: '', label: 'Mọi nhóm việc' },
+		...(props.taskGroups ?? []).map(g => ({ value: String(g.id), label: g.archived ? `${g.name} (đã cất)` : g.name })),
+	]);
+	const sprintOptions = computed(() => [
+		{ value: '', label: 'Mọi đợt' },
+		{ value: 'backlog', label: 'Việc chờ xếp' },
+		...(props.sprints ?? []).map(s => ({ value: String(s.id), label: `${s.name} (${s.statusLabel.toLowerCase()})` })),
+	]);
+	/** Ô Trạng thái có ở mọi chế độ trừ Bảng việc (bảng đã chia cột theo trạng thái). */
+	const showStatus = computed(() => props.state.mode !== 'board');
 
 	/* eslint-disable vue/no-mutating-props -- các ô dưới ghi thẳng vào state dùng chung */
 	function set<K extends keyof TaskFilterState>(key: K, value: TaskFilterState[K]) {
@@ -66,30 +88,27 @@
 <template>
 	<div class="space-y-2" data-testid="task-filter-bar">
 		<div class="flex flex-wrap items-center gap-2">
-			<div v-if="!hideMode" class="flex rounded-lg bg-gray-100 p-0.5 text-sm dark:bg-gray-800" role="tablist" aria-label="Chế độ xem">
+			<div
+				v-if="!hideMode"
+				class="flex max-w-full overflow-x-auto rounded-lg bg-gray-100 p-0.5 text-sm dark:bg-gray-800"
+				role="tablist"
+				aria-label="Chế độ xem"
+				data-testid="task-mode-tabs"
+			>
 				<button
+					v-for="m in MODES"
+					:key="m.key"
 					type="button"
 					role="tab"
-					:aria-selected="state.mode === 'list'"
-					class="flex items-center gap-1 rounded-md px-3 py-1.5 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-					:class="state.mode === 'list' ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'"
-					@click="set('mode', 'list')"
+					:aria-selected="state.mode === m.key"
+					class="flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 sm:px-3"
+					:class="state.mode === m.key ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'"
+					:data-tour="m.tour"
+					:data-testid="`task-mode-${m.key}`"
+					@click="set('mode', m.key)"
 				>
-					<Icon name="heroicons:list-bullet" class="h-4 w-4" aria-hidden="true" />Danh sách
+					<Icon :name="m.icon" class="h-4 w-4" aria-hidden="true" />{{ m.label }}
 				</button>
-				<button
-					type="button"
-					role="tab"
-					:aria-selected="state.mode === 'board'"
-					class="flex items-center gap-1 rounded-md px-3 py-1.5 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-					:class="state.mode === 'board' ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'"
-					data-tour="task-board-tab"
-					@click="set('mode', 'board')"
-				>
-					<Icon name="heroicons:view-columns" class="h-4 w-4" aria-hidden="true" />Bảng việc
-				</button>
-				<span class="flex cursor-not-allowed items-center rounded-md px-3 py-1.5 text-gray-400 dark:text-gray-600" title="Tiến độ và Lịch có ở bản sau">Tiến độ</span>
-				<span class="hidden cursor-not-allowed items-center rounded-md px-3 py-1.5 text-gray-400 sm:flex dark:text-gray-600" title="Tiến độ và Lịch có ở bản sau">Lịch</span>
 			</div>
 			<div class="relative min-w-[12rem] flex-1">
 				<Icon name="heroicons:magnifying-glass" class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" aria-hidden="true" />
@@ -104,9 +123,25 @@
 		</div>
 		<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
 			<UiSelect class="sm:w-48" :model-value="state.assignee" :options="peopleOptions" searchable @update:model-value="v => set('assignee', v == null ? '' : String(v))" />
-			<UiSelect v-if="state.mode === 'list'" class="sm:w-40" :model-value="state.status" :options="statusOptions" @update:model-value="v => set('status', v == null ? '' : String(v))" />
+			<UiSelect v-if="showStatus" class="sm:w-40" :model-value="state.status" :options="statusOptions" @update:model-value="v => set('status', v == null ? '' : String(v))" />
 			<UiSelect class="sm:w-36" :model-value="state.due" :options="dueOptions" @update:model-value="v => set('due', (v == null ? '' : String(v)) as TaskFilterState['due'])" />
 			<UiSelect class="sm:w-40" :model-value="state.priority" :options="priorityOptions" @update:model-value="v => set('priority', v == null ? '' : String(v))" />
+			<UiSelect
+				v-if="taskGroups?.length"
+				class="sm:w-44"
+				:model-value="state.taskGroup"
+				:options="taskGroupOptions"
+				data-testid="task-filter-group"
+				@update:model-value="v => set('taskGroup', v == null ? '' : String(v))"
+			/>
+			<UiSelect
+				v-if="sprints"
+				class="sm:w-44"
+				:model-value="state.sprint"
+				:options="sprintOptions"
+				data-testid="task-filter-sprint"
+				@update:model-value="v => set('sprint', v == null ? '' : String(v))"
+			/>
 			<UiSelect
 				v-if="state.mode === 'list'"
 				class="sm:w-48"

@@ -257,3 +257,98 @@ export function projectCodeError(code: string): string | null {
 export function isTaskRef(value: string): boolean {
 	return /^[A-Za-z]{2,6}-\d+$/.test(value) || /^\d+$/.test(value);
 }
+
+// ─── Lô 2 ─────────────────────────────────────────────────────────────────────
+
+/** Câu ⓘ một dòng cho các khái niệm mới (mục 9.2 "Hướng dẫn người mới"). */
+export const TASK_HINTS = {
+	sprint: 'Đợt là một khoảng ngắn, thường một hai tuần. Cả nhóm chọn việc làm trong khoảng đó rồi đóng đợt.',
+	backlog: 'Việc chờ xếp là việc của dự án chưa đưa vào đợt nào.',
+	points: 'Điểm khối lượng: việc càng nặng điểm càng cao, từ 1 rất nhẹ tới 8 rất nặng.',
+	group: 'Nhóm việc gom các việc cùng một phần của dự án, ví dụ một giai đoạn.',
+	dependency: 'Việc này chỉ nên bắt đầu khi việc nó chờ đã xong. Hệ thống chỉ cảnh báo, không chặn.',
+	wip: 'Số thẻ tối đa nên có trong cột. Vượt thì cột báo đỏ, vẫn kéo thẻ vào được.',
+} as const;
+
+export const WEEKDAY_LABELS: Record<number, string> = {
+	1: 'Thứ Hai',
+	2: 'Thứ Ba',
+	3: 'Thứ Tư',
+	4: 'Thứ Năm',
+	5: 'Thứ Sáu',
+	6: 'Thứ Bảy',
+	7: 'Chủ nhật',
+};
+
+export const WEEKDAY_SHORT: Record<number, string> = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' };
+
+export const FREQUENCY_LABELS = {
+	WEEKLY: 'Hằng tuần',
+	MONTHLY: 'Hằng tháng',
+	QUARTERLY: 'Hằng quý',
+	YEARLY: 'Hằng năm',
+} as const;
+
+const PERIOD_WORD = { WEEKLY: 'tuần', MONTHLY: 'tháng', QUARTERLY: 'quý', YEARLY: 'năm' } as const;
+
+/**
+ * Câu đời thường cho một quy tắc lặp: "Thứ Hai hằng tuần", "Ngày 31 hằng tháng", "Ngày 15 tháng thứ 2
+ * mỗi quý", "Ngày 20/12 hằng năm", "Ngày 5, mỗi 2 tháng".
+ */
+export function recurrenceText(r: {
+	frequency: keyof typeof FREQUENCY_LABELS;
+	interval?: number;
+	weekdays?: number[];
+	dayOfMonth?: number | null;
+	monthOfPeriod?: number | null;
+}): string {
+	const n = r.interval && r.interval > 1 ? r.interval : 1;
+	const every = n > 1 ? `mỗi ${n} ${PERIOD_WORD[r.frequency]}` : FREQUENCY_LABELS[r.frequency].toLowerCase();
+	if (r.frequency === 'WEEKLY') {
+		const days = [...(r.weekdays ?? [])].sort((a, b) => a - b).map(d => WEEKDAY_LABELS[d] ?? `Thứ ${d}`);
+		return `${days.length ? days.join(', ') : 'Chưa chọn thứ'} ${every}`;
+	}
+	const day = r.dayOfMonth ?? 1;
+	if (r.frequency === 'MONTHLY') return `Ngày ${day} ${every}`;
+	if (r.frequency === 'QUARTERLY') return `Ngày ${day} tháng thứ ${r.monthOfPeriod ?? 1} của quý, ${every}`;
+	return `Ngày ${day}/${r.monthOfPeriod ?? 1} ${every}`;
+}
+
+export interface ProgressColumn {
+	metric: 'assigned' | 'cancelled' | 'done' | 'onTimeOriginal' | 'onTimeCurrent' | 'overdueOpen' | 'returned' | 'points' | 'quality';
+	label: string;
+	hint: string;
+	/** Tỷ lệ đi kèm (trường `…Pct`). */
+	pct?: 'donePct' | 'onTimeOriginalPct' | 'onTimeCurrentPct';
+}
+
+/** Cột báo cáo tiến độ, đúng thứ tự và cách tính của bridge mục 16. */
+export const PROGRESS_COLUMNS: ProgressColumn[] = [
+	{ metric: 'assigned', label: 'Được giao', hint: 'Việc người khác giao, hạn ban đầu trong khoảng, kể cả việc đã huỷ.' },
+	{ metric: 'cancelled', label: 'Đã huỷ', hint: 'Việc được giao rồi bị huỷ, tính riêng.' },
+	{ metric: 'done', label: 'Hoàn thành', hint: 'Đã nghiệm thu.', pct: 'donePct' },
+	{ metric: 'onTimeOriginal', label: 'Đúng hạn ban đầu', hint: 'Báo xong lần đầu không muộn hơn hạn lúc giao.', pct: 'onTimeOriginalPct' },
+	{ metric: 'onTimeCurrent', label: 'Đúng hạn hiện tại', hint: 'Báo xong lần đầu không muộn hơn hạn sau khi đổi.', pct: 'onTimeCurrentPct' },
+	{ metric: 'overdueOpen', label: 'Quá hạn còn mở', hint: 'Chưa báo xong mà hạn đã qua tại cuối khoảng.' },
+	{ metric: 'returned', label: 'Bị trả lại', hint: 'Đã bị trả lại hoặc mở lại ít nhất một lần.' },
+	{ metric: 'points', label: 'Khối lượng', hint: 'Tổng điểm việc nghiệm thu trong khoảng.' },
+	{ metric: 'quality', label: 'Chất lượng', hint: 'Điểm chất lượng trung bình của việc có chấm.' },
+];
+
+/** "66,7%"; null thì "—". */
+export function pctText(v: number | null | undefined): string {
+	if (v == null) return '—';
+	return `${String(Math.round(v * 10) / 10).replace('.', ',')}%`;
+}
+
+/** Tải blob về máy (tên file do nơi gọi đặt, `$fetch` blob không đưa header ra). */
+export function downloadTaskBlob(blob: Blob, fileName: string): void {
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = fileName;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	URL.revokeObjectURL(url);
+}

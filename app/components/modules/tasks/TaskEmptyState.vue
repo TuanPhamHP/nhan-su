@@ -8,8 +8,10 @@
 		title: string;
 		description?: string;
 		actionLabel?: string;
+		/** Nút thứ hai, ví dụ "Tạo dự án mẫu" cạnh "Tạo dự án". */
+		secondaryLabel?: string;
 	}>();
-	const emit = defineEmits<{ action: [] }>();
+	const emit = defineEmits<{ action: []; secondary: [] }>();
 
 	const ICON: Record<typeof props.kind, string> = {
 		none: 'heroicons:clipboard-document-list',
@@ -34,8 +36,13 @@
 		/>
 		<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ title }}</h3>
 		<p v-if="description" class="max-w-md text-sm text-gray-600 dark:text-gray-400">{{ description }}</p>
-		<CommonAppButton v-if="actionLabel" size="sm" :variant="kind === 'none' ? 'primary' : 'secondary'" class="mt-1" @click="emit('action')">
-			{{ actionLabel }}
-		</CommonAppButton>
+		<div v-if="actionLabel || secondaryLabel" class="mt-1 flex flex-wrap justify-center gap-2">
+			<CommonAppButton v-if="actionLabel" size="sm" :variant="kind === 'none' ? 'primary' : 'secondary'" @click="emit('action')">
+				{{ actionLabel }}
+			</CommonAppButton>
+			<CommonAppButton v-if="secondaryLabel" size="sm" variant="outline" data-testid="task-empty-secondary" @click="emit('secondary')">
+				{{ secondaryLabel }}
+			</CommonAppButton>
+		</div>
 	</div>
 </template>

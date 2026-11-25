@@ -93,6 +93,9 @@ export type NotificationType =
 	| 'TASK_DUE_SOON'
 	| 'TASK_OVERDUE'
 	| 'TASK_DUE_CHANGED'
+	// Lô 2 (bridge mục 18): cho nghỉ người còn việc đang mở. refType `task_offboarding`, refId là id người
+	// nghỉ, mở danh sách việc của người đó để giao lại.
+	| 'TASK_OFFBOARDING_OPEN'
 	| 'TEST';
 
 export interface NotificationActionPayload {

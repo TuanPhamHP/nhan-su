@@ -52,6 +52,16 @@
 					<span :class="DUE_TONE_CLASS[tone]">{{ taskDueText(task, today) }}</span>
 					<TaskPriorityBadge :priority="task.priority" only-high />
 					<span>{{ task.points }} điểm</span>
+					<span
+						v-if="task.recurrenceId"
+						class="rounded bg-teal-50 px-1 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
+						data-testid="row-recurring"
+					>
+						Việc định kỳ
+					</span>
+					<span v-if="task.dependencies?.late" class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400" data-testid="task-late-dot">
+						<span class="h-1.5 w-1.5 rounded-full bg-rose-500" />đang chờ việc bị trễ
+					</span>
 					<span v-if="task.project" class="truncate">{{ task.project.name }}</span>
 					<span v-if="showAssignee">làm: {{ task.assignee.fullName }}</span>
 					<span v-else-if="task.assigner.id !== task.assignee.id">giao: {{ task.assigner.fullName }}</span>

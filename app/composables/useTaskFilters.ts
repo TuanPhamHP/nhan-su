@@ -6,15 +6,24 @@ import type { TaskDueFilter, TaskListQuery } from '~/types/tasks.types';
  * duyệt theo `storageKey` (mỗi dự án một khoá); vào lại mà đường dẫn trống thì dùng lần cuối. Nút Về
  * mặc định xoá cả hai.
  */
+export type TaskViewMode = 'list' | 'board' | 'timeline' | 'calendar';
+export const TASK_VIEW_MODES: TaskViewMode[] = ['list', 'board', 'timeline', 'calendar'];
+
 export interface TaskFilterState {
-	mode: 'list' | 'board';
+	/** Bốn chế độ xem dùng chung thanh lọc (UI-04): Danh sách, Bảng việc, Tiến độ, Lịch. */
+	mode: TaskViewMode;
 	q: string;
 	status: string;
 	due: '' | TaskDueFilter;
 	priority: string;
 	assignee: string;
-	group: 'status' | 'assignee' | 'due' | 'none';
+	/** Cách nhóm ở Danh sách (không phải nhóm việc). */
+	group: 'status' | 'assignee' | 'due' | 'taskGroup' | 'none';
 	cancelled: boolean;
+	/** Lô 2: lọc theo nhóm việc (id, hoặc rỗng). */
+	taskGroup: string;
+	/** Lô 2: lọc theo đợt: id đợt, `backlog` (việc chờ xếp) hoặc rỗng. */
+	sprint: string;
 }
 
 const DEFAULTS: TaskFilterState = {
@@ -26,6 +35,8 @@ const DEFAULTS: TaskFilterState = {
 	assignee: '',
 	group: 'status',
 	cancelled: false,
+	taskGroup: '',
+	sprint: '',
 };
 
 const KEYS = Object.keys(DEFAULTS) as Array<keyof TaskFilterState>;
@@ -39,7 +50,7 @@ function fromQuery(query: Record<string, unknown>, base: TaskFilterState): TaskF
 		if (key === 'cancelled') s.cancelled = v === '1';
 		else (s as Record<string, unknown>)[key] = v;
 	}
-	if (s.mode !== 'list' && s.mode !== 'board') s.mode = base.mode;
+	if (!TASK_VIEW_MODES.includes(s.mode)) s.mode = base.mode;
 	return s;
 }
 
@@ -98,7 +109,9 @@ export function useTaskFilters(storageKey: () => string, overrides: Partial<Task
 		sync();
 	}
 
-	const isFiltered = computed(() => !!(state.q || state.status || state.due || state.priority || state.assignee));
+	const isFiltered = computed(
+		() => !!(state.q || state.status || state.due || state.priority || state.assignee || state.taskGroup || state.sprint),
+	);
 	const isDefault = computed(() => KEYS.every(k => state[k] === defaults[k]));
 
 	/** Phần bộ lọc gửi lên API (không gồm chế độ xem, cách nhóm). */
@@ -108,6 +121,9 @@ export function useTaskFilters(storageKey: () => string, overrides: Partial<Task
 		due: state.due || undefined,
 		priority: state.priority || undefined,
 		assigneeIds: state.assignee || undefined,
+		groupId: state.taskGroup ? Number(state.taskGroup) : undefined,
+		sprintId: state.sprint && state.sprint !== 'backlog' ? Number(state.sprint) : undefined,
+		backlog: state.sprint === 'backlog' || undefined,
 	}));
 
 	watch(

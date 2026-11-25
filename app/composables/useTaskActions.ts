@@ -166,7 +166,17 @@ export function useTaskActions() {
 	/** Sửa trên ô (ưu tiên, người thực hiện, tiêu đề...): gửi kèm `version` đang hiện. */
 	async function updateFields(
 		task: TaskListItem,
-		fields: { title?: string; description?: string; priority?: TaskListItem['priority']; points?: number; startDate?: string; assigneeId?: number; reviewerId?: number },
+		fields: {
+			title?: string;
+			description?: string;
+			priority?: TaskListItem['priority'];
+			points?: number;
+			startDate?: string;
+			assigneeId?: number;
+			reviewerId?: number;
+			groupId?: number | null;
+			sprintId?: number | null;
+		},
 	): Promise<TaskActionResult> {
 		busy.value = true;
 		try {

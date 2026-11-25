@@ -1,6 +1,6 @@
 /**
- * Module Công việc và KPI, lô 1 (`docs/backend/bridges/tasks.md`). Kiểu khớp `docs/openapi.json` của
- * nhánh BE `feat/tasks-lot1`.
+ * Module Công việc và KPI, lô 1 và lô 2 (`docs/backend/bridges/tasks.md`, lô 2 từ mục 12). Kiểu khớp
+ * `docs/openapi.json` của BE develop (d3cc8fe).
  *
  * Giao diện KHÔNG tự tính ai được làm gì: mọi nút, cột mờ, ô sửa được đều đọc từ `allowedActions`,
  * `columnRules`, `permissions` máy chủ trả kèm mỗi việc (bridge mục 1.2).
@@ -69,6 +69,27 @@ export interface TaskPermissions {
 	comment: boolean;
 }
 
+export interface TaskGroupRef {
+	id: number;
+	name: string;
+}
+
+export type TaskSprintStatus = 'PLANNED' | 'ACTIVE' | 'CLOSED';
+
+export interface TaskSprintRef {
+	id: number;
+	name: string;
+	status: TaskSprintStatus;
+	statusLabel: string;
+}
+
+/** Đếm phụ thuộc trên dòng việc (bridge mục 12.1). `late`: có việc phải chờ đang trễ, hiện dấu đỏ. */
+export interface TaskDependencySummary {
+	blockers: number;
+	blocking: number;
+	late: boolean;
+}
+
 export interface TaskListItem {
 	id: number;
 	code: string;
@@ -85,6 +106,15 @@ export interface TaskListItem {
 	personalOrder: number | null;
 	project: TaskProjectRef | null;
 	parent: TaskParentRef | null;
+	/** Lô 2: nhóm việc, đợt (null khi không có; dự án bật đợt mà `sprint` null là việc chờ xếp). */
+	group: TaskGroupRef | null;
+	sprint: TaskSprintRef | null;
+	/** Khác null: việc sinh từ việc định kỳ. */
+	recurrenceId: number | null;
+	/** Số lần bị chuyển sang đợt sau khi đóng đợt. */
+	sprintMoveCount: number;
+	addedAfterSprintStart: boolean;
+	dependencies: TaskDependencySummary;
 	assigner: TaskPerson;
 	assignee: TaskPerson;
 	reviewer: TaskPerson;
@@ -147,8 +177,25 @@ export interface TaskDetail extends TaskListItem {
 	attachments: TaskAttachment[];
 	dueChanges: TaskDueChange[];
 	children: TaskListItem[];
+	/** Việc này phải chờ (việc trước). */
+	blockers: TaskDependency[];
+	/** Việc đang chờ việc này (việc sau). */
+	blocking: TaskDependency[];
 	/** Câu cảnh báo không chặn sau thao tác (VD báo xong khi còn việc con mở). */
 	warning: string | null;
+}
+
+/** Một đầu của phụ thuộc trong chi tiết việc. Không xem được thì `title` null, `visible` false. */
+export interface TaskDependency {
+	id: number;
+	code: string;
+	title: string | null;
+	status: TaskStatus;
+	statusLabel: string;
+	startDate: string | null;
+	dueDate: string;
+	visible: boolean;
+	late: boolean;
 }
 
 export interface TaskBoardColumn {
@@ -183,6 +230,11 @@ export interface TaskListQuery {
 	page?: number;
 	limit?: number;
 	includeCancelled?: boolean;
+	groupId?: number;
+	sprintId?: number;
+	recurrenceId?: number;
+	/** Việc chờ xếp của dự án bật đợt (dùng kèm `projectId`). */
+	backlog?: boolean;
 }
 
 export interface CreateTaskBody {
@@ -198,6 +250,8 @@ export interface CreateTaskBody {
 	parentId?: number;
 	watcherIds?: number[];
 	checklist?: string[];
+	groupId?: number;
+	sprintId?: number;
 }
 
 export interface UpdateTaskBody {
@@ -209,6 +263,10 @@ export interface UpdateTaskBody {
 	startDate?: string;
 	assigneeId?: number;
 	reviewerId?: number;
+	/** `null` bỏ nhóm. */
+	groupId?: number | null;
+	/** `null` đưa về việc chờ xếp. */
+	sprintId?: number | null;
 }
 
 export interface TransitionTaskBody {
@@ -329,7 +387,15 @@ export interface TaskProject {
 	myRoleLabel: string | null;
 	canManage: boolean;
 	createdAt: string;
+	/** Lô 2: dự án bật đợt và việc chờ xếp. */
+	useSprints: boolean;
+	/** Dự án mẫu (D-Q4): không vào báo cáo, người tạo xoá được. */
+	isSample: boolean;
+	/** Giới hạn số thẻ mỗi cột, chỉ để cảnh báo. */
+	wipLimits: TaskWipLimits | null;
 }
+
+export type TaskWipLimits = Partial<Record<'TODO' | 'IN_PROGRESS' | 'IN_REVIEW', number>>;
 
 export interface TaskProjectMember {
 	employee: TaskPerson;
@@ -357,6 +423,209 @@ export interface UpdateTaskProjectBody {
 	name?: string;
 	description?: string;
 	departmentId?: number | null;
+	useSprints?: boolean;
+	wipLimits?: TaskWipLimits | null;
+}
+
+// ─── Lô 2: nhóm việc, đợt ──────────────────────────────────────────────────────
+
+export interface TaskGroup {
+	id: number;
+	projectId: number;
+	name: string;
+	sortOrder: number;
+	archived: boolean;
+	/** Chỉ đếm việc cấp trên chưa huỷ. */
+	taskCount: number;
+	doneCount: number;
+	points: number;
+}
+
+export interface TaskSprint {
+	id: number;
+	projectId: number;
+	name: string;
+	goal: string | null;
+	startDate: string;
+	endDate: string;
+	status: TaskSprintStatus;
+	statusLabel: string;
+	startedAt: string | null;
+	closedAt: string | null;
+	taskCounts: Record<TaskStatus, number>;
+	points: Record<TaskStatus, number>;
+	/** Không tính việc huỷ. */
+	totalPoints: number;
+}
+
+export interface TaskSprintBody {
+	name: string;
+	goal?: string;
+	startDate: string;
+	endDate: string;
+}
+
+export type TaskSprintMoveTo = 'next' | 'new' | 'backlog';
+
+export interface TaskSprintCloseResult {
+	sprint: TaskSprint;
+	movedTo: TaskSprint | null;
+	moved: string[];
+}
+
+// ─── Lô 2: việc định kỳ ────────────────────────────────────────────────────────
+
+export type TaskRecurrenceFrequency = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+
+export interface TaskRecurrencePerson extends TaskPerson {
+	inactive: boolean;
+}
+
+export interface TaskRecurrence {
+	id: number;
+	title: string;
+	description: string | null;
+	project: TaskProjectRef | null;
+	assigner: TaskRecurrencePerson;
+	assignee: TaskRecurrencePerson;
+	reviewer: TaskRecurrencePerson;
+	priority: TaskPriority;
+	priorityLabel: string;
+	points: number;
+	watcherIds: number[];
+	checklist: string[];
+	frequency: TaskRecurrenceFrequency;
+	frequencyLabel: string;
+	interval: number;
+	/** 1 thứ Hai … 7 Chủ nhật. */
+	weekdays: number[];
+	dayOfMonth: number | null;
+	monthOfPeriod: number | null;
+	leadDays: number;
+	startDate: string;
+	endDate: string | null;
+	/** Hạn lần sinh kế. */
+	nextDueDate: string | null;
+	/** Ngày việc kế xuất hiện. */
+	nextAppearDate: string | null;
+	lastDueDate: string | null;
+	isActive: boolean;
+	/** Lý do hệ thống tự dừng; null khi người dùng dừng. */
+	pausedReason: string | null;
+	/** Tối đa 5 hạn sắp tới, rỗng khi đã dừng. */
+	upcoming: string[];
+	taskCount: number;
+	canManage: boolean;
+	createdAt: string;
+}
+
+export interface TaskRecurrenceBody {
+	title: string;
+	description?: string;
+	projectId?: number;
+	assigneeId: number;
+	reviewerId?: number;
+	priority?: TaskPriority;
+	points: number;
+	watcherIds?: number[];
+	checklist?: string[];
+	frequency: TaskRecurrenceFrequency;
+	interval?: number;
+	weekdays?: number[];
+	dayOfMonth?: number;
+	monthOfPeriod?: number;
+	leadDays?: number;
+	startDate: string;
+	endDate?: string | null;
+}
+
+// ─── Lô 2: biểu đồ tiến độ, lịch ──────────────────────────────────────────────
+
+export interface TaskTimelineLink {
+	blockerId: number;
+	blockedId: number;
+	late: boolean;
+}
+
+export interface TaskTimeline {
+	from: string;
+	to: string;
+	tasks: TaskListItem[];
+	links: TaskTimelineLink[];
+	/** Còn quá 500 việc: gợi ý lọc hẹp hơn. */
+	truncated: boolean;
+}
+
+export interface TaskCalendar {
+	from: string;
+	to: string;
+	tasks: TaskListItem[];
+	truncated: boolean;
+}
+
+// ─── Lô 2: báo cáo ─────────────────────────────────────────────────────────────
+
+export type TaskProgressMetric =
+	| 'assigned'
+	| 'cancelled'
+	| 'done'
+	| 'onTimeOriginal'
+	| 'onTimeCurrent'
+	| 'overdueOpen'
+	| 'returned'
+	| 'points'
+	| 'quality';
+
+export interface TaskReportPerson extends TaskPerson {
+	employeeCode: string | null;
+	departmentName: string | null;
+	inactive: boolean;
+}
+
+export interface TaskProgressCounts {
+	assigned: number;
+	cancelled: number;
+	done: number;
+	onTimeOriginal: number;
+	onTimeCurrent: number;
+	overdueOpen: number;
+	returned: number;
+	points: number;
+	quality: number | null;
+	qualityCount: number;
+	onTimeOriginalPct: number | null;
+	onTimeCurrentPct: number | null;
+	donePct: number | null;
+}
+
+export interface TaskProgressReport {
+	from: string;
+	to: string;
+	scope: { departmentNames: string[]; projectId: number | null; projectName: string | null };
+	rows: Array<{ person: TaskReportPerson; counts: TaskProgressCounts }>;
+	total: TaskProgressCounts;
+}
+
+export interface TaskReportQuery {
+	from?: string;
+	to?: string;
+	departmentId?: number;
+	projectId?: number;
+	groupId?: number;
+	assigneeIds?: string;
+}
+
+export interface TaskOverdueItem extends TaskListItem {
+	daysOverdue: number;
+}
+
+export interface TaskProjectOverview {
+	project: TaskProject;
+	statusCounts: Record<TaskStatus, number>;
+	overdue: number;
+	groups: TaskGroup[];
+	byAssignee: Array<{ person: TaskReportPerson; open: number; overdue: number }>;
+	activeSprint: TaskSprint | null;
 }
 
 /** Bản rút gọn trong `error.details.task` của 409 `TASK_VERSION_CONFLICT`, `TASK_STATUS_INVALID`. */
@@ -378,7 +647,18 @@ export interface TaskChangedEvent {
 	id: number;
 	code: string;
 	version: number;
-	kind: 'created' | 'updated' | 'status' | 'due' | 'moved' | 'checklist' | 'watchers' | 'attachment' | 'cancelled';
+	kind:
+		| 'created'
+		| 'updated'
+		| 'status'
+		| 'due'
+		| 'moved'
+		| 'checklist'
+		| 'watchers'
+		| 'attachment'
+		| 'cancelled'
+		| 'dependency'
+		| 'sprint';
 }
 
 export interface TaskCommentEvent {

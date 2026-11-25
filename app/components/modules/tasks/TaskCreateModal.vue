@@ -7,7 +7,7 @@
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
 	import { useTasksService } from '~/services/tasks.service';
-	import type { TaskDetail, TaskPriority, TaskProject } from '~/types/tasks.types';
+	import type { TaskDetail, TaskGroup, TaskPriority, TaskProject, TaskSprint } from '~/types/tasks.types';
 	import { POINT_SCALE, PRIORITY_LABELS, quickDueOptions, taskErrorInfo, vnToday } from '~/utils/tasks.utils';
 
 	/**
@@ -15,7 +15,11 @@
 	 * Dự án chỉ liệt kê dự án đang chạy mà người tạo là Quản lý hoặc Thành viên, vì Người xem không
 	 * tạo được việc trong dự án.
 	 */
-	const props = withDefaults(defineProps<{ projectId?: number | null }>(), { projectId: null });
+	const props = withDefaults(defineProps<{ projectId?: number | null; groupId?: number | null; sprintId?: number | null }>(), {
+		projectId: null,
+		groupId: null,
+		sprintId: null,
+	});
 	const emit = defineEmits<{ close: []; created: [task: TaskDetail] }>();
 
 	const authStore = useAuthStore();
@@ -51,6 +55,8 @@
 				description: z.string(),
 				watcherIds: z.array(z.number()),
 				checklistText: z.string(),
+				groupId: z.string(),
+				sprintId: z.string(),
 			})
 			.refine(v => !v.startDate || !v.dueDate || v.startDate <= v.dueDate, {
 				message: 'Ngày bắt đầu không được sau hạn',
@@ -76,6 +82,8 @@
 			description: '',
 			watcherIds: [],
 			checklistText: '',
+			groupId: props.groupId ? String(props.groupId) : '',
+			sprintId: props.sprintId ? String(props.sprintId) : '',
 		},
 	});
 	const [title] = defineField('title');
@@ -89,6 +97,46 @@
 	const [description] = defineField('description');
 	const [watcherIds] = defineField('watcherIds');
 	const [checklistText] = defineField('checklistText');
+	const [groupId] = defineField('groupId');
+	const [sprintId] = defineField('sprintId');
+
+	// Lô 2: nhóm việc, đợt của dự án đang chọn. Nhóm đã cất không chọn được (máy chủ cũng chặn).
+	const groups = ref<TaskGroup[]>([]);
+	const sprints = ref<TaskSprint[]>([]);
+	const useSprints = ref(false);
+	let projectSeq = 0;
+	watch(
+		() => projectId.value,
+		async pid => {
+			const my = ++projectSeq;
+			groups.value = [];
+			sprints.value = [];
+			useSprints.value = false;
+			if (!pid) {
+				groupId.value = '';
+				sprintId.value = '';
+				return;
+			}
+			try {
+				const id = Number(pid);
+				const [g, p] = await Promise.all([service.listGroups(id), service.getProject(id)]);
+				if (my !== projectSeq) return;
+				groups.value = g.filter(x => !x.archived);
+				useSprints.value = p.useSprints;
+				sprints.value = p.useSprints ? (await service.listSprints(id)).filter(x => x.status !== 'CLOSED') : [];
+				if (groupId.value && !groups.value.some(x => String(x.id) === groupId.value)) groupId.value = '';
+				if (sprintId.value && !sprints.value.some(x => String(x.id) === sprintId.value)) sprintId.value = '';
+			} catch {
+				groups.value = [];
+			}
+		},
+		{ immediate: true },
+	);
+	const groupOptions = computed(() => [{ value: '', label: 'Chưa có nhóm' }, ...groups.value.map(g => ({ value: String(g.id), label: g.name }))]);
+	const sprintOptions = computed(() => [
+		{ value: '', label: 'Việc chờ xếp' },
+		...sprints.value.map(x => ({ value: String(x.id), label: `${x.name} (${x.statusLabel.toLowerCase()})` })),
+	]);
 
 	const people = computed<PickablePerson[]>(() =>
 		employees.value.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
@@ -117,6 +165,8 @@
 				description: v.description && v.description !== '<p></p>' ? v.description : undefined,
 				watcherIds: v.watcherIds.length ? v.watcherIds : undefined,
 				checklist: checklist.length ? checklist : undefined,
+				groupId: v.projectId && v.groupId ? Number(v.groupId) : undefined,
+				sprintId: v.projectId && v.sprintId ? Number(v.sprintId) : undefined,
 			});
 			toast.success(`Đã giao việc ${created.code}`);
 			emit('created', created);
@@ -232,6 +282,26 @@
 						searchable
 						@update:model-value="v => (projectId = v == null ? '' : String(v))"
 					/>
+
+					<div v-if="groups.length || useSprints" class="grid gap-4 sm:grid-cols-2">
+						<UiSelect
+							v-if="groups.length"
+							:model-value="groupId"
+							label="Nhóm việc"
+							:options="groupOptions"
+							data-testid="task-create-group"
+							@update:model-value="v => (groupId = v == null ? '' : String(v))"
+						/>
+						<UiSelect
+							v-if="useSprints"
+							:model-value="sprintId"
+							label="Đợt"
+							:options="sprintOptions"
+							hint="Bỏ trống thì việc nằm ở Việc chờ xếp"
+							data-testid="task-create-sprint"
+							@update:model-value="v => (sprintId = v == null ? '' : String(v))"
+						/>
+					</div>
 
 					<div>
 						<span class="block text-sm font-medium text-gray-700 dark:text-gray-300">Mô tả</span>
