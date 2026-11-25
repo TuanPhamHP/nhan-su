@@ -1,0 +1,259 @@
+import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { vnCalendarDate } from '~/utils/date';
+import type {
+	TaskAction,
+	TaskConflictSnapshot,
+	TaskListItem,
+	TaskPriority,
+	TaskStatus,
+} from '~/types/tasks.types';
+
+/**
+ * Hàm thuần của module Công việc. Không hỏi quyền: ai được làm gì là việc của máy chủ
+ * (`allowedActions`, `columnRules`, `permissions`), ở đây chỉ chia nhóm, tô màu, đặt chữ.
+ */
+
+/** Năm cột cố định của bảng việc, đúng thứ tự trạng thái. Cột Đã huỷ ẩn mặc định. */
+export const BOARD_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'];
+
+/** Nhãn dự phòng khi trang tự dựng cột (máy chủ vẫn trả `statusLabel` kèm mỗi việc). */
+export const STATUS_LABELS: Record<TaskStatus, string> = {
+	TODO: 'Chưa làm',
+	IN_PROGRESS: 'Đang làm',
+	IN_REVIEW: 'Chờ nghiệm thu',
+	DONE: 'Hoàn thành',
+	CANCELLED: 'Đã huỷ',
+};
+
+export const PRIORITY_LABELS: Record<TaskPriority, string> = {
+	LOW: 'Thấp',
+	NORMAL: 'Bình thường',
+	HIGH: 'Cao',
+	URGENT: 'Gấp',
+};
+
+export const POINT_SCALE = [1, 2, 3, 5, 8] as const;
+
+export const ACTION_LABELS: Record<TaskAction, string> = {
+	start: 'Bắt đầu làm',
+	back_to_todo: 'Về Chưa làm',
+	submit: 'Báo xong',
+	accept: 'Nghiệm thu',
+	return: 'Trả lại',
+	self_close: 'Đóng việc',
+	reopen: 'Mở lại',
+	cancel: 'Huỷ việc',
+};
+
+/** Trạng thái đích của từng thao tác, để menu "Chuyển sang" và câu đọc cho trình đọc màn hình. */
+export const ACTION_TARGET: Record<TaskAction, TaskStatus> = {
+	start: 'IN_PROGRESS',
+	back_to_todo: 'TODO',
+	submit: 'IN_REVIEW',
+	accept: 'DONE',
+	return: 'IN_PROGRESS',
+	self_close: 'DONE',
+	reopen: 'IN_PROGRESS',
+	cancel: 'CANCELLED',
+};
+
+/** Thao tác cần mở hộp trước khi gửi: ba thao tác bắt buộc lý do, nghiệm thu có điểm chất lượng tuỳ chọn. */
+export function actionNeedsDialog(action: TaskAction): boolean {
+	return action === 'return' || action === 'reopen' || action === 'cancel' || action === 'accept';
+}
+
+export function actionNeedsReason(action: TaskAction): boolean {
+	return action === 'return' || action === 'reopen' || action === 'cancel';
+}
+
+/**
+ * Một đến hai nút chính cho đầu khung chi tiết và dòng Việc của tôi, xếp theo việc người xem
+ * hay làm nhất. Huỷ và Về Chưa làm là thao tác hiếm, nằm trong menu ba chấm.
+ */
+const PRIMARY_ORDER: TaskAction[] = ['accept', 'return', 'submit', 'self_close', 'start', 'reopen'];
+
+export function primaryActions(allowed: TaskAction[], max = 2): TaskAction[] {
+	return PRIMARY_ORDER.filter(a => allowed.includes(a)).slice(0, max);
+}
+
+/** Thao tác còn lại cho menu ba chấm (sau khi đã bày nút chính). */
+export function secondaryActions(allowed: TaskAction[], max = 2): TaskAction[] {
+	const primary = primaryActions(allowed, max);
+	return allowed.filter(a => !primary.includes(a));
+}
+
+// ─── Ngày và hạn ──────────────────────────────────────────────────────────────
+
+/** Hôm nay theo lịch Việt Nam, dạng `YYYY-MM-DD`, vì hạn của việc tính theo giờ Việt Nam. */
+export function vnToday(now: Date = new Date()): string {
+	return vnCalendarDate(now);
+}
+
+export type DueTone = 'overdue' | 'today' | 'soon' | 'normal' | 'done';
+
+/**
+ * Màu của hạn: đỏ khi quá hạn, cam khi đến hạn hôm nay. "Quá hạn" lấy đúng cờ `overdue` của máy
+ * chủ (chưa báo xong và hạn đã qua), không tự so ngày, để hai bên không lệch nhau.
+ */
+export function dueTone(task: Pick<TaskListItem, 'dueDate' | 'overdue' | 'status'>, today: string): DueTone {
+	if (task.status === 'DONE' || task.status === 'CANCELLED') return 'done';
+	if (task.overdue) return 'overdue';
+	if (task.status === 'IN_REVIEW') return 'normal';
+	const days = differenceInCalendarDays(parseISO(task.dueDate), parseISO(today));
+	if (days === 0) return 'today';
+	if (days > 0 && days <= 2) return 'soon';
+	return 'normal';
+}
+
+export const DUE_TONE_CLASS: Record<DueTone, string> = {
+	overdue: 'text-rose-600 dark:text-rose-400 font-semibold',
+	today: 'text-orange-600 dark:text-orange-400 font-semibold',
+	soon: 'text-amber-700 dark:text-amber-400',
+	normal: 'text-gray-600 dark:text-gray-300',
+	done: 'text-gray-400 dark:text-gray-500',
+};
+
+/** "28/11" trong năm nay, "28/11/2027" khác năm. */
+export function shortDate(ymd: string | null | undefined, today: string = vnToday()): string {
+	if (!ymd) return '—';
+	const d = parseISO(ymd);
+	return ymd.slice(0, 4) === today.slice(0, 4) ? format(d, 'dd/MM') : format(d, 'dd/MM/yyyy');
+}
+
+/** Chữ ngắn cho hạn trên thẻ: "Hôm nay", "Ngày mai", "Quá 2 ngày", hoặc ngày. */
+export function taskDueText(task: Pick<TaskListItem, 'dueDate' | 'overdue' | 'status'>, today: string): string {
+	const days = differenceInCalendarDays(parseISO(task.dueDate), parseISO(today));
+	if (task.status !== 'DONE' && task.status !== 'CANCELLED') {
+		if (task.overdue && days < 0) return `Quá ${-days} ngày`;
+		if (days === 0) return 'Hôm nay';
+		if (days === 1) return 'Ngày mai';
+	}
+	return shortDate(task.dueDate, today);
+}
+
+export type MyGroupKey = 'overdue' | 'today' | 'upcoming' | 'later';
+
+export const MY_GROUP_LABELS: Record<MyGroupKey, string> = {
+	overdue: 'Quá hạn',
+	today: 'Hôm nay',
+	upcoming: 'Sắp tới 7 ngày',
+	later: 'Sau đó',
+};
+
+/**
+ * Chia Việc của tôi thành Quá hạn, Hôm nay, Sắp tới 7 ngày, Sau đó (UI-01). Việc đã báo xong
+ * (Chờ nghiệm thu) không bao giờ "quá hạn" vì máy chủ chỉ gắn cờ đó khi chưa báo xong, nên nó rơi
+ * vào nhóm theo ngày như mọi việc khác.
+ */
+export function groupMyTasks<T extends Pick<TaskListItem, 'dueDate' | 'overdue' | 'status'>>(
+	tasks: T[],
+	today: string,
+): Record<MyGroupKey, T[]> {
+	const groups: Record<MyGroupKey, T[]> = { overdue: [], today: [], upcoming: [], later: [] };
+	for (const task of tasks) {
+		const days = differenceInCalendarDays(parseISO(task.dueDate), parseISO(today));
+		if (task.overdue) groups.overdue.push(task);
+		else if (days <= 0) groups.today.push(task);
+		else if (days <= 7) groups.upcoming.push(task);
+		else groups.later.push(task);
+	}
+	return groups;
+}
+
+export interface QuickDueOption {
+	label: string;
+	value: string;
+}
+
+/** Lựa chọn nhanh cho ô Hạn khi tạo nhanh: Hôm nay, Ngày mai, Thứ sáu này, Tuần sau (thứ Hai tới). */
+export function quickDueOptions(today: string): QuickDueOption[] {
+	const base = parseISO(today);
+	const dow = base.getDay(); // 0 = Chủ nhật
+	const toFriday = (5 - dow + 7) % 7;
+	const toNextMonday = ((1 - dow + 7) % 7) || 7;
+	const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
+	const options: QuickDueOption[] = [
+		{ label: 'Hôm nay', value: ymd(base) },
+		{ label: 'Ngày mai', value: ymd(addDays(base, 1)) },
+	];
+	if (toFriday > 1) options.push({ label: 'Thứ sáu này', value: ymd(addDays(base, toFriday)) });
+	options.push({ label: 'Tuần sau', value: ymd(addDays(base, toNextMonday)) });
+	return options;
+}
+
+// ─── Lỗi máy chủ ──────────────────────────────────────────────────────────────
+
+export interface TaskErrorInfo {
+	status: number | undefined;
+	code: string | undefined;
+	message: string;
+	/** Bản mới rút gọn của `TASK_VERSION_CONFLICT`, `TASK_STATUS_INVALID`. */
+	task: TaskConflictSnapshot | null;
+	/** Tên người giao của `TASK_NOT_VISIBLE`. */
+	assignerName: string | null;
+}
+
+/** Đọc lỗi `useAuthFetch` (đã mang câu tiếng Việt) thành mã, câu và phần `details`. */
+export function taskErrorInfo(err: unknown, fallback = 'Chưa thực hiện được thao tác này.'): TaskErrorInfo {
+	const e = err as {
+		message?: string;
+		status?: number;
+		data?: { error?: { code?: string; message?: string; details?: Record<string, unknown> } };
+	} | null;
+	const details = e?.data?.error?.details ?? {};
+	const task = details.task && typeof details.task === 'object' ? (details.task as TaskConflictSnapshot) : null;
+	const assignerName = typeof details.assignerName === 'string' ? details.assignerName : null;
+	return {
+		status: e?.status,
+		code: e?.data?.error?.code,
+		message: e?.data?.error?.message || e?.message || fallback,
+		task,
+		assignerName,
+	};
+}
+
+// ─── Bình luận ────────────────────────────────────────────────────────────────
+
+/**
+ * Id người được nhắc trong HTML Tiptap (`<span data-type="mention" data-id="6">`), không trùng.
+ * Dùng regex thay vì DOMParser để chạy được cả khi kiểm thử không có trình duyệt.
+ */
+export function mentionIdsFromHtml(html: string): number[] {
+	const ids = new Set<number>();
+	const re = /<span[^>]*data-type="mention"[^>]*>/g;
+	for (const tag of html.match(re) ?? []) {
+		const m = tag.match(/data-id="(\d+)"/);
+		if (m) ids.add(Number(m[1]));
+	}
+	return [...ids];
+}
+
+/** HTML Tiptap rỗng (`<p></p>`) hay chỉ có khoảng trắng thì coi như chưa gõ gì. */
+export function isBlankHtml(html: string): boolean {
+	return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() && !/data-type="mention"/.test(html);
+}
+
+export function taskFileSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+	return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}
+
+/** Loại file máy chủ nhận (bridge mục 4). Máy chủ vẫn kiểm chữ ký file; ở đây chỉ để chọn file. */
+export const TASK_FILE_ACCEPT =
+	'.pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip';
+export const TASK_FILE_MAX_MB = 20;
+
+/** Mã dự án: 2–6 chữ cái không dấu, `CV` dành cho việc lẻ. Máy chủ viết hoa giúp. */
+export function projectCodeError(code: string): string | null {
+	const c = code.trim().toUpperCase();
+	if (!c) return 'Nhập mã dự án';
+	if (!/^[A-Z]{2,6}$/.test(c)) return 'Mã dự án gồm 2 đến 6 chữ cái không dấu, ví dụ HQ';
+	if (c === 'CV') return 'Mã CV dành cho việc lẻ, bạn chọn mã khác';
+	return null;
+}
+
+/** Số hiệu việc (`HQ-12`, `cv-3`) hay id số, để trang chi tiết nhận cả hai. */
+export function isTaskRef(value: string): boolean {
+	return /^[A-Za-z]{2,6}-\d+$/.test(value) || /^\d+$/.test(value);
+}

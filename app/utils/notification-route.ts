@@ -64,6 +64,9 @@ import { isManagementRole } from '~/utils/role';
  * | office_supply_request     | /office/supplies?request_id=:id                |
  * | office_supply_period      | /management/office/supply-periods/:id          |
  * | office_room_booking       | /office/rooms?booking_id=:id                   |
+ *
+ * Công việc lô 1 (module `TASKS`) không rẽ theo vai trò: mọi người nhận mở cùng trang chi tiết việc.
+ * | task                      | /cong-viec/:refId (trang nhận cả id số lẫn số hiệu) |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -232,6 +235,11 @@ export function resolveNotificationRoute(
 
 		case 'office_room_booking':
 			return id ? `/office/rooms?booking_id=${id}` : '/office/rooms';
+
+		// Mười một loại `TASK_*`. `refId` là id việc; trang `/cong-viec/[code]` nhận cả id số, mở xong thì
+		// tự đổi đường dẫn sang số hiệu. `targetUrl` máy chủ dựng sẵn cũng trỏ đúng trang này.
+		case 'task':
+			return id ? `/cong-viec/${id}` : '/cong-viec';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

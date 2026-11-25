@@ -12,6 +12,7 @@ const EMPTY_COUNTS: ApprovalCountsResponseDto = {
 	assetDisposals: 0,
 	profileChanges: 0,
 	generalRequests: 0,
+	taskReviews: 0,
 	total: 0,
 };
 

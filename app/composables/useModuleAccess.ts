@@ -22,6 +22,8 @@ export const MODULE_ROUTES: Record<Exclude<ModuleCode, 'CORE'>, string[]> = {
 	// `/office` là nhóm trang của mọi nhân viên (phiếu văn phòng phẩm của phòng mình, đặt phòng
 	// họp), `/management/office` là nhóm trang của HCNS và trưởng phòng.
 	OFFICE: ['/management/office', '/office'],
+	// Công việc và KPI: mọi nhân viên giao việc, tạo dự án nên mọi trang nằm ngoài `/management`.
+	TASKS: ['/cong-viec'],
 };
 
 /** Route này thuộc module nào, `null` nếu không thuộc module nào bật tắt được. */

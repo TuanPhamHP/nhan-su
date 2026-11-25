@@ -148,6 +148,7 @@
 	const { pendingAssetCount, setPendingAssetCount } = useMyAssetBadge();
 	const { fetchMyAnnouncements } = useCompanyAnnouncements();
 	const assetService = useAssetService();
+	const taskScope = useTaskScope();
 
 	async function loadUnreadAnnouncementCount() {
 		try {
@@ -172,6 +173,8 @@
 		if (!user.value) return;
 		if (canUse('ANNOUNCEMENT')) loadUnreadAnnouncementCount();
 		if (canUse('ASSET')) loadPendingAssetCount();
+		// Phạm vi công việc quyết định có hiện mục Việc của phòng hay không.
+		if (canUse('TASKS')) taskScope.load();
 	});
 
 	/** Dịch `badgeKey` trong cấu hình sang số thật. */
@@ -179,6 +182,8 @@
 		if (item.badgeKey === 'approval') return approvalCounts.value.total;
 		if (item.badgeKey === 'unreadAnnouncement') return unreadAnnouncementCount.value;
 		if (item.badgeKey === 'pendingAsset') return pendingAssetCount.value;
+		// Việc chờ mình nghiệm thu: máy chủ không cộng vào `total` của Duyệt đơn (bridge tasks mục 6).
+		if (item.badgeKey === 'taskReviews') return approvalCounts.value.taskReviews ?? 0;
 		return 0;
 	}
 

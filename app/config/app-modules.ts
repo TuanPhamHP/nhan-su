@@ -485,6 +485,43 @@ export const APP_MODULES: AppScreensDef[] = [
 		],
 	},
 	{
+		/**
+		 * TSK — Công việc và KPI, lô 1 (module bán riêng `TASKS`). Mọi mục là `personal` vì ai cũng giao
+		 * việc, tạo dự án (Q-07, Q-20): máy chủ quyết theo vai trên từng việc, không theo vai trò hệ
+		 * thống. "Việc của phòng" chỉ hiện khi `GET /v1/tasks/scope` cho biết người xem làm trưởng phòng
+		 * hoặc xem mọi việc (`showWhen`).
+		 * KPI (lô 3) và báo cáo (lô 2) thêm mục sau.
+		 */
+		code: 'tsk',
+		home: '/cong-viec',
+		routes: ['/cong-viec'],
+		items: [
+			{
+				label: 'Việc của tôi',
+				route: '/cong-viec',
+				icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+				module: 'TASKS',
+				badgeKey: 'taskReviews',
+				scope: 'personal',
+			},
+			{
+				label: 'Dự án',
+				route: '/cong-viec/du-an',
+				icon: 'M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z',
+				module: 'TASKS',
+				scope: 'personal',
+			},
+			{
+				label: 'Việc của phòng',
+				route: '/cong-viec/phong',
+				showWhen: 'taskDepartments',
+				icon: 'M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z',
+				module: 'TASKS',
+				scope: 'personal',
+			},
+		],
+	},
+	{
 		/** ENG — Truyền thông & Gắn kết nội bộ. Mới có bảng tin; khảo sát, vinh danh, góp ý chưa làm. */
 		code: 'eng',
 		home: '/management/announcements',
@@ -613,6 +650,9 @@ export const APP_MODULES: AppScreensDef[] = [
  * phòng phẩm theo kỳ và đặt phòng họp. Xe, văn thư công văn và con dấu thuộc các lô sau,
  * nên phân hệ này còn lớn lên tiếp.
  *
+ * `TSK` và `PER` đã chuyển sang `APP_MODULES` ở lô 1 Công việc và KPI (ô `tsk`, module `TASKS`): KPI là
+ * lô 3 của cùng module nên không còn là phân hệ riêng.
+ *
  * `BEN` đã có một phần: màn hình BHXH hiện là một tab trong hồ sơ nhân viên
  * (`EmployeeSocialInsurance.vue`) và một thẻ ở trang hồ sơ cá nhân, chưa có trang quản lý
  * bảo hiểm & phúc lợi cho toàn công ty.
@@ -620,7 +660,5 @@ export const APP_MODULES: AppScreensDef[] = [
 export const PLANNED_MODULES: Array<{ code: string; label: string; group: string; scope: string }> = [
 	{ code: 'BEN', label: 'Bảo hiểm & Phúc lợi', group: 'Quản trị nhân sự', scope: 'BHXH/BHYT/BHTN, ốm đau – thai sản, phúc lợi sinh nhật, hiếu hỉ, lễ tết, khám sức khỏe' },
 	{ code: 'ONB', label: 'Hội nhập & Thử việc', group: 'Thu hút & Phát triển', scope: 'Checklist đón nhân viên mới, cấp phát tài khoản/thiết bị, đánh giá thử việc' },
-	{ code: 'PER', label: 'Đánh giá hiệu suất (KPI/OKR)', group: 'Thu hút & Phát triển', scope: 'Giao mục tiêu, kỳ đánh giá, xếp loại, gắn kết quả với thưởng/lương' },
 	{ code: 'LND', label: 'Đào tạo & Phát triển', group: 'Thu hút & Phát triển', scope: 'Khung năng lực, kế hoạch đào tạo, LMS, cam kết đào tạo, lộ trình & kế nhiệm' },
-	{ code: 'TSK', label: 'Quản lý công việc & Dự án', group: 'Hành chính & Vận hành', scope: 'Giao việc, dự án, kanban/gantt, việc định kỳ, timesheet, báo cáo tiến độ' },
 ];

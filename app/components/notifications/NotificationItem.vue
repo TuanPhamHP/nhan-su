@@ -44,6 +44,7 @@
 	const CATEGORY_ICONS: Record<string, { icon: string; cls: string }> = {
 		ATTENDANCE: { icon: 'heroicons:clock', cls: 'text-amber-600 dark:text-amber-400' },
 		LEAVE: { icon: 'heroicons:calendar-days', cls: 'text-sky-600 dark:text-sky-400' },
+		TASK: { icon: 'heroicons:clipboard-document-check', cls: 'text-brand-600 dark:text-brand-400' },
 	};
 	const DEFAULT_ICON = { icon: 'heroicons:bell', cls: 'text-gray-500 dark:text-gray-400' };
 
