@@ -36,17 +36,20 @@
 	const { counts: approvalCounts } = storeToRefs(approvalStore);
 	const userRoleLabel = computed(() => (user.value ? metaDataStore.labelForRole(user.value.role) : ''));
 
+	/**
+	 * Số chờ duyệt cho quản lý; nhân viên cũng cần khi công ty dùng Công việc và KPI, vì nhân viên có thể là người
+	 * nghiệm thu việc hay người chấm KPI của người mình quản lý trực tiếp (`taskReviews`, `kpiReviews`).
+	 */
+	function needsCounts(): boolean {
+		return !!user.value && (isManagementRole(user.value.role) || canUse('TASKS'));
+	}
 	onMounted(() => {
-		if (user.value && isManagementRole(user.value.role)) {
-			approvalStore.fetchCounts();
-		}
+		if (needsCounts()) approvalStore.fetchCounts();
 	});
 
 	// Module vừa đổi trạng thái thì số đơn chờ duyệt cũng đổi theo (BE trả 0 cho module không bật).
 	watch(modules, () => {
-		if (user.value && isManagementRole(user.value.role)) {
-			approvalStore.fetchCounts();
-		}
+		if (needsCounts()) approvalStore.fetchCounts();
 	});
 
 	watch(
@@ -149,6 +152,7 @@
 	const { fetchMyAnnouncements } = useCompanyAnnouncements();
 	const assetService = useAssetService();
 	const taskScope = useTaskScope();
+	const kpiScope = useKpiScope();
 
 	async function loadUnreadAnnouncementCount() {
 		try {
@@ -175,6 +179,8 @@
 		if (canUse('ASSET')) loadPendingAssetCount();
 		// Phạm vi công việc quyết định có hiện mục Việc của phòng hay không.
 		if (canUse('TASKS')) taskScope.load();
+		// Có từng chấm phiếu KPI nào không: quyết định có hiện mục Đánh giá nhân viên.
+		if (canUse('TASKS')) kpiScope.load();
 	});
 
 	/** Dịch `badgeKey` trong cấu hình sang số thật. */
@@ -184,6 +190,8 @@
 		if (item.badgeKey === 'pendingAsset') return pendingAssetCount.value;
 		// Việc chờ mình nghiệm thu: máy chủ không cộng vào `total` của Duyệt đơn (bridge tasks mục 6).
 		if (item.badgeKey === 'taskReviews') return approvalCounts.value.taskReviews ?? 0;
+		// Phiếu KPI chờ mình chấm: cũng không cộng vào `total` (bridge kpi mục 1).
+		if (item.badgeKey === 'kpiReviews') return approvalCounts.value.kpiReviews ?? 0;
 		return 0;
 	}
 

@@ -96,6 +96,12 @@ export type NotificationType =
 	// Lô 2 (bridge mục 18): cho nghỉ người còn việc đang mở. refType `task_offboarding`, refId là id người
 	// nghỉ, mở danh sách việc của người đó để giao lại.
 	| 'TASK_OFFBOARDING_OPEN'
+	// KPI, lô 3 (`docs/backend/bridges/kpi.md` mục 8): category `TASK`, `NAVIGATE_ONLY`. refType `kpi_review` (refId id
+	// phiếu) cho người chấm và nhân viên, `kpi_period` (refId id kỳ) cho nhân sự.
+	| 'KPI_REVIEW_NEEDED'
+	| 'KPI_FEEDBACK_NEEDED'
+	| 'KPI_PUBLISHED'
+	| 'KPI_REVIEW_OVERDUE'
 	| 'TEST';
 
 export interface NotificationActionPayload {

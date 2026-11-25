@@ -25,6 +25,11 @@ export interface ApprovalCountsResponseDto {
 	 * (nghiệm thu làm ở trang Công việc); 0 khi module `TASKS` không dùng đầy đủ. BE cũ không có.
 	 */
 	taskReviews?: number;
+	/**
+	 * KPI (lô 3): phiếu Chờ cấp trên đánh giá mà người xem chấm. KHÔNG cộng vào `total` (đánh giá làm ở trang
+	 * KPI); 0 khi module `TASKS` không dùng đầy đủ. BE cũ không có.
+	 */
+	kpiReviews?: number;
 	total: number;
 }
 

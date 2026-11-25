@@ -32,13 +32,36 @@ export function useAppModules() {
 		catalogApps.value.length > 0 ? mergeAppCatalog(APP_MODULES, catalogApps.value) : appsWithoutCatalog(APP_MODULES),
 	);
 
-	const { hasDepartmentView, hasReportScope } = useTaskScope();
+	const { scope: taskScope, hasDepartmentView, hasReportScope } = useTaskScope();
+	const { reviewsAny: kpiReviewsAny } = useKpiScope();
+	const { counts: approvalCounts } = storeToRefs(useApprovalStore());
+
+	/** Đánh giá nhân viên: có phiếu chờ chấm, đã từng chấm, hoặc là quản lý, trưởng phòng, giám đốc. */
+	const isKpiReviewer = computed(() => {
+		const role = user.value?.role;
+		return (
+			(approvalCounts.value.kpiReviews ?? 0) > 0 ||
+			kpiReviewsAny.value ||
+			role === 'MANAGER' ||
+			role === 'CHIEF' ||
+			role === 'DIRECTOR' ||
+			(taskScope.value?.managedDepartments.length ?? 0) > 0
+		);
+	});
+	/** Kết quả KPI: giám đốc, ADMIN, trưởng phòng; người có `kpi:manage` đã xem trong Kỳ đánh giá. */
+	const seesKpiResults = computed(() => {
+		if (hasPermission('kpi:manage')) return false;
+		const role = user.value?.role;
+		return role === 'DIRECTOR' || (taskScope.value?.managedDepartments.length ?? 0) > 0;
+	});
 
 	function canSeeItem(item: NavItem): boolean {
 		if (item.module && !canUse(item.module)) return false;
 		// Việc của phòng chỉ có nghĩa với trưởng phòng và người xem mọi việc (`NavItem.showWhen`).
 		if (item.showWhen === 'taskDepartments' && !hasDepartmentView.value) return false;
 		if (item.showWhen === 'taskReports' && !hasReportScope.value && !hasPermission('task:report')) return false;
+		if (item.showWhen === 'kpiReviewer' && !isKpiReviewer.value) return false;
+		if (item.showWhen === 'kpiResults' && !seesKpiResults.value) return false;
 		return canSeeItemIgnoringModule(item);
 	}
 

@@ -4,7 +4,8 @@ Cho web `nhan-su` và mobile. Thiết kế: `docs/modules/18-tasks.md`. Phiếu 
 Lô 1 là **lõi công việc**: dự án và thành viên, công việc và việc con, danh sách kiểm tra, vòng đời và nghiệm thu, đổi hạn,
 huỷ, người theo dõi, bình luận nhắc tên, file, Việc của tôi, danh sách, bảng việc kéo thả, thông báo N-01 đến N-08, nhắc hạn
 J-02, J-03 và kênh thời gian thực `/tasks`. **Lô 2** (mục 12 trở đi): nhóm việc, đợt và việc chờ xếp, việc định kỳ, phụ
-thuộc và biểu đồ tiến độ, lịch, báo cáo tiến độ và xuất Excel, cảnh báo nghỉ việc, dự án mẫu. KPI ở lô 3.
+thuộc và biểu đồ tiến độ, lịch, báo cáo tiến độ và xuất Excel, cảnh báo nghỉ việc, dự án mẫu. KPI (lô 3) ở
+`docs/bridges/kpi.md`.
 
 Mọi response bọc `{ success, data }` (danh sách thêm `meta { page, limit, total, totalPages }`), lỗi là
 `{ success: false, error: { code, message, details? } }` như các module khác. `message` là câu tiếng Việt đời thường, hiện
@@ -608,7 +609,7 @@ POST /v1/task-recurrences
 
 - `interval` 1–12 (mỗi n tuần, tháng, quý, năm, đếm từ tuần, tháng, quý, năm chứa `startDate`). `leadDays` 0–60: việc xuất hiện
   từ ngày hạn trừ số ngày này. Ngày 31 ở tháng ngắn lấy **ngày cuối tháng** (tháng 2 ra 28 hoặc 29, T-12).
-- Trả về: mọi trường trên, `frequencyLabel`, `priorityLabel`, `project`, `assigner`/`assignee`/`reviewer` (kèm `inactive`),
+- Trả về: mọi trường trên (gồm `description`, `watcherIds`, `checklist`), `createdAt`, `frequencyLabel`, `priorityLabel`, `project`, `assigner`/`assignee`/`reviewer` (kèm `inactive`),
   `nextDueDate` (hạn lần sinh kế), `nextAppearDate` (ngày việc kế xuất hiện), `lastDueDate`, `isActive`, `pausedReason` (lý do
   hệ thống tự dừng: "Người thực hiện đã nghỉ việc", "Dự án đã đóng", "Đã hết lịch"…; null khi người dùng dừng), `upcoming`
   (tối đa 5 hạn sắp tới, rỗng khi đã dừng), `taskCount` (số việc đã sinh), `canManage`.

@@ -68,6 +68,11 @@ import { isManagementRole } from '~/utils/role';
  * Công việc lô 1 (module `TASKS`) không rẽ theo vai trò: mọi người nhận mở cùng trang chi tiết việc.
  * | task                      | /cong-viec/:refId (trang nhận cả id số lẫn số hiệu) |
  * | task_offboarding          | /cong-viec?assigneeIds=:refId (refId là id người nghỉ) |
+ *
+ * KPI lô 3 cũng không rẽ theo vai trò mà theo loại thông báo, vì cùng refType `kpi_review` gửi cho hai phía:
+ * | kpi_review, KPI_REVIEW_NEEDED (người chấm) | /kpi/danh-gia?reviewId=:id |
+ * | kpi_review, KPI_FEEDBACK_NEEDED, KPI_PUBLISHED (nhân viên) | /kpi?reviewId=:id |
+ * | kpi_period, KPI_REVIEW_OVERDUE (nhân sự) | /management/kpi/ky?periodId=:id |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -246,6 +251,15 @@ export function resolveNotificationRoute(
 		// đọc `assigneeIds` trên đường dẫn và hiện việc đang mở của người đó để giao lại.
 		case 'task_offboarding':
 			return id ? `/cong-viec?assigneeIds=${id}` : '/cong-viec';
+
+		// KPI: N-22 tới người chấm mở màn Đánh giá nhân viên; N-23, N-24 tới nhân viên mở KPI của tôi.
+		case 'kpi_review':
+			if (type === 'KPI_REVIEW_NEEDED') return id ? `/kpi/danh-gia?reviewId=${id}` : '/kpi/danh-gia';
+			return id ? `/kpi?reviewId=${id}` : '/kpi';
+
+		// Nhắc nhân sự phiếu chờ người chấm quá 3 ngày: mở đúng kỳ ở màn Kỳ đánh giá.
+		case 'kpi_period':
+			return id ? `/management/kpi/ky?periodId=${id}` : '/management/kpi/ky';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

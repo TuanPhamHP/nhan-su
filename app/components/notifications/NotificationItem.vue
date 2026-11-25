@@ -48,7 +48,11 @@
 	};
 	const DEFAULT_ICON = { icon: 'heroicons:bell', cls: 'text-gray-500 dark:text-gray-400' };
 
-	const categoryIcon = computed(() => CATEGORY_ICONS[props.notification.category] ?? DEFAULT_ICON);
+	/** KPI dùng chung category `TASK` với công việc; tách icon theo loại để người đọc phân biệt. */
+	const KPI_ICON = { icon: 'heroicons:chart-bar', cls: 'text-violet-600 dark:text-violet-400' };
+	const categoryIcon = computed(() =>
+		props.notification.type?.startsWith('KPI_') ? KPI_ICON : CATEGORY_ICONS[props.notification.category] ?? DEFAULT_ICON,
+	);
 
 	const showRejectInput = ref(false);
 	const rejectNote = ref('');

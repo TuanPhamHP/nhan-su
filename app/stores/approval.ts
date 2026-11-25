@@ -13,6 +13,7 @@ const EMPTY_COUNTS: ApprovalCountsResponseDto = {
 	profileChanges: 0,
 	generalRequests: 0,
 	taskReviews: 0,
+	kpiReviews: 0,
 	total: 0,
 };
 
