@@ -68,7 +68,26 @@ Bucket lưu trữ là **private**. Backend đã tự sign toàn bộ URL trướ
 
 - URL presigned có TTL 3600s (1 giờ). Nếu user mở lại tab sau > 1 giờ, gọi lại API để lấy URL mới.
 - Nếu sign lỗi (file bị xoá, key sai), field sẽ về `null` (transport) hoặc bị filter khỏi mảng (report). FE handle như file không tồn tại.
-- Khi FE **upload** ảnh vé / file đính kèm, gọi module upload trước để nhận URL gốc, rồi truyền URL đó vào body của `updateRouteTransport` / `createReport`. Không gửi presigned URL ngược lại về BE.
+- Khi FE **upload** ảnh vé / file đính kèm, gọi module upload trước để nhận URL gốc, rồi truyền URL đó vào body của `updateRouteTransport` / `createReport`.
+
+### Quy tắc cho hai trường URL gửi lên (từ 26/11/2026)
+
+`transports[].ticketImageUrl` và `attachmentUrls[]` chỉ nhận file đã tải lên cho **chính chuyến công tác đó**:
+
+| Trường | Phải là file tải lên qua | Mã lỗi khi sai (HTTP 400) |
+|---|---|---|
+| `transports[].ticketImageUrl` | `POST /v1/business-trips/routes/:routeId/upload-ticket` của một lộ trình thuộc chuyến này | `TRIP_TICKET_URL_INVALID` |
+| `attachmentUrls[]` | `POST /v1/business-trips/:id/upload-attachment` của chuyến này | `TRIP_ATTACHMENT_URL_INVALID` |
+
+- Client gửi **URL gốc** (vừa nhận từ route upload) hay **link đã ký** (lấy từ response `GET`) đều được. Server tự rút về
+  URL gốc trước khi lưu, nên màn sửa cứ gửi lại nguyên giá trị đang hiển thị cho các file giữ nguyên.
+- URL của file khác (file của chuyến khác, giấy tờ nhân viên, ảnh chấm công), URL host khác với đường dẫn lạ, và chuỗi
+  không phải URL đều bị từ chối. Khi bị từ chối, server không lưu gì: báo cáo và danh sách phương tiện cũ giữ nguyên.
+- `attachmentUrls` tối đa 20 phần tử, mỗi chuỗi tối đa 2048 ký tự. `ticketImageUrl` tối đa 2048 ký tự.
+- `ticketImageUrl` bỏ trống, `null` hoặc chuỗi rỗng nghĩa là phương tiện không có ảnh vé.
+- `error.message` của hai mã lỗi là câu tiếng Việt cho người dùng ("…Vui lòng tải lại…"), hiện thẳng bằng toast.
+- Lúc đọc, server cũng chỉ ký file nằm đúng thư mục của chuyến. Dòng cũ lỡ chứa URL khác sẽ hiện như file không tồn tại
+  (`null` hoặc không có trong mảng).
 
 ---
 
@@ -242,7 +261,7 @@ export interface CreateTripTransportDto {
   driverPhone?: string;
   flightNumber?: string;
   checkInTime?: string;                   // ISO 8601
-  ticketImageUrl?: string;
+  ticketImageUrl?: string;                // file từ upload-ticket của chuyến này (URL gốc hoặc link đã ký), tối đa 2048 ký tự
   note?: string;
   paymentMethod?: TripPaymentMethod;      // Bỏ trống = 'COMPANY_PAID'
   paymentAmount?: number;                 // Bỏ trống = 0. Số nguyên 0..2_000_000_000 (VNĐ)
@@ -263,7 +282,7 @@ export interface CreateTripReportDto {
   results: string;                        // min 20 ký tự
   actualCost?: number;
   issues?: string;
-  attachmentUrls?: string[];              // URL ảnh/tài liệu (đã upload trước qua module upload)
+  attachmentUrls?: string[];              // file từ upload-attachment của chuyến này (URL gốc hoặc link đã ký), tối đa 20
 }
 
 export type UpdateTripReportDto = Partial<CreateTripReportDto>;
@@ -770,7 +789,9 @@ Server sẽ **replace toàn bộ** transports cũ bằng danh sách mới, `isSe
 tiền của mọi transport**. Bỏ sót trường tiền ở một phần tử = phần tử đó bị reset về
 `COMPANY_PAID`/`0`, không phải "giữ nguyên giá trị cũ".
 
-`ticketImageUrl` trong body phải là URL **gốc** nhận từ module upload (chưa sign). BE lưu nguyên và sẽ tự sign khi trả về response.
+`ticketImageUrl` trong body phải là file đã tải lên qua `upload-ticket` của chính chuyến này: URL gốc vừa nhận, hoặc link
+đã ký đang hiển thị của một vé giữ nguyên. BE rút về URL gốc rồi lưu, và tự sign khi trả về response. Xem
+[Quy tắc cho hai trường URL gửi lên](#quy-tắc-cho-hai-trường-url-gửi-lên-từ-26112026).
 
 **Side effect:** Chủ đơn nhận notification `businessTripTransportUpdated` cho `routeOrder` tương ứng.
 
@@ -781,6 +802,8 @@ tiền của mọi transport**. Bỏ sót trường tiền ở một phần tử
 - Không truyền `isSelfTransport: true` mà cũng không truyền `transports` (hoặc `transports` rỗng)
 - `paymentAmount` âm, có phần thập phân, hoặc > 2.000.000.000
 - `paymentMethod` không thuộc enum
+- `ticketImageUrl` không phải ảnh vé đã tải lên cho chuyến này: `error.code = TRIP_TICKET_URL_INVALID`, danh sách phương
+  tiện cũ giữ nguyên
 
 **403** nếu user không phải HR/ADMIN. **404** nếu `routeId` không tồn tại.
 
@@ -804,17 +827,22 @@ Chỉ tạo được khi `status === APPROVED` hoặc `IN_PROGRESS`. Mỗi chuy�
 }
 ```
 
-`attachmentUrls` là mảng string tuỳ chọn — FE upload ảnh/file qua module upload trước, nhận URL gốc (chưa sign), rồi truyền vào đây. BE lưu URL gốc và tự sign lại khi trả về response — xem section [Presigned URLs](#presigned-urls--ảnhfile-đã-được-sign-dùng-trực-tiếp).
+`attachmentUrls` là mảng string tuỳ chọn, tối đa 20 phần tử — FE upload ảnh/file qua `upload-attachment` của chính chuyến này trước, nhận URL gốc (chưa sign), rồi truyền vào đây. BE lưu URL gốc và tự sign lại khi trả về response — xem section [Presigned URLs](#presigned-urls--ảnhfile-đã-được-sign-dùng-trực-tiếp).
 
 **Response 201:** `BusinessTripResponse` với `report` đã được điền, `report.status = "DRAFT"`, `report.attachmentUrls = [...]`.
 
-**400** nếu đơn chưa được duyệt hoặc đã có báo cáo.
+**400** nếu đơn chưa được duyệt, đã có báo cáo, hoặc có phần tử của `attachmentUrls` không phải file đã tải lên cho chuyến
+này (`error.code = TRIP_ATTACHMENT_URL_INVALID`, không tạo báo cáo).
 
 ---
 
 ## PATCH /v1/business-trips/:id/report — Cập nhật báo cáo
 
 Chỉ khi `report.status === DRAFT`. Body dùng `UpdateTripReportDto` (partial). Có thể cập nhật `attachmentUrls` (thay thế toàn bộ mảng).
+
+Màn sửa gửi lại cả mảng: file giữ nguyên thì gửi lại đúng link đã ký đang hiển thị, file mới thì gửi URL gốc vừa nhận từ
+`upload-attachment`. Có phần tử không phải file của chuyến này thì trả 400 `TRIP_ATTACHMENT_URL_INVALID` và báo cáo giữ
+nguyên như trước.
 
 ---
 
@@ -1007,6 +1035,10 @@ export function useBusinessTrips() {
 | Tạo chặng không gửi `needsVehicleSupport` | Lưu `true` ("cần hỗ trợ đặt xe") |
 | Gửi `paymentAmount` âm / số lẻ / > 2.000.000.000 | 400 Bad Request |
 | Gửi transport không kèm `paymentMethod`/`paymentAmount` | Lưu `COMPANY_PAID` / `0` |
+| Gửi lại `ticketImageUrl` là link đã ký đang hiển thị | Hợp lệ. Server lưu URL gốc |
+| `ticketImageUrl` là file không thuộc thư mục vé của chuyến này | 400 `TRIP_TICKET_URL_INVALID`, phương tiện cũ giữ nguyên |
+| `attachmentUrls` có phần tử không thuộc thư mục đính kèm của chuyến này | 400 `TRIP_ATTACHMENT_URL_INVALID`, báo cáo giữ nguyên |
+| `attachmentUrls` quá 20 phần tử | 400 Bad Request |
 | HR chốt `isSelfTransport: true` cho chặng nhân viên xin hỗ trợ | Hợp lệ. `needsVehicleSupport` giữ `true`, `transports` rỗng |
 | Đơn có 3 chặng, 1 chặng `needsVehicleSupport = true` | Cấp đơn gộp = `true` ("Có") |
 | Tạo báo cáo khi `status === DRAFT/PENDING/CANCELLED` | 400 Bad Request |

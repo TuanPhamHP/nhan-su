@@ -7,7 +7,8 @@ HR cần tạo hàng loạt hợp đồng mà không phải nhập từng cái q
 1. `GET /v1/contracts/import/template` — tải file Excel template (7 cột theo chuẩn hệ thống, 2 sheet: "Danh sách hợp đồng" + "Hướng dẫn").
 2. `POST /v1/contracts/import` — upload file `.xlsx` để tạo hàng loạt hợp đồng. **All-or-nothing:** chỉ tạo khi TẤT CẢ dòng đều valid, nếu có bất kỳ dòng lỗi → không tạo gì, trả về danh sách lỗi chi tiết.
 
-File Excel gốc được lưu lại trên server sau khi import thành công (URL trả về trong response, vĩnh viễn, không TTL).
+File Excel gốc được lưu ở kho file private sau khi import thành công. `fileUrl` trong response là link tải đã ký, hết hạn
+sau 1 giờ (từ 26/11/2026; trước đó là link công khai vĩnh viễn dưới `/uploads/`, các link cũ đó nay trả 404).
 
 > Đọc trước [`api-response-envelope.md`](./api-response-envelope.md) và [`contracts.md`](./contracts.md) nếu cần refresher về contract model.
 
@@ -78,7 +79,7 @@ import type { ContractResponse } from './contract.types';
 
 export interface ImportContractsResponse {
   importedCount: number;
-  fileUrl: string;                    // URL vĩnh viễn (local storage), không cần refresh
+  fileUrl: string;                    // link tải đã ký, hết hạn sau 1 giờ; không lưu lại để dùng sau
   contracts: ContractResponse[];      // list contracts vừa tạo — cùng shape với GET /contracts/:id
 }
 
@@ -109,7 +110,7 @@ export interface ImportContractsValidationError {
   "success": true,
   "data": {
     "importedCount": 2,
-    "fileUrl": "http://api.example.com/uploads/contracts/imports/2026/08/11/6c9c...3f.xlsx",
+    "fileUrl": "https://s3-read.example.com/tenants/cty-a/contracts/imports/2026/08/11/6c9c...3f.xlsx?X-Amz-Expires=3600&X-Amz-Signature=...",
     "contracts": [
       {
         "id": 42,
@@ -272,7 +273,7 @@ const FIELD_LABEL: Record<string, string> = {
 ## Ghi chú thêm
 
 - Response `contracts[]` cùng shape với `GET /v1/contracts/:id` — có thể reuse `<ContractCard>` component nếu muốn hiển thị preview sau import.
-- `fileUrl` trong response là **URL vĩnh viễn** (local storage), **KHÔNG cần refresh** như presigned S3. Có thể lưu và mở lại bất cứ lúc nào.
+- `fileUrl` trong response là **link đã ký, hết hạn sau 1 giờ**. Chỉ dùng để hiện link "Xem file đã import" ngay sau khi nhập; không lưu lại để mở về sau. File gốc có lương nên không còn nằm ở link công khai.
 - File Excel đã import không có endpoint list — nếu cần lịch sử import, tìm trong `system_logs` (action `contract.import`, payload chứa `contractIds` + `importedCount`).
 - Excel Date vs Text: BE chấp nhận **cả 2** — cell dạng Date object (Excel format) hoặc string `yyyy-MM-dd`. HR không cần format lại nếu Excel auto-detect ngày.
 - Sau import, cột `fileUrl` của mỗi contract mới = `null`. Muốn attach PDF hợp đồng thật, HR mở từng contract (chỉ khi `DRAFT`) → `PATCH /v1/contracts/:id` với multipart + field `file`.
