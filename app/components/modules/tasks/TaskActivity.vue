@@ -1,5 +1,7 @@
 <script setup lang="ts">
 	import { sanitizeTaskComment } from '~/utils/task-html';
+	import { splitAgentMark } from '~/utils/agent-source';
+	import AgentSourceLabel from '~/components/modules/agent/AgentSourceLabel.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { storeToRefs } from 'pinia';
 	import RecruitConfirmModal from '~/components/modules/recruitment/RecruitConfirmModal.vue';
@@ -269,6 +271,12 @@
 		return sanitizeTaskComment(value);
 	}
 
+	/** Bình luận do trợ lý soạn: bỏ đuôi `⟦Trợ lý AI⟧ …`, hiện nhãn thay. */
+	function commentView(body: string | null) {
+		const m = splitAgentMark(body);
+		return { html: safeHtml(m.text), viaAgent: m.viaAgent, trace: m.trace };
+	}
+
 	function personName(id: unknown): string {
 		const n = Number(id);
 		return employees.value.find(e => e.id === n)?.fullName ?? 'người khác';
@@ -284,8 +292,18 @@
 
 	function eventDetail(e: TaskEvent): string {
 		const p = (e.payload ?? {}) as Record<string, unknown>;
-		const reason = typeof p.reason === 'string' ? p.reason : '';
+		const rawReason = splitAgentMark(typeof p.reason === 'string' ? p.reason : '');
+		const reason = rawReason.viaAgent ? `${rawReason.text} (soạn qua Trợ lý AI)` : rawReason.text;
 		switch (e.type) {
+			case 'WITHDRAWN':
+				return 'việc về Đang làm';
+			case 'DUE_REQUESTED':
+				return `xin dời hạn sang ${shortDate(String(p.to ?? ''), today)}${reason ? `. Lý do: ${reason}` : ''}`;
+			case 'DUE_REQUEST_DECIDED': {
+				const note = typeof p.note === 'string' && p.note ? `. Ghi chú: ${splitAgentMark(p.note).text}` : '';
+				if (p.cancelled) return 'phiếu xin dời hạn đã huỷ';
+				return `${p.approved ? 'duyệt' : 'không duyệt'} phiếu xin dời hạn${note}`;
+			}
 			case 'RETURNED':
 			case 'REOPENED':
 			case 'CANCELLED':
@@ -299,6 +317,7 @@
 			case 'DUE_CHANGED':
 				return `hạn từ ${shortDate(String(p.from ?? ''), today)} sang ${shortDate(String(p.to ?? ''), today)}${reason ? `. Lý do: ${reason}` : ''}`;
 			case 'ASSIGNEE_CHANGED':
+				return `từ ${personName(p.from)} sang ${personName(p.to)}${reason ? `. Lý do: ${reason}` : ''}`;
 			case 'REVIEWER_CHANGED':
 				return `từ ${personName(p.from)} sang ${personName(p.to)}`;
 			case 'FIELD_CHANGED': {
@@ -399,12 +418,14 @@
 								<CommonAppButton size="sm" @click="saveEdit(it.comment)">Lưu</CommonAppButton>
 							</div>
 						</div>
-						<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskComment -->
-						<div
-							v-else
-							class="tt-prose mt-0.5 break-words text-sm text-gray-800 dark:text-gray-200 [&_.task-mention]:font-medium [&_.task-mention]:text-brand-700 dark:[&_.task-mention]:text-brand-300 [&_a]:text-brand-600 [&_a]:underline"
-							v-html="safeHtml(it.comment.body)"
-						/>
+						<template v-else>
+							<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskComment -->
+							<div
+								class="tt-prose mt-0.5 break-words text-sm text-gray-800 dark:text-gray-200 [&_.task-mention]:font-medium [&_.task-mention]:text-brand-700 dark:[&_.task-mention]:text-brand-300 [&_a]:text-brand-600 [&_a]:underline"
+								v-html="commentView(it.comment.body).html"
+							/>
+							<AgentSourceLabel v-if="commentView(it.comment.body).viaAgent" class="mt-1" :trace="commentView(it.comment.body).trace" />
+						</template>
 						<ul v-if="it.comment.attachments.length" class="mt-1 flex flex-wrap gap-1.5">
 							<li v-for="a in it.comment.attachments" :key="a.id">
 								<button

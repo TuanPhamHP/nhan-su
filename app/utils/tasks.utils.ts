@@ -44,6 +44,7 @@ export const ACTION_LABELS: Record<TaskAction, string> = {
 	self_close: 'Đóng việc',
 	reopen: 'Mở lại',
 	cancel: 'Huỷ việc',
+	withdraw: 'Rút lại báo xong',
 };
 
 /** Trạng thái đích của từng thao tác, để menu "Chuyển sang" và câu đọc cho trình đọc màn hình. */
@@ -56,7 +57,28 @@ export const ACTION_TARGET: Record<TaskAction, TaskStatus> = {
 	self_close: 'DONE',
 	reopen: 'IN_PROGRESS',
 	cancel: 'CANCELLED',
+	withdraw: 'IN_PROGRESS',
 };
+
+/**
+ * Thao tác hỏi lại khi việc còn phải chờ việc khác chưa xong (bridge mục 28): bắt đầu, báo xong, tự đóng,
+ * nghiệm thu. Chỉ cảnh báo, không chặn.
+ */
+export function needsBlockerWarning(action: TaskAction, openBlockers: string[] | undefined): boolean {
+	return (
+		(action === 'start' || action === 'submit' || action === 'self_close' || action === 'accept') &&
+		!!openBlockers?.length
+	);
+}
+
+/** Chữ ngắn trên dòng và thẻ: "Chờ HQ-1", nhiều việc thì "Chờ HQ-1, HQ-3"; không phải chờ gì thì `null`. */
+export function waitingText(openBlockers: string[] | undefined): string | null {
+	return openBlockers?.length ? `Chờ ${openBlockers.join(', ')}` : null;
+}
+
+export function blockerWarningText(openBlockers: string[]): string {
+	return `Việc này đang phải chờ ${openBlockers.join(', ')} chưa xong. Vẫn tiếp tục?`;
+}
 
 /** Thao tác cần mở hộp trước khi gửi: ba thao tác bắt buộc lý do, nghiệm thu có điểm chất lượng tuỳ chọn. */
 export function actionNeedsDialog(action: TaskAction): boolean {
@@ -88,7 +110,7 @@ export function needsChecklistWarning(action: TaskAction, checklist: { total: nu
  * Một đến hai nút chính cho đầu khung chi tiết và dòng Việc của tôi, xếp theo việc người xem
  * hay làm nhất. Huỷ và Về Chưa làm là thao tác hiếm, nằm trong menu ba chấm.
  */
-const PRIMARY_ORDER: TaskAction[] = ['accept', 'return', 'submit', 'self_close', 'start', 'reopen'];
+const PRIMARY_ORDER: TaskAction[] = ['accept', 'return', 'submit', 'self_close', 'start', 'reopen', 'withdraw'];
 
 export function primaryActions(allowed: TaskAction[], max = 2): TaskAction[] {
 	return PRIMARY_ORDER.filter(a => allowed.includes(a)).slice(0, max);
@@ -420,18 +442,21 @@ export const TASK_FILE_ACCEPT =
 	'.pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip';
 export const TASK_FILE_MAX_MB = 20;
 
-/** Mã dự án: 2–6 chữ cái không dấu, `CV` dành cho việc lẻ. Máy chủ viết hoa giúp. */
+/**
+ * Mã dự án: 2–6 ký tự, chữ cái đầu rồi chữ cái hoặc chữ số (`HQ`, `L25`, `KT2`; bridge mục 29), `CV` dành
+ * cho việc lẻ. Máy chủ viết hoa giúp.
+ */
 export function projectCodeError(code: string): string | null {
 	const c = code.trim().toUpperCase();
 	if (!c) return 'Nhập mã dự án';
-	if (!/^[A-Z]{2,6}$/.test(c)) return 'Mã dự án gồm 2 đến 6 chữ cái không dấu, ví dụ HQ';
+	if (!/^[A-Z][A-Z0-9]{1,5}$/.test(c)) return 'Mã dự án gồm 2 đến 6 chữ cái không dấu hoặc chữ số, bắt đầu bằng chữ cái, ví dụ HQ hay L25';
 	if (c === 'CV') return 'Mã CV dành cho việc lẻ, bạn chọn mã khác';
 	return null;
 }
 
-/** Số hiệu việc (`HQ-12`, `cv-3`) hay id số, để trang chi tiết nhận cả hai. */
+/** Số hiệu việc (`HQ-12`, `cv-3`, `L25-1`) hay id số, để trang chi tiết nhận cả hai. */
 export function isTaskRef(value: string): boolean {
-	return /^[A-Za-z]{2,6}-\d+$/.test(value) || /^\d+$/.test(value);
+	return /^[A-Za-z][A-Za-z0-9]{1,5}-\d+$/.test(value) || /^\d+$/.test(value);
 }
 
 // ─── Lô 2 ─────────────────────────────────────────────────────────────────────
@@ -491,7 +516,7 @@ export function recurrenceText(r: {
 }
 
 export interface ProgressColumn {
-	metric: 'assigned' | 'cancelled' | 'done' | 'onTimeOriginal' | 'onTimeCurrent' | 'overdueOpen' | 'returned' | 'points' | 'quality';
+	metric: 'assigned' | 'cancelled' | 'done' | 'onTimeOriginal' | 'onTimeCurrent' | 'noDue' | 'overdueOpen' | 'returned' | 'points' | 'quality';
 	label: string;
 	hint: string;
 	/** Tỷ lệ đi kèm (trường `…Pct`). */
@@ -503,8 +528,20 @@ export const PROGRESS_COLUMNS: ProgressColumn[] = [
 	{ metric: 'assigned', label: 'Được giao', hint: 'Việc người khác giao, hạn ban đầu trong khoảng, kể cả việc đã huỷ.' },
 	{ metric: 'cancelled', label: 'Đã huỷ', hint: 'Việc được giao rồi bị huỷ, tính riêng.' },
 	{ metric: 'done', label: 'Hoàn thành', hint: 'Đã nghiệm thu.', pct: 'donePct' },
-	{ metric: 'onTimeOriginal', label: 'Đúng hạn ban đầu', hint: 'Báo xong lần đầu không muộn hơn hạn lúc giao.', pct: 'onTimeOriginalPct' },
-	{ metric: 'onTimeCurrent', label: 'Đúng hạn hiện tại', hint: 'Báo xong lần đầu không muộn hơn hạn sau khi đổi.', pct: 'onTimeCurrentPct' },
+	// Sau UAT 27/11/2026 (bridge mục 31): việc chưa có hạn không còn tính là đúng hạn, tỷ lệ chỉ chia cho việc có hạn.
+	{
+		metric: 'onTimeOriginal',
+		label: 'Báo xong đúng hạn ban đầu',
+		hint: 'Báo xong lần đầu không muộn hơn hạn lúc giao. Tỷ lệ chỉ tính việc có hạn ban đầu.',
+		pct: 'onTimeOriginalPct',
+	},
+	{
+		metric: 'onTimeCurrent',
+		label: 'Báo xong đúng hạn hiện tại',
+		hint: 'Báo xong lần đầu không muộn hơn hạn sau khi đổi. Tỷ lệ chỉ tính việc có hạn.',
+		pct: 'onTimeCurrentPct',
+	},
+	{ metric: 'noDue', label: 'Chưa có hạn', hint: 'Việc chưa có hạn: không tính đúng hạn, không vào tỷ lệ đúng hạn.' },
 	{ metric: 'overdueOpen', label: 'Quá hạn còn mở', hint: 'Chưa báo xong mà hạn đã qua tại cuối khoảng.' },
 	{ metric: 'returned', label: 'Bị trả lại', hint: 'Đã bị trả lại hoặc mở lại ít nhất một lần.' },
 	{ metric: 'points', label: 'Khối lượng', hint: 'Tổng điểm việc nghiệm thu trong khoảng.' },

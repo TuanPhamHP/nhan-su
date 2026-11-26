@@ -14,6 +14,7 @@
 		groupMyTasks,
 		taskDueText,
 		vnToday,
+		waitingText,
 	} from '~/utils/tasks.utils';
 
 	/**
@@ -253,6 +254,9 @@
 							</span>
 							<span v-if="t.points != null">{{ t.points }} điểm</span>
 							<span v-if="t.dependencies?.late" class="text-rose-600 dark:text-rose-400">phải chờ việc khác đang trễ hạn</span>
+							<span v-if="waitingText(t.dependencies?.openBlockers)" class="rounded bg-amber-50 px-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
+								{{ waitingText(t.dependencies?.openBlockers) }}
+							</span>
 							<span v-if="showProject && t.project" class="truncate">{{ t.project.name }}</span>
 						</p>
 					</div>
@@ -344,6 +348,9 @@
 							</button>
 							<span v-if="t.parent" class="ml-1 text-xs text-gray-400">· việc con của {{ t.parent.title ?? t.parent.code }}</span>
 							<span v-if="t.recurrenceId" class="ml-1 rounded bg-teal-50 px-1 text-[11px] text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Định kỳ</span>
+							<span v-if="waitingText(t.dependencies?.openBlockers)" class="ml-1 rounded bg-amber-50 px-1 text-[11px] text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
+								{{ waitingText(t.dependencies?.openBlockers) }}
+							</span>
 						</td>
 						<td class="px-3 py-2">
 							<button

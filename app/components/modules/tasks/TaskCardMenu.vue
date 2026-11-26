@@ -1,5 +1,5 @@
 <script setup lang="ts">
-	import type { TaskListItem, TaskStatus } from '~/types/tasks.types';
+	import type { TaskDetail, TaskListItem, TaskStatus } from '~/types/tasks.types';
 	import { BOARD_STATUSES, STATUS_LABELS, primaryActions } from '~/utils/tasks.utils';
 
 	/**
@@ -31,7 +31,15 @@
 		moveBottom: [];
 		changeDue: [];
 		reassign: [];
+		/** Đã gửi phiếu xin dời hạn từ menu (menu tự mở hộp và gọi API): nơi gọi thay bản mới nếu cần. */
+		dueRequested: [task: TaskDetail];
 	}>();
+
+	const actions = useTaskActions();
+	async function requestDue() {
+		const result = await actions.requestDue(props.task);
+		if (result.ok) emit('dueRequested', result.task);
+	}
 
 	const toast = useToast();
 	const open = ref(false);
@@ -71,7 +79,8 @@
 			list.push({ key: 'bottom', label: 'Đưa xuống cuối cột', run: () => emit('moveBottom') });
 		}
 		if (props.task.permissions.reassign) list.push({ key: 'reassign', label: 'Đổi người thực hiện', run: () => emit('reassign') });
-		if (props.task.permissions.changeDue) list.push({ key: 'due', label: 'Đổi hạn', run: () => emit('changeDue') });
+		if (props.task.permissions.changeDue) list.push({ key: 'due', label: props.task.dueDate ? 'Đổi hạn' : 'Đặt hạn', run: () => emit('changeDue') });
+		else if (props.task.permissions.requestDue) list.push({ key: 'request-due', label: 'Xin dời hạn', run: requestDue });
 		return list;
 	});
 

@@ -33,12 +33,13 @@ const bgMap = {
 const icon = computed(() => iconMap[props.toast.type]);
 const bg = computed(() => bgMap[props.toast.type]);
 
-/** Bấm nút kèm toast thì đi tới trang đó và đóng luôn toast, khỏi phải bấm thêm dấu ×. */
+/** Bấm nút kèm toast thì làm việc đó (hoặc đi tới trang đó) và đóng luôn toast, khỏi phải bấm thêm dấu ×. */
 async function runAction() {
 	const action = props.toast.action;
 	if (!action) return;
 	emit('close', props.toast.id);
-	await navigateTo(action.to);
+	if (action.run) await action.run();
+	else if (action.to) await navigateTo(action.to);
 }
 </script>
 
@@ -66,6 +67,7 @@ async function runAction() {
 				v-if="toast.action"
 				type="button"
 				class="mt-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+				data-testid="toast-action"
 				@click="runAction"
 			>
 				{{ toast.action.label }}

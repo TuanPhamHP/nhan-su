@@ -108,7 +108,7 @@
 							v-model="code"
 							:disabled="isEdit"
 							maxlength="6"
-							placeholder="VD: HQ"
+							placeholder="VD: HQ hoặc L25"
 							class="mt-1 w-32 rounded-lg border bg-white px-3 py-2 text-sm uppercase text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-700"
 							:class="errors.code ? 'border-rose-500' : 'border-gray-300 dark:border-gray-600'"
 						/>

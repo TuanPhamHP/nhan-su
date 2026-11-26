@@ -1,6 +1,9 @@
 <script setup lang="ts">
 	import { sanitizeTaskDescription } from '~/utils/task-html';
+	import { splitAgentMark } from '~/utils/agent-source';
+	import { vnCalendarDate } from '~/utils/date';
 	import { storeToRefs } from 'pinia';
+	import AgentSourceLabel from '~/components/modules/agent/AgentSourceLabel.vue';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
 	import TaskActivity from '~/components/modules/tasks/TaskActivity.vue';
 	import TaskCardMenu from '~/components/modules/tasks/TaskCardMenu.vue';
@@ -158,7 +161,9 @@
 		if (result.ok) editingDesc.value = false;
 		handle(result);
 	}
-	const descHtml = computed(() => sanitizeTaskDescription(task.value?.description));
+	/** Mô tả do trợ lý soạn có đuôi `⟦Trợ lý AI⟧ …`: cắt khi hiện, thay bằng nhãn (dữ liệu giữ nguyên, sửa mô tả vẫn thấy đủ). */
+	const descMark = computed(() => splitAgentMark(task.value?.description));
+	const descHtml = computed(() => sanitizeTaskDescription(descMark.value.text));
 
 	async function onPriority(value: string) {
 		const t = task.value;
@@ -175,6 +180,29 @@
 	async function changeDue() {
 		if (task.value) handle(await actions.changeDue(task.value));
 	}
+	// Phiếu xin dời hạn (bridge mục 25).
+	async function requestDue() {
+		if (task.value) handle(await actions.requestDue(task.value));
+	}
+	async function approveDue() {
+		if (task.value) handle(await actions.approveDueRequest(task.value));
+	}
+	async function rejectDue() {
+		if (task.value) handle(await actions.rejectDueRequest(task.value));
+	}
+	async function cancelDue() {
+		if (task.value) handle(await actions.cancelDueRequest(task.value));
+	}
+	// Bấm Hoàn tác trong toast sau Báo xong: thay bản mới nếu là việc đang mở ở đây.
+	watch(
+		() => actions.externalChange.value,
+		t => {
+			if (t && task.value && t.id === task.value.id) {
+				setTask(t);
+				activityRef.value?.reload();
+			}
+		},
+	);
 	async function reassign() {
 		if (task.value) handle(await actions.reassign(task.value));
 	}
@@ -567,9 +595,51 @@
 							@open="() => {}"
 							@status="onMenuStatus"
 							@change-due="changeDue"
+							@due-requested="t => handle({ ok: true, task: t })"
 							@reassign="reassign"
 						/>
 					</div>
+				</div>
+
+				<!-- Phiếu xin dời hạn đang chờ (bridge mục 25): người xin huỷ được, người có quyền đổi hạn duyệt ngay ở đây. -->
+				<div
+					v-if="task.pendingDueRequest"
+					class="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100"
+					data-testid="task-due-request"
+				>
+					<p>
+						<span class="font-medium">{{ task.pendingDueRequest.requestedBy.fullName }}</span>
+						đang xin dời hạn sang <span class="font-medium">{{ shortDate(task.pendingDueRequest.proposedDueDate, today) }}</span>,
+						lý do: {{ splitAgentMark(task.pendingDueRequest.reason).text }}
+					</p>
+					<div v-if="!readOnly" class="mt-2 flex flex-wrap gap-2">
+						<template v-if="task.permissions.changeDue">
+							<CommonAppButton size="sm" :loading="actions.busy.value" data-testid="task-due-request-approve" @click="approveDue">Duyệt</CommonAppButton>
+							<CommonAppButton size="sm" variant="danger_outline" data-testid="task-due-request-reject" @click="rejectDue">Không duyệt</CommonAppButton>
+						</template>
+						<CommonAppButton
+							v-if="task.pendingDueRequest.requestedBy.id === authStore.user?.id"
+							size="sm"
+							variant="secondary"
+							data-testid="task-due-request-cancel"
+							@click="cancelDue"
+						>
+							Huỷ phiếu
+						</CommonAppButton>
+					</div>
+				</div>
+
+				<!-- Lý do trả lại hay mở lại gần nhất, khi việc đang làm lại (bridge mục 28). -->
+				<div
+					v-if="task.lastReturn && task.status === 'IN_PROGRESS'"
+					class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+					data-testid="task-last-return"
+				>
+					<span class="font-medium">{{ task.lastReturn.reopened ? 'Được mở lại' : 'Bị trả lại' }}:</span>
+					{{ splitAgentMark(task.lastReturn.reason).text }}
+					<span class="text-xs text-amber-700 dark:text-amber-300">
+						({{ task.lastReturn.by?.fullName ?? 'không rõ người' }}, {{ shortDate(vnCalendarDate(task.lastReturn.at), today) }})
+					</span>
 				</div>
 			</header>
 
@@ -618,6 +688,15 @@
 										@click="changeDue"
 									>
 										{{ task.dueDate ? 'Đổi hạn' : 'Đặt hạn' }}
+									</button>
+									<button
+										v-else-if="task.permissions.requestDue && !readOnly && !task.pendingDueRequest"
+										type="button"
+										class="ml-2 text-xs text-brand-600 hover:underline dark:text-brand-400"
+										data-testid="task-request-due"
+										@click="requestDue"
+									>
+										Xin dời hạn
 									</button>
 									<p v-if="task.dueChangeCount" class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
 										hạn ban đầu {{ shortDate(task.originalDueDate, today) }}, đã đổi {{ task.dueChangeCount }} lần
@@ -789,8 +868,11 @@
 									<CommonAppButton size="sm" @click="saveDesc">Lưu mô tả</CommonAppButton>
 								</div>
 							</div>
-							<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskDescription -->
-							<div v-else-if="task.description" class="tt-prose mt-2 break-words text-sm text-gray-800 dark:text-gray-200" v-html="descHtml" />
+							<template v-else-if="task.description">
+								<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskDescription -->
+								<div v-if="descHtml" class="tt-prose mt-2 break-words text-sm text-gray-800 dark:text-gray-200" v-html="descHtml" />
+								<AgentSourceLabel v-if="descMark.viaAgent" class="mt-1.5" :trace="descMark.trace" />
+							</template>
 							<p v-else class="mt-2 text-sm text-gray-400">Chưa có mô tả.</p>
 						</section>
 

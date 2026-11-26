@@ -7,7 +7,15 @@ import type {
 	TaskListItem,
 	TaskStatus,
 } from '~/types/tasks.types';
-import { ACTION_LABELS, ACTION_TARGET, STATUS_LABELS, actionNeedsDialog, needsChecklistWarning, taskErrorInfo } from '~/utils/tasks.utils';
+import {
+	ACTION_LABELS,
+	ACTION_TARGET,
+	STATUS_LABELS,
+	actionNeedsDialog,
+	needsBlockerWarning,
+	needsChecklistWarning,
+	taskErrorInfo,
+} from '~/utils/tasks.utils';
 
 /**
  * Một chỗ chạy mọi thao tác ghi lên việc: nút trên dòng, nút đầu khung chi tiết, menu ba chấm,
@@ -20,7 +28,11 @@ import { ACTION_LABELS, ACTION_TARGET, STATUS_LABELS, actionNeedsDialog, needsCh
 export type TaskDialogRequest =
 	| { kind: 'transition'; task: TaskListItem; action: TaskAction; resolve: (v: TaskDialogResult | null) => void }
 	| { kind: 'due'; task: TaskListItem; presetDate?: string; resolve: (v: TaskDialogResult | null) => void }
-	| { kind: 'reassign'; task: TaskListItem; resolve: (v: TaskDialogResult | null) => void };
+	| { kind: 'reassign'; task: TaskListItem; resolve: (v: TaskDialogResult | null) => void }
+	/** Người thực hiện xin dời hạn: hạn đề xuất, lý do bắt buộc. */
+	| { kind: 'requestDue'; task: TaskListItem; resolve: (v: TaskDialogResult | null) => void }
+	/** Người duyệt không duyệt phiếu xin dời hạn: ghi chú tuỳ chọn. */
+	| { kind: 'rejectDue'; task: TaskDetail; resolve: (v: TaskDialogResult | null) => void };
 
 export interface TaskDialogResult {
 	reason?: string;
@@ -37,6 +49,13 @@ export type TaskActionResult =
 
 const dialog = ref<TaskDialogRequest | null>(null);
 const busy = ref(false);
+/**
+ * Việc vừa đổi do một thao tác không đi qua nơi gọi (bấm Hoàn tác trong toast sau Báo xong). Trang và khung
+ * chi tiết theo dõi để thay dòng ngay, không đợi tải lại.
+ */
+const externalChange = ref<TaskDetail | null>(null);
+/** Giữ nút Hoàn tác trong khoảng này sau Báo xong (bridge mục 23). */
+const UNDO_MS = 10_000;
 /** Câu cho trình đọc màn hình sau mỗi lần chuyển (vùng `aria-live` ở `TaskActionDialogHost`). */
 const liveMessage = ref('');
 
@@ -78,11 +97,40 @@ export function useTaskActions() {
 	}
 
 	/**
-	 * Thao tác có phải mở hộp trước khi gửi không: cần lý do hay điểm, hoặc báo xong, tự đóng việc mà
-	 * còn mục kiểm tra chưa tick (hộp hỏi lại, API không chặn).
+	 * Thao tác có phải mở hộp trước khi gửi không: cần lý do hay điểm; báo xong, tự đóng việc mà còn mục
+	 * kiểm tra chưa tick; bắt đầu, báo xong, nghiệm thu khi việc còn phải chờ việc khác chưa xong (hộp hỏi
+	 * lại, API không chặn).
 	 */
 	function dialogFirst(task: TaskListItem, action: TaskAction): boolean {
-		return actionNeedsDialog(action) || needsChecklistWarning(action, task.checklist);
+		return (
+			actionNeedsDialog(action) ||
+			needsChecklistWarning(action, task.checklist) ||
+			needsBlockerWarning(action, task.dependencies?.openBlockers)
+		);
+	}
+
+	/** Bấm Hoàn tác trong toast sau Báo xong: rút lại bằng `version` mới nhất. */
+	async function undoSubmit(updated: TaskDetail) {
+		try {
+			const back = await service.transition(updated.id, { action: 'withdraw', version: updated.version });
+			toast.success(`Đã rút lại báo xong ${updated.code}`);
+			externalChange.value = back;
+			announce(`Đã rút lại báo xong ${updated.title}, việc về Đang làm.`);
+		} catch (err) {
+			reportError(err);
+		}
+	}
+
+	/** Câu báo sau thao tác; Báo xong có nút Hoàn tác khi máy chủ còn cho rút lại. */
+	function successToast(action: TaskAction, task: TaskListItem, updated: TaskDetail) {
+		if (action === 'submit' && updated.allowedActions.includes('withdraw')) {
+			toast.success(`${ACTION_LABELS[action]}: ${task.code}`, {
+				duration: UNDO_MS,
+				action: { label: 'Hoàn tác', run: () => undoSubmit(updated) },
+			});
+			return;
+		}
+		toast.success(`${ACTION_LABELS[action]}: ${task.code}`);
 	}
 
 	/** Chuyển trạng thái bằng nút hoặc menu. Thao tác cần lý do hay điểm thì mở hộp trước. */
@@ -101,7 +149,7 @@ export function useTaskActions() {
 				reason: extra.reason,
 				qualityScore: extra.qualityScore,
 			});
-			toast.success(`${ACTION_LABELS[action]}: ${task.code}`);
+			successToast(action, task, updated);
 			return done(updated, `Đã chuyển ${task.title} sang ${updated.statusLabel}.`);
 		} catch (err) {
 			return { ok: false, cancelled: false, ...reportError(err) };
@@ -152,19 +200,23 @@ export function useTaskActions() {
 		}
 	}
 
-	/** Đổi hạn: luôn qua hộp có ô lý do bắt buộc (F-04). */
+	/**
+	 * Đổi hạn qua hộp có ô lý do (F-04). Việc chưa có hạn là đặt hạn lần đầu: lý do không bắt buộc, không tính
+	 * là đổi hạn (bridge mục 25).
+	 */
 	async function changeDue(task: TaskListItem, presetDate?: string): Promise<TaskActionResult> {
 		const answer = await openDialog<'due'>({ kind: 'due', task, presetDate });
-		if (!answer?.dueDate || !answer.reason) return { ok: false, cancelled: true, conflict: null, message: null };
+		const firstDue = !task.dueDate;
+		if (!answer?.dueDate || (!firstDue && !answer.reason)) return { ok: false, cancelled: true, conflict: null, message: null };
 		busy.value = true;
 		try {
 			const updated = await service.changeDue(task.id, {
 				dueDate: answer.dueDate,
-				reason: answer.reason,
+				reason: answer.reason || undefined,
 				version: task.version,
 			});
-			toast.success(`Đã đổi hạn ${task.code}`);
-			return done(updated, `Đã đổi hạn ${task.title}.`);
+			toast.success(firstDue ? `Đã đặt hạn ${task.code}` : `Đã đổi hạn ${task.code}`);
+			return done(updated, firstDue ? `Đã đặt hạn ${task.title}.` : `Đã đổi hạn ${task.title}.`);
 		} catch (err) {
 			return { ok: false, cancelled: false, ...reportError(err) };
 		} finally {
@@ -180,8 +232,11 @@ export function useTaskActions() {
 		const answer = await openDialog<'reassign'>({ kind: 'reassign', task });
 		if (!answer?.assigneeId) return { ok: false, cancelled: true, conflict: null, message: null };
 		if (answer.assigneeId === task.assignee.id && !answer.reviewerId) return { ok: false, cancelled: true, conflict: null, message: null };
+		const changingAssignee = answer.assigneeId !== task.assignee.id;
 		const result = await updateFields(task, {
-			assigneeId: answer.assigneeId === task.assignee.id ? undefined : answer.assigneeId,
+			assigneeId: changingAssignee ? answer.assigneeId : undefined,
+			// Lý do chỉ đi kèm khi đổi người làm (bridge mục 30): ghi lịch sử và gửi người bị đổi đi.
+			reason: changingAssignee ? answer.reason : undefined,
 			reviewerId: answer.reviewerId,
 		});
 		if (result.ok) {
@@ -204,6 +259,7 @@ export function useTaskActions() {
 			points?: number | null;
 			startDate?: string;
 			assigneeId?: number;
+			reason?: string;
 			reviewerId?: number;
 			groupId?: number | null;
 			sprintId?: number | null;
@@ -220,7 +276,84 @@ export function useTaskActions() {
 		}
 	}
 
-	return { dialog, busy, liveMessage, runAction, moveTask, changeDue, reassign, updateFields, reportError, announce };
+	// ─── Phiếu xin dời hạn (bridge mục 25) ──────────────────────────────────
+
+	/** Chạy một lệnh ghi lên phiếu xin dời hạn, báo bằng toast và câu đọc màn hình. Lỗi hiện thẳng `message` máy chủ. */
+	async function dueRequestCall(call: () => Promise<TaskDetail>, success: string, live: string): Promise<TaskActionResult> {
+		busy.value = true;
+		try {
+			const updated = await call();
+			toast.success(success);
+			return done(updated, live);
+		} catch (err) {
+			return { ok: false, cancelled: false, ...reportError(err) };
+		} finally {
+			busy.value = false;
+		}
+	}
+
+	/** Người thực hiện xin dời hạn: hộp có Hạn đề xuất và Lý do bắt buộc. */
+	async function requestDue(task: TaskListItem): Promise<TaskActionResult> {
+		const answer = await openDialog<'requestDue'>({ kind: 'requestDue', task });
+		if (!answer?.dueDate || !answer.reason) return { ok: false, cancelled: true, conflict: null, message: null };
+		const { dueDate, reason } = answer;
+		return dueRequestCall(
+			() => service.requestDue(task.id, { dueDate, reason }),
+			`Đã gửi xin dời hạn ${task.code}`,
+			`Đã gửi xin dời hạn ${task.title}, chờ người giao duyệt.`,
+		);
+	}
+
+	async function approveDueRequest(task: TaskDetail): Promise<TaskActionResult> {
+		const req = task.pendingDueRequest;
+		if (!req) return { ok: false, cancelled: true, conflict: null, message: null };
+		return dueRequestCall(
+			() => service.approveDueRequest(task.id, req.id),
+			`Đã duyệt dời hạn ${task.code}`,
+			`Đã duyệt dời hạn ${task.title}.`,
+		);
+	}
+
+	/** Không duyệt: hộp ghi chú tuỳ chọn, ghi chú gửi kèm thông báo cho người xin. */
+	async function rejectDueRequest(task: TaskDetail): Promise<TaskActionResult> {
+		const req = task.pendingDueRequest;
+		if (!req) return { ok: false, cancelled: true, conflict: null, message: null };
+		const answer = await openDialog<'rejectDue'>({ kind: 'rejectDue', task });
+		if (!answer) return { ok: false, cancelled: true, conflict: null, message: null };
+		return dueRequestCall(
+			() => service.rejectDueRequest(task.id, req.id, answer.reason),
+			`Đã không duyệt dời hạn ${task.code}`,
+			`Đã không duyệt dời hạn ${task.title}.`,
+		);
+	}
+
+	async function cancelDueRequest(task: TaskDetail): Promise<TaskActionResult> {
+		const req = task.pendingDueRequest;
+		if (!req) return { ok: false, cancelled: true, conflict: null, message: null };
+		return dueRequestCall(
+			() => service.cancelDueRequest(task.id, req.id),
+			`Đã huỷ phiếu xin dời hạn ${task.code}`,
+			`Đã huỷ phiếu xin dời hạn ${task.title}.`,
+		);
+	}
+
+	return {
+		dialog,
+		busy,
+		liveMessage,
+		externalChange,
+		runAction,
+		moveTask,
+		changeDue,
+		reassign,
+		updateFields,
+		requestDue,
+		approveDueRequest,
+		rejectDueRequest,
+		cancelDueRequest,
+		reportError,
+		announce,
+	};
 }
 
 /** Trạng thái đích của một thao tác, để menu ghi "Chuyển sang …". */

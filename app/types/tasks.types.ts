@@ -10,7 +10,8 @@ export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE' | 'CANCEL
 export type TaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 export type TaskSource = 'SELF' | 'ASSIGNED' | 'RECURRING';
 export type TaskPoints = 1 | 2 | 3 | 5 | 8;
-export type TaskAction = 'start' | 'back_to_todo' | 'submit' | 'accept' | 'return' | 'self_close' | 'reopen' | 'cancel';
+/** `withdraw`: người thực hiện rút lại báo xong khi việc còn Chờ nghiệm thu (bridge mục 23). */
+export type TaskAction = 'start' | 'back_to_todo' | 'submit' | 'accept' | 'return' | 'self_close' | 'reopen' | 'cancel' | 'withdraw';
 export type TaskProjectRole = 'MANAGER' | 'MEMBER' | 'VIEWER';
 export type TaskProjectStatus = 'ACTIVE' | 'CLOSED';
 
@@ -67,6 +68,8 @@ export interface TaskPermissions {
 	manageWatchers: boolean;
 	addSubtask: boolean;
 	comment: boolean;
+	/** Người thực hiện không tự đổi hạn được thì hiện nút Xin dời hạn (bridge mục 25). Người duyệt phiếu dùng `changeDue`. */
+	requestDue: boolean;
 }
 
 export interface TaskGroupRef {
@@ -88,6 +91,8 @@ export interface TaskDependencySummary {
 	blockers: number;
 	blocking: number;
 	late: boolean;
+	/** Số hiệu việc phải chờ chưa xong (bridge mục 28): có thì hỏi lại trước khi bắt đầu, báo xong, nghiệm thu. */
+	openBlockers: string[];
 }
 
 export interface TaskListItem {
@@ -186,6 +191,43 @@ export interface TaskDetail extends TaskListItem {
 	blocking: TaskDependency[];
 	/** Câu cảnh báo không chặn sau thao tác (VD báo xong khi còn việc con mở). */
 	warning: string | null;
+	/** Phiếu xin dời hạn đang chờ (bridge mục 25.3). */
+	pendingDueRequest: TaskDueRequest | null;
+	/** Lần trả lại hoặc mở lại gần nhất, hiện ở đầu việc (bridge mục 28). */
+	lastReturn: TaskLastReturn | null;
+}
+
+export interface TaskDueRequest {
+	id: number;
+	requestedBy: TaskPerson;
+	oldDueDate: string | null;
+	proposedDueDate: string;
+	reason: string;
+	createdAt: string;
+}
+
+export interface TaskLastReturn {
+	reason: string;
+	/** `true`: mở lại việc đã hoàn thành, không phải trả lại khi nghiệm thu. */
+	reopened: boolean;
+	at: string;
+	by: TaskPerson | null;
+}
+
+/** `GET /v1/tasks/department-summary` (bridge mục 26). */
+export interface TaskPersonLoad {
+	employee: TaskPerson;
+	todo: number;
+	inProgress: number;
+	inReview: number;
+	overdue: number;
+	/** Tổng điểm việc đang mở; việc chưa có điểm tính 0. */
+	openPoints: number;
+}
+
+export interface TaskDepartmentSummary {
+	department: { id: number; name: string };
+	people: TaskPersonLoad[];
 }
 
 /** Một đầu của phụ thuộc trong chi tiết việc. Không xem được thì `title` null, `visible` false. */
@@ -272,6 +314,8 @@ export interface UpdateTaskBody {
 	points?: number | null;
 	startDate?: string;
 	assigneeId?: number;
+	/** Lý do khi đổi `assigneeId` (tối đa 500), ghi lịch sử và gửi người bị đổi đi. */
+	reason?: string;
 	reviewerId?: number;
 	/** `null` bỏ nhóm. */
 	groupId?: number | null;
@@ -298,8 +342,14 @@ export interface MoveTaskBody {
 
 export interface ChangeDueBody {
 	dueDate: string;
-	reason: string;
+	/** Không bắt buộc khi việc chưa có hạn (đặt hạn lần đầu, bridge mục 25). */
+	reason?: string;
 	version: number;
+}
+
+export interface CreateDueRequestBody {
+	dueDate: string;
+	reason: string;
 }
 
 export interface TaskComment {
@@ -333,7 +383,10 @@ export type TaskEventType =
 	| 'DEPENDENCY_ADDED'
 	| 'DEPENDENCY_REMOVED'
 	| 'ATTACHMENT_ADDED'
-	| 'ATTACHMENT_REMOVED';
+	| 'ATTACHMENT_REMOVED'
+	| 'WITHDRAWN'
+	| 'DUE_REQUESTED'
+	| 'DUE_REQUEST_DECIDED';
 
 export interface TaskEvent {
 	id: number;
@@ -396,6 +449,8 @@ export interface TaskProject {
 	myRole: TaskProjectRole | null;
 	myRoleLabel: string | null;
 	canManage: boolean;
+	/** Người xem không là thành viên mà là trưởng phòng của một thành viên: xem chỉ đọc (bridge mục 24). */
+	viaDepartment: boolean;
 	createdAt: string;
 	/** Lô 2: dự án bật đợt và việc chờ xếp. */
 	useSprints: boolean;
@@ -581,6 +636,7 @@ export type TaskProgressMetric =
 	| 'done'
 	| 'onTimeOriginal'
 	| 'onTimeCurrent'
+	| 'noDue'
 	| 'overdueOpen'
 	| 'returned'
 	| 'points'
@@ -598,6 +654,11 @@ export interface TaskProgressCounts {
 	done: number;
 	onTimeOriginal: number;
 	onTimeCurrent: number;
+	/**
+	 * Sau UAT 27/11/2026 (bridge tasks mục 31): việc tính tỷ lệ mà chưa có hạn; không tính đúng hạn, không vào mẫu số
+	 * tỷ lệ đúng hạn. BE cũ không có.
+	 */
+	noDue?: number;
 	overdueOpen: number;
 	returned: number;
 	points: number;

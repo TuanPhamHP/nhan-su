@@ -2,6 +2,7 @@ import { useAuthFetch } from './http/auth.fetch';
 import type { ApiResponse, PaginatedMeta } from '~/types/api.types';
 import type {
 	ChangeDueBody,
+	CreateDueRequestBody,
 	CreateTaskBody,
 	CreateTaskProjectBody,
 	MentionCandidate,
@@ -13,6 +14,7 @@ import type {
 	TaskCalendar,
 	TaskChecklistItem,
 	TaskComment,
+	TaskDepartmentSummary,
 	TaskDetail,
 	TaskGroup,
 	TaskListItem,
@@ -114,6 +116,43 @@ export const useTasksService = () => {
 
 		async move(id: number, body: MoveTaskBody): Promise<TaskDetail> {
 			const res = await authFetch<ApiResponse<TaskDetail>>(`/v1/tasks/${id}/move`, { method: 'POST', body });
+			return res.data;
+		},
+
+		// ─── Phiếu xin dời hạn (bridge mục 25) ──────────────────────────────────
+
+		async requestDue(id: number, body: CreateDueRequestBody): Promise<TaskDetail> {
+			const res = await authFetch<ApiResponse<TaskDetail>>(`/v1/tasks/${id}/due-requests`, { method: 'POST', body });
+			return res.data;
+		},
+
+		async approveDueRequest(id: number, requestId: number): Promise<TaskDetail> {
+			const res = await authFetch<ApiResponse<TaskDetail>>(`/v1/tasks/${id}/due-requests/${requestId}/approve`, {
+				method: 'POST',
+			});
+			return res.data;
+		},
+
+		async rejectDueRequest(id: number, requestId: number, note?: string): Promise<TaskDetail> {
+			const res = await authFetch<ApiResponse<TaskDetail>>(`/v1/tasks/${id}/due-requests/${requestId}/reject`, {
+				method: 'POST',
+				body: note ? { note } : {},
+			});
+			return res.data;
+		},
+
+		async cancelDueRequest(id: number, requestId: number): Promise<TaskDetail> {
+			const res = await authFetch<ApiResponse<TaskDetail>>(`/v1/tasks/${id}/due-requests/${requestId}/cancel`, {
+				method: 'POST',
+			});
+			return res.data;
+		},
+
+		/** Tóm tắt Việc của phòng theo người (bridge mục 26). Trưởng phòng bỏ trống `departmentId` là phòng mình. */
+		async departmentSummary(departmentId?: number): Promise<TaskDepartmentSummary> {
+			const res = await authFetch<ApiResponse<TaskDepartmentSummary>>('/v1/tasks/department-summary', {
+				params: cleanQuery({ departmentId }),
+			});
 			return res.data;
 		},
 

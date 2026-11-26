@@ -3,7 +3,7 @@
 	import TaskPriorityBadge from '~/components/modules/tasks/TaskPriorityBadge.vue';
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
 	import type { TaskAction, TaskListItem, TaskStatus } from '~/types/tasks.types';
-	import { ACTION_LABELS, DUE_TONE_CLASS, dueTone, primaryActions, taskDueText } from '~/utils/tasks.utils';
+	import { ACTION_LABELS, DUE_TONE_CLASS, dueTone, primaryActions, taskDueText, waitingText } from '~/utils/tasks.utils';
 
 	/**
 	 * Một dòng ở Việc của tôi: nút thao tác chính ngay trên dòng (Báo xong, Nghiệm thu…) để người
@@ -70,6 +70,9 @@
 					</span>
 					<span v-if="task.dependencies?.late" class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400" data-testid="task-late-dot">
 						<span class="h-1.5 w-1.5 rounded-full bg-rose-500" />phải chờ việc khác đang trễ hạn
+					</span>
+					<span v-if="waitingText(task.dependencies?.openBlockers)" class="rounded bg-amber-50 px-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
+						{{ waitingText(task.dependencies?.openBlockers) }}
 					</span>
 					<span v-if="task.project" class="truncate">{{ task.project.name }}</span>
 					<span v-if="showAssignee">làm: {{ task.assignee.fullName }}</span>

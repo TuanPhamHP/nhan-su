@@ -100,13 +100,14 @@ describe('Công việc lô 2: việc định kỳ, báo cáo', () => {
 		expect(recurrenceText({ frequency: 'YEARLY', dayOfMonth: 20, monthOfPeriod: 12 })).toBe('Ngày 20/12 hằng năm');
 	});
 
-	it('cột báo cáo đúng chín ô của bridge mục 16, tỷ lệ viết kiểu Việt', () => {
+	it('cột báo cáo đúng các ô của bridge mục 16 và 31 (thêm Chưa có hạn), tỷ lệ viết kiểu Việt', () => {
 		expect(PROGRESS_COLUMNS.map(c => c.metric)).toEqual([
 			'assigned',
 			'cancelled',
 			'done',
 			'onTimeOriginal',
 			'onTimeCurrent',
+			'noDue',
 			'overdueOpen',
 			'returned',
 			'points',

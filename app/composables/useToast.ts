@@ -1,9 +1,13 @@
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
-/** Nút kèm toast, VD "Mở tài sản" ngay sau khi tạo. `to` là đường dẫn trong app. */
+/**
+ * Nút kèm toast: `to` là đường dẫn trong app (VD "Mở tài sản" ngay sau khi tạo), hoặc `run` là việc làm tại
+ * chỗ (VD "Hoàn tác" ngay sau khi báo xong). Có cả hai thì `run` thắng.
+ */
 export interface ToastAction {
 	label: string;
-	to: string;
+	to?: string;
+	run?: () => void | Promise<void>;
 }
 
 export interface Toast {
