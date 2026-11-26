@@ -37,7 +37,11 @@
 	const indicators = ref<KpiIndicator[]>([]);
 	const templates = ref<KpiTemplate[]>([]);
 	const scales = ref<KpiGradeScale[]>([]);
-	const showInactive = ref(false);
+	/** Hiện chỉ tiêu, mẫu ngừng dùng nằm trên đường dẫn (`?inactive=1`). */
+	const showInactive = computed({
+		get: () => route.query.inactive === '1',
+		set: (v: boolean) => router.replace({ query: { ...route.query, inactive: v ? '1' : undefined } }),
+	});
 	const loading = ref(true);
 	const loadError = ref('');
 

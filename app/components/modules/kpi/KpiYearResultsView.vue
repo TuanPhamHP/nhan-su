@@ -10,13 +10,25 @@
 	 * Kết quả năm (F-22): trung bình điểm các kỳ con ĐÃ CÔNG BỐ của từng người, xếp loại theo thang áp dụng
 	 * ngày cuối năm. Không có kỳ năm riêng.
 	 */
-	const props = defineProps<{ departmentOptions: Array<{ value: string; label: string }> }>();
+	const props = defineProps<{
+		departmentOptions: Array<{ value: string; label: string }>;
+		/** Năm và phòng đang xem, trang cha giữ trên đường dẫn (`?year=`, `?dept=`). Năm rỗng là năm nay. */
+		year: string;
+		dept: string;
+	}>();
+	const emit = defineEmits<{ 'update:year': [value: string]; 'update:dept': [value: string] }>();
 
 	const service = useKpiService();
 	const thisYear = Number(vnToday().slice(0, 4));
-	const year = ref(String(thisYear));
+	const year = computed({
+		get: () => props.year || String(thisYear),
+		set: (v: string) => emit('update:year', v),
+	});
 	const yearOptions = Array.from({ length: 5 }, (_, i) => ({ value: String(thisYear - i), label: `Năm ${thisYear - i}` }));
-	const dept = ref(props.departmentOptions.length === 1 ? props.departmentOptions[0]!.value : '');
+	const dept = computed({
+		get: () => props.dept,
+		set: (v: string) => emit('update:dept', v),
+	});
 	const data = ref<KpiYearResults | null>(null);
 	const loading = ref(true);
 	const error = ref('');

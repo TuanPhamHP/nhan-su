@@ -83,7 +83,8 @@
 		return (['tasks', 'sprints', 'overview', 'members', 'settings'] as Tab[]).includes(t as Tab) ? (t as Tab) : 'tasks';
 	});
 	function setTab(t: Tab) {
-		router.replace({ query: { ...route.query, tab: t === 'tasks' ? undefined : t } });
+		// Đổi thẻ thì đóng khung việc đang mở (thẻ khác không có khung).
+		router.replace({ query: { ...route.query, tab: t === 'tasks' ? undefined : t, task: undefined, activity: undefined } });
 	}
 	const tabs = computed(() => {
 		const p = project.value;
@@ -106,11 +107,14 @@
 	const canReorder = computed(() => isContributor.value);
 
 	const workspaceRef = ref<InstanceType<typeof TaskWorkspace> | null>(null);
+	const panel = useTaskPanel();
 	const showCreate = ref(false);
 	function onCreated(t: TaskDetail) {
 		showCreate.value = false;
 		workspaceRef.value?.reload();
-		useTaskPanel().open(t.code);
+		// Thẻ Tổng quan, Thành viên, Cài đặt không có khung việc: sang thẻ Việc rồi mở khung.
+		if (tab.value === 'tasks' || tab.value === 'sprints') panel.open(t.code);
+		else router.push({ query: { ...route.query, tab: undefined, task: t.code } });
 		load(true);
 	}
 

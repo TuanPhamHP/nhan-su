@@ -60,7 +60,6 @@
 
 	const service = useTasksService();
 	const panel = useTaskPanel();
-	panel.bindPage();
 	const filters = useTaskFilters(() => props.storageKey);
 	const { state } = filters;
 

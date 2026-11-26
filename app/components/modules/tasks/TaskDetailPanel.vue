@@ -5,7 +5,8 @@
 	/**
 	 * Khung chi tiết trượt từ phải, rộng khoảng 640 điểm ảnh (UI-02). Không phủ nền tối: danh sách
 	 * bên trái vẫn bấm được và dòng đang mở được tô. Màn hẹp hơn 1.024 điểm ảnh thì khung chiếm toàn
-	 * màn hình. Esc đóng khung (trừ khi đang mở hộp thoại hay menu), nút Quay lại cũng đóng.
+	 * màn hình. Esc đóng khung (trừ khi đang mở hộp thoại hay menu), nút Quay lại cũng đóng. Việc đang
+	 * mở đọc từ `?task=` trên đường dẫn (`useTaskPanel`).
 	 */
 	const emit = defineEmits<{ changed: [task: TaskDetail] }>();
 	const panel = useTaskPanel();
@@ -36,16 +37,20 @@
 			(target as HTMLElement).blur();
 			return;
 		}
+		// Khung việc nằm trên cùng (việc định kỳ có thêm khung quy tắc bên dưới): Esc chỉ đóng khung này.
+		e.preventDefault();
 		panel.close();
 	}
 	onMounted(() => window.addEventListener('keydown', onKey));
 	onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
+	/** Sang trang đầy đủ là một bước mới: Quay lại từ đó về đúng danh sách kèm khung. */
+	const route = useRoute();
 	function openFull() {
 		const code = panel.code.value;
 		if (!code) return;
-		panel.code.value = null;
-		navigateTo(`/cong-viec/${code}`, { replace: true });
+		const activity = route.query.activity;
+		navigateTo({ path: `/cong-viec/${encodeURIComponent(code)}`, query: activity ? { activity } : {} });
 	}
 </script>
 
@@ -66,7 +71,7 @@
 				role="dialog"
 				:aria-label="`Chi tiết việc ${panel.code.value}`"
 				data-testid="task-panel"
-				class="fixed inset-y-0 right-0 z-[55] flex w-full flex-col bg-white shadow-2xl outline-none lg:w-[640px] lg:border-l lg:border-gray-200 dark:bg-gray-900 dark:lg:border-gray-700"
+				class="fixed inset-y-0 right-0 z-[56] flex w-full flex-col bg-white shadow-2xl outline-none lg:w-[640px] lg:border-l lg:border-gray-200 dark:bg-gray-900 dark:lg:border-gray-700"
 			>
 				<TaskDetailView
 					:key="panel.code.value"

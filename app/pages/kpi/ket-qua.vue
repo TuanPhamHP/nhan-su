@@ -6,7 +6,7 @@
 	import { useKpiService } from '~/services/kpi.service';
 	import { useDirectoryStore } from '~/stores/directory';
 	import type { KpiPeriodRef } from '~/types/kpi.types';
-	import { taskErrorInfo } from '~/utils/tasks.utils';
+	import { taskErrorInfo, vnToday } from '~/utils/tasks.utils';
 
 	/**
 	 * Kết quả KPI cho giám đốc và trưởng phòng (F-29): phần Kết quả, Kết quả năm của UI-13 mở cho người xem được
@@ -80,6 +80,15 @@
 		return Number.isInteger(v) && v > 0 ? v : periods.value[0]?.id ?? null;
 	});
 	const periodOptions = computed(() => periods.value.map(p => ({ value: String(p.id), label: p.name })));
+	/** Phòng (`dept`, dùng chung hai thẻ) và năm (`year`, bỏ khi là năm nay) nằm trên đường dẫn. */
+	const dept = computed(() => {
+		const v = String(route.query.dept ?? '');
+		if (v) return v;
+		// Trưởng phòng một phòng: chọn sẵn phòng đó.
+		return deptOptions.value.length === 1 ? deptOptions.value[0]!.value : '';
+	});
+	const thisYear = vnToday().slice(0, 4);
+	const year = computed(() => (/^\d{4}$/.test(String(route.query.year ?? '')) ? String(route.query.year) : ''));
 	const openReviewId = computed<number | null>(() => {
 		const v = Number(route.query.reviewId);
 		return Number.isInteger(v) && v > 0 ? v : null;
@@ -137,10 +146,19 @@
 				:key="periodId"
 				:period-id="periodId"
 				:department-options="deptOptions"
+				:dept="dept"
 				:can-open-review="broad"
 				@open-review="id => setQuery({ reviewId: String(id) })"
+				@update:dept="v => setQuery({ dept: v })"
 			/>
-			<KpiYearResultsView v-else-if="view === 'year'" :department-options="deptOptions" />
+			<KpiYearResultsView
+				v-else-if="view === 'year'"
+				:department-options="deptOptions"
+				:year="year"
+				:dept="dept"
+				@update:year="v => setQuery({ year: v === thisYear ? undefined : v })"
+				@update:dept="v => setQuery({ dept: v })"
+			/>
 		</template>
 		<KpiReviewPanel v-if="openReviewId" :review-id="openReviewId" @close="setQuery({ reviewId: undefined })" />
 	</div>

@@ -31,7 +31,6 @@
 	const taskScope = useTaskScope();
 	const { scope, managedProjects } = taskScope;
 	const panel = useTaskPanel();
-	panel.bindPage();
 	const today = vnToday();
 
 	// ─── Phạm vi ─────────────────────────────────────────────────────────────

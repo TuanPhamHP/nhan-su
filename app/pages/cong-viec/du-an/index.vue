@@ -14,12 +14,26 @@
 
 	const service = useTasksService();
 	const toast = useToast();
+	const route = useRoute();
 	const router = useRouter();
 	const { canUse, canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
 
-	const status = ref<TaskProjectStatus | ''>('ACTIVE');
-	const q = ref('');
+	/** Trạng thái và từ khoá nằm trên đường dẫn: `status` (`CLOSED`, `all`; bỏ khi Đang chạy), `q`. */
+	function setQuery(patch: Record<string, string | undefined>) {
+		const next: Record<string, unknown> = { ...route.query, ...patch };
+		for (const [k, v] of Object.entries(next)) if (v === undefined || v === '') delete next[k];
+		router.replace({ query: next as Record<string, string> });
+	}
+	const status = computed<TaskProjectStatus | ''>({
+		get: () => {
+			const v = String(route.query.status ?? '');
+			if (v === 'CLOSED') return 'CLOSED';
+			return v === 'all' ? '' : 'ACTIVE';
+		},
+		set: v => setQuery({ status: v === 'ACTIVE' ? undefined : v || 'all' }),
+	});
+	const q = ref(String(route.query.q ?? ''));
 	const projects = ref<TaskProject[]>([]);
 	const total = ref(0);
 	const page = ref(1);
@@ -43,9 +57,12 @@
 	}
 
 	let timer: ReturnType<typeof setTimeout> | null = null;
-	watch(q, () => {
+	watch(q, v => {
 		if (timer) clearTimeout(timer);
-		timer = setTimeout(() => load(), 350);
+		timer = setTimeout(() => {
+			setQuery({ q: v.trim() || undefined });
+			load();
+		}, 350);
 	});
 	watch(status, () => load());
 	onMounted(() => {

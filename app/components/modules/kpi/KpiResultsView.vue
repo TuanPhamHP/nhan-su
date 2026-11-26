@@ -19,12 +19,17 @@
 		departmentOptions: Array<{ value: string; label: string }>;
 		/** Mở được phiếu từng người (nhân sự, giám đốc); trưởng phòng chỉ xem điểm. */
 		canOpenReview?: boolean;
+		/** Phòng đang xem, trang cha giữ trên đường dẫn (`?dept=`). */
+		dept: string;
 	}>();
-	const emit = defineEmits<{ openReview: [id: number] }>();
+	const emit = defineEmits<{ openReview: [id: number]; 'update:dept': [value: string] }>();
 
 	const service = useKpiService();
 	const toast = useToast();
-	const dept = ref(props.departmentOptions.length === 1 ? props.departmentOptions[0]!.value : '');
+	const dept = computed({
+		get: () => props.dept,
+		set: (v: string) => emit('update:dept', v),
+	});
 	const data = ref<KpiResults | null>(null);
 	const loading = ref(true);
 	const error = ref('');

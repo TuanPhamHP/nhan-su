@@ -32,7 +32,6 @@
 	const service = useTasksService();
 	const actions = useTaskActions();
 	const panel = useTaskPanel();
-	panel.bindPage();
 	const { canUse, canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
 	const today = vnToday();

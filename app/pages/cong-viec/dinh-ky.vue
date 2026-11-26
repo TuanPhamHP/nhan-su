@@ -23,7 +23,6 @@
 	const { canUse, canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
 	const panel = useTaskPanel();
-	panel.bindPage();
 	const today = vnToday();
 
 	type Filter = 'active' | 'paused' | 'all';
@@ -141,8 +140,8 @@
 		}
 	}
 
+	/** Mở việc đã giao từ khung quy tắc: khung việc nằm trên, đóng khung việc thì còn khung quy tắc. */
 	function openTask(code: string) {
-		closeDetail();
 		panel.open(code);
 	}
 

@@ -48,10 +48,35 @@
 	const toast = useToast();
 	const today = vnToday();
 
+	/**
+	 * Thang, kỳ đang xem và cách gom nằm trên đường dẫn để tải lại hay gửi cho đồng nghiệp vẫn đúng màn:
+	 * `scale` (bỏ khi là Ngày), `date` là ngày neo (bỏ khi là hôm nay), `byGroup=0` khi tắt Theo nhóm việc.
+	 * Đường dẫn không có `scale` thì dùng thang nhớ trong trình duyệt như trước.
+	 */
+	const route = useRoute();
+	const router = useRouter();
 	const SCALE_KEY = 'tasks-timeline-scale';
-	const scale = ref<TimelineScale>('day');
-	const anchor = ref(today);
-	const byGroup = ref(true);
+	const SCALES: TimelineScale[] = ['day', 'week', 'month'];
+	const savedScale = ref<TimelineScale>('day');
+	/** Mỗi lần ghi kèm luôn thang đang thấy, kể cả thang lấy từ bản nhớ. */
+	function setQuery(patch: Record<string, string | undefined>) {
+		router.replace({ query: { ...route.query, scale: scale.value === 'day' ? undefined : scale.value, ...patch } });
+	}
+	const scale = computed<TimelineScale>(() => {
+		const v = String(route.query.scale ?? '') as TimelineScale;
+		return SCALES.includes(v) ? v : savedScale.value;
+	});
+	const anchor = computed<string>({
+		get: () => {
+			const v = String(route.query.date ?? '');
+			return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today;
+		},
+		set: v => setQuery({ date: v === today ? undefined : v }),
+	});
+	const byGroup = computed<boolean>({
+		get: () => route.query.byGroup !== '0',
+		set: v => setQuery({ byGroup: v ? undefined : '0' }),
+	});
 	const data = ref<TaskTimeline | null>(null);
 	const loading = ref(true);
 	const loadError = ref('');
@@ -88,23 +113,33 @@
 	}
 	onMounted(() => {
 		try {
-			const saved = localStorage.getItem(SCALE_KEY);
-			if (saved === 'day' || saved === 'week' || saved === 'month') scale.value = saved;
+			const saved = localStorage.getItem(SCALE_KEY) as TimelineScale | null;
+			if (saved && SCALES.includes(saved)) savedScale.value = saved;
 		} catch {
 			// bộ nhớ bị chặn
 		}
+		// Thang nhớ khác Ngày mà đường dẫn chưa có: ghi lên để đường dẫn gửi đi đúng màn đang thấy. Chờ một
+		// nhịp để thanh lọc ghi đường dẫn xong trước, hai lần ghi chồng nhau thì lần sau đè mất lần trước.
+		scaleTimer = setTimeout(() => {
+			if (route.query.scale === undefined && savedScale.value !== 'day') setQuery({});
+		}, 0);
 		mql = window.matchMedia('(max-width: 639px)');
 		onMql();
 		mql.addEventListener('change', onMql);
 		load();
 	});
-	onBeforeUnmount(() => mql?.removeEventListener('change', onMql));
+	let scaleTimer: ReturnType<typeof setTimeout> | null = null;
+	onBeforeUnmount(() => {
+		mql?.removeEventListener('change', onMql);
+		if (scaleTimer) clearTimeout(scaleTimer);
+	});
 	watch(
 		() => [JSON.stringify(props.query), scale.value, anchor.value],
 		() => load(),
 	);
 	function setScale(s: TimelineScale) {
-		scale.value = s;
+		savedScale.value = s;
+		setQuery({ scale: s === 'day' ? undefined : s });
 		try {
 			localStorage.setItem(SCALE_KEY, s);
 		} catch {

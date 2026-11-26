@@ -1,63 +1,52 @@
 /**
  * Khung chi tiết việc trượt từ phải, mở từ mọi danh sách (UI-02).
  *
- * Mở khung thì đường dẫn trên trình duyệt đổi thành `/cong-viec/<số hiệu>` để sao chép, gửi cho
- * đồng nghiệp được; nút Quay lại của trình duyệt đóng khung. Đường dẫn đổi bằng `history.pushState`
- * chứ không qua router, vì đi qua router thì trang danh sách phía sau bị gỡ và người dùng mất chỗ
- * đang xem. `state` của router được chép nguyên (cùng `position`), nên khi bấm Quay lại router thấy
- * vẫn là trang danh sách cũ và không điều hướng gì; ở đây nghe `popstate` để đóng khung.
+ * Việc đang mở nằm trên đường dẫn của chính trang danh sách (`?task=HQ-12`), cạnh bộ lọc, thẻ, chế độ
+ * xem đang có, nên tải lại trang hay gửi đường dẫn cho đồng nghiệp vẫn ra đúng danh sách đó kèm khung.
+ * `route.query.task` là nguồn duy nhất: khung mở khi có, đóng khi không. Trang dùng `ssr: false` nên đổi
+ * query không gỡ trang phía sau.
  *
- * Mở thẳng đường dẫn đó (tải lại trang, bấm từ thông báo) thì là trang đầy đủ `pages/cong-viec/[code].vue`.
+ * Mở khung là một bước lịch sử mới (Quay lại thì đóng khung); đang mở mà chọn việc khác thì thay tại chỗ.
+ * Bấm X hay Esc: bước hiện tại do khung đẩy vào (bước trước đúng là trang này khi chưa mở khung) thì lùi
+ * lại một bước, còn vào thẳng từ đường dẫn thì bỏ `task` tại chỗ và ở lại trang.
+ *
+ * Trang đầy đủ `pages/cong-viec/[code].vue` vẫn dùng cho thông báo, Ctrl+bấm, nút Mở trang đầy đủ.
  */
 export function useTaskPanel() {
-	const code = useState<string | null>('task-panel-code', () => null);
-	/** Đường dẫn trang danh sách lúc mở khung, để đóng khung thì trả đúng về đó. */
-	const baseUrl = useState<string | null>('task-panel-base', () => null);
-	const pushed = useState<boolean>('task-panel-pushed', () => false);
+	const route = useRoute();
+	const router = useRouter();
+
+	const code = computed<string | null>(() => {
+		const raw = route.query.task;
+		const v = Array.isArray(raw) ? raw[0] : raw;
+		return v ? String(v) : null;
+	});
 
 	function open(taskCode: string) {
-		if (!import.meta.client) return;
-		const url = `/cong-viec/${encodeURIComponent(taskCode)}`;
+		const query = { ...route.query, task: taskCode };
+		// Đang mở việc khác: thay tại chỗ, không chồng thêm một bước Quay lại. Thẻ Hoạt động về mặc định.
 		if (code.value) {
-			// Đang mở việc khác: thay đường dẫn tại chỗ, không chồng thêm một bước Quay lại.
-			window.history.replaceState(window.history.state, '', url);
-		} else {
-			baseUrl.value = window.location.pathname + window.location.search;
-			window.history.pushState(window.history.state, '', url);
-			pushed.value = true;
-		}
-		code.value = taskCode;
+			delete query.activity;
+			router.replace({ query });
+		} else router.push({ query });
 	}
 
-	/** Đóng khung; `fromPopstate` khi trình duyệt đã tự lùi đường dẫn. */
-	function close(fromPopstate = false) {
+	/** Query của trang khi không có khung: bỏ việc đang mở và thẻ Hoạt động của nó. */
+	function queryWithoutPanel() {
+		const query = { ...route.query };
+		delete query.task;
+		delete query.activity;
+		return query;
+	}
+
+	function close() {
 		if (!code.value) return;
-		code.value = null;
-		if (!import.meta.client) return;
-		if (pushed.value && !fromPopstate) {
-			pushed.value = false;
-			window.history.back();
-			return;
-		}
-		pushed.value = false;
-		if (!fromPopstate && baseUrl.value) window.history.replaceState(window.history.state, '', baseUrl.value);
+		const query = queryWithoutPanel();
+		// Vue Router giữ đường dẫn bước trước ở `history.state.back`.
+		const back = import.meta.client ? (window.history.state as { back?: string | null } | null)?.back : null;
+		if (back && back === router.resolve({ path: route.path, query }).fullPath) router.back();
+		else router.replace({ query });
 	}
 
-	/** Gắn ở trang có khung: nghe nút Quay lại, và đóng khung khi rời trang. */
-	function bindPage() {
-		function onPopState() {
-			if (code.value) {
-				code.value = null;
-				pushed.value = false;
-			}
-		}
-		onMounted(() => window.addEventListener('popstate', onPopState));
-		onBeforeUnmount(() => {
-			window.removeEventListener('popstate', onPopState);
-			code.value = null;
-			pushed.value = false;
-		});
-	}
-
-	return { code, open, close, bindPage };
+	return { code, open, close };
 }

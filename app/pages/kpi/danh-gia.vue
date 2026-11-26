@@ -53,9 +53,13 @@
 	});
 	watch(tab, load);
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
-	watch(q, () => {
+	watch(q, v => {
 		if (searchTimer) clearTimeout(searchTimer);
-		searchTimer = setTimeout(load, 350);
+		searchTimer = setTimeout(() => {
+			// Ghi từ khoá lên đường dẫn để tải lại trang vẫn còn.
+			setQuery({ q: v.trim() || undefined });
+			load();
+		}, 350);
 	});
 
 	const selectedId = computed<number | null>(() => {

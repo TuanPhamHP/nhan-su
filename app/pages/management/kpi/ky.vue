@@ -13,7 +13,7 @@
 	import type { KpiGradeScale, KpiPeriod, KpiPeriodDetail, KpiReviewDetail, KpiReviewListItem, KpiReviewStatus } from '~/types/kpi.types';
 	import { KPI_STATUS_LABELS, KPI_STEPS, kpiAtText, kpiGradeLegend, kpiNum, kpiRangeText } from '~/utils/kpi.utils';
 	import { formatDate } from '~/utils/date';
-	import { taskErrorInfo } from '~/utils/tasks.utils';
+	import { taskErrorInfo, vnToday } from '~/utils/tasks.utils';
 
 	/**
 	 * UI-13 Kỳ đánh giá (nhân sự, `kpi:manage`): mở kỳ, đếm phiếu theo bước (bấm số để lọc), người chưa có phiếu
@@ -101,7 +101,10 @@
 
 	const view = computed<'reviews' | 'results' | 'year'>(() => (route.query.view === 'results' ? 'results' : route.query.view === 'year' ? 'year' : 'reviews'));
 	const statusFilter = computed<KpiReviewStatus | ''>(() => (KPI_STEPS.includes(route.query.status as KpiReviewStatus) ? (route.query.status as KpiReviewStatus) : ''));
+	/** Một tham số `dept` dùng chung cho thẻ Phiếu, Kết quả, Kết quả năm. */
 	const deptFilter = computed(() => String(route.query.dept ?? ''));
+	const thisYear = vnToday().slice(0, 4);
+	const yearFilter = computed(() => (/^\d{4}$/.test(String(route.query.year ?? '')) ? String(route.query.year) : ''));
 	const q = ref(String(route.query.q ?? ''));
 
 	// ─── Phiếu của kỳ ───────────────────────────────────────────────────────
@@ -135,9 +138,13 @@
 	}
 	watch(() => [statusFilter.value, deptFilter.value], () => loadReviews());
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
-	watch(q, () => {
+	watch(q, v => {
 		if (searchTimer) clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => loadReviews(), 350);
+		searchTimer = setTimeout(() => {
+			// Ghi từ khoá lên đường dẫn để tải lại trang vẫn còn.
+			setQuery({ q: v.trim() || undefined });
+			loadReviews();
+		}, 350);
 	});
 
 	const deptOptions = computed(() => [{ value: '', label: 'Mọi phòng' }, ...directoryStore.departments.map(d => ({ value: String(d.id), label: d.name }))]);
@@ -446,8 +453,24 @@
 						<CommonAppButton size="sm" variant="secondary" :loading="reviewsLoading" @click="loadReviews(true)">Tải thêm</CommonAppButton>
 					</div>
 				</section>
-				<KpiResultsView v-else-if="view === 'results'" :key="`r${detail.id}`" :period-id="detail.id" :department-options="deptOptions" can-open-review @open-review="openReview" />
-				<KpiYearResultsView v-else :department-options="deptOptions" />
+				<KpiResultsView
+					v-else-if="view === 'results'"
+					:key="`r${detail.id}`"
+					:period-id="detail.id"
+					:department-options="deptOptions"
+					:dept="deptFilter"
+					can-open-review
+					@open-review="openReview"
+					@update:dept="v => setQuery({ dept: v })"
+				/>
+				<KpiYearResultsView
+					v-else
+					:department-options="deptOptions"
+					:year="yearFilter"
+					:dept="deptFilter"
+					@update:year="v => setQuery({ year: v === thisYear ? undefined : v })"
+					@update:dept="v => setQuery({ dept: v })"
+				/>
 			</template>
 		</template>
 

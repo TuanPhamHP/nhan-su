@@ -35,7 +35,8 @@
 	const actions = useTaskActions();
 	const toast = useToast();
 	const panel = useTaskPanel();
-	panel.bindPage();
+	const route = useRoute();
+	const router = useRouter();
 	const today = vnToday();
 	const dnd = `sprint-plan-${Math.random().toString(36).slice(2)}`;
 
@@ -43,7 +44,11 @@
 	const zones = ref<Record<string, TaskListItem[]>>({});
 	const loading = ref(true);
 	const loadError = ref('');
-	const showClosed = ref(false);
+	/** Mở danh sách đợt đã đóng nằm trên đường dẫn (`?closed=1`). */
+	const showClosed = computed({
+		get: () => route.query.closed === '1',
+		set: (v: boolean) => router.replace({ query: { ...route.query, closed: v ? '1' : undefined } }),
+	});
 
 	const openSprints = computed(() =>
 		sprints.value

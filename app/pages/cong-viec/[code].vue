@@ -15,7 +15,7 @@
 	useHead({ title: () => `Việc ${code.value}` });
 
 	function onLoaded(t: TaskDetail) {
-		if (t.code.toUpperCase() !== code.value.toUpperCase()) router.replace(`/cong-viec/${t.code}`);
+		if (t.code.toUpperCase() !== code.value.toUpperCase()) router.replace({ path: `/cong-viec/${t.code}`, query: route.query });
 	}
 
 	function openTask(c: string) {

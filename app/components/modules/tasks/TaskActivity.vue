@@ -43,7 +43,16 @@
 	const { employees } = storeToRefs(directoryStore);
 	const today = vnToday();
 
-	const kind = ref<TaskActivityKind>('comments');
+	/** Thẻ đang xem nằm trên đường dẫn (`?activity=all|history`, bỏ khi là Bình luận), ở khung lẫn trang đầy đủ. */
+	const route = useRoute();
+	const router = useRouter();
+	const kind = computed<TaskActivityKind>({
+		get: () => {
+			const v = String(route.query.activity ?? '');
+			return v === 'all' || v === 'history' ? v : 'comments';
+		},
+		set: v => router.replace({ query: { ...route.query, activity: v === 'comments' ? undefined : v } }),
+	});
 	const items = ref<TaskActivityItem[]>([]);
 	const page = ref(1);
 	const totalPages = ref(1);
