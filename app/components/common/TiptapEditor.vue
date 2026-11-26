@@ -19,8 +19,13 @@
 			// Callback upload ảnh — parent tự xử lý API call, trả về URL của ảnh sau upload.
 			// Khi prop này có mặt, toolbar sẽ hiện nút chèn ảnh + hỗ trợ paste ảnh.
 			onImageUpload?: (file: File) => Promise<string>;
+			/**
+			 * Bỏ nhóm nút tiêu đề (H1, H2, H3, ¶) cho ô mô tả ngắn như mô tả việc: người văn phòng không hiểu
+			 * các ký hiệu đó và cũng không cần chia mục.
+			 */
+			noHeadings?: boolean;
 		}>(),
-		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined },
+		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined, noHeadings: false },
 	);
 
 	const emit = defineEmits<{
@@ -262,6 +267,7 @@
 			<div class="tt-divider" />
 
 			<!-- Headings -->
+			<template v-if="!noHeadings">
 			<button
 				type="button"
 				class="tt-btn tt-btn-text"
@@ -300,6 +306,7 @@
 			</button>
 
 			<div class="tt-divider" />
+			</template>
 
 			<!-- Alignment -->
 			<button

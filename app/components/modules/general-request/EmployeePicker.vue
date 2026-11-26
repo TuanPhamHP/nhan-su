@@ -1,4 +1,5 @@
 <script setup lang="ts">
+	import { useEscapeLayer } from '~/composables/useEscapeKey';
 	import { vnSearchIncludes } from '~/utils/vn-text';
 	/**
 	 * Ô chọn người: gõ để tìm, bấm để thêm, thẻ tên có nút bỏ.
@@ -15,6 +16,11 @@
 		fullName: string;
 		/** Mã nhân viên hoặc tên phòng, hiện mờ bên cạnh tên để phân biệt người trùng tên. */
 		hint?: string | null;
+		/**
+		 * Nhãn nổi bật cạnh tên, ví dụ "Trưởng phòng Kế toán". Chữ gõ khớp nhãn thì người đó lên đầu
+		 * danh sách gợi ý.
+		 */
+		badge?: string | null;
 	}
 
 	const props = withDefaults(
@@ -53,10 +59,14 @@
 	const matches = computed(() => {
 		// Tìm không dấu (`vnSearchIncludes`): gõ "lan" ra "Lê Thị Lan" cả khi máy không bật bộ gõ tiếng Việt.
 		const q = query.value.trim();
-		return props.people
+		const found = props.people
 			.filter(p => !props.modelValue.includes(p.id))
-			.filter(p => !q || vnSearchIncludes(p.fullName, q) || vnSearchIncludes(p.hint ?? '', q))
-			.slice(0, 8);
+			.filter(
+				p => !q || vnSearchIncludes(p.fullName, q) || vnSearchIncludes(p.hint ?? '', q) || vnSearchIncludes(p.badge ?? '', q),
+			);
+		// Gõ "trưởng phòng" hay tên phòng thì trưởng phòng đứng đầu; sắp ổn định nên phần còn lại giữ thứ tự cũ.
+		const byBadge = q ? found.filter(p => p.badge && vnSearchIncludes(p.badge, q)) : [];
+		return [...byBadge, ...found.filter(p => !byBadge.includes(p))].slice(0, 8);
 	});
 
 	function add(person: PickablePerson) {
@@ -83,6 +93,12 @@
 
 	onMounted(() => document.addEventListener('mousedown', onClickOutside));
 	onUnmounted(() => document.removeEventListener('mousedown', onClickOutside));
+
+	// Esc đóng danh sách gợi ý trước, không đóng luôn hộp thoại chứa ô.
+	useEscapeLayer(
+		() => open.value && !props.disabled && !atLimit.value,
+		() => (open.value = false),
+	);
 </script>
 
 <template>
@@ -138,7 +154,14 @@
 					@mousedown.prevent="add(person)"
 				>
 					<span class="font-medium text-gray-900 dark:text-white">{{ person.fullName }}</span>
-					<span v-if="person.hint" class="text-xs text-gray-400">{{ person.hint }}</span>
+					<span
+						v-if="person.badge"
+						class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+						data-testid="picker-badge"
+					>
+						{{ person.badge }}
+					</span>
+					<span v-else-if="person.hint" class="text-xs text-gray-400">{{ person.hint }}</span>
 				</button>
 				<p v-if="!matches.length" class="px-3 py-2.5 text-sm text-gray-400">
 					{{ query ? 'Không tìm thấy ai phù hợp.' : 'Chưa có người nào để chọn.' }}

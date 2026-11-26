@@ -190,6 +190,9 @@
 		const dot = file.name.lastIndexOf('.');
 		return dot > 0 ? file.name.slice(dot + 1).toUpperCase().slice(0, 4) : 'FILE';
 	}
+
+	/** Nơi gọi có nút "Tải file lên" riêng thì mở thẳng hộp chọn file, khỏi bắt bấm thêm lần nữa vào vùng thả. */
+	defineExpose({ openPicker });
 </script>
 
 <template>

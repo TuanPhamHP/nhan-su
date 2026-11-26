@@ -28,7 +28,8 @@ onMounted(() => {
 		<div class="flex flex-col flex-1 min-w-0 overflow-hidden">
 			<LayoutAppHeader />
 
-			<main class="flex-1 overflow-y-auto p-4 lg:p-6">
+			<!-- Điện thoại chừa lề dưới bằng chỗ của nút Hướng dẫn và nút trợ lý, cuộn hết là không còn chữ bị che. -->
+			<main class="flex-1 overflow-y-auto p-4 pb-52 sm:pb-4 lg:p-6">
 				<CommonAppModuleExpiryBanner />
 				<slot />
 			</main>

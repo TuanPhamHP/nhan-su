@@ -27,7 +27,7 @@
 	const typeOptions = [
 		{ value: '', label: 'Tất cả loại việc' },
 		{ value: 'REQUISITION', label: 'Yêu cầu tuyển dụng' },
-		{ value: 'OFFER', label: 'Offer' },
+		{ value: 'OFFER', label: 'Thư mời nhận việc' },
 	];
 
 	async function load() {
@@ -95,7 +95,7 @@
 	}
 
 	const rejectTitle = computed(() =>
-		rejectTarget.value?.type === 'OFFER' ? 'Từ chối duyệt offer' : 'Từ chối yêu cầu tuyển dụng',
+		rejectTarget.value?.type === 'OFFER' ? 'Từ chối duyệt thư mời nhận việc' : 'Từ chối yêu cầu tuyển dụng',
 	);
 
 	/**

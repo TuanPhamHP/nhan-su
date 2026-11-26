@@ -110,21 +110,21 @@
 				if (s.isEarlyLeaveToday) {
 					status = {
 						value: 'Về sớm',
-						sub: 'Check-out sớm hơn quy định',
+						sub: 'Chấm công ra sớm hơn quy định',
 						cls: 'text-orange-600 dark:text-orange-400',
 						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
 					};
 				} else if (s.isLateToday) {
 					status = {
 						value: 'Đi muộn',
-						sub: 'Check-in muộn hơn quy định',
+						sub: 'Chấm công vào muộn hơn quy định',
 						cls: 'text-orange-600 dark:text-orange-400',
 						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
 					};
 				} else {
 					status = {
 						value: 'Hoàn thành',
-						sub: 'Đã check-in và check-out',
+						sub: 'Đã chấm công vào và ra',
 						cls: 'text-green-600 dark:text-green-400',
 						iconBg: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
 					};
@@ -133,13 +133,13 @@
 				if (s.isLateToday) {
 					status = {
 						value: 'Đi muộn',
-						sub: 'Check-in muộn hơn quy định',
+						sub: 'Chấm công vào muộn hơn quy định',
 						cls: 'text-orange-600 dark:text-orange-400',
 						iconBg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
 					};
 				} else {
 					status = {
-						value: 'Chưa check-out',
+						value: 'Chưa chấm công ra',
 						sub: 'Đang trong ca làm việc',
 						cls: 'text-amber-600 dark:text-amber-400',
 						iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
@@ -147,14 +147,14 @@
 				}
 			} else if (!s.isCheckedInToday && s.isCheckedOutToday) {
 				status = {
-					value: 'Thiếu check-in',
-					sub: 'Chỉ có check-out, không có check-in',
+					value: 'Thiếu chấm công vào',
+					sub: 'Chỉ có chấm công ra, không có chấm công vào',
 					cls: 'text-amber-600 dark:text-amber-400',
 					iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
 				};
 			} else {
 				status = {
-					value: 'Chưa check-in',
+					value: 'Chưa chấm công vào',
 					sub: 'Hôm nay chưa điểm danh',
 					cls: 'text-red-600 dark:text-red-400',
 					iconBg: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
@@ -211,7 +211,7 @@
 				{
 					label: 'Có mặt hôm nay',
 					value: s.checkedInToday,
-					sub: `${s.checkedInRate}% đã check-in`,
+					sub: `${s.checkedInRate}% đã chấm công vào`,
 					iconPath: ICONS.checkCircle,
 					iconBg: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
 				},
@@ -220,7 +220,7 @@
 					value: pendingTotal,
 					sub: pendingSub([
 						`${s.pendingLeave} phép`,
-						canUse('OVERTIME') && `${s.pendingOT} OT`,
+						canUse('OVERTIME') && `${s.pendingOT} tăng ca`,
 						`${s.pendingViolation} vi phạm`,
 					]),
 					iconPath: ICONS.calendar,
@@ -250,7 +250,7 @@
 			{
 				label: 'Chấm công hôm nay',
 				value: s.checkedInToday,
-				sub: `${s.checkedInRate}% đã check-in`,
+				sub: `${s.checkedInRate}% đã chấm công vào`,
 				iconPath: ICONS.checkCircle,
 				iconBg: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
 			},
@@ -259,7 +259,7 @@
 				value: pendingTotal,
 				sub: pendingSub([
 					`${s.pendingLeave} phép`,
-					canUse('OVERTIME') && `${s.pendingOT} OT`,
+					canUse('OVERTIME') && `${s.pendingOT} tăng ca`,
 					`${s.pendingViolation} vi phạm`,
 				]),
 				iconPath: ICONS.calendar,

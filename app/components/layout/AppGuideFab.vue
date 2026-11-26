@@ -12,6 +12,7 @@
 	const { currentApp } = useAppModules();
 	const { guides, manageGuides, staffGuides, openGuide } = useFeatureGuides();
 	const { state } = useTour();
+	const overlayOpen = useOverlayOpen();
 
 	const open = ref(false);
 	const panel = ref<HTMLElement | null>(null);
@@ -113,11 +114,20 @@
 </script>
 
 <template>
-	<div v-if="guides.length && !state" class="fixed right-0 top-1/2 z-30 -translate-y-1/2">
+	<!--
+		Điện thoại: nút tròn nhỏ ở góc dưới, ngay trên nút trợ lý (lề dưới của trang chừa đủ chỗ cho hai nút),
+		vì tab dọc giữa mép phải che nút ba chấm của từng việc. Màn rộng: tab dọc dính mép phải như cũ.
+		Ẩn khi đang có khung chi tiết hay hộp thoại mở, để không đè lên nút của khung đó.
+	-->
+	<div
+		v-if="guides.length && !state && !overlayOpen"
+		class="fixed bottom-40 right-4 z-30 sm:bottom-auto sm:right-0 sm:top-1/2 sm:-translate-y-1/2"
+		data-testid="guide-fab"
+	>
 		<button
 			ref="trigger"
 			type="button"
-			class="flex flex-col items-center gap-1 rounded-l-xl bg-brand-600 px-1.5 py-3 text-white shadow-lg transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-300"
+			class="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-300 sm:h-auto sm:w-auto sm:flex-col sm:gap-1 sm:rounded-none sm:rounded-l-xl sm:px-1.5 sm:py-3"
 			:aria-expanded="open"
 			aria-haspopup="dialog"
 			aria-label="Hướng dẫn theo tính năng"
@@ -125,7 +135,7 @@
 			@click="open = !open"
 		>
 			<Icon name="heroicons:academic-cap" class="h-5 w-5" />
-			<span class="text-[11px] font-medium leading-none [writing-mode:vertical-rl]">Hướng dẫn</span>
+			<span class="hidden text-[11px] font-medium leading-none [writing-mode:vertical-rl] sm:inline">Hướng dẫn</span>
 		</button>
 
 		<Transition
@@ -139,7 +149,8 @@
 				ref="panel"
 				role="dialog"
 				aria-label="Danh sách hướng dẫn"
-				class="absolute right-full top-1/2 mr-2 max-h-[70vh] w-80 max-w-[calc(100vw-4rem)] -translate-y-1/2 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+				data-overlay-ignore
+				class="absolute bottom-full right-0 mb-2 max-h-[60vh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl sm:bottom-auto sm:right-full sm:top-1/2 sm:mb-0 sm:mr-2 sm:max-h-[70vh] sm:max-w-[calc(100vw-4rem)] sm:-translate-y-1/2 dark:border-gray-700 dark:bg-gray-900"
 			>
 				<div class="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
 					<p class="text-sm font-semibold text-gray-900 dark:text-white">Hướng dẫn</p>

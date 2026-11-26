@@ -141,7 +141,7 @@
 
 		<div
 			ref="root"
-			class="fixed right-5 bottom-24 z-30 sm:right-6 sm:bottom-6"
+			class="fixed right-4 bottom-24 z-30 sm:right-6 sm:bottom-6"
 			@pointerenter="onPointerEnter"
 			@pointerleave="onPointerLeave"
 		>
@@ -210,9 +210,10 @@
 				:aria-label="quick === 'open' ? 'Thu nhỏ cửa sổ chat nhanh' : 'Mở trợ lý AI'"
 				:aria-haspopup="canQuickChat && quick !== 'open' ? 'menu' : undefined"
 				:aria-expanded="canQuickChat && quick !== 'open' ? menuOpen : undefined"
-				class="group relative flex items-center rounded-full bg-[var(--color-accent)] p-4 text-white shadow-lg transition duration-200 hover:scale-105 hover:shadow-xl active:scale-95"
+				class="group relative flex items-center rounded-full bg-[var(--color-accent)] p-2.5 text-white shadow-lg transition duration-200 hover:scale-105 hover:shadow-xl active:scale-95 sm:p-4"
 				@click="onFabClick"
 			>
+				<!-- Điện thoại thu nhỏ còn 48px để ít che chữ; lề dưới của trang chừa đủ chỗ cho nút. -->
 				<Icon v-if="quick === 'open'" name="heroicons:chevron-down" class="h-7 w-7 shrink-0" />
 				<img v-else :src="agentAvatar" alt="" draggable="false" class="h-7 w-7 shrink-0 object-contain select-none" />
 
