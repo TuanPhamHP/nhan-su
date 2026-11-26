@@ -1071,6 +1071,8 @@ và gửi người bị đổi đi (`TASK_UNASSIGNED`). Web thêm ô "Lý do (kh
 - `GET /departments` trả thêm `manager: { id, fullName } | null` (trưởng phòng), dùng cho ô giao việc "nhờ phòng…".
 - Nội dung do trợ lý AI soạn (mô tả việc, bình luận, lý do) có đuôi `⟦Trợ lý AI⟧ Soạn qua Trợ lý AI · {người} xác nhận lúc
   {giờ}` để truy vết. Web cắt đuôi này khi hiện nội dung và thay bằng nhãn nhỏ "Soạn qua Trợ lý AI" (giữ nguyên dữ liệu).
+  Thông báo, email, push dựng từ 27/11/2026 đã tự cắt đuôi khi ghép lý do, ghi chú vào câu (`clause()`); thông báo cũ trong
+  database vẫn có thể còn đuôi, nên web giữ bước cắt khi hiện thân thông báo.
 
 ## 33. Kịch bản phải thử trên web (phần 2)
 
