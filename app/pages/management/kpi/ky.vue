@@ -8,6 +8,7 @@
 	import KpiStatusBadge from '~/components/modules/kpi/KpiStatusBadge.vue';
 	import KpiYearResultsView from '~/components/modules/kpi/KpiYearResultsView.vue';
 	import { useKpiService } from '~/services/kpi.service';
+	import { useApprovalStore } from '~/stores/approval';
 	import { useDirectoryStore } from '~/stores/directory';
 	import { kpiPeriodTour } from '~/tours/kpi';
 	import type { KpiGradeScale, KpiPeriod, KpiPeriodDetail, KpiReviewDetail, KpiReviewListItem, KpiReviewStatus } from '~/types/kpi.types';
@@ -27,6 +28,8 @@
 	const router = useRouter();
 	const service = useKpiService();
 	const toast = useToast();
+	// Số đỏ Chờ chốt cạnh mục Kỳ đánh giá (`kpiPendingFinal`): làm mới sau khi chốt, công bố, mở lại.
+	const approvalStore = useApprovalStore();
 	const directoryStore = useDirectoryStore();
 	const { canUse, canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
@@ -161,6 +164,7 @@
 		const i = reviews.value.findIndex(x => x.id === r.id);
 		if (i >= 0) reviews.value[i] = { ...reviews.value[i]!, ...r };
 		loadDetail(true);
+		approvalStore.fetchCounts();
 	}
 
 	// ─── Thao tác kỳ ────────────────────────────────────────────────────────
@@ -172,7 +176,26 @@
 		await loadPeriods();
 	}
 
-	const busy = ref<'recompute' | 'missing' | null>(null);
+	const busy = ref<'recompute' | 'missing' | 'remind' | null>(null);
+	/**
+	 * UI-16b: nhắc người chấm còn phiếu Chờ cấp trên đánh giá (bridge kpi mục 13.3). Máy chủ chỉ nhắc mỗi người chấm
+	 * một lần mỗi ngày mỗi kỳ, bấm lại trong ngày thì `reminded: 0` và `skipped` là số người đã nhắc rồi.
+	 */
+	async function remind() {
+		if (!detail.value) return;
+		busy.value = 'remind';
+		try {
+			const res = await service.remindReviewers(detail.value.id);
+			const skipped = res.skipped ? ` (${res.skipped} người đã được nhắc hôm nay)` : '';
+			if (res.reminded) toast.success(`Đã nhắc ${res.reminded} người chấm${skipped}`);
+			else if (res.skipped) toast.info(`Đã nhắc ${res.skipped} người chấm hôm nay rồi, mai nhắc lại được.`);
+			else toast.info('Không còn phiếu nào chờ người chấm đánh giá.');
+		} catch (err) {
+			toast.error(taskErrorInfo(err, 'Chưa nhắc được người chấm.').message);
+		} finally {
+			busy.value = null;
+		}
+	}
 	async function recompute() {
 		if (!detail.value) return;
 		busy.value = 'recompute';
@@ -212,7 +235,7 @@
 					? `Đã công bố ${res.published} phiếu. Bỏ qua ${res.skippedOwn} phiếu của chính bạn, người khác có quyền công bố giúp.`
 					: `Đã công bố ${res.published} phiếu`,
 			);
-			await Promise.all([loadDetail(true), loadReviews()]);
+			await Promise.all([loadDetail(true), loadReviews(), approvalStore.fetchCounts()]);
 			return null;
 		} catch (err) {
 			const info = taskErrorInfo(err, 'Chưa công bố được.');
@@ -309,6 +332,16 @@
 								@click="addMissing"
 							>
 								<Icon name="heroicons:user-plus" class="mr-1 h-4 w-4" />Tạo phần còn thiếu
+							</CommonAppButton>
+							<CommonAppButton
+								v-if="detail.counts.MANAGER_REVIEW > 0"
+								variant="secondary"
+								:loading="busy === 'remind'"
+								title="Gửi thông báo cho người chấm còn phiếu Chờ cấp trên đánh giá; mỗi người tối đa một lần mỗi ngày"
+								data-testid="kpi-remind"
+								@click="remind"
+							>
+								<Icon name="heroicons:bell-alert" class="mr-1 h-4 w-4" />Nhắc người chấm ({{ detail.counts.MANAGER_REVIEW }} phiếu)
 							</CommonAppButton>
 							<CommonAppButton v-if="canRecompute" variant="secondary" :loading="busy === 'recompute'" data-testid="kpi-recompute" @click="recompute">
 								<Icon name="heroicons:arrow-path" class="mr-1 h-4 w-4" />Tính lại ngay

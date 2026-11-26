@@ -75,6 +75,14 @@
 				<p class="text-xs text-gray-500">
 					{{ l.source === 'AUTO' ? 'Tự động' : 'Nhập tay' }} · {{ l.directionLabel }}<template v-if="l.manualScale"> · chấm 1–5</template>
 				</p>
+				<!-- UI-17b: vì sao không áp dụng (máy chủ tính từ bằng chứng), trọng số của dòng này chia sang dòng khác. -->
+				<p
+					v-if="!l.applicable && l.notApplicableReason"
+					class="mt-1 text-xs text-gray-600 dark:text-gray-300"
+					data-testid="kpi-line-na-reason"
+				>
+					{{ l.notApplicableReason }} Trọng số chia sang các chỉ tiêu còn lại.
+				</p>
 				<p v-if="l.reviewerNote" class="mt-1 text-xs text-gray-700 dark:text-gray-300" data-testid="kpi-line-note-text">
 					<Icon name="heroicons:chat-bubble-bottom-center-text" class="-mt-0.5 mr-0.5 inline h-3.5 w-3.5 text-gray-400" aria-hidden="true" />{{ l.reviewerNote }}
 				</p>

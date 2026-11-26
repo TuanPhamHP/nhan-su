@@ -11,6 +11,7 @@ import type {
 	KpiPeriodDetail,
 	KpiPublishAllResult,
 	KpiRecomputeResult,
+	KpiRemindResult,
 	KpiResults,
 	KpiReviewDetail,
 	KpiReviewListItem,
@@ -108,6 +109,11 @@ export const useKpiService = () => {
 		},
 		async recompute(id: number): Promise<KpiRecomputeResult> {
 			const res = await authFetch<ApiResponse<KpiRecomputeResult>>(`/v1/kpi/periods/${id}/recompute`, { method: 'POST' });
+			return res.data;
+		},
+		/** Nhắc người chấm còn phiếu Chờ cấp trên đánh giá; mỗi người chấm tối đa một lần mỗi ngày mỗi kỳ. */
+		async remindReviewers(id: number): Promise<KpiRemindResult> {
+			const res = await authFetch<ApiResponse<KpiRemindResult>>(`/v1/kpi/periods/${id}/remind`, { method: 'POST' });
 			return res.data;
 		},
 		async publishPeriod(id: number): Promise<KpiPublishAllResult> {

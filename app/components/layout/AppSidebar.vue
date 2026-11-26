@@ -188,10 +188,13 @@
 		if (item.badgeKey === 'approval') return approvalCounts.value.total;
 		if (item.badgeKey === 'unreadAnnouncement') return unreadAnnouncementCount.value;
 		if (item.badgeKey === 'pendingAsset') return pendingAssetCount.value;
-		// Việc chờ mình nghiệm thu: máy chủ không cộng vào `total` của Duyệt đơn (bridge tasks mục 6).
-		if (item.badgeKey === 'taskReviews') return approvalCounts.value.taskReviews ?? 0;
+		// Việc chờ mình nghiệm thu và phiếu xin dời hạn chờ mình duyệt: máy chủ không cộng vào `total` của
+		// Duyệt đơn (bridge tasks mục 6, 25.4), cả hai đều xử lý ở trang Công việc nên chung một huy hiệu.
+		if (item.badgeKey === 'taskReviews') return (approvalCounts.value.taskReviews ?? 0) + (approvalCounts.value.taskDueRequests ?? 0);
 		// Phiếu KPI chờ mình chấm: cũng không cộng vào `total` (bridge kpi mục 1).
 		if (item.badgeKey === 'kpiReviews') return approvalCounts.value.kpiReviews ?? 0;
+		// Phiếu KPI Chờ chốt, chỉ đếm cho người quản lý KPI (bridge kpi mục 13.5).
+		if (item.badgeKey === 'kpiPendingFinal') return approvalCounts.value.kpiPendingFinal ?? 0;
 		return 0;
 	}
 

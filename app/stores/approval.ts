@@ -14,6 +14,8 @@ const EMPTY_COUNTS: ApprovalCountsResponseDto = {
 	generalRequests: 0,
 	taskReviews: 0,
 	kpiReviews: 0,
+	taskDueRequests: 0,
+	kpiPendingFinal: 0,
 	total: 0,
 };
 

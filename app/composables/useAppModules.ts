@@ -106,7 +106,12 @@ export function useAppModules() {
 	 * UI-16a: người có `kpi:manage` không có việc nào phải làm và không có việc chờ nghiệm thu thì ô Công việc và KPI
 	 * dẫn thẳng vào Kỳ đánh giá, thay cho ngăn Tôi làm trống. Có việc rồi thì về lại Việc của tôi như mọi người.
 	 */
-	const kpiLanding = computed(() => managerWithoutTasks.value && (approvalCounts.value.taskReviews ?? 0) === 0);
+	const kpiLanding = computed(
+		() =>
+			managerWithoutTasks.value &&
+			(approvalCounts.value.taskReviews ?? 0) === 0 &&
+			(approvalCounts.value.taskDueRequests ?? 0) === 0,
+	);
 	const visibleApps = computed<AppModuleDef[]>(() =>
 		split.value.visible.map(app =>
 			app.code === 'tsk' && kpiLanding.value && app.items.some(i => i.route === KPI_PERIODS_ROUTE)

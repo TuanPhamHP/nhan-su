@@ -152,7 +152,8 @@
 	const drill = ref<{ col: ProgressColumn; person: TaskReportPerson | null; expected: number | string } | null>(null);
 	function cellText(c: TaskProgressCounts, col: ProgressColumn): string {
 		if (col.metric === 'quality') return c.quality == null ? '—' : String(Math.round(c.quality * 10) / 10).replace('.', ',');
-		return String(c[col.metric]);
+		// `noDue` không có ở BE cũ: hiện 0 thay vì chữ "undefined".
+		return String(c[col.metric] ?? 0);
 	}
 	function cellCount(c: TaskProgressCounts, col: ProgressColumn): number {
 		return col.metric === 'quality' ? c.qualityCount : c[col.metric] ?? 0;
@@ -324,7 +325,7 @@
 					</button>
 				</div>
 				<div v-if="report.rows.length" class="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" data-tour="task-report-table">
-					<table class="w-full min-w-[64rem] text-sm" data-testid="report-table">
+					<table class="w-full min-w-[72rem] text-sm" data-testid="report-table">
 						<thead class="bg-gray-50 text-left text-xs font-medium text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
 							<tr>
 								<th class="sticky left-0 z-10 bg-gray-50 px-3 py-2 dark:bg-gray-800">Người thực hiện</th>
@@ -388,8 +389,9 @@
 						</tfoot>
 					</table>
 				</div>
-				<p class="text-xs text-gray-500 dark:text-gray-400">
-					Tỷ lệ tính trên số việc được giao trừ việc đã huỷ. Đúng hạn tính theo lần báo xong đầu tiên.
+				<p class="text-xs text-gray-500 dark:text-gray-400" data-testid="report-rate-note">
+					Tỷ lệ hoàn thành tính trên số việc được giao trừ việc đã huỷ. Tỷ lệ báo xong đúng hạn chỉ tính việc có hạn,
+					việc chưa có hạn đếm riêng ở cột Chưa có hạn. Đúng hạn tính theo lần báo xong đầu tiên.
 				</p>
 			</template>
 

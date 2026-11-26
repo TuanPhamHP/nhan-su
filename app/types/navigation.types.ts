@@ -32,7 +32,7 @@ export interface NavItem {
 	 * cấu hình là dữ liệu tĩnh, không với tay vào store được. Sidebar dịch khoá này sang
 	 * số thật (xem `badgeValue`).
 	 */
-	badgeKey?: 'approval' | 'unreadAnnouncement' | 'pendingAsset' | 'taskReviews' | 'kpiReviews';
+	badgeKey?: 'approval' | 'unreadAnnouncement' | 'pendingAsset' | 'taskReviews' | 'kpiReviews' | 'kpiPendingFinal';
 	/**
 	 * Điều kiện hiện mục lấy từ dữ liệu máy chủ chứ không từ vai trò hay quyền. `taskDepartments`:
 	 * chỉ hiện khi `GET /v1/tasks/scope` cho biết người này xem mọi việc hoặc làm trưởng phòng.
