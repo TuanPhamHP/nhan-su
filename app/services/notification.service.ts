@@ -55,6 +55,16 @@ export const useNotificationService = () => {
 			await authFetch<unknown>(endpoint, { method: 'PATCH', body: { rejectNote } });
 		},
 
+		/**
+		 * Duyệt, không duyệt phiếu xin dời hạn từ chuông (`actionPayload.refType: 'task_due_request'`). Khác các phiếu
+		 * khác: hai endpoint này là POST, duyệt không body, không duyệt gửi `{ note }` tuỳ chọn (bridge `tasks.md`
+		 * mục 25.2). `endpoint` là đường dẫn máy chủ ghi sẵn trong thông báo, đã có tiền tố `/v1`.
+		 */
+		async decideTaskDueRequest(endpoint: string, note?: string): Promise<void> {
+			const trimmed = note?.trim();
+			await authFetch<unknown>(endpoint, { method: 'POST', body: trimmed ? { note: trimmed } : undefined });
+		},
+
 		async testUnified(payload: TestNotificationDto): Promise<TestNotificationResult> {
 			const res = await authFetch<ApiResponse<TestNotificationResult>>('/v1/notifications/test', {
 				method: 'POST',

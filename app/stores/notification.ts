@@ -3,7 +3,16 @@ import type { NotificationResponse, NotificationListMeta, UnreadCountResponse, Q
 import { useNotificationService } from '~/services';
 import { useDeviceTokenService } from '~/services';
 
-const DEFAULT_UNREAD: UnreadCountResponse = { total: 0, event: 0, attendance: 0, leave: 0 };
+const DEFAULT_UNREAD: UnreadCountResponse = { total: 0, event: 0, attendance: 0, leave: 0, task: 0 };
+
+/** Ô đếm chưa đọc theo category; category không có ô riêng (REQUEST) thì chỉ trừ tổng. */
+type UnreadKey = 'event' | 'attendance' | 'leave' | 'task';
+const UNREAD_KEY: Partial<Record<NotificationCategory, UnreadKey>> = {
+	EVENT: 'event',
+	ATTENDANCE: 'attendance',
+	LEAVE: 'leave',
+	TASK: 'task',
+};
 
 export const useNotificationStore = defineStore('notification', () => {
 	const fcmToken = ref<string | null>(null);
@@ -42,9 +51,8 @@ export const useNotificationStore = defineStore('notification', () => {
 		if (notif && !notif.isRead) {
 			notif.isRead = true;
 			unreadCount.value.total = Math.max(0, unreadCount.value.total - 1);
-			if (notif.category === 'EVENT') unreadCount.value.event = Math.max(0, unreadCount.value.event - 1);
-			else if (notif.category === 'ATTENDANCE') unreadCount.value.attendance = Math.max(0, unreadCount.value.attendance - 1);
-			else if (notif.category === 'LEAVE') unreadCount.value.leave = Math.max(0, unreadCount.value.leave - 1);
+			const key = UNREAD_KEY[notif.category];
+			if (key) unreadCount.value[key] = Math.max(0, (unreadCount.value[key] ?? 0) - 1);
 		}
 	}
 
@@ -59,27 +67,45 @@ export const useNotificationStore = defineStore('notification', () => {
 		if (!category) {
 			unreadCount.value = { ...DEFAULT_UNREAD };
 		} else {
-			const key = category.toLowerCase() as 'event' | 'attendance' | 'leave';
-			const prev = unreadCount.value[key];
+			const key = UNREAD_KEY[category];
+			if (!key) return;
+			const prev = unreadCount.value[key] ?? 0;
 			unreadCount.value[key] = 0;
 			unreadCount.value.total = Math.max(0, unreadCount.value.total - prev);
 		}
 	}
 
+	/**
+	 * Sau khi duyệt, từ chối ngay trong chuông: làm mới huy hiệu Duyệt đơn và Công việc (phiếu xin dời hạn tính ở
+	 * `taskDueRequests`), cùng số chưa đọc, vì máy chủ tự đánh dấu đã đọc cả các tin cùng phiếu.
+	 */
+	function refreshAfterDecision() {
+		useApprovalStore().fetchCounts();
+		fetchUnreadCount().catch(() => undefined);
+	}
+
 	async function quickApprove(notification: NotificationResponse) {
 		if (!notification.actionPayload) return;
-		const { approveRequest } = useNotificationService();
-		await approveRequest(notification.actionPayload.approveEndpoint);
+		const service = useNotificationService();
+		if (notification.actionPayload.refType === 'task_due_request') {
+			await service.decideTaskDueRequest(notification.actionPayload.approveEndpoint);
+		} else {
+			await service.approveRequest(notification.actionPayload.approveEndpoint);
+		}
 		await markRead(notification.id);
-		useApprovalStore().fetchCounts();
+		refreshAfterDecision();
 	}
 
 	async function quickReject(notification: NotificationResponse, rejectNote: string) {
 		if (!notification.actionPayload) return;
-		const { rejectRequest } = useNotificationService();
-		await rejectRequest(notification.actionPayload.rejectEndpoint, rejectNote);
+		const service = useNotificationService();
+		if (notification.actionPayload.refType === 'task_due_request') {
+			await service.decideTaskDueRequest(notification.actionPayload.rejectEndpoint, rejectNote);
+		} else {
+			await service.rejectRequest(notification.actionPayload.rejectEndpoint, rejectNote);
+		}
 		await markRead(notification.id);
-		useApprovalStore().fetchCounts();
+		refreshAfterDecision();
 	}
 
 	async function deleteAll(category?: NotificationCategory) {
@@ -90,9 +116,10 @@ export const useNotificationStore = defineStore('notification', () => {
 			meta.value = null;
 			unreadCount.value = { ...DEFAULT_UNREAD };
 		} else {
-			const key = category.toLowerCase() as 'event' | 'attendance' | 'leave';
-			const prev = unreadCount.value[key];
 			notifications.value = notifications.value.filter(n => n.category !== category);
+			const key = UNREAD_KEY[category];
+			if (!key) return;
+			const prev = unreadCount.value[key] ?? 0;
 			unreadCount.value[key] = 0;
 			unreadCount.value.total = Math.max(0, unreadCount.value.total - prev);
 		}

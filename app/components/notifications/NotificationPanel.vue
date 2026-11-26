@@ -6,14 +6,16 @@
 	const emit = defineEmits<{ close: [] }>();
 
 	const toast = useToast();
-	const { unreadCount, notifications, loading, fetchNotifications, markAllRead, deleteAll } = useNotifications();
+	const { unreadCount, notifications, loading, fetchNotifications, fetchUnreadCount, markAllRead, deleteAll } = useNotifications();
 
 	// ─── Tabs ─────────────────────────────────────────────────────────────────────
 	type Tab = 'ALL' | NotificationCategory;
 	const activeTab = ref<Tab>('ALL');
 
+	// Ngăn Công việc (category `TASK`, gồm cả KPI) thêm 27/11/2026: thông báo việc nhiều nhất nên đặt ngay sau Tất cả.
 	const tabs: { key: Tab; label: string }[] = [
 		{ key: 'ALL', label: 'Tất cả' },
+		{ key: 'TASK', label: 'Công việc' },
 		{ key: 'EVENT', label: 'Sự kiện' },
 		{ key: 'ATTENDANCE', label: 'Chấm công' },
 		{ key: 'LEAVE', label: 'Xin nghỉ' },
@@ -21,6 +23,7 @@
 
 	function tabUnreadCount(tab: Tab): number {
 		if (tab === 'ALL') return unreadCount.value.total;
+		if (tab === 'TASK') return unreadCount.value.task ?? 0;
 		if (tab === 'EVENT') return unreadCount.value.event;
 		if (tab === 'ATTENDANCE') return unreadCount.value.attendance;
 		if (tab === 'LEAVE') return unreadCount.value.leave;
@@ -68,6 +71,8 @@
 	async function load() {
 		const category = activeTab.value === 'ALL' ? undefined : activeTab.value;
 		await fetchNotifications({ limit: 20, category });
+		// Danh sách chỉ đồng bộ tổng chưa đọc; số của từng ngăn lấy lại để huy hiệu ngăn Công việc đúng.
+		fetchUnreadCount().catch(() => undefined);
 	}
 
 	// ─── Item event handlers ──────────────────────────────────────────────────────
@@ -140,11 +145,15 @@
 			</div>
 
 			<!-- Tabs -->
-			<div class="flex border-b border-gray-100 dark:border-gray-700 flex-shrink-0 px-1">
+			<!-- Năm ngăn kèm số không vừa khung 96 (và màn 390px): cho cuộn ngang trong hàng ngăn, trang không cuộn. -->
+			<div class="flex overflow-x-auto border-b border-gray-100 dark:border-gray-700 flex-shrink-0 px-1 [scrollbar-width:none]" role="tablist" aria-label="Nhóm thông báo">
 				<button
 					v-for="tab in tabs"
 					:key="tab.key"
-					class="flex items-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px"
+					role="tab"
+					:aria-selected="activeTab === tab.key"
+					:data-testid="`notif-tab-${tab.key}`"
+					class="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px"
 					:class="
 						activeTab === tab.key
 							? 'border-brand-600 text-brand-600 dark:text-brand-400'

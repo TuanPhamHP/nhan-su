@@ -68,6 +68,7 @@ import { isManagementRole } from '~/utils/role';
  * Công việc lô 1 (module `TASKS`) không rẽ theo vai trò: mọi người nhận mở cùng trang chi tiết việc.
  * | task                      | /cong-viec/:refId (trang nhận cả id số lẫn số hiệu) |
  * | task_offboarding          | /cong-viec?assigneeIds=:refId (refId là id người nghỉ) |
+ * | task_department           | /cong-viec/phong?departmentId=:refId&due=overdue (refId là id phòng) |
  *
  * KPI lô 3 cũng không rẽ theo vai trò mà theo loại thông báo, vì cùng refType `kpi_review` gửi cho hai phía:
  * | kpi_review, KPI_REVIEW_NEEDED (người chấm) | /kpi/danh-gia?reviewId=:id |
@@ -251,6 +252,11 @@ export function resolveNotificationRoute(
 		// đọc `assigneeIds` trên đường dẫn và hiện việc đang mở của người đó để giao lại.
 		case 'task_offboarding':
 			return id ? `/cong-viec?assigneeIds=${id}` : '/cong-viec';
+
+		// 27/11/2026: tin gom quá hạn mỗi sáng gửi trưởng phòng (`TASK_OVERDUE`), `refId` là id PHÒNG. Mở Việc của phòng
+		// đúng phòng đó, lọc sẵn việc quá hạn, giống `targetUrl` máy chủ dựng.
+		case 'task_department':
+			return id ? `/cong-viec/phong?departmentId=${id}&due=overdue` : '/cong-viec/phong?due=overdue';
 
 		// KPI: N-22 tới người chấm mở màn Đánh giá nhân viên; N-23, N-24 tới nhân viên mở KPI của tôi.
 		case 'kpi_review':

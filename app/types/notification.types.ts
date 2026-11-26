@@ -96,12 +96,22 @@ export type NotificationType =
 	// Lô 2 (bridge mục 18): cho nghỉ người còn việc đang mở. refType `task_offboarding`, refId là id người
 	// nghỉ, mở danh sách việc của người đó để giao lại.
 	| 'TASK_OFFBOARDING_OPEN'
+	// Sau thử nghiệm người dùng 27/11/2026 (bridge mục 27). `TASK_DUE_REQUESTED` là `APPROVE_REJECT` với
+	// `actionPayload.refType: 'task_due_request'` (duyệt, không duyệt bằng POST); `TASK_OVERDUE` gửi trưởng phòng mang
+	// `refType: 'task_department'`, `refId` là id phòng, mở Việc của phòng lọc quá hạn.
+	| 'TASK_WITHDRAWN'
+	| 'TASK_DUE_REQUESTED'
+	| 'TASK_DUE_REQUEST_DECIDED'
+	| 'TASK_WATCHED_UPDATED'
+	| 'TASK_UNASSIGNED'
 	// KPI, lô 3 (`docs/backend/bridges/kpi.md` mục 8): category `TASK`, `NAVIGATE_ONLY`. refType `kpi_review` (refId id
 	// phiếu) cho người chấm và nhân viên, `kpi_period` (refId id kỳ) cho nhân sự.
 	| 'KPI_REVIEW_NEEDED'
 	| 'KPI_FEEDBACK_NEEDED'
 	| 'KPI_PUBLISHED'
 	| 'KPI_REVIEW_OVERDUE'
+	// Gửi nhân sự khi một phiếu sang Chờ chốt, refType `kpi_period` (kpi.md mục 13).
+	| 'KPI_REVIEW_PENDING_FINAL'
 	| 'TEST';
 
 export interface NotificationActionPayload {
@@ -132,6 +142,8 @@ export interface UnreadCountResponse {
 	event: number;
 	attendance: number;
 	leave: number;
+	/** Số chưa đọc nhóm `TASK` (Công việc và KPI), cho ngăn Công việc. */
+	task: number;
 }
 
 export interface NotificationListMeta {
