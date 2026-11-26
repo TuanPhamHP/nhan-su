@@ -16,6 +16,7 @@
 		kpiDaysLeft,
 		kpiEventText,
 		kpiGradeLegend,
+		kpiAllZero,
 		kpiMissingLines,
 		kpiNum,
 		kpiRangeText,
@@ -134,6 +135,18 @@
 	// ─── Gửi đánh giá ───────────────────────────────────────────────────────
 	const comment = ref('');
 	const submitting = ref(false);
+	/** Cả phiếu đang 0 điểm thì hỏi lại trước khi gửi (UI-17a). */
+	const confirmZero = ref(false);
+	function askSubmit() {
+		if (r.value && kpiAllZero(r.value.lines)) confirmZero.value = true;
+		else submit();
+	}
+	/** Lỗi gửi đã báo bằng toast và viền đỏ trên dòng thiếu, nên hộp hỏi lại luôn đóng. */
+	async function submitAnyway(): Promise<string | null> {
+		confirmZero.value = false;
+		await submit();
+		return null;
+	}
 	async function submit() {
 		if (!r.value) return;
 		submitting.value = true;
@@ -315,7 +328,7 @@
 					<p class="text-xs" :class="unscoredCount ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500'">
 						<template v-if="unscoredCount">Còn {{ unscoredCount }} chỉ tiêu nhập tay chưa chấm. </template>Gửi xong số liệu được khoá và {{ r.employee.fullName }} nhận thông báo để phản hồi.
 					</p>
-					<CommonAppButton :loading="submitting" data-testid="kpi-submit" @click="submit">Gửi đánh giá</CommonAppButton>
+					<CommonAppButton :loading="submitting" data-testid="kpi-submit" @click="askSubmit">Gửi đánh giá</CommonAppButton>
 				</div>
 			</div>
 			<div v-else-if="r.reviewerComment" class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
@@ -415,6 +428,14 @@
 			reason-placeholder="Ví dụ: nhân viên phản hồi đúng, cần sửa số khối lượng"
 			:confirm="reason => doHr(confirming!, reason)"
 			@close="confirming = null"
+		/>
+		<KpiConfirmModal
+			v-if="confirmZero && r"
+			title="Gửi phiếu toàn số 0?"
+			:message="`Mọi chỉ tiêu đang là 0, nên tổng điểm của ${r.employee.fullName} là 0 và xếp loại thấp nhất. Bạn xem lại số liệu và các chỉ tiêu nhập tay trước khi gửi, vì gửi xong số liệu bị khoá.`"
+			confirm-label="Vẫn gửi đánh giá"
+			:confirm="submitAnyway"
+			@close="confirmZero = false"
 		/>
 		<KpiChangeReviewerModal
 			v-if="changingReviewer && r"

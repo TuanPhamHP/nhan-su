@@ -492,7 +492,7 @@ export const APP_MODULES: AppScreensDef[] = [
 		 * hoặc xem mọi việc (`showWhen`).
 		 * Lô 2 thêm Việc định kỳ và Báo cáo công việc (`showWhen: 'taskReports'`).
 		 * Lô 3 thêm KPI: KPI của tôi (mọi người), Đánh giá nhân viên (`showWhen: 'kpiReviewer'`, huy hiệu
-		 * `kpiReviews`), Kết quả KPI cho giám đốc và trưởng phòng (`showWhen: 'kpiResults'`); Kỳ đánh giá và Cài
+		 * `kpiReviews`), Kết quả KPI cho giám đốc, trưởng phòng, `kpi:manage` (`showWhen: 'kpiResults'`); Kỳ đánh giá và Cài
 		 * đặt KPI chỉ cho `kpi:manage` (ADMIN luôn có).
 		 */
 		code: 'tsk',
@@ -559,7 +559,7 @@ export const APP_MODULES: AppScreensDef[] = [
 				scope: 'personal',
 			},
 			{
-				// Giám đốc, ADMIN, trưởng phòng xem kết quả kỳ và năm; người có `kpi:manage` xem trong Kỳ đánh giá.
+				// Giám đốc, ADMIN, trưởng phòng và người có `kpi:manage` xem kết quả kỳ và năm (UI-16a).
 				label: 'Kết quả KPI',
 				route: '/kpi/ket-qua',
 				showWhen: 'kpiResults',

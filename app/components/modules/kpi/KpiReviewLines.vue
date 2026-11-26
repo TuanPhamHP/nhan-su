@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import type { KpiReviewDetail, KpiReviewLine } from '~/types/kpi.types';
-	import { KPI_HINTS, kpiNum, kpiPct, kpiTargetText, kpiValueText } from '~/utils/kpi.utils';
+	import { KPI_HINTS, kpiNum, kpiPct, kpiTargetText, kpiValueText, kpiWeightShiftText } from '~/utils/kpi.utils';
 
 	/**
 	 * Bảng chỉ tiêu của phiếu (mục 9.2 "Phiếu KPI"): Chỉ tiêu, Mức giao, Kết quả, Tỷ lệ, Trọng số, Điểm, dòng cuối
@@ -198,6 +198,9 @@
 						{{ kpiNum(l.effectiveWeight) }}%
 					</template>
 					<template v-else>{{ kpiNum(l.weight) }}%</template>
+				</p>
+				<p v-if="kpiWeightShiftText(review.lines, l)" class="text-[11px] text-gray-500" data-testid="kpi-line-weight-note">
+					{{ kpiWeightShiftText(review.lines, l) }}
 				</p>
 			</div>
 

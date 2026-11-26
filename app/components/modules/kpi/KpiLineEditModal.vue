@@ -27,6 +27,8 @@
 
 	const title = computed(() => (props.mode === 'adjust' ? 'Chỉnh số tự động' : props.mode === 'value' ? 'Nhập kết quả' : 'Ghi chú cho chỉ tiêu'));
 	const changed = computed(() => props.mode === 'adjust' && value.value != null && value.value !== props.line.autoValue);
+	/** Số mới khác số hệ thống mà chưa ghi lý do: nút Lưu tắt (UI-17a), máy chủ cũng đòi lý do. */
+	const missingReason = computed(() => changed.value && !reason.value.trim());
 
 	async function send(body: UpdateKpiLineBody, okText: string) {
 		saving.value = true;
@@ -47,6 +49,7 @@
 	}
 
 	function save() {
+		if (missingReason.value) return;
 		const n = note.value.trim();
 		const noteChanged = n !== (props.line.reviewerNote ?? '');
 		const body: UpdateKpiLineBody = {};
@@ -107,6 +110,7 @@
 								data-testid="kpi-line-reason"
 							/>
 							<p v-if="reasonError" class="mt-1 text-xs text-rose-600" data-testid="kpi-line-reason-error">{{ reasonError }}</p>
+							<p v-else-if="missingReason" class="mt-1 text-xs text-amber-700 dark:text-amber-400" data-testid="kpi-line-reason-hint">Số mới khác số hệ thống tính nên phải ghi lý do.</p>
 							<p v-else class="mt-1 text-xs text-gray-500">Nhân viên và nhân sự đều thấy số gốc, số mới và lý do.</p>
 						</div>
 					</template>
@@ -143,7 +147,7 @@
 						Về số hệ thống
 					</CommonAppButton>
 					<CommonAppButton variant="secondary" :disabled="saving" @click="emit('close')">Huỷ</CommonAppButton>
-					<CommonAppButton type="submit" :loading="saving" data-testid="kpi-line-save">Lưu</CommonAppButton>
+					<CommonAppButton type="submit" :loading="saving" :disabled="missingReason" data-testid="kpi-line-save">Lưu</CommonAppButton>
 				</div>
 			</form>
 		</div>
