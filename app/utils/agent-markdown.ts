@@ -52,11 +52,13 @@ export function isSafeInternalPath(s: string): boolean {
 export type AgentTextSegment = { type: 'text'; value: string } | { type: 'link'; value: string };
 
 /**
- * Ứng viên: một cụm không có khoảng trắng bắt đầu bằng `/`, đứng đầu chuỗi hoặc sau khoảng trắng
- * hay dấu mở ngoặc, nháy. Lấy CẢ cụm chứ không dừng ở ký tự lạ đầu tiên: `/a'onclick=…` phải bị
- * loại cả cụm, không được cắt lấy `/a` làm link.
+ * Ứng viên: một cụm không có khoảng trắng bắt đầu bằng `/`, đứng đầu chuỗi hoặc sau khoảng trắng,
+ * dấu mở ngoặc, nháy, hay dấu hai chấm dính liền ("Mở trên web:/cong-viec?task=CV-9"). Lấy CẢ cụm
+ * chứ không dừng ở ký tự lạ đầu tiên: `/a'onclick=…` phải bị loại cả cụm, không được cắt lấy `/a`
+ * làm link. Sau dấu hai chấm của `http://host/x` là cụm `//host/x`, cụm đó không qua được luật
+ * đường dẫn nên vẫn là chữ.
  */
-const PATH_CANDIDATE = /(^|[\s([{"'“‘`*])(\/\S*)/g;
+const PATH_CANDIDATE = /(^|[\s([{"'“‘`*:：])(\/\S*)/g;
 /**
  * Dấu câu, dấu đóng ngoặc, dấu đậm dính sau đường dẫn ("(/cong-viec).", "…: /kpi?reviewId=4.",
  * hai dấu sao của chữ đậm): không thuộc link.
@@ -156,14 +158,31 @@ function splitCells(line: string): string[] {
 		.map((c) => c.trim());
 }
 
+/**
+ * Bảng từ ngần này cột trở lên thì trên khung hẹp (điện thoại, cửa sổ chat nhanh) hiện thành thẻ,
+ * mỗi dòng một thẻ. Hai cột vẫn vừa màn 390 px nên giữ dạng bảng. AgentTableBlock dùng chung số này.
+ */
+export const AGENT_TABLE_CARD_MIN_COLUMNS = 3;
+
+/** Nhãn cột cho thẻ (`data-label`): chữ trong ô tiêu đề, bỏ dấu đậm, nghiêng, code. Chuỗi đã escape. */
+function cellLabel(escaped: string): string {
+	return escaped.replace(/[*`]/g, '');
+}
+
 function renderTable(lines: string[], links: boolean): string {
 	const head = splitCells(lines[0]!);
 	const bodyLines = lines.slice(isTableDivider(lines[1] ?? '') ? 2 : 1);
 	const th = head.map((c) => `<th>${inlineMd(c, links)}</th>`).join('');
 	const rows = bodyLines
-		.map((l) => `<tr>${splitCells(l).map((c) => `<td>${inlineMd(c, links)}</td>`).join('')}</tr>`)
+		.map(
+			(l) =>
+				`<tr>${splitCells(l)
+					.map((c, i) => `<td data-label="${cellLabel(head[i] ?? '')}">${inlineMd(c, links)}</td>`)
+					.join('')}</tr>`,
+		)
 		.join('');
-	return `<div class="agent-table-wrap"><table class="agent-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+	const cls = head.length >= AGENT_TABLE_CARD_MIN_COLUMNS ? 'agent-table agent-table--cards' : 'agent-table';
+	return `<div class="agent-table-wrap"><table class="${cls}"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 export interface AgentMarkdownOptions {

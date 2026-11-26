@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import type { AgentTable } from '~/types/agent.types';
-	import { isSafeInternalPath } from '~/utils/agent-markdown';
+	import { AGENT_TABLE_CARD_MIN_COLUMNS, isSafeInternalPath } from '~/utils/agent-markdown';
 
 	/**
 	 * Bảng chi tiết do server dựng, đính kèm câu trả lời của trợ lý.
@@ -17,7 +17,16 @@
 		 * Cú bấm do AgentMessageBubble bắt và đi bằng router. Tắt ở màn ADMIN xem lại hội thoại.
 		 */
 		links?: boolean;
+		/**
+		 * Khung chat hẹp (AgentMessageBubble tự đo): bảng từ ba cột hiện thành thẻ, mỗi dòng một thẻ, ô
+		 * đầu làm tên thẻ, các ô sau thành hàng "nhãn cột, giá trị". Vẫn đủ dòng, đúng thứ tự, đúng chữ.
+		 */
+		cards?: boolean;
 	}>();
+
+	const asCards = computed(() => !!props.cards && props.table.columns.length >= AGENT_TABLE_CARD_MIN_COLUMNS);
+	const headCol = computed(() => props.table.columns[0]);
+	const restCols = computed(() => props.table.columns.slice(1));
 
 	/** Chữ trong ô vẫn y nguyên server gửi; chỉ thêm thẻ `<a>` bọc quanh. */
 	function linkOf(value: string): string | null {
@@ -63,7 +72,56 @@
 			lời, nút sao chép và thanh đánh giá bị đẩy đi rất xa. CUỘN, không cắt dòng — cắt
 			là người dùng tưởng mình chỉ đi muộn mấy hôm.
 		-->
-		<div class="agent-table-wrap max-h-[26rem] overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
+		<!-- Dạng thẻ cho khung hẹp: cùng khung cuộn dọc, không còn gì phải cuộn ngang. -->
+		<div
+			v-if="asCards && headCol"
+			class="agent-table-wrap max-h-[26rem] overflow-auto rounded-lg border border-gray-200 dark:border-gray-700"
+			data-testid="agent-table-cards"
+		>
+			<ul class="divide-y divide-gray-100 text-xs dark:divide-gray-700/60">
+				<li
+					v-for="(row, r) in table.rows"
+					:key="r"
+					class="px-2.5 py-2 even:bg-gray-50/60 dark:even:bg-gray-700/25"
+				>
+					<p class="font-semibold break-words text-gray-800 dark:text-gray-100">
+						<a
+							v-if="linkOf(cell(row, headCol.key))"
+							:href="cell(row, headCol.key)"
+							data-agent-link=""
+							class="text-[var(--color-accent)] underline underline-offset-2 [overflow-wrap:anywhere] hover:decoration-2"
+							>{{ cell(row, headCol.key) }}</a
+						>
+						<template v-else>{{ cell(row, headCol.key) }}</template>
+					</p>
+					<dl class="mt-1 grid grid-cols-[minmax(0,38%)_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+						<template v-for="col in restCols" :key="col.key">
+							<dt class="break-words text-gray-500 dark:text-gray-400">{{ col.label }}</dt>
+							<dd
+								:class="[
+									'min-w-0 break-words text-gray-700 dark:text-gray-200',
+									isNumberCol(col.align) ? 'tabular-nums' : '',
+								]"
+							>
+								<a
+									v-if="linkOf(cell(row, col.key))"
+									:href="cell(row, col.key)"
+									data-agent-link=""
+									class="text-[var(--color-accent)] underline underline-offset-2 [overflow-wrap:anywhere] hover:decoration-2"
+									>{{ cell(row, col.key) }}</a
+								>
+								<template v-else>{{ cell(row, col.key) }}</template>
+							</dd>
+						</template>
+					</dl>
+				</li>
+			</ul>
+		</div>
+
+		<div
+			v-else
+			class="agent-table-wrap max-h-[26rem] overflow-auto rounded-lg border border-gray-200 dark:border-gray-700"
+		>
 			<table class="w-max min-w-full border-collapse text-xs">
 				<thead>
 					<tr>

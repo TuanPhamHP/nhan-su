@@ -4,6 +4,7 @@
 	import AgentActionForm from '~/components/modules/agent/AgentActionForm.vue';
 	import AgentChartBlock from '~/components/modules/agent/AgentChartBlock.vue';
 	import AgentFeedbackBar from '~/components/modules/agent/AgentFeedbackBar.vue';
+	import AgentLinkedText from '~/components/modules/agent/AgentLinkedText.vue';
 	import AgentTableBlock from '~/components/modules/agent/AgentTableBlock.vue';
 	import { agentToolChipLabel } from '~/types/agent.types';
 	import type {
@@ -35,6 +36,20 @@
 	const toast = useToast();
 
 	const copied = ref(false);
+
+	/**
+	 * Khung chat hẹp (điện thoại, cửa sổ chat nhanh 400 px) thì bảng từ ba cột hiện thành thẻ, mỗi dòng
+	 * một thẻ: bảng 5 cột ở màn 390 px phải vuốt ngang mới đọc hết một dòng, cột đầu trôi mất nên không
+	 * biết đang đọc dòng nào. Đo bề rộng hàng tin nhắn (luôn rộng hết khung chat, không co theo chữ)
+	 * chứ không đo màn hình, vì cửa sổ chat nhanh trên máy tính cũng hẹp như điện thoại.
+	 *
+	 * Chưa đo được (0, như khi chạy test) thì coi là rộng: giữ dạng bảng như trước.
+	 */
+	const NARROW_ROW_WIDTH = 560;
+	const rowEl = ref<HTMLElement | null>(null);
+	const rowWidth = ref(0);
+	const narrow = computed(() => rowWidth.value > 0 && rowWidth.value < NARROW_ROW_WIDTH);
+	let resizeObserver: ResizeObserver | null = null;
 
 	const isUser = computed(() => props.message.role === 'user');
 	const isSystem = computed(() => props.message.role === 'system');
@@ -98,21 +113,35 @@
 			toast.error('Trình duyệt không cho phép sao chép');
 		}
 	}
+
+	onMounted(() => {
+		const el = rowEl.value;
+		if (!el || typeof ResizeObserver === 'undefined') return;
+		rowWidth.value = el.clientWidth;
+		resizeObserver = new ResizeObserver((entries) => {
+			rowWidth.value = entries[0]?.contentRect.width ?? el.clientWidth;
+		});
+		resizeObserver.observe(el);
+	});
+
+	onBeforeUnmount(() => resizeObserver?.disconnect());
 </script>
 
 <template>
 	<!-- Dấu vết một thao tác đã thực thi — dải mảnh giữa khung, không phải lời thoại -->
-	<div v-if="isSystem" class="flex w-full justify-center animate-fade-in">
+	<!-- Câu do server dựng có thể kèm đường dẫn ("Mở trên web: /cong-viec?task=CV-9"): thành link. -->
+	<div v-if="isSystem" class="flex w-full justify-center animate-fade-in" @click="onLinkClick">
 		<p
-			class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+			class="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-2xl bg-emerald-50 px-3 py-1 text-[12px] font-medium break-words text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
 		>
-			<Icon name="heroicons:check-circle" class="h-3.5 w-3.5" />
-			{{ message.text }}
+			<Icon name="heroicons:check-circle" class="mt-px h-3.5 w-3.5 shrink-0" />
+			<span class="min-w-0"><AgentLinkedText :text="message.text" /></span>
 		</p>
 	</div>
 
 	<div
 		v-else
+		ref="rowEl"
 		:class="[
 			'group flex w-full animate-fade-in',
 			compact ? 'gap-2' : 'gap-3',
@@ -181,7 +210,7 @@
 				</p>
 
 				<!-- Đã xong → markdown đã render và sanitize -->
-				<div v-else-if="html" class="agent-md" v-html="html" />
+				<div v-else-if="html" :class="['agent-md', narrow ? 'agent-md--narrow' : '']" v-html="html" />
 
 				<!-- Đang stream hoặc lỗi → text thô -->
 				<template v-else>
@@ -209,6 +238,7 @@
 				:key="`table-${i}`"
 				:table="t"
 				links
+				:cards="narrow"
 			/>
 
 			<AgentActionForm
@@ -344,5 +374,54 @@
 	}
 	.dark .agent-md :deep(.agent-table tbody tr:hover) {
 		background: rgb(255 255 255 / 0.04);
+	}
+	/*
+		Khung hẹp: bảng từ ba cột thành thẻ, mỗi dòng một thẻ, mỗi ô một hàng "nhãn cột: giá trị".
+		Nhãn lấy từ `data-label` do renderAgentMarkdown gắn vào từng ô. Ô đầu là tên của dòng nên
+		in đậm, không cần nhãn.
+	*/
+	.agent-md--narrow :deep(.agent-table--cards),
+	.agent-md--narrow :deep(.agent-table--cards tbody),
+	.agent-md--narrow :deep(.agent-table--cards tr),
+	.agent-md--narrow :deep(.agent-table--cards td) {
+		display: block;
+		width: auto;
+		min-width: 0;
+	}
+	.agent-md--narrow :deep(.agent-table--cards thead) {
+		display: none;
+	}
+	.agent-md--narrow :deep(.agent-table--cards tr) {
+		padding: 0.5rem 0.7rem;
+		border-bottom: 1px solid rgb(0 0 0 / 0.07);
+	}
+	.dark .agent-md--narrow :deep(.agent-table--cards tr) {
+		border-color: rgb(255 255 255 / 0.1);
+	}
+	.agent-md--narrow :deep(.agent-table--cards tr:last-child) {
+		border-bottom: 0;
+	}
+	.agent-md--narrow :deep(.agent-table--cards td) {
+		display: flex;
+		gap: 0.6rem;
+		padding: 0.1rem 0;
+		border: 0;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	.agent-md--narrow :deep(.agent-table--cards td::before) {
+		content: attr(data-label);
+		flex: 0 0 38%;
+		color: rgb(0 0 0 / 0.5);
+	}
+	.dark .agent-md--narrow :deep(.agent-table--cards td::before) {
+		color: rgb(255 255 255 / 0.55);
+	}
+	.agent-md--narrow :deep(.agent-table--cards td:first-child) {
+		font-weight: 600;
+		padding-bottom: 0.2rem;
+	}
+	.agent-md--narrow :deep(.agent-table--cards td:first-child::before) {
+		display: none;
 	}
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 	import AppButton from '~/components/common/AppButton.vue';
+	import AgentLinkedText from '~/components/modules/agent/AgentLinkedText.vue';
 	import type { AgentFormField, AgentPendingAction } from '~/types/agent.types';
-	import { splitInternalPaths } from '~/utils/agent-markdown';
 
 	const props = defineProps<{
 		pending: AgentPendingAction;
@@ -102,8 +102,11 @@
 		touched.value[name] = true;
 	}
 
-	/** Câu báo kết quả do server dựng, có thể kèm đường dẫn ("Mở trên web: /cong-viec?task=CV-9"). */
-	const doneSegments = computed(() => splitInternalPaths(props.pending.message || 'Đã thực hiện.'));
+	/**
+	 * Ô nào đang mở câu giải thích "Trợ lý điền sẵn". Bấm để mở chứ không rê chuột: trên điện thoại
+	 * không có `title` để xem, mà người dùng phải hiểu vì sao cần soát lại ô đó.
+	 */
+	const hintOpen = ref<Record<string, boolean>>({});
 
 	/** Hiện lỗi sau khi người dùng đã chạm vào ô, hoặc sau lần bấm gửi đầu tiên. */
 	function errorFor(f: AgentFormField): string | null {
@@ -194,16 +197,7 @@
 			<Icon name="heroicons:check-circle" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
 			<!-- Đường dẫn trong câu báo thành link; AgentMessageBubble bắt cú bấm và đi bằng router. -->
 			<p class="min-w-0 break-words text-emerald-700 dark:text-emerald-400">
-				<template v-for="(seg, i) in doneSegments" :key="i">
-					<a
-						v-if="seg.type === 'link'"
-						:href="seg.value"
-						data-agent-link=""
-						class="font-medium underline underline-offset-2 hover:decoration-2"
-						>{{ seg.value }}</a
-					>
-					<template v-else>{{ seg.value }}</template>
-				</template>
+				<AgentLinkedText :text="pending.message || 'Đã thực hiện.'" />
 			</p>
 		</div>
 
@@ -218,8 +212,8 @@
 		-->
 		<div v-else-if="pending.state === 'failed'" class="flex items-start gap-2 px-4 py-3 text-sm">
 			<Icon name="heroicons:exclamation-triangle" class="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-			<div>
-				<p class="text-red-600 dark:text-red-400">{{ pending.message }}</p>
+			<div class="min-w-0 break-words">
+				<p class="text-red-600 dark:text-red-400"><AgentLinkedText :text="pending.message ?? ''" /></p>
 				<!-- KHÔNG hứa "chưa ghi gì": server tự nó cũng không biết commit đã đi tới đâu. -->
 				<p class="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
 					Bạn nhắn lại yêu cầu với thông tin đã sửa giúp mình nhé.
@@ -249,7 +243,7 @@
 							compact ? 'text-[13px] leading-snug' : 'text-sm',
 						]"
 					>
-						{{ f.value }}
+						<AgentLinkedText :text="String(f.value ?? '')" />
 					</dd>
 				</div>
 				<div
@@ -265,7 +259,7 @@
 							compact ? 'text-[13px] leading-snug' : 'text-sm',
 						]"
 					>
-						{{ c.value }}
+						<AgentLinkedText :text="c.value" />
 					</dd>
 				</div>
 			</dl>
@@ -286,32 +280,50 @@
 					]"
 				>
 					<Icon name="heroicons:exclamation-triangle" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-					<span>{{ w }}</span>
+					<span class="min-w-0 break-words"><AgentLinkedText :text="w" /></span>
 				</li>
 			</ul>
 
 			<div :class="compact ? 'space-y-2' : 'space-y-3'">
 				<div v-for="f in editable" v-show="isVisible(f)" :key="f.name">
-					<label
-						:for="`af-${pending.pendingActionId}-${f.name}`"
-						:class="['flex items-center gap-1.5', compact ? 'mb-0.5' : 'mb-1']"
-					>
-						<span
+					<div :class="['flex flex-wrap items-center gap-x-1.5 gap-y-0.5', compact ? 'mb-0.5' : 'mb-1']">
+						<label
+							:for="`af-${pending.pendingActionId}-${f.name}`"
 							:class="['font-medium text-gray-700 dark:text-gray-200', compact ? 'text-xs' : 'text-[13px]']"
-							>{{ f.label }}</span
 						>
-						<!-- Dấu * theo trạng thái HIỆN TẠI: chọn "Từ chối" thì ô Ghi chú mới hiện sao -->
-						<span v-if="isRequired(f)" class="text-red-500">*</span>
-						<!-- Người dùng PHẢI phân biệt được cái gì là máy đoán để mà soát -->
-						<span
+							{{ f.label }}
+							<!-- Dấu * theo trạng thái HIỆN TẠI: chọn "Từ chối" thì ô Ghi chú mới hiện sao -->
+							<span v-if="isRequired(f)" class="text-red-500">*</span>
+						</label>
+						<!--
+							Người dùng PHẢI phân biệt được ô nào trợ lý tự điền để mà soát. Là nút bấm chứ không
+							chỉ `title`: trên điện thoại không rê chuột được, câu giải thích phải mở bằng một chạm.
+						-->
+						<button
 							v-if="f.source === 'llm'"
-							class="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
-							title="Giá trị này do trợ lý suy ra từ câu bạn nói — kiểm tra lại giúp nhé"
+							type="button"
+							:aria-expanded="!!hintOpen[f.name]"
+							:aria-controls="`af-${pending.pendingActionId}-${f.name}-hint`"
+							data-testid="agent-llm-badge"
+							class="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 transition hover:bg-violet-200 dark:bg-violet-500/20 dark:text-violet-300 dark:hover:bg-violet-500/30"
+							@click="hintOpen[f.name] = !hintOpen[f.name]"
 						>
 							<Icon name="heroicons:sparkles" class="h-2.5 w-2.5" />
-							máy đoán
-						</span>
-					</label>
+							Trợ lý điền sẵn
+							<Icon name="heroicons:information-circle" class="h-3 w-3" />
+						</button>
+					</div>
+					<p
+						v-if="f.source === 'llm' && hintOpen[f.name]"
+						:id="`af-${pending.pendingActionId}-${f.name}-hint`"
+						data-testid="agent-llm-hint"
+						:class="[
+							'rounded-lg bg-violet-50 text-violet-800 dark:bg-violet-500/10 dark:text-violet-200',
+							compact ? 'mb-1 px-2 py-1 text-[11px] leading-snug' : 'mb-1.5 px-2.5 py-1.5 text-xs',
+						]"
+					>
+						Trợ lý điền ô này từ câu bạn nhắn. Bạn xem lại cho đúng rồi hãy xác nhận, sửa thẳng trong ô nếu cần.
+					</p>
 
 					<select
 						v-if="f.type === 'select'"
@@ -399,7 +411,7 @@
 				class="mt-3 flex items-start gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
 			>
 				<Icon name="heroicons:exclamation-circle" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-				<span>{{ pending.message }}</span>
+				<span class="min-w-0 break-words"><AgentLinkedText :text="pending.message" /></span>
 			</p>
 
 			<div :class="['flex items-center justify-end gap-2', compact ? 'mt-3' : 'mt-4']">
