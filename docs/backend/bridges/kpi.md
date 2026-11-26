@@ -260,3 +260,24 @@ phản hồi có câu nói rõ bấm Đồng ý không làm mất quyền phản
 
 Bản đầu web làm trước. Mobile làm sau theo cùng API: KPI của tôi (UI-10), phản hồi, mở deep link N-23, N-24; người chấm mở
 N-22 sang web nếu mobile chưa có màn đánh giá.
+
+## 12. Trạng thái xem nằm trên đường dẫn web (26/11/2026)
+
+Chỉ đổi ở web, API không đổi. Quy ước chung như `docs/bridges/tasks.md` mục 22: giá trị mặc định không ghi lên đường dẫn, đổi
+bộ lọc thay đường dẫn tại chỗ; F5 hay gửi đường dẫn vẫn ra đúng màn trong phạm vi quyền của người mở (API chặn quyền, phiếu
+người khác vẫn là "Không tìm thấy phiếu").
+
+| Màn | Tham số (mặc định) |
+|---|---|
+| KPI của tôi `/kpi` | `reviewId` (phiếu chưa công bố mới nhất, không có thì phiếu mới nhất) |
+| Đánh giá nhân viên `/kpi/danh-gia` | `tab` = `all` (Chờ tôi chấm); `q` (tìm tên, mã, ghi sau 350 ms); `reviewId` |
+| Kết quả KPI `/kpi/ket-qua` (giám đốc, trưởng phòng) | `view` = `year` (Theo kỳ); `periodId` (kỳ mới nhất); `dept` dùng chung hai thẻ (trưởng phòng một phòng thì chọn sẵn phòng đó); `year` (năm nay); `reviewId` |
+| Cài đặt KPI `/management/kpi/cai-dat` | `tab` = `templates` \| `grades` (Chỉ tiêu); `inactive=1` hiện chỉ tiêu, mẫu ngừng dùng |
+| Kỳ đánh giá `/management/kpi/ky` | `periodId`; `view` = `results` \| `year` (Phiếu); `status` (bước phiếu, bấm số đếm); `dept` dùng chung ba thẻ; `q`; `year` (năm nay); `reviewId` |
+
+`dept` trên đường dẫn chỉ là lựa chọn ban đầu của ô Phòng. Trưởng phòng mở đường dẫn có `dept` phòng khác thì API kết quả trả
+403 "Bạn chỉ xem được kết quả KPI của phòng mình." (mục 1), web hiện câu đó, không lộ thêm gì.
+
+Kịch bản phải thử: tìm tên ở Đánh giá nhân viên và Kỳ đánh giá rồi F5 vẫn còn chữ; chọn phòng ở thẻ Kết quả, chọn năm và phòng
+ở Kết quả năm rồi F5 giữ; bật hiện chỉ tiêu ngừng dùng rồi F5 giữ; gửi đường dẫn có `reviewId` cho người không xem được phiếu
+thì thấy "Không tìm thấy phiếu".

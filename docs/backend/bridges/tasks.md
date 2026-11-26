@@ -423,7 +423,8 @@ Lỗi kiểm dữ liệu chung (thiếu `dueDate`, sai kiểu) là 400 `BAD_REQU
 ## 8. Thông báo (deep link)
 
 Mọi thông báo của module có `category: 'TASK'`, `refType: 'task'`, `refId` là id việc, `targetUrl: '/cong-viec/<số hiệu>'`,
-`actionType: 'NAVIGATE_ONLY'`. Web mở khung chi tiết việc theo số hiệu; mobile mở màn chi tiết việc bằng `refId`.
+`actionType: 'NAVIGATE_ONLY'`. Web mở `targetUrl` là trang chi tiết đầy đủ; bấm việc trong danh sách thì mở khung bên phải bằng
+`?task=<số hiệu>` (mục 22). Mobile mở màn chi tiết việc bằng `refId`.
 
 | Mã | `type` | Người nhận |
 |---|---|---|
@@ -787,4 +788,78 @@ Lấy từ phiếu S-06..S-08, thiết kế T-09..T-13 và `docs/modules/18-task
 9. Cảnh báo nghỉ việc: thông báo "Cần giao lại việc của …" mở đúng danh sách việc của người nghỉ.
 10. Chỉ xem: báo cáo, tiến độ, lịch xem được; nút tạo nhóm, đợt, việc định kỳ, nối phụ thuộc, dự án mẫu ẩn hoặc báo 403 có câu.
 11. Mọi vai: ADMIN, HR, DIRECTOR, MANAGER (trưởng phòng), EMPLOYEE; rỗng, đang tải, lỗi; màn 390 điểm ảnh.
+
+---
+
+# Đường dẫn web (26/11/2026)
+
+Chỉ đổi ở web, API không đổi. Thiết kế: `docs/modules/18-tasks.md` mục 9.1 UI-02 và mục 9.2. KPI ở `docs/bridges/kpi.md` mục 12.
+
+## 22. Trạng thái xem nằm trên đường dẫn
+
+Mọi thứ người dùng chọn để xem (thẻ, chế độ xem, ô tìm, bộ lọc, khung việc đang mở) nằm trên query của đường dẫn. Tải lại trang
+không mất chỗ đang xem; gửi đường dẫn cho đồng nghiệp thì họ thấy đúng màn đó trong phạm vi quyền của họ (mục 1.1), API vẫn là
+nơi chặn quyền. Quy ước chung:
+
+- Giá trị mặc định không ghi lên đường dẫn (cột "Mặc định" dưới đây).
+- Đổi bộ lọc, thẻ, chế độ xem thay đường dẫn tại chỗ (`router.replace`), không thêm bước Quay lại.
+- Thanh lọc của dự án và Việc của phòng còn nhớ lần cuối trong trình duyệt theo từng dự án; đường dẫn có tham số thì đường dẫn
+  thắng.
+
+### 22.1 Khung chi tiết việc
+
+| Tham số | Giá trị | Ghi chú |
+|---|---|---|
+| `task` | số hiệu việc (`HQ-1`, `CV-3`) | Có thì khung bên phải mở việc đó, trên mọi màn có danh sách việc. Mở khung là một bước Quay lại mới; đang mở mà chọn việc khác thì thay tại chỗ. X hoặc Esc: nếu khung do bấm mở thì lùi một bước, vào thẳng từ đường dẫn thì bỏ `task` tại chỗ |
+| `activity` | `all`, `history` | Thẻ Hoạt động trong khung và trang đầy đủ. Mặc định Bình luận. Đóng khung hay đổi việc thì bỏ |
+
+Web gọi `GET /tasks/:idOrCode` với số hiệu đã `encodeURIComponent`. Người không xem được việc thấy câu "Bạn không xem được việc
+này" trong khung, danh sách của họ vẫn hiện bình thường. Trang đầy đủ `/cong-viec/<số hiệu>` (thông báo, nút Mở trang đầy đủ)
+nhận cùng `activity`; từ trang đầy đủ bấm Quay lại thì về đúng danh sách kèm khung.
+
+### 22.2 Theo màn
+
+| Màn | Tham số (mặc định) |
+|---|---|
+| Việc của tôi `/cong-viec` | `tab` = `assigned` \| `watching` (Tôi làm); `mode` = `board` (Danh sách); `q`; `cancelled=1`; `task`, `activity` |
+| Danh sách dự án `/cong-viec/du-an` | `status` = `CLOSED` \| `all` (Đang chạy); `q` |
+| Dự án `/cong-viec/du-an/<mã>` | `tab` = `sprints` \| `overview` \| `members` \| `settings` (Việc; đổi thẻ thì bỏ `task`, `activity`); thanh lọc 22.3; `closed=1` (thẻ Việc chờ xếp và Đợt, mở danh sách đợt đã đóng); `task`, `activity` |
+| Việc của phòng `/cong-viec/phong` | `dept` (phòng đầu tiên người xem được chọn: phòng mình làm trưởng, hoặc mọi phòng nếu xem được mọi việc; id phòng ngoài danh sách đó bị bỏ qua); thanh lọc 22.3; `task`, `activity` |
+| Việc định kỳ `/cong-viec/dinh-ky` | `status` = `paused` \| `all` (đang chạy); `id` (khung quy tắc); `task` (khung việc nằm trên khung quy tắc, Esc đóng khung việc trước) |
+| Báo cáo `/cong-viec/bao-cao` | `tab` = `overdue` (Tiến độ); `from`, `to` (`YYYY-MM-DD`, tháng này); `dept`; `project`; `task` |
+
+### 22.3 Thanh lọc dùng chung (dự án, Việc của phòng)
+
+| Tham số | Giá trị (mặc định) |
+|---|---|
+| `mode` | `board`, `timeline`, `calendar` (Danh sách) |
+| `q` | từ khoá tiêu đề hoặc số hiệu |
+| `status` | một trạng thái hoặc `TODO,IN_PROGRESS,IN_REVIEW` (Chưa xong); trống là mọi trạng thái |
+| `due` | `overdue`, `today`, `this_week`, `next_week` |
+| `priority` | mã ưu tiên |
+| `assignee` | id người thực hiện |
+| `group` | `assignee`, `due`, `taskGroup`, `none` (theo trạng thái), chỉ ở Danh sách |
+| `cancelled` | `1` hiện việc đã huỷ (Bảng việc: cột Đã huỷ) |
+| `taskGroup` | id nhóm việc |
+| `sprint` | id đợt hoặc `backlog` |
+| `scale` | Tiến độ: `week`, `month` (Ngày; thiếu thì lấy thang nhớ trong trình duyệt) |
+| `date` | Tiến độ: ngày neo `YYYY-MM-DD` (hôm nay) |
+| `byGroup` | Tiến độ: `0` tắt "Theo nhóm việc" (bật) |
+| `month` | Lịch: `YYYY-MM` (tháng này) |
+
+### 22.4 Mobile
+
+Mobile không dùng các tham số này. Đường dẫn web gửi qua chat, nếu mobile muốn mở: lấy `task` (hoặc phần số hiệu của
+`/cong-viec/<số hiệu>`) rồi gọi `GET /tasks/:idOrCode`, bỏ qua tham số khác.
+
+### 22.5 Kịch bản phải thử trên web
+
+1. Mở việc từ danh sách dự án đang lọc: đường dẫn thêm `task`, giữ bộ lọc; F5 còn danh sách lọc và khung; Quay lại đóng khung.
+2. Chọn việc khác khi khung đang mở, Quay lại một lần là đóng khung.
+3. Vào thẳng đường dẫn có `task`, bấm X hoặc Esc: khung đóng, ở lại trang.
+4. Mở trang đầy đủ rồi Quay lại: về danh sách kèm khung.
+5. Thành viên dự án nhận đường dẫn thấy đúng màn; người không xem được việc thấy câu báo trong khung, không trắng trang.
+6. F5 giữ khung ở Việc của tôi (Danh sách, Bảng việc), Việc của phòng, Lịch, Tiến độ, Việc chờ xếp và Đợt, Việc định kỳ, Báo cáo.
+7. Tiến độ: Tuần, lùi một kỳ, tắt Theo nhóm việc, F5 và gửi đường dẫn đều giữ; danh sách dự án lọc và tìm giữ; thẻ Lịch sử giữ.
+8. Màn 390 điểm ảnh: khung chiếm toàn màn, F5 giữ, Quay lại đóng.
 
