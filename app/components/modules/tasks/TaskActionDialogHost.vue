@@ -2,11 +2,12 @@
 	import { storeToRefs } from 'pinia';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
 	import { useDirectoryStore } from '~/stores/directory';
-	import { ACTION_LABELS, actionNeedsReason, shortDate, vnToday } from '~/utils/tasks.utils';
+	import { ACTION_LABELS, actionNeedsReason, checklistLeft, needsChecklistWarning, shortDate, vnToday } from '~/utils/tasks.utils';
 
 	/**
 	 * Hộp thoại của `useTaskActions`: lý do Trả lại, Mở lại, Huỷ; Nghiệm thu với điểm chất lượng tuỳ
-	 * chọn; Đổi hạn có lý do bắt buộc; Đổi người thực hiện. Gắn một lần ở mỗi trang công việc.
+	 * chọn; Đổi hạn có lý do bắt buộc; Đổi người thực hiện; hỏi lại khi Báo xong hay Đóng việc mà còn
+	 * mục kiểm tra chưa tick. Gắn một lần ở mỗi trang công việc.
 	 *
 	 * Bấm Huỷ hay Esc thì trả `null`, nơi gọi để thẻ về chỗ cũ. Vùng `aria-live` cuối file đọc câu
 	 * tiếng Việt sau mỗi lần chuyển cho trình đọc màn hình.
@@ -67,6 +68,23 @@
 		if (req?.kind === 'transition' && req.action === 'cancel') return 'Việc con chưa xong cũng bị huỷ theo cùng lý do.';
 		if (req?.kind === 'due') return 'Hạn ban đầu vẫn được giữ để xem lại sau.';
 		return '';
+	});
+
+	/** Báo xong, Đóng việc khi còn mục chưa tick: câu hỏi lại, API không chặn. */
+	const checklistWarning = computed(() => {
+		const req = dialog.value;
+		if (req?.kind !== 'transition' || !needsChecklistWarning(req.action, req.task.checklist)) return '';
+		const { total } = req.task.checklist;
+		const verb = req.action === 'self_close' ? 'Vẫn đóng việc?' : 'Vẫn báo xong?';
+		return `Còn ${checklistLeft(req.task.checklist)}/${total} mục kiểm tra chưa xong. ${verb}`;
+	});
+
+	/** Nghiệm thu: chỉ nhắc, không chặn. */
+	const acceptChecklistNote = computed(() => {
+		const req = dialog.value;
+		if (req?.kind !== 'transition' || req.action !== 'accept') return '';
+		const left = checklistLeft(req.task.checklist);
+		return left ? `Còn ${left} mục kiểm tra chưa tick.` : '';
 	});
 
 	const people = computed<PickablePerson[]>(() =>
@@ -172,8 +190,23 @@
 				</div>
 
 				<div class="space-y-4 px-5 py-4">
+					<p
+						v-if="checklistWarning"
+						class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+						data-testid="task-dialog-checklist"
+					>
+						{{ checklistWarning }}
+					</p>
+
 					<!-- Nghiệm thu: điểm chất lượng tuỳ chọn, năm nút như phiếu KPI. -->
 					<div v-if="dialog.kind === 'transition' && dialog.action === 'accept'" class="space-y-2">
+						<p
+							v-if="acceptChecklistNote"
+							class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+							data-testid="task-dialog-checklist"
+						>
+							{{ acceptChecklistNote }}
+						</p>
 						<p class="text-sm text-gray-700 dark:text-gray-300">
 							Chấm chất lượng nếu muốn, không chấm vẫn nghiệm thu được.
 						</p>
@@ -232,7 +265,8 @@
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
-					<CommonAppButton variant="secondary" @click="cancel">Huỷ</CommonAppButton>
+					<!-- Hộp chỉ hỏi lại thì con trỏ đứng ở Huỷ, Enter nhầm không gửi đi. -->
+					<CommonAppButton variant="secondary" :data-autofocus="checklistWarning ? '' : undefined" @click="cancel">Huỷ</CommonAppButton>
 					<CommonAppButton :variant="confirmVariant" data-testid="task-dialog-confirm" @click="confirm">
 						{{ confirmLabel }}
 					</CommonAppButton>

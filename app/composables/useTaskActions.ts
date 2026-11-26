@@ -7,7 +7,7 @@ import type {
 	TaskListItem,
 	TaskStatus,
 } from '~/types/tasks.types';
-import { ACTION_LABELS, ACTION_TARGET, STATUS_LABELS, actionNeedsDialog, taskErrorInfo } from '~/utils/tasks.utils';
+import { ACTION_LABELS, ACTION_TARGET, STATUS_LABELS, actionNeedsDialog, needsChecklistWarning, taskErrorInfo } from '~/utils/tasks.utils';
 
 /**
  * Một chỗ chạy mọi thao tác ghi lên việc: nút trên dòng, nút đầu khung chi tiết, menu ba chấm,
@@ -75,10 +75,18 @@ export function useTaskActions() {
 		return { ok: true, task };
 	}
 
+	/**
+	 * Thao tác có phải mở hộp trước khi gửi không: cần lý do hay điểm, hoặc báo xong, tự đóng việc mà
+	 * còn mục kiểm tra chưa tick (hộp hỏi lại, API không chặn).
+	 */
+	function dialogFirst(task: TaskListItem, action: TaskAction): boolean {
+		return actionNeedsDialog(action) || needsChecklistWarning(action, task.checklist);
+	}
+
 	/** Chuyển trạng thái bằng nút hoặc menu. Thao tác cần lý do hay điểm thì mở hộp trước. */
 	async function runAction(task: TaskListItem, action: TaskAction): Promise<TaskActionResult> {
 		let extra: TaskDialogResult = {};
-		if (actionNeedsDialog(action)) {
+		if (dialogFirst(task, action)) {
 			const answer = await openDialog<'transition'>({ kind: 'transition', task, action });
 			if (!answer) return { ok: false, cancelled: true, conflict: null, message: null };
 			extra = answer;
@@ -101,8 +109,9 @@ export function useTaskActions() {
 	}
 
 	/**
-	 * Kéo thẻ sang cột khác hoặc đổi thứ tự. Cột cần lý do (Trả lại, Mở lại, Huỷ) hay cột Hoàn thành
-	 * của người nghiệm thu thì mở hộp tại chỗ; bấm Huỷ trong hộp thì trả về `cancelled` để thẻ về chỗ cũ.
+	 * Kéo thẻ sang cột khác hoặc đổi thứ tự. Cột cần lý do (Trả lại, Mở lại, Huỷ), cột Hoàn thành của
+	 * người nghiệm thu, hay cột báo xong khi còn mục kiểm tra chưa tick thì mở hộp tại chỗ; bấm Huỷ trong
+	 * hộp thì trả về `cancelled` để thẻ về chỗ cũ.
 	 */
 	async function moveTask(
 		task: TaskListItem,
@@ -118,7 +127,7 @@ export function useTaskActions() {
 				announce(message);
 				return { ok: false, cancelled: false, conflict: null, message };
 			}
-			if (rule.action && actionNeedsDialog(rule.action)) {
+			if (rule.action && dialogFirst(task, rule.action)) {
 				const answer = await openDialog<'transition'>({ kind: 'transition', task, action: rule.action });
 				if (!answer) return { ok: false, cancelled: true, conflict: null, message: null };
 				Object.assign(extra, answer);

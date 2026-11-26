@@ -66,6 +66,23 @@ export function actionNeedsReason(action: TaskAction): boolean {
 	return action === 'return' || action === 'reopen' || action === 'cancel';
 }
 
+/** Giới hạn danh sách kiểm tra khi tạo việc hay đặt việc định kỳ, theo API. */
+export const CHECKLIST_MAX_ITEMS = 100;
+export const CHECKLIST_ITEM_MAX = 300;
+
+/** Số mục kiểm tra chưa tick của một việc. */
+export function checklistLeft(checklist: { total: number; done: number }): number {
+	return Math.max(0, checklist.total - checklist.done);
+}
+
+/**
+ * Báo xong hay tự đóng việc mà còn mục kiểm tra chưa tick thì hỏi lại trước khi gửi. API không chặn,
+ * đây là cảnh báo của giao diện (bridge tasks mục 3).
+ */
+export function needsChecklistWarning(action: TaskAction, checklist: { total: number; done: number }): boolean {
+	return (action === 'submit' || action === 'self_close') && checklistLeft(checklist) > 0;
+}
+
 /**
  * Một đến hai nút chính cho đầu khung chi tiết và dòng Việc của tôi, xếp theo việc người xem
  * hay làm nhất. Huỷ và Về Chưa làm là thao tác hiếm, nằm trong menu ba chấm.

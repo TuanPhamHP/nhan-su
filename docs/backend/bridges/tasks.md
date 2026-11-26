@@ -175,6 +175,13 @@ Giao diện **không tự tính** các luật này: dùng `allowedActions`, `col
 
 Các route POST trả **201** (cả `transition`, `due-date`, `move`).
 
+**Mục kiểm tra chưa tick khi báo xong** (chốt 26/11/2026): API **không chặn** `submit`, `self_close` hay `accept` khi còn mục
+chưa tick. Giao diện tự hỏi lại trước khi gửi: nút, menu và kéo thẻ sang cột Chờ nghiệm thu hoặc Hoàn thành với thao tác
+`submit`/`self_close` mà `checklist.done < checklist.total` thì hiện hộp "Còn N/M mục kiểm tra chưa xong. Vẫn báo xong?"; hộp
+Nghiệm thu (`accept`) ghi "Còn N mục kiểm tra chưa tick". Số lấy từ `checklist` của việc đang hiện (cập nhật ngay khi tick ở
+khung chi tiết). Form tạo việc và việc định kỳ nhập từng mục (gõ, Enter hoặc Thêm), vẫn gửi `checklist: string[]` như cũ, tối
+đa 100 mục, mỗi mục 300 ký tự.
+
 ### 3.1 Lọc danh sách và bảng việc
 
 | Query | Ý nghĩa |

@@ -4,6 +4,7 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
+	import TaskChecklistInput from '~/components/modules/tasks/TaskChecklistInput.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
 	import { useTasksService } from '~/services/tasks.service';
@@ -55,7 +56,7 @@
 				projectId: z.string(),
 				description: z.string(),
 				watcherIds: z.array(z.number()),
-				checklistText: z.string(),
+				checklist: z.array(z.string()),
 				groupId: z.string(),
 				sprintId: z.string(),
 			})
@@ -82,7 +83,7 @@
 			projectId: props.projectId ? String(props.projectId) : '',
 			description: '',
 			watcherIds: [],
-			checklistText: '',
+			checklist: [] as string[],
 			groupId: props.groupId ? String(props.groupId) : '',
 			sprintId: props.sprintId ? String(props.sprintId) : '',
 		},
@@ -97,7 +98,7 @@
 	const [projectId] = defineField('projectId');
 	const [description] = defineField('description');
 	const [watcherIds] = defineField('watcherIds');
-	const [checklistText] = defineField('checklistText');
+	const [checklist] = defineField('checklist');
 	const [groupId] = defineField('groupId');
 	const [sprintId] = defineField('sprintId');
 
@@ -150,10 +151,6 @@
 
 	const onSubmit = handleSubmit(async v => {
 		try {
-			const checklist = v.checklistText
-				.split('\n')
-				.map(s => s.trim())
-				.filter(Boolean);
 			const created = await service.create({
 				title: v.title.trim(),
 				assigneeId: v.assigneeIds[0]!,
@@ -165,7 +162,7 @@
 				projectId: v.projectId ? Number(v.projectId) : undefined,
 				description: v.description && v.description !== '<p></p>' ? v.description : undefined,
 				watcherIds: v.watcherIds.length ? v.watcherIds : undefined,
-				checklist: checklist.length ? checklist : undefined,
+				checklist: v.checklist.length ? v.checklist : undefined,
 				groupId: v.projectId && v.groupId ? Number(v.groupId) : undefined,
 				sprintId: v.projectId && v.sprintId ? Number(v.sprintId) : undefined,
 			});
@@ -316,16 +313,7 @@
 
 					<EmployeePicker v-model="watcherIds" :people="people" label="Người theo dõi" />
 
-					<div>
-						<label for="task-checklist" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Danh sách kiểm tra</label>
-						<textarea
-							id="task-checklist"
-							v-model="checklistText"
-							rows="3"
-							placeholder="Mỗi dòng một mục"
-							class="mt-1 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-						/>
-					</div>
+					<TaskChecklistInput id="task-checklist" v-model="checklist" />
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">

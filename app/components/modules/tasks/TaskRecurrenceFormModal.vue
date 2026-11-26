@@ -4,6 +4,7 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
+	import TaskChecklistInput from '~/components/modules/tasks/TaskChecklistInput.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
 	import { useTasksService } from '~/services/tasks.service';
@@ -67,7 +68,7 @@
 				leadDays: z.number({ invalid_type_error: 'Nhập số từ 0 đến 60' }).int('Nhập số nguyên').min(0, 'Ít nhất 0').max(60, 'Nhiều nhất 60 ngày'),
 				startDate: z.string({ required_error: 'Chọn ngày bắt đầu' }).min(1, 'Chọn ngày bắt đầu'),
 				endDate: z.string().optional(),
-				checklistText: z.string(),
+				checklist: z.array(z.string()),
 			})
 			.refine(v => v.frequency !== 'WEEKLY' || v.weekdays.length > 0, { message: 'Chọn ít nhất một thứ trong tuần', path: ['weekdays'] })
 			.refine(v => v.frequency !== 'QUARTERLY' || v.monthOfPeriod <= 3, { message: 'Tháng thứ mấy trong quý chỉ từ 1 đến 3', path: ['monthOfPeriod'] })
@@ -95,7 +96,7 @@
 			leadDays: r?.leadDays ?? 3,
 			startDate: r?.startDate ?? today,
 			endDate: r?.endDate ?? undefined,
-			checklistText: (r?.checklist ?? []).join('\n'),
+			checklist: [...(r?.checklist ?? [])],
 		},
 	});
 	const [title] = defineField('title');
@@ -112,7 +113,7 @@
 	const [leadDays] = defineField('leadDays');
 	const [startDate] = defineField('startDate');
 	const [endDate] = defineField('endDate');
-	const [checklistText] = defineField('checklistText');
+	const [checklistItems] = defineField('checklist');
 
 	const people = computed<PickablePerson[]>(() =>
 		employees.value.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
@@ -149,10 +150,7 @@
 	);
 
 	const onSubmit = handleSubmit(async v => {
-		const checklist = v.checklistText
-			.split('\n')
-			.map(s => s.trim())
-			.filter(Boolean);
+		const checklist = v.checklist;
 		const rule = {
 			frequency: v.frequency,
 			interval: v.interval,
@@ -388,16 +386,7 @@
 					/>
 					<p v-else-if="recurrence?.project" class="text-sm text-gray-600 dark:text-gray-300">Dự án {{ recurrence.project.name }} (không đổi được)</p>
 
-					<div>
-						<label for="rec-checklist" :class="LABEL">Danh sách kiểm tra mỗi lần</label>
-						<textarea
-							id="rec-checklist"
-							v-model="checklistText"
-							rows="3"
-							placeholder="Mỗi dòng một mục"
-							class="mt-1 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-						/>
-					</div>
+					<TaskChecklistInput id="rec-checklist" v-model="checklistItems" label="Danh sách kiểm tra mỗi lần" />
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">

@@ -700,8 +700,14 @@
 		background-color: rgba(153, 27, 27, 0.3);
 	}
 
-	/* Bubble menu — plugin tự toggle visibility, ta chỉ style container */
+	/*
+	 * Bubble menu: plugin chỉ ẩn phần tử sau khi đã hiện một lần (`hide()` bỏ qua khi chưa hiện), nên
+	 * phải ẩn sẵn ở đây, kẻo thanh 25%/50%… nằm dưới ô soạn khi chưa có ảnh. Hiện ảnh thì plugin đặt
+	 * `visibility: visible` và vị trí nổi lên ảnh.
+	 */
 	.tt-image-bubble {
+		position: absolute;
+		visibility: hidden;
 		display: flex;
 		align-items: center;
 		gap: 0;
