@@ -59,7 +59,7 @@ export interface TimelineBar {
 }
 
 export function timelineBar(
-	task: Pick<TaskListItem, 'startDate' | 'dueDate' | 'originalDueDate' | 'dueChangeCount'>,
+	task: Pick<TaskListItem, 'startDate' | 'originalDueDate' | 'dueChangeCount'> & { dueDate: string },
 	from: string,
 	to: string,
 	dayWidth: number,
@@ -70,7 +70,7 @@ export function timelineBar(
 	const startIdx = dot ? dueIdx : diffDays(task.startDate!, from);
 	const s = Math.max(0, startIdx);
 	const e = Math.min(total - 1, dueIdx);
-	const originalIdx = task.dueChangeCount > 0 ? diffDays(task.originalDueDate, from) : null;
+	const originalIdx = task.dueChangeCount > 0 && task.originalDueDate ? diffDays(task.originalDueDate, from) : null;
 	return {
 		left: s * dayWidth,
 		width: Math.max(1, e - s + 1) * dayWidth,
@@ -145,13 +145,17 @@ export function calendarMonthLabel(month: string): string {
 	return `Tháng ${format(parseISO(`${month}-01`), 'M/yyyy')}`;
 }
 
-/** Xếp việc theo hạn, gom theo ngày (lịch, danh sách thay biểu đồ trên màn hẹp). */
+/**
+ * Xếp việc theo hạn, gom theo ngày (lịch, danh sách thay biểu đồ trên màn hẹp). Việc không có hạn
+ * không thuộc ngày nào nên bị bỏ qua.
+ */
 export function tasksByDue<T extends Pick<TaskListItem, 'dueDate'>>(tasks: T[]): Map<string, T[]> {
 	const map = new Map<string, T[]>();
-	for (const t of [...tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate))) {
-		const list = map.get(t.dueDate) ?? [];
-		list.push(t);
-		map.set(t.dueDate, list);
+	const dated = tasks.flatMap(t => (t.dueDate ? [{ day: t.dueDate, task: t }] : []));
+	for (const { day, task } of dated.sort((a, b) => a.day.localeCompare(b.day))) {
+		const list = map.get(day) ?? [];
+		list.push(task);
+		map.set(day, list);
 	}
 	return map;
 }

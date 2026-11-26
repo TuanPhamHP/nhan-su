@@ -108,7 +108,7 @@
 	}
 	const pendingLeft = computed(() => rows.value.filter(r => r.status === 'MANAGER_REVIEW').length);
 
-	usePageTour('kpi-review', () => kpiReviewTour({ hasRows: () => rows.value.length > 0 }), () => canUse('TASKS') && !loading.value && !loadError.value && rows.value.length > 0 && wide.value);
+	usePageTour('kpi-review', () => kpiReviewTour({ hasRows: () => loading.value || rows.value.length > 0 }), () => canUse('TASKS') && !loading.value && !loadError.value && rows.value.length > 0 && wide.value);
 </script>
 
 <template>
@@ -116,7 +116,6 @@
 		<UiPageHeader
 			title="Đánh giá nhân viên"
 			description="Phiếu KPI của người bạn quản lý. Kỳ khép thì phiếu chuyển sang đây: chấm chỉ tiêu nhập tay, chỉnh số tự động nếu thấy sai, ghi nhận xét rồi gửi."
-			:tour="rows.length ? 'kpi-review' : undefined"
 		/>
 		<CommonAppModuleNotice module="TASKS" />
 

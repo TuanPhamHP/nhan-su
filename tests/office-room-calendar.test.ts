@@ -15,7 +15,10 @@
 import { describe, expect, it } from 'vitest';
 import {
 	addDaysYmd,
+	addMonthsYmd,
 	bookingHourRange,
+	layoutDayEvents,
+	monthGridDaysYmd,
 	nowLinePercent,
 	splitBookingsByDay,
 	weekDaysYmd,
@@ -165,5 +168,60 @@ describe('splitBookingsByDay', () => {
 		// Chủ nhật tuần trước 23:00 tới 01:00 thứ Hai: máy chủ trả vì chạm khoảng, nhưng không thuộc ngày nào đang vẽ.
 		const spill = { id: 2, status: 'BOOKED', startAt: '2026-11-15T23:00:00+07:00' };
 		expect(splitBookingsByDay([cancelled, spill], days).flat()).toEqual([]);
+	});
+});
+
+describe('monthGridDaysYmd và addMonthsYmd', () => {
+	it('tháng 11/2026 vẽ từ thứ Hai 26/10 tới Chủ nhật 06/12, đủ sáu tuần', () => {
+		const grid = monthGridDaysYmd('2026-11-24');
+		expect(grid[0]).toBe('2026-10-26');
+		expect(grid[grid.length - 1]).toBe('2026-12-06');
+		expect(grid).toHaveLength(42);
+	});
+
+	it('[EDGE] tháng 2/2021 bắt đầu thứ Hai và có 28 ngày: đúng bốn tuần', () => {
+		expect(monthGridDaysYmd('2021-02-10')).toHaveLength(28);
+	});
+
+	it('[EDGE] ngày 31 sang tháng sau ngắn hơn thì về ngày cuối tháng', () => {
+		expect(addMonthsYmd('2026-01-31', 1)).toBe('2026-02-28');
+		expect(addMonthsYmd('2026-12-15', 1)).toBe('2027-01-15');
+	});
+});
+
+describe('layoutDayEvents', () => {
+	const ev = (id: number, from: string, to: string, status = 'BOOKED') => ({
+		id,
+		...booking('2026-11-24', from, to, status),
+	});
+	const cols = (list: ReturnType<typeof ev>[]) =>
+		layoutDayEvents(list).map(s => [s.booking.id, s.column, s.columns]);
+
+	it('lượt không chồng giờ nhau chiếm trọn bề ngang', () => {
+		expect(cols([ev(1, '09:00', '10:00'), ev(2, '10:00', '11:00')])).toEqual([
+			[1, 0, 1],
+			[2, 0, 1],
+		]);
+	});
+
+	it('hai lượt chồng giờ đứng cạnh nhau, lượt buổi chiều một mình vẫn trọn bề ngang', () => {
+		expect(cols([ev(1, '09:00', '10:30'), ev(2, '09:30', '10:00'), ev(3, '14:00', '15:00')])).toEqual([
+			[1, 0, 2],
+			[2, 1, 2],
+			[3, 0, 1],
+		]);
+	});
+
+	it('lượt thứ ba dùng lại cột đã trống thay vì mở cột mới', () => {
+		expect(cols([ev(1, '09:00', '12:00'), ev(2, '09:00', '10:00'), ev(3, '10:00', '11:00')])).toEqual([
+			[1, 0, 2],
+			[2, 1, 2],
+			[3, 1, 2],
+		]);
+	});
+
+	it('[EDGE] bỏ lượt đã huỷ; lượt vắt qua nửa đêm kéo tới hết ngày', () => {
+		const slots = layoutDayEvents([ev(1, '09:00', '10:00', 'CANCELLED'), ev(2, '22:00', '01:00')]);
+		expect(slots.map(s => [s.booking.id, s.startMin, s.endMin])).toEqual([[2, 22 * 60, 24 * 60]]);
 	});
 });

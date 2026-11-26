@@ -27,7 +27,8 @@ docs/
 │   └── prisma-repository-rules.md  ← Cách dùng Prisma + Repository pattern
 │
 ├── frontend/
-│   └── nuxt-conventions.md          ← Chuẩn Nuxt 4, composables, API calls
+│   ├── nuxt-conventions.md          ← Chuẩn Nuxt 4, composables, API calls
+│   └── feature-guides.md            ← Hướng dẫn theo tính năng: cách thêm cho một phân hệ
 │
 ├── mobile/
 │   └── flutter-conventions.md      ← Chuẩn Flutter, folder structure

@@ -17,7 +17,7 @@
 		timelineWindow,
 		type TimelineScale,
 	} from '~/utils/task-timeline';
-	import { TASK_HINTS, shortDate, taskErrorInfo, vnToday } from '~/utils/tasks.utils';
+	import { TASK_HINTS, hasDueDate, shortDate, taskErrorInfo, vnToday } from '~/utils/tasks.utils';
 
 	/**
 	 * Biểu đồ tiến độ (mục 9.2), tự vẽ theo cách màn đặt phòng họp, không thêm thư viện.
@@ -152,11 +152,14 @@
 	const SECTION_H = 28;
 	const HEAD_H = 48;
 
-	const hasGroups = computed(() => !!data.value?.tasks.some(t => t.group));
-	const sections = computed(() => timelineSections(data.value?.tasks ?? [], byGroup.value && hasGroups.value, props.taskGroups));
+	/** Việc không có hạn không có chỗ trên trục ngày, nên không vẽ. */
+	type DatedTask = TaskListItem & { dueDate: string };
+	const datedTasks = computed<DatedTask[]>(() => (data.value?.tasks ?? []).filter(hasDueDate));
+	const hasGroups = computed(() => datedTasks.value.some(t => t.group));
+	const sections = computed(() => timelineSections(datedTasks.value, byGroup.value && hasGroups.value, props.taskGroups));
 
 	interface RowLayout {
-		task: TaskListItem;
+		task: DatedTask;
 		/** Toạ độ dọc của tâm dòng tính từ đầu thân biểu đồ. */
 		cy: number;
 	}
@@ -173,7 +176,7 @@
 		return { map, height: y };
 	});
 
-	function bar(t: TaskListItem) {
+	function bar(t: DatedTask) {
 		return timelineBar(t, range.value.from, range.value.to, dw.value);
 	}
 
@@ -222,7 +225,7 @@
 
 	// ─── Kéo thanh để đổi hạn ───────────────────────────────────────────────
 	interface DueDrag {
-		task: TaskListItem;
+		task: DatedTask;
 		kind: 'move' | 'resize';
 		startX: number;
 		dx: number;
@@ -234,7 +237,7 @@
 		return !props.readOnly && t.permissions.changeDue && t.status !== 'DONE' && t.status !== 'CANCELLED';
 	}
 
-	function onBarDown(e: PointerEvent, t: TaskListItem, kind: 'move' | 'resize') {
+	function onBarDown(e: PointerEvent, t: DatedTask, kind: 'move' | 'resize') {
 		if (e.button !== 0) return;
 		if (!canChangeDue(t)) return;
 		e.stopPropagation();
@@ -255,7 +258,7 @@
 		if (d.kind === 'resize' && d.task.startDate && due < d.task.startDate) due = d.task.startDate;
 		return { id: d.task.id, due };
 	});
-	async function onBarUp(t: TaskListItem) {
+	async function onBarUp(t: DatedTask) {
 		const d = drag.value;
 		drag.value = null;
 		if (!d) return;
@@ -275,7 +278,7 @@
 	}
 
 	/** Độ lệch đang kéo của một thanh, để thanh đi theo chuột trước khi thả. */
-	function barStyle(t: TaskListItem) {
+	function barStyle(t: DatedTask) {
 		const b = bar(t);
 		const d = drag.value;
 		let left = b.left;
@@ -291,13 +294,13 @@
 
 	// ─── Kéo chấm để nối phụ thuộc ──────────────────────────────────────────
 	const bodyRef = ref<HTMLElement | null>(null);
-	const linking = ref<{ from: TaskListItem; x1: number; y1: number; x2: number; y2: number; overId: number | null } | null>(null);
+	const linking = ref<{ from: DatedTask; x1: number; y1: number; x2: number; y2: number; overId: number | null } | null>(null);
 
 	function localPoint(e: PointerEvent): { x: number; y: number } {
 		const rect = bodyRef.value?.getBoundingClientRect();
 		return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) };
 	}
-	function onLinkDown(e: PointerEvent, t: TaskListItem) {
+	function onLinkDown(e: PointerEvent, t: DatedTask) {
 		if (e.button !== 0) return;
 		e.stopPropagation();
 		e.preventDefault();

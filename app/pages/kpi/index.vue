@@ -64,7 +64,7 @@
 
 	usePageTour(
 		'kpi-my',
-		() => kpiMyTour({ hasReview: () => reviews.value.length > 0, canFeedback: () => !!current.value?.permissions.canFeedback }),
+		() => kpiMyTour({ hasReview: () => loading.value || reviews.value.length > 0, canFeedback: () => !!current.value?.permissions.canFeedback }),
 		() => canUse('TASKS') && !loading.value && !loadError.value && reviews.value.length > 0 && !!current.value,
 	);
 </script>
@@ -74,7 +74,6 @@
 		<UiPageHeader
 			title="KPI của tôi"
 			description="Điểm KPI theo từng kỳ: số tự động lấy từ công việc và chấm công, chỉ tiêu nhập tay do cấp trên chấm. Giữa kỳ là điểm tạm tính, hệ thống tính lại mỗi đêm."
-			tour="kpi-my"
 		/>
 		<CommonAppModuleNotice module="TASKS" />
 

@@ -1,11 +1,12 @@
 <script setup lang="ts">
+	import TaskPointsFilter from '~/components/modules/tasks/TaskPointsFilter.vue';
 	import type { TaskFilterState, TaskViewMode } from '~/composables/useTaskFilters';
 	import { BOARD_STATUSES, PRIORITY_LABELS, STATUS_LABELS } from '~/utils/tasks.utils';
 
 	/**
 	 * Thanh lọc dùng chung cho Danh sách và Bảng việc (mục 9.2): đổi chế độ xem không mất bộ lọc.
-	 * Người thực hiện, Trạng thái, Hạn (Quá hạn, Hôm nay, Tuần này, Tuần sau), Ưu tiên, ô tìm theo tiêu
-	 * đề hoặc số hiệu (máy chủ tìm không dấu).
+	 * Người thực hiện, Trạng thái, Hạn (Quá hạn, Hôm nay, Tuần này, Tuần sau), Ưu tiên, Điểm
+	 * (kiểu JQL), ô tìm theo tiêu đề hoặc số hiệu (máy chủ tìm không dấu).
 	 */
 	const props = defineProps<{
 		state: TaskFilterState;
@@ -126,6 +127,7 @@
 			<UiSelect v-if="showStatus" class="sm:w-40" :model-value="state.status" :options="statusOptions" @update:model-value="v => set('status', v == null ? '' : String(v))" />
 			<UiSelect class="sm:w-36" :model-value="state.due" :options="dueOptions" @update:model-value="v => set('due', (v == null ? '' : String(v)) as TaskFilterState['due'])" />
 			<UiSelect class="sm:w-40" :model-value="state.priority" :options="priorityOptions" @update:model-value="v => set('priority', v == null ? '' : String(v))" />
+			<TaskPointsFilter class="sm:w-48" :model-value="state.points" @update:model-value="v => set('points', v)" />
 			<UiSelect
 				v-if="taskGroups?.length"
 				class="sm:w-44"

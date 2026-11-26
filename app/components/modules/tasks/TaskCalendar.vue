@@ -99,7 +99,7 @@
 				<Icon name="heroicons:chevron-right" class="h-4 w-4" />
 			</button>
 			<h3 class="ml-1 font-semibold text-gray-900 dark:text-white" data-testid="calendar-month">{{ calendarMonthLabel(month) }}</h3>
-			<span v-if="data" class="text-gray-500 dark:text-gray-400">{{ data.tasks.filter(t => inMonth(t.dueDate)).length }} việc có hạn trong tháng</span>
+			<span v-if="data" class="text-gray-500 dark:text-gray-400">{{ data.tasks.filter(t => !!t.dueDate && inMonth(t.dueDate)).length }} việc có hạn trong tháng</span>
 		</div>
 
 		<p v-if="data?.truncated" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">

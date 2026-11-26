@@ -2,7 +2,7 @@
 	import TaskCardMenu from '~/components/modules/tasks/TaskCardMenu.vue';
 	import TaskPriorityBadge from '~/components/modules/tasks/TaskPriorityBadge.vue';
 	import type { TaskListItem, TaskStatus } from '~/types/tasks.types';
-	import { DUE_TONE_CLASS, dueTone, taskDueText } from '~/utils/tasks.utils';
+	import { DUE_TONE_CLASS, dueTone, taskDueText, taskPointsText } from '~/utils/tasks.utils';
 
 	/**
 	 * Thẻ trên bảng việc (mục 9.2): số hiệu, tiêu đề tối đa ba dòng, ảnh người thực hiện, hạn có màu,
@@ -82,8 +82,12 @@
 				{{ taskDueText(task, today) }}
 			</span>
 			<TaskPriorityBadge :priority="task.priority" only-high />
-			<span class="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300" :title="`${task.points} điểm`">
-				{{ task.points }} đ
+			<span
+				class="rounded bg-gray-100 px-1.5 py-0.5 font-medium dark:bg-gray-800"
+				:class="task.points == null ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'"
+				:title="task.points == null ? 'Chưa có điểm, tính 0 điểm' : `${task.points} điểm`"
+			>
+				{{ taskPointsText(task.points) }}
 			</span>
 			<span v-if="task.subtasks.total" class="inline-flex items-center gap-0.5 text-gray-500 dark:text-gray-400" title="Việc con xong trên tổng">
 				<Icon name="heroicons:rectangle-stack" class="h-3.5 w-3.5" aria-hidden="true" />

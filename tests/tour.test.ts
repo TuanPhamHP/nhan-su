@@ -13,6 +13,7 @@ import {
 	sheetSide,
 	stepCounter,
 	tourStorageKey,
+	tourTextParts,
 	unionRects,
 } from '~/utils/tour';
 
@@ -258,7 +259,7 @@ describe('số bước của ba tour Tài sản', () => {
 		const viewer = assetDetailTour({ ...base, canManage: () => false });
 		expect(ids(viewer)).toEqual(['head', 'tabs']);
 		expect(viewer.steps.at(-1)!.body).not.toContain('thu hồi');
-		expect(assetDetailTour({ ...base, isService: () => true, canManage: () => true }).steps.at(-1)!.body).toContain('mục Ghế');
+		expect(assetDetailTour({ ...base, isService: () => true, canManage: () => true }).steps.at(-1)!.body).toContain('mục **Ghế**');
 	});
 
 	it('Tài sản của tôi: tối đa 3 bước, chưa giữ gì thì 1 bước', async () => {
@@ -269,5 +270,27 @@ describe('số bước của ba tour Tài sản', () => {
 		const empty = assetMyTour({ ...base, hasHolding: () => false, hasPending: () => false, canReport: () => false });
 		expect(ids(empty)).toEqual(['confirm-later']);
 		expect(empty.steps.find(s => s.id === 'confirm-later')!.body).toMatch(/^Hiện bạn chưa giữ tài sản nào/);
+	});
+});
+
+describe('tourTextParts: in đậm tên nút trong chữ của bước', () => {
+	it('tách đoạn **in đậm** khỏi chữ thường', () => {
+		expect(tourTextParts('Bấm **Lưu** rồi **Đóng**.')).toEqual([
+			{ text: 'Bấm ', strong: false },
+			{ text: 'Lưu', strong: true },
+			{ text: ' rồi ', strong: false },
+			{ text: 'Đóng', strong: true },
+			{ text: '.', strong: false },
+		]);
+	});
+
+	it('không có dấu ** thì là một đoạn thường; chữ rỗng thì không có đoạn nào', () => {
+		expect(tourTextParts('Chữ thường')).toEqual([{ text: 'Chữ thường', strong: false }]);
+		expect(tourTextParts('')).toEqual([]);
+	});
+
+	it('[EDGE] dấu ** lẻ giữ nguyên, thẻ HTML vẫn chỉ là chữ', () => {
+		expect(tourTextParts('a ** b')).toEqual([{ text: 'a ** b', strong: false }]);
+		expect(tourTextParts('**<b>x</b>**')).toEqual([{ text: '<b>x</b>', strong: true }]);
 	});
 });

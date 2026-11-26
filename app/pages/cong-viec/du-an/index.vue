@@ -2,6 +2,7 @@
 	import TaskEmptyState from '~/components/modules/tasks/TaskEmptyState.vue';
 	import TaskProjectFormModal from '~/components/modules/tasks/TaskProjectFormModal.vue';
 	import { useTasksService } from '~/services/tasks.service';
+	import { tasksProjectOpenTour } from '~/tours/tasks';
 	import type { TaskProject, TaskProjectDetail, TaskProjectStatus } from '~/types/tasks.types';
 	import { taskErrorInfo } from '~/utils/tasks.utils';
 
@@ -95,6 +96,19 @@
 			creatingSample.value = false;
 		}
 	}
+	// ─── Hướng dẫn ──────────────────────────────────────────────────────────
+	/** Hướng dẫn chạy trong một dự án: bắt đầu ở đây bằng bước mở dự án đầu tiên, trang dự án chạy tiếp. */
+	const PROJECT_TOURS = ['tasks-timeline', 'tasks-sprints'];
+	const tour = useTour();
+	const openTourContext = { hasProjects: () => projects.value.length > 0, isLoading: () => loading.value };
+	for (const id of PROJECT_TOURS) useGuideTour(id, () => tasksProjectOpenTour(id, openTourContext));
+
+	/** Đổi trang là tour tắt: xếp hướng dẫn đang chạy vào hàng chờ để trang dự án chạy tiếp phần của nó. */
+	function handOffTour() {
+		const id = tour.state.value?.tour.id;
+		if (id && PROJECT_TOURS.includes(id)) tour.pending.value = id;
+	}
+
 	function onSaved(p: TaskProjectDetail) {
 		showForm.value = false;
 		router.push(`/cong-viec/du-an/${p.code}`);
@@ -170,9 +184,11 @@
 			Dự án mẫu có sẵn nhóm việc, việc con và việc phải chờ để bạn thử đủ bốn cách xem. Thử xong thì xoá.
 		</p>
 		<ul v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="project-list">
-			<li v-for="p in projects" :key="p.id">
+			<li v-for="(p, idx) in projects" :key="p.id">
 				<NuxtLink
 					:to="`/cong-viec/du-an/${p.code}`"
+					:data-tour="idx === 0 ? 'project-card' : undefined"
+					@click="handOffTour"
 					class="block h-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900"
 				>
 					<div class="flex items-center justify-between gap-2">

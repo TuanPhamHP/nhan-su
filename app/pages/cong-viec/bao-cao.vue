@@ -192,7 +192,7 @@
 		return s.departmentNames.length ? `Phòng ${s.departmentNames.join(', ')}` : 'Mọi phòng';
 	});
 
-	usePageTour('tasks-report', tasksReportTour, () => !checking.value && allowed.value && !loading.value && !loadError.value && tab.value === 'progress');
+	usePageTour('tasks-report', () => tasksReportTour({ showProgress: () => setQuery({ tab: undefined }) }), () => !checking.value && allowed.value && !loading.value && !loadError.value && tab.value === 'progress');
 </script>
 
 <template>
@@ -200,7 +200,6 @@
 		<UiPageHeader
 			title="Báo cáo công việc"
 			description="Tiến độ theo từng người trong khoảng ngày: được giao, hoàn thành, đúng hạn, quá hạn, khối lượng và chất lượng. Việc tự giao, việc con và dự án mẫu không tính."
-			:tour="allowed ? 'tasks-report' : undefined"
 		>
 			<CommonAppButton
 				v-if="allowed && !checking"

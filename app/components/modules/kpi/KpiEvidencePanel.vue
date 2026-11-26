@@ -43,7 +43,7 @@
 
 	/** Đúng hạn, trả lại có cột "đạt"; khối lượng, chất lượng, số việc, quá hạn thì không. */
 	const showMatched = computed(() => !!texts.value?.matched);
-	const pointSum = computed(() => items.value.reduce((n, t) => n + t.points, 0));
+	const pointSum = computed(() => items.value.reduce((n, t) => n + (t.points ?? 0), 0));
 </script>
 
 <template>
@@ -133,10 +133,10 @@
 										<span class="italic">Việc bạn không xem được</span>
 									</p>
 									<p class="text-xs text-gray-500">
-										hạn {{ shortDate(t.dueDate) }}<template v-if="t.originalDueDate !== t.dueDate"> (ban đầu {{ shortDate(t.originalDueDate) }})</template>
+										{{ t.dueDate ? `hạn ${shortDate(t.dueDate)}` : 'chưa có hạn' }}<template v-if="t.originalDueDate && t.originalDueDate !== t.dueDate"> (ban đầu {{ shortDate(t.originalDueDate) }})</template>
 										<template v-if="t.firstSubmittedAt"> · báo xong {{ shortDate(vnCalendarDate(t.firstSubmittedAt)) }}</template>
 										<template v-if="t.acceptedAt"> · nghiệm thu {{ shortDate(vnCalendarDate(t.acceptedAt)) }}</template>
-										· {{ t.points }} điểm
+										· {{ t.points == null ? 'chưa có điểm (tính 0)' : `${t.points} điểm` }}
 										<template v-if="t.qualityScore"> · chất lượng {{ t.qualityScore }}/5</template>
 										<template v-if="t.returnCount"> · trả lại {{ t.returnCount }} lần</template>
 									</p>

@@ -6,13 +6,14 @@
 	import TaskEmptyState from '~/components/modules/tasks/TaskEmptyState.vue';
 	import TaskMyRow from '~/components/modules/tasks/TaskMyRow.vue';
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
+	import TaskPointsFilter from '~/components/modules/tasks/TaskPointsFilter.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useApprovalStore } from '~/stores/approval';
 	import { useTasksService } from '~/services/tasks.service';
 	import { tasksBoardTour, tasksMyTour } from '~/tours/tasks';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
 	import type { TaskAction, TaskBoard as TaskBoardData, TaskDetail, TaskListItem, TaskStatus, TaskView } from '~/types/tasks.types';
-	import { MY_GROUP_LABELS, groupMyTasks, taskErrorInfo, vnToday, type MyGroupKey } from '~/utils/tasks.utils';
+	import { MY_GROUP_LABELS, groupMyTasks, pointsQuery, taskErrorInfo, vnToday, type MyGroupKey } from '~/utils/tasks.utils';
 
 	/**
 	 * UI-01 Việc của tôi. Nhóm Quá hạn, Hôm nay, Sắp tới 7 ngày, Sau đó; khối Chờ tôi nghiệm thu nổi
@@ -59,6 +60,13 @@
 		router.replace({ query });
 	}
 
+	/** Lọc điểm kiểu JQL trên đường dẫn (`?points=>=3`); sai cú pháp thì bỏ qua. */
+	const pointsFilter = computed(() => pointsQuery(String(route.query.points ?? '')));
+	const pointsModel = computed({
+		get: () => pointsFilter.value ?? '',
+		set: (v: string) => setQuery({ points: v || undefined }),
+	});
+
 	const q = ref(String(route.query.q ?? ''));
 	let qTimer: ReturnType<typeof setTimeout> | null = null;
 	watch(q, v => {
@@ -104,6 +112,7 @@
 				status: openStatuses,
 				sort: 'dueDate',
 				q: String(route.query.q ?? '') || undefined,
+				points: pointsFilter.value,
 				page: next,
 				limit: LIMIT,
 			});
@@ -114,7 +123,7 @@
 				const name = res.data.find(t => t.assignee.id === offboardId.value)?.assignee.fullName;
 				if (name) offboardName.value = name;
 				doneCount.value = 1;
-			} else if (!more && !res.data.length && !route.query.q) {
+			} else if (!more && !res.data.length && !route.query.q && !pointsFilter.value) {
 				// Phân biệt "chưa có việc" với "đã xong hết": hỏi xem đã từng có việc hoàn thành chưa.
 				const done = await service.list({ view: tab.value as TaskView, status: 'DONE', limit: 1 });
 				doneCount.value = done.meta.total;
@@ -134,6 +143,7 @@
 			board.value = await service.board({
 				view: tab.value as TaskView,
 				q: String(route.query.q ?? '') || undefined,
+				points: pointsFilter.value,
 				includeCancelled: route.query.cancelled === '1' || undefined,
 			});
 		} catch (err) {
@@ -150,7 +160,7 @@
 		approvalStore.fetchCounts();
 	}
 
-	watch(() => [tab.value, mode.value, route.query.q, route.query.cancelled, offboardId.value], () => reload());
+	watch(() => [tab.value, mode.value, route.query.q, route.query.cancelled, pointsFilter.value, offboardId.value], () => reload());
 	onMounted(() => {
 		if (canUse('TASKS')) reload();
 		else loading.value = false;
@@ -176,7 +186,7 @@
 
 	// ─── Nhóm theo hạn ──────────────────────────────────────────────────────
 	const groups = computed(() => groupMyTasks(tasks.value, today));
-	const GROUP_ORDER: MyGroupKey[] = ['overdue', 'today', 'upcoming', 'later'];
+	const GROUP_ORDER: MyGroupKey[] = ['overdue', 'today', 'upcoming', 'later', 'noDue'];
 	const collapsed = ref<Record<string, boolean>>({});
 	const COLLAPSE_KEY = 'tasks-my-collapsed';
 	onMounted(() => {
@@ -199,6 +209,7 @@
 		today: 'text-orange-700 dark:text-orange-400',
 		upcoming: 'text-gray-800 dark:text-gray-100',
 		later: 'text-gray-800 dark:text-gray-100',
+		noDue: 'text-gray-500 dark:text-gray-400',
 	};
 
 	// ─── Thao tác ───────────────────────────────────────────────────────────
@@ -268,32 +279,45 @@
 
 	// ─── Rỗng ───────────────────────────────────────────────────────────────
 	const emptyKind = computed<'none' | 'done' | 'filtered'>(() => {
-		if (route.query.q) return 'filtered';
+		if (route.query.q || pointsFilter.value) return 'filtered';
 		return doneCount.value ? 'done' : 'none';
 	});
 	const emptyText = computed(() => {
 		if (offboardId.value) return { title: 'Không còn việc đang mở nào', desc: 'Mọi việc của người này đã được giao lại hoặc đã xong.', action: '' };
-		if (emptyKind.value === 'filtered') return { title: 'Không có việc khớp bộ lọc', desc: 'Bạn thử từ khoá khác.', action: 'Xoá bộ lọc' };
+		if (emptyKind.value === 'filtered') return { title: 'Không có việc khớp bộ lọc', desc: 'Bạn thử từ khoá hoặc điều kiện điểm khác.', action: 'Xoá bộ lọc' };
 		if (emptyKind.value === 'done') {
 			if (tab.value === 'my') return { title: 'Bạn đã xong hết việc', desc: 'Không còn việc nào đang mở. Nghỉ tay một chút nhé.', action: '' };
 			return { title: 'Không còn việc nào đang mở', desc: 'Mọi việc ở đây đã hoàn thành.', action: '' };
 		}
 		if (tab.value === 'my') return { title: 'Chưa có việc nào được giao cho bạn', desc: 'Khi có người giao việc, việc sẽ hiện ở đây. Bạn cũng tự tạo việc cho mình được.', action: readOnly.value ? '' : 'Tạo việc' };
-		if (tab.value === 'assigned') return { title: 'Bạn chưa giao việc cho ai', desc: 'Giao việc kèm hạn và điểm để theo dõi tiến độ ở đây.', action: readOnly.value ? '' : 'Giao việc đầu tiên' };
+		if (tab.value === 'assigned') return { title: 'Bạn chưa giao việc cho ai', desc: 'Việc bạn giao cho người khác sẽ hiện ở đây để theo dõi tiến độ.', action: readOnly.value ? '' : 'Giao việc đầu tiên' };
 		return { title: 'Bạn chưa theo dõi việc nào', desc: 'Mở một việc rồi bấm Theo dõi việc này để thấy nó ở đây.', action: '' };
 	});
 	function onEmptyAction() {
-		if (emptyKind.value === 'filtered') q.value = '';
-		else showCreate.value = true;
+		if (emptyKind.value === 'filtered') {
+			q.value = '';
+			setQuery({ points: undefined });
+		} else showCreate.value = true;
 	}
 
 	// ─── Hướng dẫn ──────────────────────────────────────────────────────────
+	// Mở từ tab Hướng dẫn bên phải; bước đầu mỗi tour chuyển về đúng chế độ xem.
 	usePageTour(
 		'tasks-my',
-		() => tasksMyTour({ hasRows: () => tasks.value.length > 0, hasReview: () => review.value.length > 0, canCreate: () => !readOnly.value }),
+		() =>
+			tasksMyTour({
+				hasRows: () => tasks.value.length > 0,
+				hasReview: () => review.value.length > 0,
+				canCreate: () => !readOnly.value,
+				showList: () => setQuery({ mode: undefined }),
+			}),
 		() => canUse('TASKS') && mode.value === 'list' && !loading.value && !loadError.value,
 	);
-	usePageTour('tasks-board', tasksBoardTour, () => canUse('TASKS') && mode.value === 'board' && !loading.value && !loadError.value && !!board.value);
+	usePageTour(
+		'tasks-board',
+		() => tasksBoardTour({ showBoard: () => setQuery({ mode: 'board' }) }),
+		() => canUse('TASKS') && mode.value === 'board' && !loading.value && !loadError.value && !!board.value,
+	);
 </script>
 
 <template>
@@ -301,7 +325,6 @@
 		<UiPageHeader
 			title="Việc của tôi"
 			description="Việc bạn làm, việc bạn giao và việc bạn theo dõi, xếp theo hạn. Việc người khác báo xong cho bạn nghiệm thu nằm trên cùng."
-			:tour="mode === 'board' ? 'tasks-board' : 'tasks-my'"
 		>
 			<CommonAppButton v-if="!readOnly" data-tour="task-create" data-testid="task-create-open" @click="showCreate = true">
 				<Icon name="heroicons:plus" class="mr-1 h-4 w-4" />Tạo việc
@@ -403,6 +426,7 @@
 					class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
 				/>
 			</div>
+			<TaskPointsFilter v-model="pointsModel" class="w-full sm:w-48" />
 			<label v-if="mode === 'board'" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
 				<input
 					type="checkbox"
@@ -468,7 +492,7 @@
 						<Icon name="heroicons:chevron-down" class="h-4 w-4 transition-transform" :class="collapsed[key] ? '-rotate-90' : ''" aria-hidden="true" />
 						{{ MY_GROUP_LABELS[key] }}
 						<span class="font-normal text-gray-500 dark:text-gray-400">
-							{{ groups[key].length }} việc · {{ groups[key].reduce((s, t) => s + t.points, 0) }} điểm
+							{{ groups[key].length }} việc · {{ groups[key].reduce((s, t) => s + (t.points ?? 0), 0) }} điểm
 						</span>
 					</button>
 					<ul v-if="!collapsed[key]" class="border-t border-gray-100 dark:border-gray-800">

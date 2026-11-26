@@ -2,7 +2,7 @@
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
 	import type { SortableDropEvent } from '~/composables/useSortableList';
 	import type { TaskListItem } from '~/types/tasks.types';
-	import { DUE_TONE_CLASS, dueTone, taskDueText } from '~/utils/tasks.utils';
+	import { DUE_TONE_CLASS, dueTone, taskDueText, taskPointsText } from '~/utils/tasks.utils';
 
 	/**
 	 * Một vùng thả của màn Việc chờ xếp và Đợt: một đợt, hoặc khối Việc chờ xếp. Mỗi vùng giữ một thể
@@ -73,7 +73,7 @@
 				</span>
 			</button>
 			<TaskStatusBadge class="hidden sm:inline-flex" :status="t.status" :label="t.statusLabel" />
-			<span class="w-8 shrink-0 text-right text-xs font-medium text-gray-600 dark:text-gray-300" :title="`${t.points} điểm`">{{ t.points }} đ</span>
+			<span class="w-8 shrink-0 text-right text-xs font-medium text-gray-600 dark:text-gray-300" :title="t.points == null ? 'Chưa có điểm, tính 0 điểm' : `${t.points} điểm`">{{ taskPointsText(t.points) }}</span>
 			<CommonAppAvatar :src="t.assignee.avatarUrl" :name="t.assignee.fullName" size="xs" :title="t.assignee.fullName" />
 			<div v-if="!disabled && menuTargets.length" class="relative" data-no-drag data-sprint-menu>
 				<button

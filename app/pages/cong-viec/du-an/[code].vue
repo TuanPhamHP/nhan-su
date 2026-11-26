@@ -174,16 +174,24 @@
 
 	const counts = computed(() => project.value?.taskCounts);
 
-	usePageTour('tasks-board', tasksBoardTour, () => canUse('TASKS') && !!project.value && tab.value === 'tasks' && route.query.mode === 'board');
-	usePageTour('tasks-timeline', tasksTimelineTour, () => canUse('TASKS') && !!project.value && tab.value === 'tasks' && route.query.mode === 'timeline');
-	usePageTour('tasks-sprints', tasksSprintTour, () => canUse('TASKS') && !!project.value && tab.value === 'sprints');
-	const tourId = computed(() => {
-		if (tab.value === 'sprints') return 'tasks-sprints';
-		if (tab.value !== 'tasks') return undefined;
-		if (route.query.mode === 'board') return 'tasks-board';
-		if (route.query.mode === 'timeline') return 'tasks-timeline';
-		return undefined;
-	});
+	// Hướng dẫn mở từ tab bên phải: bước đầu mỗi tour chuyển sang đúng thẻ và chế độ xem. Tiến độ và Đợt bắt
+	// đầu ở danh sách Dự án (bấm mở một dự án) rồi chạy tiếp ở đây.
+	const showTasksMode = (mode: 'board' | 'timeline') => router.replace({ query: { ...route.query, tab: undefined, task: undefined, mode } });
+	usePageTour(
+		'tasks-board',
+		() => tasksBoardTour({ showBoard: () => showTasksMode('board') }),
+		() => canUse('TASKS') && !!project.value && tab.value === 'tasks' && route.query.mode === 'board',
+	);
+	usePageTour(
+		'tasks-timeline',
+		() => tasksTimelineTour({ showTimeline: () => showTasksMode('timeline') }),
+		() => canUse('TASKS') && !!project.value && tab.value === 'tasks' && route.query.mode === 'timeline',
+	);
+	usePageTour(
+		'tasks-sprints',
+		() => tasksSprintTour({ useSprints: () => project.value?.useSprints ?? true, showSprints: () => setTab('sprints') }),
+		() => canUse('TASKS') && !!project.value && tab.value === 'sprints',
+	);
 </script>
 
 <template>
@@ -210,7 +218,6 @@
 			<UiPageHeader
 				:title="project.name"
 				:description="project.description || `Dự án ${project.code}. Số hiệu mọi việc trong dự án bắt đầu bằng ${project.code}.`"
-				:tour="tourId"
 			>
 				<CommonAppButton v-if="canCreateTask" data-testid="project-task-create" @click="showCreate = true">
 					<Icon name="heroicons:plus" class="mr-1 h-4 w-4" />Tạo việc

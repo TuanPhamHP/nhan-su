@@ -56,7 +56,7 @@
 	onMounted(() => load());
 	useEscapeKey(() => emit('close'), () => true);
 
-	const pointSum = computed(() => tasks.value.reduce((n, t) => n + t.points, 0));
+	const pointSum = computed(() => tasks.value.reduce((n, t) => n + (t.points ?? 0), 0));
 </script>
 
 <template>
@@ -96,8 +96,8 @@
 								<span class="min-w-0 flex-1">
 									<span class="block truncate text-sm text-gray-900 dark:text-gray-100">{{ t.title }}</span>
 									<span class="text-xs text-gray-500">
-										{{ t.assignee.fullName }} · hạn {{ shortDate(t.dueDate, today) }}<template v-if="t.dueChangeCount"> (ban đầu {{ shortDate(t.originalDueDate, today) }})</template>
-										· {{ t.points }} điểm<template v-if="t.qualityScore"> · {{ t.qualityScore }} sao</template>
+										{{ t.assignee.fullName }} · {{ t.dueDate ? `hạn ${shortDate(t.dueDate, today)}` : 'chưa có hạn' }}<template v-if="t.dueChangeCount && t.originalDueDate"> (ban đầu {{ shortDate(t.originalDueDate, today) }})</template>
+										· {{ t.points == null ? 'chưa có điểm' : `${t.points} điểm` }}<template v-if="t.qualityScore"> · {{ t.qualityScore }} sao</template>
 									</span>
 								</span>
 								<TaskStatusBadge :status="t.status" :label="t.statusLabel" />

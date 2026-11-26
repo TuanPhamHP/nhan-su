@@ -23,6 +23,31 @@ export function nextStepIndex(steps: TourStep[], from: number, dir: 1 | -1, skip
 	return -1;
 }
 
+export interface TourTextPart {
+	text: string;
+	strong: boolean;
+}
+
+/**
+ * Tách chữ của bước thành từng đoạn thường và đoạn in đậm, theo cú pháp `**Tên nút**`.
+ *
+ * Chỉ hiểu đúng một cú pháp này và hộp hướng dẫn vẽ mỗi đoạn bằng `{{ }}`, không dùng `v-html`, nên
+ * chữ trong tour không bao giờ thành HTML. Dấu `**` lẻ không có cặp thì giữ nguyên như chữ thường.
+ */
+export function tourTextParts(text: string): TourTextPart[] {
+	const parts: TourTextPart[] = [];
+	const re = /\*\*(.+?)\*\*/g;
+	let last = 0;
+	for (const m of text.matchAll(re)) {
+		const at = m.index ?? 0;
+		if (at > last) parts.push({ text: text.slice(last, at), strong: false });
+		parts.push({ text: m[1]!, strong: true });
+		last = at + m[0].length;
+	}
+	if (last < text.length) parts.push({ text: text.slice(last), strong: false });
+	return parts;
+}
+
 /** "Bước 3/12": chỉ đếm những bước thật sự hiện. */
 export function stepCounter(steps: TourStep[], index: number, skipped: number[] = []) {
 	const visible = steps.map((s, i) => i).filter(i => !skipped.includes(i) && stepEnabled(steps[i]!));

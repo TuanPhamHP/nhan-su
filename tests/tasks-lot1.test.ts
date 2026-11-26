@@ -4,12 +4,16 @@ import {
 	groupMyTasks,
 	isBlankHtml,
 	mentionIdsFromHtml,
+	parsePointsFilter,
+	pointsFilterLabel,
+	pointsFilterParam,
 	primaryActions,
 	projectCodeError,
 	quickDueOptions,
 	secondaryActions,
 	taskDueText,
 	taskErrorInfo,
+	taskPointsText,
 } from '~/utils/tasks.utils';
 import { moduleOfPath } from '~/composables/useModuleAccess';
 import { resolveNotificationRoute } from '~/utils/notification-route';
@@ -46,6 +50,45 @@ describe('Công việc lô 1: chia nhóm Việc của tôi', () => {
 			{ label: 'Tuần sau', value: '2026-11-30' },
 		]);
 		expect(quickDueOptions('2026-11-24').map(o => o.label)).toEqual(['Hôm nay', 'Ngày mai', 'Thứ sáu này', 'Tuần sau']);
+	});
+
+	it('việc không có hạn: chữ "Chưa có hạn", màu thường, nằm nhóm cuối', () => {
+		const noDue = { dueDate: null, status: 'TODO' as const, overdue: false };
+		expect(taskDueText(noDue, '2026-11-26')).toBe('Chưa có hạn');
+		expect(dueTone(noDue, '2026-11-26')).toBe('normal');
+		const g = groupMyTasks([noDue, t('2026-11-26')], '2026-11-26');
+		expect(g.noDue).toHaveLength(1);
+		expect(g.today).toHaveLength(1);
+	});
+});
+
+describe('Công việc: điểm và bộ lọc điểm', () => {
+	it('chữ điểm: có điểm thì "3 đ", chưa chấm thì gạch', () => {
+		expect(taskPointsText(3)).toBe('3 đ');
+		expect(taskPointsText(null)).toBe('—');
+	});
+
+	it('đọc bộ lọc kiểu JQL, ghép VÀ, bỏ khoảng trắng', () => {
+		expect(parsePointsFilter('>=3')).toEqual([{ op: '>=', value: 3 }]);
+		expect(parsePointsFilter(' >= 2 , <=5 ')).toEqual([
+			{ op: '>=', value: 2 },
+			{ op: '<=', value: 5 },
+		]);
+		expect(parsePointsFilter('!=0')).toEqual([{ op: '!=', value: 0 }]);
+		expect(parsePointsFilter('')).toEqual([]);
+		expect(pointsFilterParam(parsePointsFilter(' >= 2 , <=5 ') ?? [])).toBe('>=2,<=5');
+	});
+
+	it('cú pháp sai thì trả null', () => {
+		expect(parsePointsFilter('3')).toBeNull();
+		expect(parsePointsFilter('=>3')).toBeNull();
+		expect(parsePointsFilter('>=a')).toBeNull();
+		expect(parsePointsFilter('>=2,abc')).toBeNull();
+	});
+
+	it('câu đọc của bộ lọc', () => {
+		expect(pointsFilterLabel([{ op: '=', value: 0 }])).toBe('Chưa có điểm');
+		expect(pointsFilterLabel([{ op: '>=', value: 2 }, { op: '<=', value: 5 }])).toBe('Điểm từ 2 và tối đa 5');
 	});
 });
 

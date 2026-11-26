@@ -164,8 +164,10 @@
 	}
 	async function onPoints(value: string) {
 		const t = task.value;
-		if (!t || Number(value) === t.points) return;
-		handle(await actions.updateFields(t, { points: Number(value) }));
+		// Ô trống là bỏ điểm (chưa có điểm, tính 0).
+		const next = value ? Number(value) : null;
+		if (!t || next === t.points) return;
+		handle(await actions.updateFields(t, { points: next }));
 	}
 	async function changeDue() {
 		if (task.value) handle(await actions.changeDue(task.value));
@@ -590,7 +592,10 @@
 								<dt class="text-xs text-gray-500 dark:text-gray-400">Hạn</dt>
 								<dd class="mt-1" data-testid="task-due">
 									<span :class="DUE_TONE_CLASS[dueTone(task, today)]">
+										<template v-if="!task.dueDate">{{ taskDueText(task, today) }}</template>
+									<template v-else>
 										{{ shortDate(task.dueDate, today) }}<template v-if="taskDueText(task, today) !== shortDate(task.dueDate, today)"> · {{ taskDueText(task, today) }}</template>
+									</template>
 									</span>
 									<button
 										v-if="task.permissions.changeDue && !readOnly"
@@ -599,7 +604,7 @@
 										data-testid="task-change-due"
 										@click="changeDue"
 									>
-										Đổi hạn
+										{{ task.dueDate ? 'Đổi hạn' : 'Đặt hạn' }}
 									</button>
 									<p v-if="task.dueChangeCount" class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
 										hạn ban đầu {{ shortDate(task.originalDueDate, today) }}, đã đổi {{ task.dueChangeCount }} lần
@@ -636,14 +641,15 @@
 									<dd class="mt-1">
 										<select
 											v-if="task.permissions.edit && !readOnly"
-											:value="task.points"
+											:value="task.points ?? ''"
 											aria-label="Điểm khối lượng"
 											class="w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
 											@change="e => onPoints((e.target as HTMLSelectElement).value)"
 										>
+											<option value="">Chưa có</option>
 											<option v-for="p in POINT_SCALE" :key="p" :value="p">{{ p }}</option>
 										</select>
-										<span v-else class="text-gray-900 dark:text-gray-100">{{ task.points }}</span>
+										<span v-else class="text-gray-900 dark:text-gray-100">{{ task.points ?? 'Chưa có' }}</span>
 										<span v-if="subtaskDone.total" class="mt-0.5 block text-[11px] text-gray-500">việc con {{ subtaskDone.points }} điểm</span>
 									</dd>
 								</div>
@@ -852,7 +858,7 @@
 										>
 											<span class="text-xs font-semibold text-gray-500">{{ r.code }}</span>
 											<span class="min-w-0 flex-1 truncate text-gray-800 dark:text-gray-200">{{ r.title }}</span>
-											<span class="text-xs text-gray-500">hạn {{ shortDate(r.dueDate, today) }}</span>
+											<span class="text-xs text-gray-500">{{ r.dueDate ? `hạn ${shortDate(r.dueDate, today)}` : 'chưa có hạn' }}</span>
 										</button>
 									</li>
 								</ul>

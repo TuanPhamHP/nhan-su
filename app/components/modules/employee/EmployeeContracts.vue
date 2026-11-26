@@ -16,8 +16,13 @@
 	const { canWrite } = useModuleAccess();
 	// Module chỉ xem thì ẩn mọi thao tác ghi, kể cả với ADMIN.
 	const writable = computed(() => canWrite('CONTRACT_INSURANCE'));
-	// Create + edit form vẫn giới hạn ADMIN/HR vì POST /v1/contracts còn role-based.
-	const canCreate = computed(() => writable.value && (authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN'));
+	// POST /v1/contracts đòi cả vai trò ADMIN/HR lẫn quyền `contract:create`.
+	const canCreate = computed(
+		() =>
+			writable.value &&
+			(authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN') &&
+			hasPermission('contract:create'),
+	);
 	// 3 mutation còn lại đã chuyển sang permission-based ở backend (contract:update/activate/terminate).
 	const canUpdate = computed(() => writable.value && hasPermission('contract:update'));
 	const canActivate = computed(() => writable.value && hasPermission('contract:activate'));
@@ -137,6 +142,12 @@
 		selectedFile.value = null;
 	}
 
+	// Hướng dẫn "Thêm hợp đồng" ở hồ sơ nhân viên mở hộp nhập bằng bước bấm, rồi đóng lại khi kết thúc.
+	defineExpose({
+		isFormOpen: () => showContractModal.value,
+		closeForm: closeContractModal,
+	});
+
 	function handleFileChange(e: Event) {
 		const input = e.target as HTMLInputElement;
 		selectedFile.value = input.files?.[0] ?? null;
@@ -246,7 +257,7 @@
 		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Hợp đồng lao động</h3>
-			<CommonAppButton v-if="canCreate" size="sm" @click="openCreate">
+			<CommonAppButton v-if="canCreate" size="sm" data-tour="contract-add" @click="openCreate">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
 				</svg>
@@ -465,6 +476,7 @@
 					</div>
 
 					<form class="p-6 space-y-4" @submit.prevent="onSubmit">
+						<div data-tour="contract-form-basics" class="space-y-4">
 						<!-- Contract number -->
 						<div>
 							<label :class="labelCls">Số hợp đồng <span class="text-red-500">*</span></label>
@@ -497,7 +509,9 @@
 							<UiDatePicker v-model="endDate" />
 							<p v-if="errors.endDate" class="mt-1 text-xs text-red-500">{{ errors.endDate }}</p>
 						</div>
+						</div>
 
+						<div data-tour="contract-form-terms" class="space-y-4">
 						<!-- Base salary -->
 						<div>
 							<label :class="labelCls">Lương cơ bản</label>
@@ -562,9 +576,10 @@
 							</div>
 							<input ref="fileInputRef" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" class="hidden" @change="handleFileChange" />
 						</div>
+						</div>
 
 						<!-- Actions -->
-						<div class="flex justify-end gap-3 pt-2">
+						<div data-tour="contract-form-submit" class="flex justify-end gap-3 pt-2">
 							<CommonAppButton type="button" variant="outline" @click="closeContractModal">Hủy</CommonAppButton>
 							<CommonAppButton type="submit" :loading="isSubmitting">
 								{{ editingContract ? 'Lưu thay đổi' : 'Tạo hợp đồng' }}

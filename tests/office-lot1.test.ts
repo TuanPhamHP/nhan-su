@@ -305,7 +305,7 @@ describe('fileNameFromDisposition', () => {
 describe('copyPreviousSummary', () => {
 	it('nói rõ lấy từ kỳ nào và thêm được bao nhiêu dòng', () => {
 		expect(copyPreviousSummary({ previousTitle: 'Tháng 11/2026', added: 8, skippedItems: [] })).toBe(
-			'Đã thêm 8 dòng từ Tháng 11/2026.',
+			'Đã lấy 8 mặt hàng từ Tháng 11/2026.',
 		);
 	});
 
@@ -320,7 +320,7 @@ describe('copyPreviousSummary', () => {
 				],
 			}),
 		).toBe(
-			'Đã thêm 6 dòng từ Tháng 11/2026. Bỏ qua 2 dòng: Giấy in A4 IK Plus (vượt định mức 5, bạn tự nhập kèm lý do); Pin 3A (mặt hàng đã ngừng dùng).',
+			'Đã lấy 6 mặt hàng từ Tháng 11/2026. Bỏ qua 2 dòng: Giấy in A4 IK Plus (vượt định mức 5, bạn tự nhập kèm lý do); Pin 3A (mặt hàng đã ngừng dùng).',
 		);
 	});
 
@@ -344,7 +344,7 @@ describe('copyPreviousSummary', () => {
 		// Đợt UAT C: `existing` tách khỏi `skipped`, nên câu phải nói rõ hai chuyện khác nhau.
 		expect(
 			copyPreviousSummary({ previousTitle: 'Tháng 11/2026', added: 2, existing: 3, skippedItems: [] }),
-		).toBe('Đã thêm 2 dòng từ Tháng 11/2026. 3 mặt hàng phiếu đã có nên giữ nguyên số của phòng.');
+		).toBe('Đã lấy 2 mặt hàng từ Tháng 11/2026. 3 mặt hàng phiếu đã có nên giữ nguyên số của phòng.');
 	});
 
 	it('vừa có mặt hàng đã có, vừa có dòng bỏ qua thì nói cả hai', () => {
@@ -356,7 +356,7 @@ describe('copyPreviousSummary', () => {
 				skippedItems: [{ name: 'Giấy in A4 IK Plus', reason: 'vượt định mức 5, bạn tự nhập kèm lý do' }],
 			}),
 		).toBe(
-			'Đã thêm 1 dòng từ Tháng 11/2026. 2 mặt hàng phiếu đã có nên giữ nguyên số của phòng. Bỏ qua 1 dòng: Giấy in A4 IK Plus (vượt định mức 5, bạn tự nhập kèm lý do).',
+			'Đã lấy 1 mặt hàng từ Tháng 11/2026. 2 mặt hàng phiếu đã có nên giữ nguyên số của phòng. Bỏ qua 1 dòng: Giấy in A4 IK Plus (vượt định mức 5, bạn tự nhập kèm lý do).',
 		);
 	});
 });
@@ -495,5 +495,427 @@ describe('điều hướng của module OFFICE', () => {
 		expect(moduleOfPath('/management/office/supply-periods/7')).toBe('OFFICE');
 		expect(moduleOfPath('/management/office/reports')).toBe('OFFICE');
 		expect(moduleOfPath('/management/office/settings')).toBe('OFFICE');
+	});
+});
+
+// ─── Form danh mục của trang Văn phòng phẩm ───────────────────────────────────
+
+import {
+	SUPPLY_STATUS,
+	buildSupplyCatalog,
+	supplyLockLabel,
+	supplyStatusLabel,
+} from '../app/utils/office.utils';
+import type { SupplyItem, SupplyLine } from '../app/types/office.types';
+
+function item(id: number, groupName: string, name: string, quota: number | null = null): SupplyItem {
+	return { id, groupId: groupName.length, groupName, hrOnly: false, name, unit: 'Chiếc', unitPrice: null, sortOrder: id, isActive: true, quota };
+}
+
+function line(id: number, itemId: number | null, name: string, groupName: string | null, myQty: number, requestedQty = myQty): SupplyLine {
+	return {
+		id,
+		itemId,
+		isCustom: itemId == null,
+		name,
+		unit: 'Chiếc',
+		groupName,
+		requestedQty,
+		quota: null,
+		overQuota: false,
+		overQuotaReason: null,
+		note: null,
+		finalQty: null,
+		finalNote: null,
+		receivedQty: null,
+		receivedNote: null,
+		unitPrice: null,
+		amount: null,
+		previousQty: null,
+		createdBy: { id: 1, fullName: 'A' },
+		updatedBy: { id: 1, fullName: 'A' },
+		updatedAt: '2026-11-20T02:00:00.000Z',
+		shares: [],
+		myQty,
+	};
+}
+
+describe('buildSupplyCatalog', () => {
+	const items = [item(1, 'Bút', 'Bút bi', 10), item(2, 'Bút', 'Bút chì gỗ'), item(3, 'Sổ & Giấy', 'Giấy A4')];
+
+	it('hiện mọi mặt hàng theo nhóm, giữ thứ tự máy chủ, gắn dòng phiếu đúng mặt hàng', () => {
+		const groups = buildSupplyCatalog(items, [line(7, 2, 'Bút chì gỗ', 'Bút', 0, 5)]);
+		expect(groups.map(g => g.name)).toEqual(['Bút', 'Sổ & Giấy']);
+		expect(groups[0]!.rows.map(r => r.name)).toEqual(['Bút bi', 'Bút chì gỗ']);
+		expect(groups[0]!.rows[1]!.line?.requestedQty).toBe(5);
+		expect(groups[0]!.rows[0]!.quota).toBe(10);
+		expect(groups[0]!.rows[0]!.searchText).toBe('but bi');
+	});
+
+	it('[EDGE] dòng của mặt hàng danh mục không còn vẫn hiện, dòng ngoài danh mục luôn ở nhóm cuối', () => {
+		const groups = buildSupplyCatalog(items, [line(8, null, 'Pin 3A', null, 2), line(9, 99, 'Nước rửa tay', 'Vệ sinh', 1)]);
+		expect(groups.map(g => g.name)).toEqual(['Bút', 'Sổ & Giấy', 'Vệ sinh', CUSTOM_GROUP_NAME]);
+		expect(groups.at(-1)!.isCustom).toBe(true);
+		expect(groups.at(-1)!.rows[0]!.key).toBe('c8');
+	});
+
+	it('phiếu chỉ xem chỉ còn những dòng phòng đã đăng ký', () => {
+		const groups = buildSupplyCatalog(items, [line(7, 3, 'Giấy A4', 'Sổ & Giấy', 1)], true);
+		expect(groups.map(g => g.name)).toEqual(['Sổ & Giấy']);
+		expect(groups[0]!.rows).toHaveLength(1);
+	});
+});
+
+describe('supplyStatusLabel', () => {
+	it('kỳ và phiếu cùng nhãn ở OPEN và LOCKED, các bước sau giữ chữ của máy chủ', () => {
+		expect(supplyStatusLabel('OPEN')).toBe('Đang đăng ký');
+		expect(supplyStatusLabel('LOCKED', 3)).toBe('Đã khoá');
+		expect(supplyStatusLabel('CLOSED')).toBe('Đã đóng');
+		expect(supplyStatusLabel('FINALIZED', 3)).toBe('Đã chốt, chờ cấp');
+		expect(supplyStatusLabel('ISSUED', 3)).toBe('Đã cấp, chờ nhận');
+		expect(supplyStatusLabel('RECEIVED', 3)).toBe('Đã nhận');
+	});
+
+	it('nhãn ngắn cho số đếm', () => {
+		expect(SUPPLY_STATUS.FINALIZED.shortLabel).toBe('Đã chốt');
+		expect(SUPPLY_STATUS.ISSUED.shortLabel).toBe('Đã cấp');
+	});
+
+	it('[EDGE] phiếu rỗng sau khi khoá ghi "Không đăng ký", phiếu rỗng còn mở thì không', () => {
+		expect(supplyStatusLabel('LOCKED', 0)).toBe('Không đăng ký');
+		expect(supplyStatusLabel('OPEN', 0)).toBe('Đang đăng ký');
+	});
+});
+
+describe('supplyLockLabel', () => {
+	it('đọc mốc khoá theo giờ Việt Nam', () => {
+		expect(supplyLockLabel('2026-11-27T17:00:00.000Z')).toBe('00:00 ngày 28/11/2026');
+	});
+});
+
+// ─── Kỳ văn phòng phẩm: mặc định khi mở kỳ, trùng kỳ, gợi ý, phân nhóm ─────────
+
+import {
+	addMonthsYm,
+	daysBetweenYmd,
+	defaultPeriodDeadline,
+	defaultPeriodMonth,
+	findPeriodFor,
+	groupSupplyPeriods,
+	latestPeriodOf,
+	lockAtOfDeadline,
+	nextPeriodSuggestions,
+	periodProgress,
+	supplyStatusMeta,
+	vnMonthValue,
+	weekdayOf,
+} from '../app/utils/office.utils';
+
+const P = (id: number, siteId: number, month: string, deadline: string, status = 'OPEN') => ({
+	id,
+	month,
+	deadline,
+	status,
+	officeSite: { id: siteId },
+});
+
+describe('supplyStatusMeta', () => {
+	it('[EDGE] trạng thái lạ từ máy chủ: hiện nguyên mã, màu xám, không ném lỗi', () => {
+		const meta = supplyStatusMeta('ARCHIVED');
+		expect(meta.label).toBe('ARCHIVED');
+		expect(meta.class).toContain('bg-gray-100');
+		expect(supplyStatusLabel('ARCHIVED', 2)).toBe('ARCHIVED');
+	});
+});
+
+describe('tháng và hạn chót mặc định khi mở kỳ', () => {
+	it('tháng hiện tại theo giờ Việt Nam', () => {
+		expect(vnMonthValue(new Date('2026-11-30T18:00:00.000Z'))).toBe('2026-12');
+	});
+
+	it('cộng tháng qua năm', () => {
+		expect(addMonthsYm('2026-12', 1)).toBe('2027-01');
+		expect(addMonthsYm('2026-01', -1)).toBe('2025-12');
+	});
+
+	it('tháng mặc định là tháng sau kỳ gần nhất, không trước tháng hiện tại', () => {
+		expect(defaultPeriodMonth(null, '2026-11')).toBe('2026-11');
+		expect(defaultPeriodMonth({ month: '2026-11' }, '2026-11')).toBe('2026-12');
+		expect(defaultPeriodMonth({ month: '2026-08' }, '2026-11')).toBe('2026-11');
+	});
+
+	it('kỳ gần nhất là kỳ có tháng muộn nhất của văn phòng', () => {
+		const list = [P(1, 1, '2026-11', '2026-11-27'), P(2, 1, '2026-12', '2026-12-27'), P(3, 2, '2027-01', '2027-01-20')];
+		expect(latestPeriodOf(list, 1)?.id).toBe(2);
+		expect(latestPeriodOf(list, 9)).toBeNull();
+	});
+
+	it('hạn chót giữ ngày trong tháng của kỳ trước', () => {
+		expect(defaultPeriodDeadline({ month: '2026-11', deadline: '2026-11-27' }, '2026-12', '2026-11-24')).toBe('2026-12-27');
+	});
+
+	it('hạn chót giữ cả khoảng cách tháng: kỳ tháng 12 hạn 27/11 thì kỳ tháng 1 hạn 27/12', () => {
+		expect(defaultPeriodDeadline({ month: '2026-12', deadline: '2026-11-27' }, '2027-01', '2026-11-24')).toBe('2026-12-27');
+	});
+
+	it('[EDGE] kẹp về ngày cuối tháng khi tháng đích ngắn hơn, kể cả năm nhuận', () => {
+		expect(defaultPeriodDeadline({ month: '2027-01', deadline: '2027-01-31' }, '2027-02', '2026-11-24')).toBe('2027-02-28');
+		expect(defaultPeriodDeadline({ month: '2028-01', deadline: '2028-01-31' }, '2028-02', '2026-11-24')).toBe('2028-02-29');
+		expect(defaultPeriodDeadline({ month: '2026-12', deadline: '2026-12-31' }, '2027-04', '2026-11-24')).toBe('2027-04-30');
+	});
+
+	it('[EDGE] chưa có kỳ trước hoặc ngày tính ra đã qua thì để trống', () => {
+		expect(defaultPeriodDeadline(null, '2026-12', '2026-11-24')).toBe('');
+		expect(defaultPeriodDeadline({ month: '2026-10', deadline: '2026-10-20' }, '2026-11', '2026-11-24')).toBe('');
+	});
+});
+
+describe('thứ trong tuần, mốc khoá, số ngày', () => {
+	it('thứ của một ngày và cuối tuần', () => {
+		expect(weekdayOf('2026-12-27')).toEqual({ label: 'Chủ nhật', weekend: true });
+		expect(weekdayOf('2026-12-26')).toEqual({ label: 'Thứ Bảy', weekend: true });
+		expect(weekdayOf('2026-12-28')).toEqual({ label: 'Thứ Hai', weekend: false });
+	});
+
+	it('phiếu khoá lúc 00:00 giờ Việt Nam ngày sau hạn chót, kể cả cuối tháng, cuối năm', () => {
+		expect(supplyLockLabel(lockAtOfDeadline('2026-12-27'))).toBe('00:00 ngày 28/12/2026');
+		expect(supplyLockLabel(lockAtOfDeadline('2026-12-31'))).toBe('00:00 ngày 01/01/2027');
+		expect(new Date(lockAtOfDeadline('2026-11-27')).toISOString()).toBe('2026-11-27T17:00:00.000Z');
+	});
+
+	it('số ngày theo lịch', () => {
+		expect(daysBetweenYmd('2026-11-24', '2026-12-28')).toBe(34);
+		expect(daysBetweenYmd('2026-11-24', '2026-11-24')).toBe(0);
+	});
+});
+
+describe('trùng kỳ và gợi ý mở kỳ tiếp theo', () => {
+	const sites = [{ id: 1 }, { id: 2 }, { id: 3 }];
+
+	it('tìm kỳ đã có theo văn phòng và tháng', () => {
+		const list = [P(1, 1, '2026-12', '2026-12-27')];
+		expect(findPeriodFor(list, 1, '2026-12')?.id).toBe(1);
+		expect(findPeriodFor(list, 2, '2026-12')).toBeNull();
+	});
+
+	it('chỉ gợi ý văn phòng có kỳ gần nhất đã khoá hoặc đóng mà chưa có kỳ tháng sau', () => {
+		const list = [
+			P(1, 1, '2026-11', '2026-11-27', 'LOCKED'),
+			P(2, 2, '2026-11', '2026-11-27', 'OPEN'),
+			P(3, 3, '2026-10', '2026-10-27', 'CLOSED'),
+			P(4, 3, '2026-11', '2026-11-27', 'CLOSED'),
+		];
+		expect(nextPeriodSuggestions(sites, list, '2026-11').map(s => [s.site.id, s.month])).toEqual([
+			[1, '2026-12'],
+			[3, '2026-12'],
+		]);
+	});
+
+	it('[EDGE] văn phòng chưa có kỳ nào không được gợi ý; kỳ gần nhất cũ thì gợi ý tháng hiện tại', () => {
+		expect(nextPeriodSuggestions(sites, [P(1, 1, '2026-06', '2026-06-27', 'CLOSED')], '2026-11')).toEqual([
+			{ site: { id: 1 }, month: '2026-11' },
+		]);
+	});
+});
+
+describe('phân nhóm và tiến độ kỳ', () => {
+	it('đang diễn ra ở trên, đã đóng ở dưới, tháng mới trước', () => {
+		const groups = groupSupplyPeriods([
+			P(1, 1, '2026-10', '', 'CLOSED'),
+			P(2, 1, '2026-11', '', 'LOCKED'),
+			P(3, 1, '2026-12', '', 'OPEN'),
+			P(4, 1, '2026-09', '', 'CLOSED'),
+		]);
+		expect(groups.active.map(p => p.id)).toEqual([3, 2]);
+		expect(groups.closed.map(p => p.id)).toEqual([1, 4]);
+	});
+
+	it('[EDGE] kỳ không có phòng nào: 0%, không chia cho 0', () => {
+		expect(periodProgress({ departmentsTotal: 0, departmentsWithLines: 0 })).toEqual({ done: 0, total: 0, percent: 0 });
+		expect(periodProgress({})).toEqual({ done: 0, total: 0, percent: 0 });
+		expect(periodProgress({ departmentsTotal: 9, departmentsWithLines: 1 })).toEqual({ done: 1, total: 9, percent: 11 });
+	});
+});
+
+// ─── Chi tiết kỳ: giai đoạn, phòng đã đăng ký, việc tiếp theo, bảng tổng hợp ──
+
+import {
+	departmentRegistration,
+	isDraftDirty,
+	isPriceMissing,
+	isRowUnpriced,
+	periodNextStep,
+	periodStageSteps,
+	requestStageCounts,
+} from '../app/utils/office.utils';
+import { formatVnDateTime } from '../app/utils/date';
+
+const dept = (departmentId: number, name: string, requests: Array<[number, number, string, number]>) => ({
+	departmentId,
+	name,
+	requests: requests.map(([id, sequence, status, lineCount]) => ({ id, sequence, status, lineCount })),
+});
+
+describe('giai đoạn kỳ', () => {
+	it('giờ Việt Nam cho mốc ISO có Z', () => {
+		expect(formatVnDateTime('2026-11-24T04:33:41.218Z')).toBe('24/11/2026 11:33');
+	});
+
+	it('kỳ đang mở: bước 1 hiện tại, bước khoá ghi dự kiến theo hạn chót', () => {
+		const steps = periodStageSteps({ status: 'OPEN', lockAt: '2026-11-27T17:00:00.000Z', lockedAt: null, closedAt: null });
+		expect(steps.map(s => s.state)).toEqual(['current', 'todo', 'todo']);
+		expect(steps.map(s => s.label)).toEqual(['Đang đăng ký', 'Đã khoá', 'Đã đóng']);
+		expect(steps[1]!.at).toBe('Dự kiến 00:00 ngày 28/11/2026');
+	});
+
+	it('kỳ đã khoá và đã đóng ghi giờ thật', () => {
+		const locked = periodStageSteps({ status: 'LOCKED', lockAt: 'x', lockedAt: '2026-11-24T04:33:00.000Z', closedAt: null });
+		expect(locked.map(s => s.state)).toEqual(['done', 'current', 'todo']);
+		expect(locked[1]!.at).toBe('Khoá lúc 24/11/2026 11:33');
+		const closed = periodStageSteps({ status: 'CLOSED', lockAt: 'x', lockedAt: null, closedAt: '2026-12-01T02:00:00.000Z' });
+		expect(closed.map(s => s.state)).toEqual(['done', 'done', 'current']);
+		expect(closed[2]!.at).toBe('Đóng lúc 01/12/2026 09:00');
+	});
+});
+
+describe('phòng đã đăng ký và tiến độ phiếu', () => {
+	const departments = [
+		dept(1, 'HCNS', [[1, 0, 'RECEIVED', 3], [5, 1, 'FINALIZED', 1]]),
+		dept(2, 'Kế toán', [[2, 0, 'LOCKED', 0]]),
+		dept(3, 'IT', [[3, 0, 'ISSUED', 2]]),
+		dept(4, 'Kinh doanh', [[4, 0, 'LOCKED', 4]]),
+	];
+
+	it('đếm theo phòng, phòng có phiếu bổ sung vẫn là một phòng', () => {
+		expect(departmentRegistration(departments)).toEqual({ done: 3, total: 4 });
+	});
+
+	it('đếm theo phiếu có dòng; bước sau tính cả bước trước', () => {
+		expect(requestStageCounts(departments)).toEqual({ total: 4, finalized: 3, issued: 2, received: 1 });
+	});
+
+	it('[EDGE] chưa phòng nào tham gia', () => {
+		expect(departmentRegistration([])).toEqual({ done: 0, total: 0 });
+		expect(requestStageCounts([])).toEqual({ total: 0, finalized: 0, issued: 0, received: 0 });
+	});
+});
+
+describe('việc tiếp theo của kỳ đã khoá', () => {
+	it('chốt phiếu chưa chốt trước, rồi cấp, rồi đóng kỳ', () => {
+		expect(periodNextStep('LOCKED', [dept(1, 'HCNS', [[1, 0, 'FINALIZED', 2]]), dept(2, 'IT', [[2, 0, 'LOCKED', 1]])])).toEqual({
+			kind: 'finalize',
+			requestId: 2,
+			departmentName: 'IT',
+			sequence: 0,
+		});
+		expect(periodNextStep('LOCKED', [dept(1, 'HCNS', [[1, 0, 'FINALIZED', 2]])])).toEqual({
+			kind: 'issue',
+			requestId: 1,
+			departmentName: 'HCNS',
+			sequence: 0,
+		});
+		expect(periodNextStep('LOCKED', [dept(1, 'HCNS', [[1, 0, 'RECEIVED', 2]]), dept(2, 'KT', [[2, 0, 'LOCKED', 0]])])).toEqual({
+			kind: 'close',
+		});
+	});
+
+	it('[EDGE] còn phiếu đã cấp chờ phòng nhận thì không có việc chính; kỳ chưa khoá cũng không', () => {
+		expect(periodNextStep('LOCKED', [dept(1, 'HCNS', [[1, 0, 'ISSUED', 2]])])).toBeNull();
+		expect(periodNextStep('OPEN', [dept(1, 'HCNS', [[1, 0, 'OPEN', 2]])])).toBeNull();
+	});
+});
+
+describe('bảng tổng hợp: thiếu đơn giá, thay đổi chưa lưu', () => {
+	it('thiếu đơn giá khi có số cần mua mà chưa có đơn giá; đơn giá 0 không phải thiếu', () => {
+		expect(isRowUnpriced({ purchaseQty: 3, unitPrice: null })).toBe(true);
+		expect(isRowUnpriced({ purchaseQty: 3, unitPrice: 0 })).toBe(false);
+		expect(isRowUnpriced({ purchaseQty: 0, unitPrice: null })).toBe(false);
+	});
+
+	it('[EDGE] một tiêu chí thiếu giá cho cả danh mục: null, undefined là thiếu, 0 là có giá', () => {
+		expect(isPriceMissing(null)).toBe(true);
+		expect(isPriceMissing(undefined)).toBe(true);
+		expect(isPriceMissing(0)).toBe(false);
+		expect(isPriceMissing(12000)).toBe(false);
+	});
+
+	it('ô trống so với null là chưa đổi; 0 khác trống', () => {
+		expect(isDraftDirty(undefined, null)).toBe(false);
+		expect(isDraftDirty(5, 5)).toBe(false);
+		expect(isDraftDirty(0, null)).toBe(true);
+		expect(isDraftDirty(undefined, 1200)).toBe(true);
+	});
+});
+
+// ─── Cài đặt hành chính: lọc danh mục văn phòng phẩm ──────────────────────────
+
+import { filterCatalogSections } from '../app/utils/office.utils';
+
+describe('filterCatalogSections', () => {
+	const groups = [
+		{ id: 1, name: 'Bút & gim', hrOnly: false, isActive: true },
+		{ id: 2, name: 'Đồ uống', hrOnly: true, isActive: true },
+		{ id: 3, name: 'Cũ', hrOnly: false, isActive: false },
+		{ id: 4, name: 'Trống', hrOnly: false, isActive: true },
+	];
+	const items = [
+		{ id: 1, groupId: 1, name: 'Bút bi (Note màu xanh)', unitPrice: null, isActive: true },
+		{ id: 2, groupId: 1, name: 'Bút chì gỗ', unitPrice: 0, isActive: true },
+		{ id: 3, groupId: 1, name: 'Bút mực cũ', unitPrice: null, isActive: false },
+		{ id: 4, groupId: 2, name: 'Trà túi lọc', unitPrice: 45000, isActive: true },
+		{ id: 5, groupId: 3, name: 'Giấy than', unitPrice: null, isActive: true },
+	];
+	const base = { search: '', onlyUnpriced: false, showInactive: false };
+
+	it('mặc định ẩn nhóm, mặt hàng ngừng dùng; chip đếm theo nhóm; nhóm trống vẫn hiện', () => {
+		const view = filterCatalogSections(groups, items, base);
+		expect(view.chips.map(c => [c.group.id, c.count])).toEqual([
+			[1, 2],
+			[2, 1],
+			[4, 0],
+		]);
+		expect(view.total).toBe(3);
+		expect(view.sections.map(s => s.group.id)).toEqual([1, 2, 4]);
+	});
+
+	it('[EDGE] số thiếu giá khớp danh sách: mặt hàng còn dùng trong nhóm đã ngừng không bị đếm', () => {
+		// "Giấy than" còn dùng, chưa có giá, nhưng nhóm "Cũ" đã ngừng nên ẩn cùng nhóm.
+		expect(filterCatalogSections(groups, items, base).unpriced).toBe(1);
+		expect(filterCatalogSections(groups, items, { ...base, showInactive: true }).unpriced).toBe(3);
+	});
+
+	it('tìm không dấu theo tên, nhóm không khớp thì ẩn', () => {
+		const view = filterCatalogSections(groups, items, { ...base, search: 'but chi' });
+		expect(view.sections.map(s => s.items.map(i => i.id))).toEqual([[2]]);
+	});
+
+	it('thiếu đơn giá: null là thiếu, 0 là có giá', () => {
+		const view = filterCatalogSections(groups, items, { ...base, onlyUnpriced: true });
+		expect(view.sections.flatMap(s => s.items.map(i => i.id))).toEqual([1]);
+	});
+
+	it('lọc một nhóm; bật xem ngừng dùng thì hiện cả nhóm và mặt hàng đã ngừng', () => {
+		expect(filterCatalogSections(groups, items, { ...base, groupId: 2 }).sections.map(s => s.group.id)).toEqual([2]);
+		const all = filterCatalogSections(groups, items, { ...base, showInactive: true });
+		expect(all.total).toBe(5);
+		expect(all.sections.map(s => s.group.id)).toEqual([1, 2, 3, 4]);
+	});
+});
+
+// ─── Chi tiết lượt họp ───────────────────────────────────────────────────────
+
+import { bookingDurationLabel } from '../app/utils/office.utils';
+import { formatVnWeekdayDate } from '../app/utils/date';
+
+describe('chi tiết lượt họp', () => {
+	it('độ dài lượt: phút, giờ chẵn, giờ lẻ', () => {
+		expect(bookingDurationLabel('2026-11-25T08:30:00.000Z', '2026-11-25T09:00:00.000Z')).toBe('30 phút');
+		expect(bookingDurationLabel('2026-11-25T08:30:00.000Z', '2026-11-25T09:30:00.000Z')).toBe('1 giờ');
+		expect(bookingDurationLabel('2026-11-25T08:30:00.000Z', '2026-11-25T10:00:00.000Z')).toBe('1 giờ 30 phút');
+	});
+
+	it('ngày kèm thứ theo lịch Việt Nam: 23:30 UTC đã là sáng hôm sau', () => {
+		expect(formatVnWeekdayDate('2026-11-24T08:30:00.000Z')).toBe('Thứ Ba, 24/11/2026');
+		expect(formatVnWeekdayDate('2026-11-24T23:30:00.000Z')).toBe('Thứ Tư, 25/11/2026');
 	});
 });

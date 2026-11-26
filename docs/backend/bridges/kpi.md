@@ -117,6 +117,9 @@ và lý do), `applicable`, `completionPct`, `score`, `reviewerNote`, `hasEvidenc
   (phạm vi xem việc ở `docs/bridges/tasks.md` mục 1.1) có `title: null`, `canView: false`: hiện số hiệu và ngày, không mở
   được. Đúng hạn: tập xét là việc được đếm, `matched` là việc đúng hạn. Khối lượng, số việc hoàn thành: việc nghiệm thu. Chất
   lượng: việc có điểm. Trả lại: việc nghiệm thu, `matched` là việc từng bị trả lại. Quá hạn: việc quá hạn còn mở.
+- Từ 26/11/2026 hạn và điểm của công việc không bắt buộc: `points: number | null` (null cộng 0 vào khối lượng),
+  `originalDueDate`, `dueDate: string | null` (việc không hạn xếp vào kỳ theo ngày tạo, không bao giờ trễ hay quá hạn). Giao
+  diện hiện "Chưa có hạn", "Chưa có điểm".
 - `kind: 'attendance'`: `lateCount`, `lateDays[]`, `absentDays[]`, `workingDays`.
 - `kind: 'none'`: chỉ tiêu nhập tay.
 

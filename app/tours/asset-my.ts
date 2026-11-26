@@ -33,15 +33,15 @@ export function assetMyTour(ctx: AssetMyTourContext): TourDefinition {
 				id: 'confirm',
 				target: '[data-tour="my-confirm"]',
 				title: 'Nhận tài sản',
-				body: 'Khi nhận được đồ, bạn kiểm tra rồi bấm Đã nhận. Thiếu hay sai gì thì bấm Báo chưa đúng.',
+				body: 'Khi nhận được đồ, bạn kiểm tra rồi bấm **Đã nhận**. Thiếu hay sai gì thì bấm **Báo chưa đúng**.',
 				when: () => ctx.hasPending(),
 			},
 			{
 				id: 'confirm-later',
 				title: holding ? 'Khi được giao tài sản mới' : 'Tài sản của bạn',
 				body: holding
-					? 'Bạn sẽ thấy hai nút Đã nhận và Báo chưa đúng. Kiểm tra đồ thật rồi bấm một trong hai.'
-					: 'Hiện bạn chưa giữ tài sản nào. Khi được giao, bạn kiểm tra đồ thật rồi bấm Đã nhận, thiếu hay sai gì thì bấm Báo chưa đúng.',
+					? 'Bạn sẽ thấy hai nút **Đã nhận** và **Báo chưa đúng**. Kiểm tra đồ thật rồi bấm một trong hai.'
+					: 'Hiện bạn chưa giữ tài sản nào. Khi được giao, bạn kiểm tra đồ thật rồi bấm **Đã nhận**, thiếu hay sai gì thì bấm **Báo chưa đúng**.',
 				when: () => !ctx.hasPending(),
 				onEnter: () => ctx.showAssetsTab(),
 			},
@@ -49,7 +49,7 @@ export function assetMyTour(ctx: AssetMyTourContext): TourDefinition {
 				id: 'report',
 				target: '[data-tour="my-report"]',
 				title: 'Hỏng hay mất',
-				body: 'Đồ bị hỏng hay thất lạc thì bấm Báo hỏng hoặc Báo mất ngay trên tài sản đó.',
+				body: 'Đồ bị hỏng hay thất lạc thì bấm **Báo hỏng** hoặc **Báo mất** ngay trên tài sản đó.',
 				when: () => ctx.canReport(),
 			},
 		],

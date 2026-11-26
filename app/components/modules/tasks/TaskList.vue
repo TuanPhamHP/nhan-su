@@ -201,7 +201,7 @@
 		handle(await actions.updateFields(before, { groupId }), before);
 	}
 
-	const groupPoints = (g: Group) => g.tasks.reduce((s, t) => s + t.points, 0);
+	const groupPoints = (g: Group) => g.tasks.reduce((s, t) => s + (t.points ?? 0), 0);
 </script>
 
 <template>

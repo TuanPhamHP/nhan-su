@@ -1,4 +1,5 @@
 import type { TaskDueFilter, TaskListQuery } from '~/types/tasks.types';
+import { pointsQuery } from '~/utils/tasks.utils';
 
 /**
  * Bộ lọc, cách nhóm và chế độ xem của một màn công việc, nằm trên đường dẫn (mục 9.2): dán đường dẫn
@@ -24,6 +25,8 @@ export interface TaskFilterState {
 	taskGroup: string;
 	/** Lô 2: lọc theo đợt: id đợt, `backlog` (việc chờ xếp) hoặc rỗng. */
 	sprint: string;
+	/** Lọc điểm kiểu JQL (`>=3`, `>=2,<=5`, `=0`), rỗng là không lọc. */
+	points: string;
 }
 
 const DEFAULTS: TaskFilterState = {
@@ -37,6 +40,7 @@ const DEFAULTS: TaskFilterState = {
 	cancelled: false,
 	taskGroup: '',
 	sprint: '',
+	points: '',
 };
 
 const KEYS = Object.keys(DEFAULTS) as Array<keyof TaskFilterState>;
@@ -110,7 +114,8 @@ export function useTaskFilters(storageKey: () => string, overrides: Partial<Task
 	}
 
 	const isFiltered = computed(
-		() => !!(state.q || state.status || state.due || state.priority || state.assignee || state.taskGroup || state.sprint),
+		() =>
+			!!(state.q || state.status || state.due || state.priority || state.assignee || state.taskGroup || state.sprint || state.points),
 	);
 	const isDefault = computed(() => KEYS.every(k => state[k] === defaults[k]));
 
@@ -124,6 +129,7 @@ export function useTaskFilters(storageKey: () => string, overrides: Partial<Task
 		groupId: state.taskGroup ? Number(state.taskGroup) : undefined,
 		sprintId: state.sprint && state.sprint !== 'backlog' ? Number(state.sprint) : undefined,
 		backlog: state.sprint === 'backlog' || undefined,
+		points: pointsQuery(state.points),
 	}));
 
 	watch(

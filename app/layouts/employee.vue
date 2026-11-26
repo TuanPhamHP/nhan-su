@@ -39,6 +39,7 @@ onMounted(() => {
 		</div>
 
 		<LayoutAppAgentFab />
+		<ClientOnly><LayoutAppGuideFab /></ClientOnly>
 
 		<!--
 			Cũng cần ở layout nhân viên: quản lý bật "Xem giao diện nhân viên" sẽ sang layout

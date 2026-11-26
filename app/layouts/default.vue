@@ -35,6 +35,7 @@ onMounted(() => {
 		</div>
 
 		<LayoutAppAgentFab />
+		<ClientOnly><LayoutAppGuideFab /></ClientOnly>
 
 		<ClientOnly>
 			<LayoutAppLauncher v-if="uiStore.launcherOpen" @close="uiStore.closeLauncher()" />

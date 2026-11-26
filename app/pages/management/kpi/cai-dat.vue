@@ -132,7 +132,6 @@
 		<UiPageHeader
 			title="Cài đặt KPI"
 			description="Danh mục chỉ tiêu, mẫu đánh giá cho từng phòng hay vị trí, và thang xếp loại. KPI chỉ để xem và xuất kết quả."
-			tour="kpi-settings"
 		/>
 		<CommonAppModuleNotice module="TASKS" />
 

@@ -14,12 +14,41 @@ import { hasSeenTour, markTourSeen, nextStepIndex, stepCounter, tourStorageKey }
 export function useTour() {
 	const state = useState<TourState | null>('tour-state', () => null);
 	const registry = useState<Record<string, TourFactory>>('tour-registry', () => ({}));
+	/** Tour được chọn từ danh sách hướng dẫn trước khi trang đích kịp đăng ký nó (đang chuyển trang). */
+	const pending = useState<string | null>('tour-pending', () => null);
 
 	function register(id: string, factory: TourFactory) {
 		registry.value = { ...registry.value, [id]: markRaw(factory) };
+		if (pending.value === id) {
+			pending.value = null;
+			// Đợi trang vẽ xong một nhịp; phần tử nào chưa có thì tour vẫn tự chờ từng bước.
+			setTimeout(() => start(id), 300);
+		}
 	}
 
-	function unregister(id: string) {
+	/**
+	 * Chạy tour `id` ngay nếu trang hiện tại đã đăng ký, không thì chờ trang đích đăng ký rồi mới
+	 * chạy. Dùng khi chọn hướng dẫn ở trang khác: gọi hàm này rồi mới chuyển trang.
+	 */
+	function startWhenReady(id: string) {
+		if (registry.value[id]) {
+			start(id);
+			return;
+		}
+		pending.value = id;
+	}
+
+	function cancelPending() {
+		pending.value = null;
+	}
+
+	/**
+	 * Gỡ tour khi trang rời đi. Truyền `factory` thì chỉ gỡ khi tour đang đăng ký đúng là của trang
+	 * này: hai trang có thể đăng ký cùng `id` (nửa đầu ở trang danh sách, nửa sau ở trang tạo), và
+	 * trang cũ gỡ muộn không được xoá tour trang mới vừa đăng ký.
+	 */
+	function unregister(id: string, factory?: TourFactory) {
+		if (factory && registry.value[id] !== factory) return;
 		const { [id]: _removed, ...rest } = registry.value;
 		registry.value = rest;
 		if (state.value?.tour.id === id) finish('route');
@@ -99,7 +128,33 @@ export function useTour() {
 		return s ? stepCounter(s.tour.steps, s.index, s.skipped) : { number: 0, total: 0 };
 	});
 
-	return { state, counter, currentStep, register, unregister, start, move, skipCurrent, markShown, finish };
+	return {
+		state,
+		counter,
+		currentStep,
+		pending,
+		register,
+		unregister,
+		start,
+		startWhenReady,
+		cancelPending,
+		move,
+		skipCurrent,
+		markShown,
+		finish,
+	};
+}
+
+/**
+ * Đăng ký một tour theo tính năng cho trang đang mở, KHÔNG tự hiện cho người mới.
+ *
+ * Một trang có thể có nhiều tour kiểu này (trang Cài đặt có tour danh mục và tour định mức);
+ * người dùng mở chúng từ nút Hướng dẫn nổi bên phải (`AppGuideFab`).
+ */
+export function useGuideTour(id: string, factory: TourFactory) {
+	const tour = useTour();
+	onMounted(() => tour.register(id, factory));
+	onBeforeUnmount(() => tour.unregister(id, factory));
 }
 
 /**
@@ -137,7 +192,8 @@ export function usePageTour(id: string, factory: TourFactory, ready: () => boole
 
 	onBeforeUnmount(() => {
 		if (timer) clearTimeout(timer);
-		tour.unregister(id);
+		// Gỡ theo đúng hàm của trang, như `useGuideTour`: Dự án và trang một dự án đăng ký chung `id`.
+		tour.unregister(id, factory);
 	});
 
 	return { start: () => tour.start(id) };

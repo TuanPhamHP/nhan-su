@@ -51,7 +51,7 @@
 				<p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
 					<span :class="DUE_TONE_CLASS[tone]">{{ taskDueText(task, today) }}</span>
 					<TaskPriorityBadge :priority="task.priority" only-high />
-					<span>{{ task.points }} điểm</span>
+					<span>{{ task.points == null ? 'Chưa có điểm' : `${task.points} điểm` }}</span>
 					<span
 						v-if="task.recurrenceId"
 						class="rounded bg-teal-50 px-1 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"

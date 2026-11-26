@@ -157,7 +157,6 @@
 		<UiPageHeader
 			title="Việc định kỳ"
 			description="Việc lặp lại đều đặn như nộp báo cáo tháng, họp đầu tuần. Đặt một lần, mỗi kỳ hệ thống tự giao việc cho người làm và báo cho họ."
-			tour="tasks-recurrences"
 		>
 			<CommonAppButton v-if="!readOnly" data-tour="task-recurrence-create" data-testid="recurrence-create" @click="openCreate">
 				<Icon name="heroicons:plus" class="mr-1 h-4 w-4" />Đặt việc định kỳ

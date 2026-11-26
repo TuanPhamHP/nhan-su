@@ -225,7 +225,7 @@
 	const grades = computed(() => detail.value?.gradeScale.grades ?? []);
 	const lastComputed = computed(() => reviews.value.map(r => r.computedAt).filter((x): x is string => !!x).sort().at(-1) ?? null);
 
-	usePageTour('kpi-periods', () => kpiPeriodTour({ hasPeriod: () => !!detail.value }), () => canUse('TASKS') && !loading.value && !loadError.value && !detailLoading.value);
+	usePageTour('kpi-periods', () => kpiPeriodTour({ hasPeriod: () => loading.value || detailLoading.value || !!detail.value, canOpen: () => !readOnly.value }), () => canUse('TASKS') && !loading.value && !loadError.value && !detailLoading.value);
 </script>
 
 <template>
@@ -233,7 +233,6 @@
 		<UiPageHeader
 			title="Kỳ đánh giá"
 			description="Mở kỳ tháng hay quý, theo dõi phiếu đang ở bước nào, chốt và công bố kết quả. Kết quả năm tự tính từ các kỳ đã công bố."
-			tour="kpi-periods"
 		>
 			<CommonAppButton v-if="!readOnly && !loading" data-tour="kpi-open-period" data-testid="kpi-open-period" @click="opening = true">
 				<Icon name="heroicons:plus" class="mr-1 h-4 w-4" />Mở kỳ

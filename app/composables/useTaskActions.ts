@@ -170,7 +170,7 @@ export function useTaskActions() {
 			title?: string;
 			description?: string;
 			priority?: TaskListItem['priority'];
-			points?: number;
+			points?: number | null;
 			startDate?: string;
 			assigneeId?: number;
 			reviewerId?: number;

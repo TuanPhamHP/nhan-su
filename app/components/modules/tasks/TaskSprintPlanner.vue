@@ -202,7 +202,7 @@
 		const parts = (['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'] as const).filter(k => s.points[k]).map(k => `${STATUS_LABELS[k]} ${s.points[k]}`);
 		return parts.length ? parts.join(' · ') : 'Chưa có việc';
 	}
-	const backlogPoints = computed(() => (zones.value.backlog ?? []).reduce((n, t) => n + t.points, 0));
+	const backlogPoints = computed(() => (zones.value.backlog ?? []).reduce((n, t) => n + (t.points ?? 0), 0));
 
 	function onPanelChanged() {
 		load(true);

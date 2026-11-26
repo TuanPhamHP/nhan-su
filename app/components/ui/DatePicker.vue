@@ -398,6 +398,7 @@ function toYMD(d: Date): string {
 				<div
 					v-if="isOpen"
 					ref="calendarRef"
+					data-floating-panel
 					:style="dropdownStyle"
 					class="w-[294px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden"
 				>

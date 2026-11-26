@@ -98,7 +98,8 @@ export interface TaskListItem {
 	statusLabel: string;
 	priority: TaskPriority;
 	priorityLabel: string;
-	points: number;
+	/** Null: chưa chấm điểm, tính là 0 khi cộng khối lượng. */
+	points: number | null;
 	source: TaskSource;
 	sourceLabel: string;
 	version: number;
@@ -119,8 +120,9 @@ export interface TaskListItem {
 	assignee: TaskPerson;
 	reviewer: TaskPerson;
 	startDate: string | null;
-	dueDate: string;
-	originalDueDate: string;
+	/** Null: việc không có hạn, không bao giờ quá hạn. */
+	dueDate: string | null;
+	originalDueDate: string | null;
 	dueChangeCount: number;
 	overdue: boolean;
 	firstSubmittedAt: string | null;
@@ -163,7 +165,8 @@ export interface TaskAttachment {
 }
 
 export interface TaskDueChange {
-	oldDueDate: string;
+	/** Null khi việc chưa có hạn trước lần đặt này. */
+	oldDueDate: string | null;
 	newDueDate: string;
 	reason: string;
 	changedBy: TaskPerson;
@@ -193,7 +196,7 @@ export interface TaskDependency {
 	status: TaskStatus;
 	statusLabel: string;
 	startDate: string | null;
-	dueDate: string;
+	dueDate: string | null;
 	visible: boolean;
 	late: boolean;
 }
@@ -235,13 +238,19 @@ export interface TaskListQuery {
 	recurrenceId?: number;
 	/** Việc chờ xếp của dự án bật đợt (dùng kèm `projectId`). */
 	backlog?: boolean;
+	/**
+	 * Lọc điểm kiểu JQL: một hoặc nhiều điều kiện cách dấu phẩy, mỗi điều kiện là toán tử `=`, `!=`, `>`,
+	 * `>=`, `<`, `<=` kèm số, ghép bằng VÀ. Việc chưa có điểm tính là 0. VD `>=3`, `>=2,<=5`, `=0`.
+	 */
+	points?: string;
 }
 
 export interface CreateTaskBody {
 	title: string;
 	assigneeId: number;
-	dueDate: string;
-	points: number;
+	dueDate?: string;
+	/** Bỏ trống là chưa chấm điểm. */
+	points?: number;
 	reviewerId?: number;
 	priority?: TaskPriority;
 	startDate?: string;
@@ -259,7 +268,8 @@ export interface UpdateTaskBody {
 	title?: string;
 	description?: string;
 	priority?: TaskPriority;
-	points?: number;
+	/** `null` bỏ điểm (chưa chấm điểm). */
+	points?: number | null;
 	startDate?: string;
 	assigneeId?: number;
 	reviewerId?: number;
@@ -635,7 +645,7 @@ export interface TaskConflictSnapshot {
 	version: number;
 	status: TaskStatus;
 	statusLabel: string;
-	dueDate: string;
+	dueDate: string | null;
 	assigneeId: number;
 	reviewerId: number;
 	boardOrder: number;

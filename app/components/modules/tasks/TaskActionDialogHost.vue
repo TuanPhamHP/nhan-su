@@ -26,7 +26,7 @@
 		reason.value = '';
 		quality.value = null;
 		touched.value = false;
-		dueDate.value = req?.kind === 'due' ? (req.presetDate ?? req.task.dueDate) : undefined;
+		dueDate.value = req?.kind === 'due' ? (req.presetDate ?? req.task.dueDate ?? undefined) : undefined;
 		assignee.value = req?.kind === 'reassign' ? [req.task.assignee.id] : [];
 		if (req?.kind === 'reassign') directoryStore.load().catch(() => {});
 		if (req) {
@@ -198,8 +198,9 @@
 					<!-- Đổi hạn -->
 					<div v-if="dialog.kind === 'due'" class="space-y-3">
 						<p class="text-sm text-gray-600 dark:text-gray-300">
-							Hạn hiện tại {{ shortDate(dialog.task.dueDate, today) }}
-							<template v-if="dialog.task.dueChangeCount > 0">
+							<template v-if="dialog.task.dueDate">Hạn hiện tại {{ shortDate(dialog.task.dueDate, today) }}</template>
+							<template v-else>Việc này chưa có hạn</template>
+							<template v-if="dialog.task.dueChangeCount > 0 && dialog.task.originalDueDate">
 								, hạn ban đầu {{ shortDate(dialog.task.originalDueDate, today) }}, đã đổi
 								{{ dialog.task.dueChangeCount }} lần
 							</template>

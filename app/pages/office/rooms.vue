@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import BookingDetailModal from '~/components/modules/office/BookingDetailModal.vue';
 	import BookingFormModal from '~/components/modules/office/BookingFormModal.vue';
+	import MyBookingsCalendar from '~/components/modules/office/MyBookingsCalendar.vue';
 	import { useOfficeService } from '~/services/office.service';
 	import {
 		addDaysYmd,
@@ -11,7 +12,6 @@
 		officeErrorMessage,
 		roomNowLabel,
 		slotStartHhmm,
-		sortMyBookings,
 		splitBookingsByDay,
 		vnMinutesOfDay,
 		vnTimeLabel,
@@ -20,6 +20,7 @@
 	} from '~/utils/office.utils';
 	import { formatDate, todayYmd, vnCalendarDate } from '~/utils/date';
 	import { OFFICE_PERMISSIONS } from '~/utils/permission';
+	import { officeRoomBookingTour } from '~/tours/office-rooms';
 	import type { MeetingRoom, OfficeSite, RoomBooking, RoomGrid, RoomStatusNow } from '~/types/office.types';
 
 	/**
@@ -91,6 +92,10 @@
 	const myBookings = ref<RoomBooking[]>([]);
 	const loadingMine = ref(false);
 	const mineError = ref<string | null>(null);
+	/** Khoảng ngày Lịch của tôi đang vẽ; lịch báo lên mỗi khi đổi chế độ xem hay lùi, tới. */
+	const mineRange = ref<{ from: string; to: string } | null>(null);
+	/** Như `loadSeq`, cho Lịch của tôi: bấm "tháng sau" liền tay thì chỉ nhận lượt về của tháng cuối. */
+	let mineSeq = 0;
 
 	/** Mốc thời gian để biết ô giờ nào đã qua và đặt vạch giờ hiện tại; nhịp một phút là đủ. */
 	const now = ref(new Date());
@@ -254,19 +259,29 @@
 		}
 	}
 
-	async function loadMine() {
+	/**
+	 * Tải lượt của tôi trong khoảng ngày lịch đang vẽ. Gọi không kèm khoảng thì tải lại khoảng cũ,
+	 * dùng sau khi đặt, sửa hay huỷ một lượt.
+	 *
+	 * Lịch tháng vẽ tối đa sáu tuần, vẫn dưới mức ba tháng mỗi lần xem mà máy chủ cho phép.
+	 */
+	async function loadMine(range?: { from: string; to: string }) {
+		if (range) mineRange.value = range;
+		const current = mineRange.value;
+		if (!current) return;
+		const seq = ++mineSeq;
 		loadingMine.value = true;
 		mineError.value = null;
 		try {
-			// Bảy ngày tới là khoảng người dùng thực sự cần nhìn; máy chủ cho tối đa ba tháng.
-			const from = todayYmd();
-			const to = vnCalendarDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
-			myBookings.value = await service.myBookings({ from, to });
+			const result = await service.myBookings(current);
+			if (seq !== mineSeq) return;
+			myBookings.value = result;
 		} catch (e) {
+			if (seq !== mineSeq) return;
 			myBookings.value = [];
 			mineError.value = officeErrorMessage(e, 'Chưa tải được lịch họp của bạn. Bạn bấm Thử lại.');
 		} finally {
-			loadingMine.value = false;
+			if (seq === mineSeq) loadingMine.value = false;
 		}
 	}
 
@@ -362,10 +377,6 @@
 		if (!value) date.value = todayYmd();
 	});
 
-	watch(activeTab, tab => {
-		if (tab === 'mine' && !myBookings.value.length && !loadingMine.value) loadMine();
-	});
-
 	function openCreate(roomId: number, hour: number, day: string = anchor.value) {
 		editingBooking.value = null;
 		formRoomId.value = roomId;
@@ -394,8 +405,10 @@
 		return isPastDay(day) || isHourPast(day, hourRange.value.end - 1, now.value);
 	}
 
-	/** Lượt của tôi: sắp tới và đang họp lên trước, lượt đã kết thúc xuống cuối. */
-	const sortedMine = computed(() => sortMyBookings(myBookings.value));
+	/** Bấm một giờ trống trên lưới giờ của Lịch của tôi. */
+	function openCreateFromMine(day: string, hour: number) {
+		openCreate(rooms.value[0]?.id ?? 0, hour, day);
+	}
 
 	/**
 	 * Đặt phòng mà không bấm vào ô giờ nào.
@@ -529,6 +542,15 @@
 	function busyStrip(bookings: RoomBooking[]): Array<{ id: number; style: Record<string, string> }> {
 		return barsOf(bookings).map(bar => ({ id: bar.booking.id, style: bar.style }));
 	}
+
+	// Hướng dẫn "Đặt phòng họp", mở từ nút Hướng dẫn nổi bên phải.
+	useGuideTour('office-room-booking', () =>
+		officeRoomBookingTour({
+			hasSites: () => sites.value.length > 0,
+			canBook: () => rooms.value.length > 0 && canBook.value,
+			showGrid: () => (activeTab.value = 'grid'),
+		}),
+	);
 </script>
 
 <template>
@@ -538,7 +560,12 @@
 			title="Đặt phòng họp"
 			description="Bạn bấm vào một khung giờ còn trống trên lịch để đặt phòng, hoặc bấm nút Đặt phòng rồi tự chọn giờ. Không có bước duyệt, nên đặt xong là phòng đã được giữ."
 		>
-			<CommonAppButton v-if="rooms.length && canBook" variant="primary" @click="openCreateAnyHour">
+			<CommonAppButton
+				v-if="rooms.length && canBook"
+				data-tour="room-book"
+				variant="primary"
+				@click="openCreateAnyHour"
+			>
 				Đặt phòng
 			</CommonAppButton>
 		</UiPageHeader>
@@ -546,7 +573,7 @@
 		<CommonAppModuleNotice module="OFFICE" />
 
 		<div class="border-b border-gray-200 dark:border-gray-700">
-			<nav class="-mb-px flex flex-wrap gap-1">
+			<nav data-tour="room-tabs" class="-mb-px flex flex-wrap gap-1">
 				<button
 					v-for="tab in [
 						{ id: 'grid' as RoomTab, label: 'Lịch phòng' },
@@ -568,7 +595,7 @@
 		</div>
 
 		<template v-if="activeTab === 'grid'">
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_200px] sm:items-end">
+			<div data-tour="room-filters" class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_200px] sm:items-end">
 				<div>
 					<p class="mb-1 text-xs text-gray-500 dark:text-gray-400">Văn phòng</p>
 					<UiSelect v-model="siteId" :options="siteOptions" placeholder="Chọn văn phòng" />
@@ -609,6 +636,7 @@
 			-->
 			<section
 				v-else
+				data-tour="room-calendar"
 				class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 			>
 				<!--
@@ -863,7 +891,7 @@
 											v-for="cell in row.days"
 											:key="cell.date"
 											:class="[
-												'relative min-h-[92px] rounded-lg p-1.5',
+												'group relative min-h-[92px] rounded-lg p-1.5',
 												cell.date === todayYmd()
 													? 'bg-brand-50/70 ring-1 ring-brand-200 dark:bg-brand-900/15 dark:ring-brand-800'
 													: dayClosed(cell.date)
@@ -925,6 +953,32 @@
 													{{ bookingTitle(booking) }}
 												</button>
 											</div>
+
+											<!--
+												Ô không có lượt nào thì ghi rõ bằng chữ ở giữa ô, kẻo ô xám trơn bị đọc nhầm thành
+												ô bị khoá hay khung đang tải. Ngày còn đặt được thì rê chuột vào hiện thêm nút
+												Đặt phòng; nút chỉ để nhìn, cú bấm xuyên xuống lớp bấm của ô bên dưới.
+											-->
+											<div
+												v-if="!cell.bookings.length"
+												class="pointer-events-none absolute inset-x-0 top-4 bottom-0 flex flex-col items-center justify-center gap-1.5 text-[11px] leading-4"
+											>
+												<p
+													:class="
+														dayClosed(cell.date)
+															? 'text-gray-400 dark:text-gray-500'
+															: 'text-emerald-600 dark:text-emerald-400'
+													"
+												>
+													{{ dayClosed(cell.date) ? 'Không có lịch' : 'Trống cả ngày' }}
+												</p>
+												<span
+													v-if="!dayClosed(cell.date) && canBook"
+													class="rounded-md bg-brand-600 px-2.5 py-1 font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:bg-brand-500"
+												>
+													Đặt phòng
+												</span>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -964,78 +1018,27 @@
 
 		<!-- ── Lịch của tôi ────────────────────────────────────────────────── -->
 		<template v-else>
-			<div v-if="loadingMine" class="space-y-3">
-				<div v-for="i in 3" :key="i" class="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
-			</div>
-
 			<div
-				v-else-if="mineError"
+				v-if="mineError && !loadingMine"
 				class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300"
 			>
 				<p>{{ mineError }}</p>
-				<CommonAppButton class="mt-3" size="sm" variant="outline" @click="loadMine">Thử lại</CommonAppButton>
+				<CommonAppButton class="mt-3" size="sm" variant="outline" @click="loadMine()">Thử lại</CommonAppButton>
 			</div>
 
-			<p
-				v-else-if="!myBookings.length"
-				class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
-			>
-				Bảy ngày tới bạn không có lượt họp nào mà mình đặt, chủ trì hoặc được mời.
-			</p>
-
-			<div v-else class="space-y-3">
-				<!-- Lượt đã kết thúc làm mờ và xếp cuối: không còn việc gì để làm với chúng nữa. -->
-				<button
-					v-for="booking in sortedMine"
-					:key="booking.id"
-					type="button"
-					:class="[
-						'block w-full rounded-xl border bg-white p-4 text-left shadow-sm transition-colors hover:border-brand-300 dark:bg-gray-900 dark:hover:border-brand-700',
-						booking.timing === 'ENDED'
-							? 'border-gray-200 opacity-60 dark:border-gray-800'
-							: 'border-gray-200 dark:border-gray-700',
-					]"
-					@click="detailBooking = booking"
-				>
-					<div class="flex flex-wrap items-start justify-between gap-2">
-						<div>
-							<p class="font-medium text-gray-900 dark:text-white">
-								{{ booking.detailsVisible ? booking.title : 'Lượt riêng tư' }}
-							</p>
-							<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-								{{ formatDate(booking.startAt) }} · {{ vnTimeLabel(booking.startAt) }}–{{
-									vnTimeLabel(booking.endAt)
-								}}
-								· {{ booking.room.name }}
-							</p>
-							<!-- Chủ trì đã nghỉ việc thì ghi rõ ngay ở dòng này: lượt đó cần người khác chủ trì. -->
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-								Chủ trì {{ booking.organizer.fullName
-								}}<template v-if="!booking.organizer.isActive"> (đã nghỉ việc)</template> · người đặt
-								{{ booking.createdBy.fullName }}
-							</p>
-						</div>
-						<!--
-							Nhãn lấy thẳng `statusLabel` của máy chủ ("Đã đặt", "Đang họp", "Đã kết thúc",
-							"Đã huỷ"); màu đi theo `timing` để ba trạng thái không cùng một màu xanh.
-						-->
-						<span
-							:class="[
-								'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
-								booking.status === 'CANCELLED'
-									? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
-									: booking.timing === 'ENDED'
-										? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-										: booking.timing === 'ONGOING'
-											? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-											: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-							]"
-						>
-							{{ booking.statusLabel }}
-						</span>
-					</div>
-				</button>
-			</div>
+			<!--
+				Lịch luôn giữ khung và thanh điều hướng, kể cả lúc tải hay lúc lỗi: bấm "tháng sau" mà
+				cả khung biến mất thì nút vừa bấm cũng biến mất dưới tay. Lượt đã huỷ không hiện trên lịch.
+			-->
+			<MyBookingsCalendar
+				:bookings="myBookings"
+				:loading="loadingMine"
+				:can-book="rooms.length > 0 && canBook"
+				:now="now"
+				@range="(from, to) => loadMine({ from, to })"
+				@open="detailBooking = $event"
+				@create="openCreateFromMine"
+			/>
 		</template>
 
 		<BookingFormModal

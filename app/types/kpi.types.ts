@@ -317,11 +317,11 @@ export interface KpiEvidenceTask {
 	canView: boolean;
 	matched: boolean;
 	status: string;
-	points: number;
+	points: number | null;
 	qualityScore: number | null;
 	returnCount: number;
-	originalDueDate: string;
-	dueDate: string;
+	originalDueDate: string | null;
+	dueDate: string | null;
 	firstSubmittedAt: string | null;
 	acceptedAt: string | null;
 }

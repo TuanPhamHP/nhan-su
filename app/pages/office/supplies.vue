@@ -1,936 +1,217 @@
 <script setup lang="ts">
-	import QtyInput from '~/components/modules/office/QtyInput.vue';
+	import SupplyCatalogRow from '~/components/modules/office/SupplyCatalogRow.vue';
+	import SupplyContactPicker from '~/components/modules/office/SupplyContactPicker.vue';
+	import SupplyCustomItemModal from '~/components/modules/office/SupplyCustomItemModal.vue';
 	import SupplyReceiveModal from '~/components/modules/office/SupplyReceiveModal.vue';
-	import { useOfficeService } from '~/services/office.service';
+	import { useMySupplies } from '~/composables/useMySupplies';
+	import { formatDate, formatDateTime } from '~/utils/date';
 	import {
-		QTY_INTEGER_MESSAGE,
-		copyPreviousSummary,
+		SUPPLY_STATUS,
 		lockCountdown,
 		monthLabel,
-		officeErrorCode,
-		officeErrorMessage,
-		officeErrorStatus,
 		officeMoney,
+		supplyLockLabel,
+		supplySharesLabel,
+		supplyStatusLabel,
+		supplyStatusMeta,
+		type SupplyCatalogRow as CatalogRow,
 	} from '~/utils/office.utils';
-	import { formatDate, formatDateTime } from '~/utils/date';
 	import { OFFICE_PERMISSIONS } from '~/utils/permission';
-	import { searchKey } from '~/utils/text-search';
-	import type {
-		CopySkippedItem,
-		SupplyContact,
-		SupplyItem,
-		SupplyLine,
-		SupplyRequest,
-		SupplyRequestListItem,
-		SupplyRequestStatus,
-	} from '~/types/office.types';
+	import {
+		officeSupplyContactTour,
+		officeSupplyRegisterTour,
+		type OfficeSuppliesTourContext,
+	} from '~/tours/office-supplies';
+	import type { SupplyRequest, SupplyRequestListItem } from '~/types/office.types';
 
 	/**
 	 * Văn phòng phẩm của phòng tôi (UI-01), trang dùng chung cho mọi nhân viên.
 	 *
-	 * Cả phòng cùng nhập vào MỘT phiếu và không có nút nộp: phiếu tự khoá lúc `period.lockAt`, nên
-	 * trang đếm ngược tới mốc đó và mỗi dòng ghi rõ ai sửa cuối. Quyền thêm, sửa, xoá lấy từ cờ
-	 * `canEdit` của máy chủ, không tự suy từ trạng thái, vì còn phụ thuộc chế độ chỉ xem của module.
+	 * Một form danh mục: mọi mặt hàng phòng được đặt hiện sẵn theo nhóm, mỗi người gõ phần của mình
+	 * ngay trên dòng và số tự lưu. Cả phòng cùng nhập vào MỘT phiếu và không có nút nộp: phiếu tự khoá
+	 * lúc `period.lockAt`. Logic nạp, lọc và lưu nằm ở `useMySupplies`; trang chỉ bày ra.
 	 */
 	definePageMeta({ title: 'Văn phòng phẩm' });
 
-	const route = useRoute();
-	const router = useRouter();
-	const toast = useToast();
-	const service = useOfficeService();
 	const { user } = useAuth();
-	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
-
-	const requests = ref<SupplyRequestListItem[]>([]);
-	const loadingList = ref(true);
-	const listError = ref<string | null>(null);
-
-	const current = ref<SupplyRequest | null>(null);
-	const loadingDetail = ref(false);
-	const working = ref(false);
-
-	const items = ref<SupplyItem[]>([]);
-	const contact = ref<SupplyContact | null>(null);
-	const showContactForm = ref(false);
-	const contactEmployeeId = ref<number | null>(null);
-	const savingContact = ref(false);
-	const showReceive = ref(false);
-
-	/** Mốc thời gian để đếm ngược; nhịp một phút là đủ cho câu "Còn 2 ngày 5 giờ". */
-	const now = ref(new Date());
-	let ticker: ReturnType<typeof setInterval> | null = null;
-
-	const STATUS_CLASS: Record<SupplyRequestStatus, string> = {
-		OPEN: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-		LOCKED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-		FINALIZED: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-		ISSUED: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400',
-		RECEIVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-	};
-
-	// ─── Thêm dòng ────────────────────────────────────────────────────────────────
-
-	const addItemId = ref<number | null>(null);
-	const addQty = ref<number | undefined>(undefined);
-	const addReason = ref('');
-	const addNote = ref('');
-	/** Hiện ô lý do khi máy chủ báo dòng vượt định mức mà chưa có lý do. */
-	const addNeedsReason = ref(false);
-	const addError = ref('');
-
-	/** Ô số đang giữ chữ gõ sai, ví dụ "2,5" hay "5 hộp": chặn thêm dòng tới khi người dùng gõ lại. */
-	const addQtyInvalid = ref(false);
-
-	const showCustomForm = ref(false);
-	const customName = ref('');
-	const customUnit = ref('');
-	const customQty = ref<number | undefined>(undefined);
-	const customQtyInvalid = ref(false);
-	const customError = ref('');
-	/** Câu nhắc thiếu tên hoặc thiếu đơn vị, để nút không chỉ nằm im màu xám. */
-	const customNameError = ref('');
-	const customUnitError = ref('');
-
-	/** Dòng chờ xoá: hộp xác nhận nêu tên, số và người nhập trước khi xoá thật. */
-	const deleteTarget = ref<SupplyLine | null>(null);
-
-	/** Dòng kỳ trước không chép được, giữ trên màn vì toast tắt mất mà người dùng còn phải nhập lại. */
-	const copySkipped = ref<CopySkippedItem[]>([]);
-
-	/**
-	 * Dòng đang sửa: số và lý do theo `lineId`, cùng cờ "đã sửa" để chỉ hiện nút Lưu khi cần.
-	 *
-	 * Ô số của dòng là PHẦN CỦA NGƯỜI ĐANG XEM, không phải tổng: một dòng do nhiều người cùng xin,
-	 * và mỗi người chỉ sửa phần mình. Tổng của dòng hiện ngay cạnh ô.
-	 */
-	const editQty = reactive<Record<number, number | undefined>>({});
-	const editReason = reactive<Record<number, string>>({});
-	const lineError = reactive<Record<number, string>>({});
-	/** Ô số của dòng đang giữ chữ gõ sai. */
-	const lineQtyInvalid = reactive<Record<number, boolean>>({});
-	/**
-	 * Dòng cần ghi lý do vượt định mức.
-	 *
-	 * Tách khỏi `lineError`: trước đây ô lý do hiện mỗi khi dòng có BẤT KỲ câu lỗi nào, nên xoá
-	 * trắng ô số (lỗi "ô số lượng đang trống") cũng làm mọc thêm ô "Lý do vượt định mức" chẳng liên
-	 * quan gì.
-	 */
-	const lineNeedsReason = reactive<Record<number, boolean>>({});
-
-	/** Dòng đang mở bảng sửa phần của từng người; chỉ trưởng phòng, đầu mối (`canEditAllShares`) mở được. */
-	const shareEditLineId = ref<number | null>(null);
-	/** Số đang gõ cho phần của từng người ở dòng đang mở, theo `employeeId`. */
-	const shareEdits = reactive<Record<number, number | undefined>>({});
-	const shareEditInvalid = reactive<Record<number, boolean>>({});
-
-	/** Dòng danh mục của phiếu theo mặt hàng, để biết thêm mặt hàng nào là cộng vào dòng đang có. */
-	const linesByItemId = computed(() => {
-		const map = new Map<number, SupplyLine>();
-		for (const line of current.value?.lines ?? []) if (line.itemId != null) map.set(line.itemId, line);
-		return map;
-	});
-
-	/** Đơn vị trong câu văn viết thường: "nay 17 chiếc", không phải "nay 17 Chiếc". */
-	function unitWord(unit: string | null | undefined): string {
-		return (unit ?? '').toLocaleLowerCase('vi');
-	}
-
-	/**
-	 * Mọi mặt hàng của danh mục, kèm số phiếu đang có và định mức ngay trên nhãn.
-	 *
-	 * Định mức nằm ở ô chọn chứ không chỉ ở dòng đã thêm, vì người dùng cần biết trần của phòng
-	 * TRƯỚC khi gõ số, không phải sau khi bị máy chủ từ chối. Mặt hàng phiếu đã có vẫn chọn được:
-	 * thêm nữa thì máy chủ cộng vào dòng đang có, nên nhãn nói luôn số đang có để người dùng gõ phần
-	 * cần thêm chứ không gõ lại cả tổng. Danh mục của màn này không có đơn giá: nhân viên thường
-	 * nhận `unitPrice` rỗng và giá không phải việc của họ.
-	 */
-	const itemOptions = computed(() =>
-		items.value.map(item => {
-			// TÊN MẶT HÀNG ĐỨNG TRƯỚC tên nhóm: ô chọn chỉ hiện một dòng và cắt phần đuôi, nên để
-			// nhóm lên trước thì trên điện thoại người dùng đọc được tên nhóm mà không thấy mặt hàng.
-			const parts = [`${item.name} (${item.unit})`];
-			const line = linesByItemId.value.get(item.id);
-			if (line) parts.push(`phiếu đang có ${line.requestedQty}`);
-			if (item.quota != null) parts.push(`định mức ${item.quota} ${item.unit} mỗi tháng`);
-			if (item.groupName) parts.push(item.groupName);
-			return { value: item.id, label: parts.join(' · ') };
-		}),
-	);
-
-	/** Mặt hàng đang chọn ở form thêm dòng, để biết định mức và nhắc lý do ngay khi gõ vượt. */
-	const addItem = computed(() => items.value.find(item => item.id === addItemId.value) ?? null);
-
-	/** Dòng phiếu đang có của mặt hàng đang chọn; có thì bấm Thêm là cộng vào dòng này. */
-	const addExistingLine = computed(() => (addItemId.value == null ? null : linesByItemId.value.get(addItemId.value) ?? null));
-
-	function pickItem(value: string | number) {
-		addItemId.value = Number(value);
-		addError.value = '';
-	}
-
-	/** Số phiếu sẽ có sau khi thêm: số đang có của dòng cộng số gõ, vì máy chủ tính định mức trên tổng này. */
-	const addTotal = computed(() => (addQty.value == null ? null : (addExistingLine.value?.requestedQty ?? 0) + addQty.value));
-
-	const addTotalOverQuota = computed(() => {
-		const quota = addItem.value?.quota;
-		return quota != null && addTotal.value != null && addTotal.value > quota;
-	});
-
-	/**
-	 * Cần nhập lý do trước khi gửi.
-	 *
-	 * Dòng đang có đã ghi lý do vượt định mức thì máy chủ giữ lý do đó khi cộng thêm, nên không bắt
-	 * người dùng gõ lại một lý do phòng đã có.
-	 */
-	const addOverQuota = computed(() => addTotalOverQuota.value && !addExistingLine.value?.overQuotaReason);
-
-	/** Câu nhắc lý do: mặt hàng đã có thì nói cả tổng, vì số gõ một mình có khi chưa vượt. */
-	const addOverQuotaMessage = computed(() => {
-		const item = addItem.value;
-		const line = addExistingLine.value;
-		if (!item || item.quota == null) return '';
-		// Định mức luôn ghi kèm ĐƠN VỊ: "vượt định mức 10" không nói 10 cái hay 10 hộp.
-		const quota = `${item.quota} ${unitWord(item.unit)} mỗi tháng của phòng`;
-		if (line && addQty.value != null) {
-			return `Phiếu đang có ${line.requestedQty}, thêm ${addQty.value} là ${addTotal.value}, vượt định mức ${quota}, bạn ghi lý do.`;
-		}
-		return `Số này vượt định mức ${quota}, bạn ghi lý do.`;
-	});
-
-	const canEdit = computed(() => !!current.value?.canEdit);
+	const { hasPermission } = usePermissions();
+	const supplies = useMySupplies();
+	const {
+		requests,
+		loadingList,
+		listError,
+		current,
+		loadingDetail,
+		detailError,
+		pendingRequestId,
+		loadingItems,
+		itemsError,
+		contact,
+		savingContact,
+		copying,
+		copySkipped,
+		now,
+		canEdit,
+		filteredGroups,
+		groupChips,
+		totalRows,
+		search,
+		groupFilter,
+		onlySelected,
+		myCount,
+		roomCount,
+		saveStatus,
+		rowState,
+		savedFlash,
+		undo,
+		notices,
+		highlighted,
+		contactOptions,
+		isDepartmentManager,
+		lockPassed,
+		readOnlyNotice,
+		hasFinalQty,
+		hasReceivedQty,
+	} = supplies;
 
 	/** Người có quyền mở và theo dõi kỳ: dùng để chỉ đường cho HCNS không thuộc phòng ban nào. */
-	const { hasPermission } = usePermissions();
 	const canManagePeriods = computed(() => hasPermission(OFFICE_PERMISSIONS.supplyReport));
 
-	/**
-	 * Đếm ngược chỉ có nghĩa khi kỳ còn nhận đăng ký.
-	 *
-	 * Kỳ đã khoá rồi mà màn hình vẫn đếm "Còn 4 ngày" thì người đọc tưởng mình còn kịp sửa, trong
-	 * khi phiếu đã sang tay HCNS.
-	 */
-	const countdown = computed(() => {
-		const period = current.value?.period;
-		if (!period || period.status !== 'OPEN') return '';
-		return lockCountdown(period.lockAt, now.value);
-	});
+	const showReceive = ref(false);
+	const contactOpen = ref(false);
+	const customOpen = ref(false);
+	const customName = ref('');
+	/** Dòng chờ xoá cả dòng: hộp xác nhận nêu rõ phần của từng người sẽ mất. */
+	const deleteTarget = ref<CatalogRow | null>(null);
+	const deleting = ref(false);
+	const collapsed = ref(new Set<string>());
+
+	const period = computed(() => current.value?.period ?? null);
 
 	/** Tên kỳ thường đã là "Tháng 12/2026", nên chỉ nhắc lại tháng khi tiêu đề kỳ khác đi. */
 	const monthSuffix = computed(() => {
-		const period = current.value?.period;
-		if (!period) return '';
-		const label = monthLabel(period.month);
-		return period.title.trim() === label ? '' : label;
+		const p = period.value;
+		if (!p) return '';
+		const label = monthLabel(p.month);
+		return p.title.trim() === label ? '' : label;
 	});
 
-	/** Nhóm của các dòng tự gõ; luôn ở cuối phiếu, giống file đăng ký của HCNS. */
-	const CUSTOM_GROUP = 'Mặt hàng ngoài danh mục';
-
-	/**
-	 * Dòng xếp theo nhóm, giữ thứ tự máy chủ trả về, riêng nhóm ngoài danh mục xuống cuối.
-	 *
-	 * Thứ tự máy chủ là thứ tự thêm dòng, nên một mặt hàng tự gõ thêm giữa buổi sẽ chen vào giữa
-	 * các nhóm của danh mục và người đọc tưởng nó thuộc nhóm phía trên.
-	 */
-	const groupedLines = computed(() => {
-		const map = new Map<string, SupplyLine[]>();
-		for (const line of current.value?.lines ?? []) {
-			const key = line.groupName || CUSTOM_GROUP;
-			const list = map.get(key) ?? [];
-			list.push(line);
-			map.set(key, list);
-		}
-		const groups = [...map.entries()].map(([groupName, lines]) => ({ groupName, lines }));
-		return groups.sort((a, b) => Number(a.groupName === CUSTOM_GROUP) - Number(b.groupName === CUSTOM_GROUP));
+	const countdown = computed(() => {
+		const p = period.value;
+		if (!p || current.value?.status !== 'OPEN') return '';
+		return lockPassed.value ? 'Đã quá hạn' : lockCountdown(p.lockAt, now.value);
 	});
 
-	/**
-	 * Câu giải thích khi phiếu không sửa được nữa.
-	 *
-	 * Kỳ bị HCNS khoá sớm thì hạn chót trên phiếu vẫn là ngày cũ, nên người dùng mở ra thấy "Hạn
-	 * chót 24/11" mà không nhập được gì và tưởng hệ thống lỗi. Mốc khoá thật nằm ở `lockedAt`.
-	 */
-	const lockedNotice = computed(() => {
-		const request = current.value;
-		const period = request?.period;
-		if (!request || !period || canEdit.value || request.status === 'OPEN') return '';
-		if (period.status === 'CLOSED') {
-			return 'Kỳ này đã đóng nên phiếu chỉ còn để xem. Phòng còn thiếu thì báo HCNS tạo phiếu bổ sung.';
-		}
-		// Câu khoá sớm chỉ đúng khi phiếu đang CHỜ HCNS CHỐT. Phiếu đã chốt, đã cấp hay đã nhận thì
-		// việc của phòng không còn là "nhập cho kịp hạn" nữa, mà là nhận hàng và đối chiếu số, nên
-		// nhắc lại chuyện khoá kỳ chỉ làm người đọc tưởng mình vừa mất lượt đăng ký.
-		if (request.status !== 'LOCKED') return '';
-		const at = period.lockedAt ?? period.lockAt;
-		return `HCNS đã khoá kỳ này lúc ${formatDateTime(at)}, phiếu không sửa được nữa. Phòng còn thiếu thì báo HCNS tạo phiếu bổ sung.`;
-	});
+	function requestLabel(req: SupplyRequestListItem | SupplyRequest): string {
+		const parts = [req.period.title, req.period.officeSite.name];
+		if (req.isSupplement) parts.push(`bổ sung ${req.sequence}`);
+		return parts.join(' · ');
+	}
+
+	// ─── Chọn phiếu ───────────────────────────────────────────────────────────
 
 	/**
-	 * Người dùng vừa sửa ô thì câu nhắc cũ hết đúng; câu vượt định mức thì ở lại cho tới khi số hạ,
-	 * và đổi theo số mới vì nó nêu cả tổng.
+	 * Phòng có từ hai phiếu đang đăng ký trở lên (hai văn phòng, phiếu bổ sung) thì các phiếu đó hiện
+	 * thành thẻ, để thấy ngay mình đang sửa phiếu nào. Phiếu các kỳ trước nằm trong một menu: vẫn phải
+	 * mở được để xem số đã chốt và bấm Đã nhận, nhưng không cần chiếm chỗ đầu trang.
 	 */
-	watch([addItemId, addQty], () => {
-		if (!addOverQuota.value) addError.value = '';
-		else if (addNeedsReason.value) addError.value = addOverQuotaMessage.value;
-	});
+	const openTabs = computed(() => requests.value.filter(r => r.status === 'OPEN'));
+	const showTabs = computed(() => openTabs.value.length >= 2);
+	const otherRequests = computed(() => requests.value.filter(r => !(showTabs.value && r.status === 'OPEN')));
+	const showOtherMenu = computed(() => otherRequests.value.some(r => r.id !== current.value?.id));
 
-	/** Người của phòng tôi, để trưởng phòng chọn đầu mối. */
-	const departmentEmployees = computed(() => {
-		const departmentId = contact.value?.departmentId;
-		if (!departmentId) return [];
-		return employees.value.filter(e => e.department?.id === departmentId && e.status === 'ACTIVE');
-	});
+	const otherMenuOpen = ref(false);
+	const {
+		root: otherMenuRoot,
+		above: otherMenuAbove,
+		alignEnd: otherMenuAlignEnd,
+		toggle: toggleOtherMenu,
+		close: closeOtherMenu,
+	} = usePopover(otherMenuOpen);
 
-	const contactOptions = computed(() => departmentEmployees.value.map(e => ({ value: e.id, label: e.fullName })));
-
-	/** Chỉ trưởng phòng đổi được đầu mối, nên nút chỉ hiện với chính họ. */
-	const isDepartmentManager = computed(() => !!contact.value?.manager && contact.value.manager.id === user.value?.id);
-
-	// ─── Nạp dữ liệu ──────────────────────────────────────────────────────────────
-
-	async function loadList() {
-		loadingList.value = true;
-		listError.value = null;
-		try {
-			requests.value = await service.myRequests();
-		} catch (e) {
-			requests.value = [];
-			listError.value = officeErrorMessage(e, 'Chưa tải được phiếu của phòng bạn. Bạn bấm Thử lại.');
-		} finally {
-			loadingList.value = false;
-		}
+	async function pickRequest(id: number) {
+		closeOtherMenu();
+		await supplies.selectRequest(id);
 	}
 
-	function fillEdits(data: SupplyRequest) {
-		current.value = data;
-		for (const line of data.lines) {
-			editQty[line.id] = line.myQty;
-			editReason[line.id] = line.overQuotaReason ?? '';
-			delete lineError[line.id];
-			delete lineNeedsReason[line.id];
-			delete lineQtyInvalid[line.id];
-		}
-		// Bảng sửa phần đang mở thì nạp lại số mới; dòng đã bị xoá (rút hết phần) thì đóng bảng.
-		const shareLine = data.lines.find(l => l.id === shareEditLineId.value);
-		if (shareLine && data.canEditAllShares) fillShareEdits(shareLine);
-		else shareEditLineId.value = null;
+	// ─── Danh mục ─────────────────────────────────────────────────────────────
+
+	const searching = computed(() => !!search.value.trim());
+	const noResults = computed(() => searching.value && !filteredGroups.value.length);
+
+	/** Thanh công cụ dính; tiêu đề nhóm dính ngay dưới mép của nó (`useStickyBottom`). */
+	const toolbarRef = ref<HTMLElement | null>(null);
+	const { bottom: toolbarBottom } = useStickyBottom(toolbarRef);
+
+	const listRef = ref<HTMLElement | null>(null);
+
+	/** Enter, ↑ và ↓ trong ô số chuyển sang ô của dòng kề bên; ô cuối thì dừng. */
+	function moveFocus(direction: 1 | -1) {
+		const inputs = [...(listRef.value?.querySelectorAll<HTMLInputElement>('input[data-supply-qty]:not(:disabled)') ?? [])];
+		const index = inputs.findIndex(input => input === document.activeElement);
+		inputs[index + direction]?.focus();
 	}
 
-	function fillShareEdits(line: SupplyLine) {
-		for (const key of Object.keys(shareEdits)) delete shareEdits[Number(key)];
-		for (const key of Object.keys(shareEditInvalid)) delete shareEditInvalid[Number(key)];
-		for (const share of line.shares) shareEdits[share.employee.id] = share.qty;
+	function toggleGroup(name: string) {
+		const next = new Set(collapsed.value);
+		if (next.has(name)) next.delete(name);
+		else next.add(name);
+		collapsed.value = next;
 	}
 
-	async function openRequest(id: number): Promise<boolean> {
-		loadingDetail.value = true;
-		try {
-			fillEdits(await service.myRequest(id));
-			return true;
-		} catch (e) {
-			// Mở phiếu phòng khác (link cũ, link của người khác) thì nói rõ và ở lại danh sách.
-			// Phiếu đã biến mất (kỳ bị HCNS huỷ) là chuyện khác: nói thẳng là nó không còn, đừng
-			// bảo người dùng thử lại một việc không bao giờ chạy được nữa.
-			const message =
-				officeErrorCode(e) === 'OFFICE_SUPPLY_NOT_YOUR_DEPARTMENT'
-					? officeErrorMessage(e, 'Phiếu này không phải của phòng bạn.')
-					: officeErrorStatus(e) === 404
-						? 'Phiếu này không còn, có thể kỳ đã bị HCNS huỷ.'
-						: officeErrorMessage(e, 'Chưa mở được phiếu này. Bạn thử lại sau ít phút.');
-			current.value = null;
-			toast.error(message);
-			return false;
-		} finally {
-			loadingDetail.value = false;
-		}
+	function openCustom(name = '') {
+		customName.value = name;
+		customOpen.value = true;
 	}
 
-	async function loadItems() {
-		try {
-			items.value = await service.mySupplyItems();
-		} catch {
-			// Thiếu danh mục thì chỉ mất ô chọn mặt hàng, phiếu vẫn đọc và sửa số được.
-			items.value = [];
-		}
-	}
-
-	async function loadContact() {
-		try {
-			contact.value = await service.mySupplyContact();
-			contactEmployeeId.value = contact.value.contact?.id ?? null;
-		} catch {
-			// Người không thuộc phòng nào nhận 403 ở đây; thẻ đầu mối đơn giản là không hiện.
-			contact.value = null;
-		}
-	}
-
-	/**
-	 * Mở sẵn phiếu theo `?request_id=` của thông báo; không có thì mở phiếu đầu danh sách.
-	 *
-	 * Thông báo trỏ tới một phiếu đã mất thì DỪNG ở danh sách, không mở phiếu khác: mở kỳ khác ra
-	 * làm người dùng tưởng mình đang xem kỳ trong thông báo và sửa số của một kỳ không liên quan.
-	 */
-	async function openInitial() {
-		const raw = route.query.request_id;
-		if (raw) {
-			const id = Number(raw);
-			// Dọn query trước khi gọi API: lỗi thì URL vẫn sạch, bấm F5 không mở lại.
-			router.replace({ path: '/office/supplies' });
-			if (id && !Number.isNaN(id)) {
-				await openRequest(id);
-				return;
-			}
-			toast.error('Đường dẫn thông báo không mang đúng mã phiếu.');
-		}
-		const first = requests.value[0];
-		if (first) await openRequest(first.id);
-	}
-
-	onMounted(async () => {
-		ticker = setInterval(() => (now.value = new Date()), 60_000);
-		await loadList();
-		await Promise.all([loadItems(), loadContact()]);
-		directoryStore.load().catch(() => {
-			// Không có danh sách nhân viên thì trưởng phòng tạm chưa chọn được đầu mối.
-		});
-		await openInitial();
-	});
-
-	onUnmounted(() => {
-		if (ticker) clearInterval(ticker);
-	});
-
-	/** Rời trang khi còn số chưa lưu thì lưu trước, không để số biến mất lặng lẽ. */
-	onBeforeRouteLeave(async () => {
-		await flushDirtyLines();
-	});
-
-	// ─── Thao tác trên dòng ───────────────────────────────────────────────────────
-
-	function afterWrite(data: SupplyRequest) {
-		fillEdits(data);
-		// Danh sách mang số dòng của từng phiếu, nên nó cũng cũ sau mỗi lần ghi.
-		loadList();
-	}
-
-	/**
-	 * Thêm dòng. Nút luôn bấm được, thiếu gì thì nói ra ngay dưới ô đó.
-	 *
-	 * Nút xám không giải thích là thứ bốn người dùng UAT đều kẹt lại: họ bấm vài lần, không có gì
-	 * xảy ra, rồi kết luận là trang bị treo.
-	 */
-	async function addLine() {
-		const requestId = current.value?.id;
-		if (!requestId || working.value) return;
-		if (addQtyInvalid.value) {
-			addError.value = QTY_INTEGER_MESSAGE;
-			return;
-		}
-		if (!addItemId.value) {
-			addError.value = 'Bạn chọn mặt hàng trong danh mục trước, hoặc dùng ô mặt hàng ngoài danh mục ở dưới.';
-			return;
-		}
-		if (addQty.value == null) {
-			addError.value = 'Bạn nhập số lượng cần xin, ví dụ 2.';
-			return;
-		}
-		// Biết định mức từ danh mục thì nhắc ngay tại chỗ, khỏi phải gửi lên mới biết thiếu lý do.
-		if (addOverQuota.value && !addReason.value.trim()) {
-			addNeedsReason.value = true;
-			addError.value = addOverQuotaMessage.value;
-			return;
-		}
-		// Cộng hay tạo mới thì biết trước bằng dòng đang có, để câu báo sau khi thêm nói đúng việc
-		// vừa xảy ra; người khác vừa thêm cùng mặt hàng thì máy chủ vẫn cộng, câu sau đó tự đúng lại
-		// vì đọc số từ phiếu máy chủ trả về.
-		const itemId = addItemId.value;
-		const qty = addQty.value;
-		working.value = true;
-		addError.value = '';
-		try {
-			const data = await service.addLine(requestId, {
-				itemId,
-				requestedQty: qty,
-				overQuotaReason: addReason.value.trim() || undefined,
-				note: addNote.value.trim() || undefined,
-			});
-			const before = linesByItemId.value.get(itemId);
-			afterWrite(data);
-			addItemId.value = null;
-			addQty.value = undefined;
-			addReason.value = '';
-			addNote.value = '';
-			addNeedsReason.value = false;
-			const merged = before ? data.lines.find(l => l.id === before.id) : undefined;
-			toast.success(mergedMessage(merged, qty));
-		} catch (e) {
-			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
-				// Định mức tính cho cả tháng và cộng cả số phòng đã xin ở văn phòng khác, nên dù
-				// ô chọn nói chưa vượt, máy chủ vẫn có thể bắt ghi lý do: mở ô lý do kèm câu của nó.
-				addNeedsReason.value = true;
-				addError.value = officeErrorMessage(e, 'Số này vượt định mức của phòng, bạn ghi lý do.');
-			} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
-				// Tổng sau khi cộng quá trần, hoặc ghi chú nối vào quá dài: câu của máy chủ nói rõ số.
-				addError.value = officeErrorMessage(e, 'Số hoặc ghi chú sau khi cộng vào dòng đang có vượt giới hạn.');
-			} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
-				await reloadAfterBusy(e, requestId);
-			} else if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG') {
-				// Người dùng gõ tay một thứ đã có sẵn: nói tên đúng và đẩy họ về ô chọn danh mục.
-				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong danh mục, bạn chọn trong danh sách.');
-			} else if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
-				toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
-				await openRequest(requestId);
-			} else {
-				toast.error(officeErrorMessage(e, 'Chưa thêm được dòng. Bạn thử lại sau ít phút.'));
-			}
-		} finally {
-			working.value = false;
-		}
-	}
-
-	async function addCustomLine() {
-		const requestId = current.value?.id;
-		if (!requestId || working.value) return;
-		customNameError.value = '';
-		customUnitError.value = '';
-		customError.value = '';
-		if (customQtyInvalid.value) {
-			customError.value = QTY_INTEGER_MESSAGE;
-			return;
-		}
-		if (!customName.value.trim()) {
-			customNameError.value = 'Bạn ghi tên mặt hàng, ví dụ Pin 3A.';
-			return;
-		}
-		if (!customUnit.value.trim()) {
-			customUnitError.value = 'Bạn ghi đơn vị, ví dụ Đôi, Hộp, Chiếc.';
-			return;
-		}
-		if (customQty.value == null) {
-			customError.value = 'Bạn nhập số lượng cần xin, ví dụ 2.';
-			return;
-		}
-		const name = customName.value.trim();
-		const unit = customUnit.value.trim();
-		const qty = customQty.value;
-		// Cùng tên và đơn vị với một dòng ngoài danh mục đang có (so không dấu, không hoa thường như
-		// máy chủ) thì máy chủ cộng vào dòng đó, nên câu báo cũng phải nói là cộng.
-		const before = (current.value?.lines ?? []).find(
-			l => l.itemId == null && searchKey(l.name) === searchKey(name) && searchKey(l.unit ?? '') === searchKey(unit),
-		);
-		working.value = true;
-		try {
-			const data = await service.addLine(requestId, { customName: name, customUnit: unit, requestedQty: qty });
-			afterWrite(data);
-			customName.value = '';
-			customUnit.value = '';
-			customQty.value = undefined;
-			showCustomForm.value = false;
-			const merged = before ? data.lines.find(l => l.id === before.id) : undefined;
-			toast.success(mergedMessage(merged, qty));
-		} catch (e) {
-			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_LINE_IN_CATALOG') {
-				// Câu của máy chủ nêu tên đúng trong danh mục, nên để ngay dưới ô tên tự gõ.
-				customError.value = officeErrorMessage(e, 'Mặt hàng này đã có trong danh mục, bạn chọn trong danh sách ở trên.');
-			} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
-				customError.value = officeErrorMessage(e, 'Số sau khi cộng vào dòng đang có vượt giới hạn.');
-			} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
-				await reloadAfterBusy(e, requestId);
-			} else {
-				toast.error(
-					officeErrorMessage(e, 'Chưa thêm được mặt hàng ngoài danh mục. Bạn kiểm tra lại tên và đơn vị.'),
-				);
-			}
-		} finally {
-			working.value = false;
-		}
-	}
-
-	/**
-	 * Câu báo sau khi thêm: cộng vào dòng đang có thì nói số vừa thêm và tổng mới, để người dùng
-	 * biết phiếu không mọc thêm dòng trùng mà dòng cũ đã tăng lên.
-	 */
-	function mergedMessage(merged: SupplyLine | undefined, qty: number): string {
-		if (!merged) return 'Đã thêm vào phiếu.';
-		const unit = unitWord(merged.unit);
-		return `Đã cộng thêm ${qty} ${unit} vào phần của bạn ở ${merged.name}, dòng nay ${merged.requestedQty} ${unit}.`.replace(
-			/\s+/g,
-			' ',
-		);
-	}
-
-	// ─── Phần của từng người trên một dòng ──────────────────────────────────────────
-
-	/** "Bạn 4 · Đỗ Hồng Hạnh 12": ai xin bao nhiêu trong tổng của dòng. */
-	function sharesLabel(line: SupplyLine): string {
-		return line.shares.map(s => `${s.isMine ? 'Bạn' : s.employee.fullName} ${s.qty}`).join(' · ');
-	}
-
-	function hasOtherShares(line: SupplyLine): boolean {
-		return line.shares.some(s => !s.isMine);
-	}
-
-	/**
-	 * Xoá cả dòng là xoá luôn phần của mọi người, nên chỉ trưởng phòng, đầu mối hoặc người duy nhất
-	 * có phần mới xoá được; người khác rút phần của mình.
-	 */
-	function canDeleteLine(line: SupplyLine): boolean {
-		return !!current.value?.canEditAllShares || !hasOtherShares(line);
-	}
-
-	/** Tổng của dòng nếu phần của `employeeId` đổi thành `qty`; định mức tính trên tổng này. */
-	function totalWithShare(line: SupplyLine, employeeId: number | undefined, qty: number): number {
-		const currentQty = line.shares.find(s => s.employee.id === employeeId)?.qty ?? 0;
-		return line.requestedQty - currentQty + qty;
-	}
-
-	/** Tổng xem trước khi đang gõ phần của mình; ô trống thì giữ tổng hiện tại. */
-	function previewTotal(line: SupplyLine): number {
-		const qty = editQty[line.id];
-		return qty == null || lineQtyInvalid[line.id] ? line.requestedQty : totalWithShare(line, user.value?.id, qty);
-	}
-
-	/**
-	 * Lỗi chung của các lệnh ghi phần: định mức thì mở ô lý do của dòng, kỳ khoá hoặc dữ liệu cũ thì
-	 * tải lại phiếu, còn lại báo câu của máy chủ.
-	 */
-	async function handleShareError(e: unknown, line: SupplyLine, requestId: number) {
-		const code = officeErrorCode(e);
-		if (code === 'OFFICE_SUPPLY_OVER_QUOTA_REASON_REQUIRED') {
-			lineNeedsReason[line.id] = true;
-			lineError[line.id] = officeErrorMessage(e, 'Tổng của dòng vượt định mức của phòng, bạn ghi lý do.');
-		} else if (code === 'OFFICE_SUPPLY_LINE_INVALID') {
-			lineError[line.id] = officeErrorMessage(e, 'Số này chưa hợp lệ, bạn kiểm tra lại.');
-		} else if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED') {
-			toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
-			await openRequest(requestId);
-		} else if (code === 'OFFICE_SUPPLY_SHARE_FORBIDDEN' || code === 'OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES') {
-			toast.warning(officeErrorMessage(e, 'Bạn chỉ sửa được phần của mình.'));
-			await openRequest(requestId);
-		} else if (code === 'OFFICE_SUPPLY_LINE_BUSY') {
-			await reloadAfterBusy(e, requestId);
-		} else if (!(await reloadIfStale(e, requestId))) {
-			toast.error(officeErrorMessage(e, 'Chưa lưu được dòng này. Bạn thử lại sau ít phút.'));
-		}
-	}
-
-	function withdrawShare(line: SupplyLine) {
-		editQty[line.id] = 0;
-		saveLine(line);
-	}
-
-	function toggleShareEdit(line: SupplyLine) {
-		if (shareEditLineId.value === line.id) {
-			shareEditLineId.value = null;
-			return;
-		}
-		shareEditLineId.value = line.id;
-		fillShareEdits(line);
-	}
-
-	function shareDirty(line: SupplyLine, employeeId: number): boolean {
-		return shareEdits[employeeId] !== line.shares.find(s => s.employee.id === employeeId)?.qty;
-	}
-
-	/** Trưởng phòng, đầu mối đặt phần của một người đã có phần; 0 là rút phần của người đó. */
-	async function saveShare(line: SupplyLine, employeeId: number) {
-		const requestId = current.value?.id;
-		const qty = shareEdits[employeeId];
-		if (!requestId || working.value || qty == null || shareEditInvalid[employeeId]) return;
-		const total = totalWithShare(line, employeeId, qty);
-		if (line.quota != null && total > line.quota && !editReason[line.id]?.trim()) {
-			lineNeedsReason[line.id] = true;
-			lineError[line.id] = `Tổng của dòng sẽ là ${total}, vượt định mức ${line.quota} ${unitWord(line.unit)} mỗi tháng của phòng, bạn ghi lý do.`;
-			return;
-		}
-		const name = line.shares.find(s => s.employee.id === employeeId)?.employee.fullName ?? 'người này';
-		working.value = true;
-		delete lineError[line.id];
-		try {
-			afterWrite(
-				await service.setLineShare(requestId, line.id, employeeId, {
-					qty,
-					overQuotaReason: editReason[line.id]?.trim() || undefined,
-				}),
-			);
-			toast.success(qty === 0 ? `Đã rút phần của ${name} ở ${line.name}.` : `Đã lưu phần của ${name} ở ${line.name}.`);
-		} catch (e) {
-			await handleShareError(e, line, requestId);
-		} finally {
-			working.value = false;
-		}
-	}
-
-	/**
-	 * Người khác đang sửa đúng dòng này liên tục nên máy chủ không cộng được: báo câu của máy chủ
-	 * và tải lại phiếu để người dùng thấy số mới nhất trước khi thử lại.
-	 */
-	async function reloadAfterBusy(error: unknown, requestId: number) {
-		toast.warning(officeErrorMessage(error, 'Dòng này đang được người khác sửa. Phiếu đã được tải lại, bạn thử lại.'));
-		await openRequest(requestId);
-	}
-
-	function lineDirty(line: SupplyLine): boolean {
-		return editQty[line.id] !== line.myQty || (editReason[line.id] ?? '') !== (line.overQuotaReason ?? '');
-	}
-
-	/** Lưu phần của người đang xem trên dòng; 0 là rút phần, phần cuối cùng bị rút thì dòng biến mất. */
-	async function saveLine(line: SupplyLine) {
-		const requestId = current.value?.id;
-		const me = user.value?.id;
-		const qty = editQty[line.id];
-		if (!requestId || !me || working.value) return;
-		if (lineQtyInvalid[line.id]) {
-			lineError[line.id] = QTY_INTEGER_MESSAGE;
-			return;
-		}
-		if (qty == null) {
-			lineError[line.id] = 'Ô phần của bạn đang trống. Bạn nhập số, hoặc 0 để rút phần của bạn.';
-			return;
-		}
-		// Định mức tính trên tổng của dòng sau khi đổi phần, máy chủ đã gửi kèm nên chặn được ngay.
-		const total = totalWithShare(line, me, qty);
-		if (line.quota != null && total > line.quota && !editReason[line.id]?.trim()) {
-			lineNeedsReason[line.id] = true;
-			lineError[line.id] = `Tổng của dòng sẽ là ${total}, vượt định mức ${line.quota} ${unitWord(line.unit)} mỗi tháng của phòng, bạn ghi lý do.`;
-			return;
-		}
-		working.value = true;
-		delete lineError[line.id];
-		try {
-			afterWrite(
-				await service.setLineShare(requestId, line.id, me, {
-					qty,
-					overQuotaReason: editReason[line.id]?.trim() || undefined,
-				}),
-			);
-			toast.success(qty === 0 ? `Đã rút phần của bạn ở ${line.name}.` : `Đã lưu phần của bạn ở ${line.name}.`);
-		} catch (e) {
-			await handleShareError(e, line, requestId);
-		} finally {
-			working.value = false;
-		}
-	}
-
-	/**
-	 * Cả phòng nhập cùng một phiếu, nên người này lưu lúc người kia vừa xoá dòng là chuyện thường.
-	 *
-	 * Gặp 404 (dòng không còn) hoặc 409 (mặt hàng đã có dòng khác) thì tải lại phiếu: giữ màn hình
-	 * cũ rồi báo lỗi sẽ khiến người dùng bấm Lưu mãi vào một dòng không còn tồn tại.
-	 */
-	async function reloadIfStale(error: unknown, requestId: number): Promise<boolean> {
-		const stale = officeErrorStatus(error) === 404 || officeErrorCode(error) === 'OFFICE_SUPPLY_LINE_EXISTS';
-		if (!stale) return false;
-		toast.warning(
-			officeErrorMessage(error, 'Người khác trong phòng vừa sửa phiếu này, nên phiếu đã được tải lại.'),
-		);
-		await openRequest(requestId);
-		return true;
-	}
-
-	/** Nhịp lưu khi rời ô hoặc bấm Enter: số đã gõ không được mất khi chuyển thẻ tháng hay rời trang. */
-	function saveLineIfDirty(line: SupplyLine) {
-		if (!canEdit.value || working.value) return;
-		if (lineQtyInvalid[line.id] || editQty[line.id] == null) return;
-		if (!lineDirty(line)) return;
-		saveLine(line);
-	}
-
-	/**
-	 * Lưu mọi dòng còn số chưa lưu, rồi mới đi chỗ khác.
-	 *
-	 * Người dùng gõ 12 vào một dòng rồi bấm sang thẻ tháng khác: trước đây số đó mất không một lời
-	 * nào, và họ chỉ phát hiện khi HCNS chốt thiếu.
-	 */
-	async function flushDirtyLines() {
-		if (!canEdit.value) return;
-		for (const line of current.value?.lines ?? []) {
-			if (lineQtyInvalid[line.id] || editQty[line.id] == null || !lineDirty(line)) continue;
-			await saveLine(line);
-		}
-	}
-
-	/** Chuyển sang phiếu khác: lưu số đang gõ trước đã. */
-	async function selectRequest(id: number) {
-		if (current.value && id !== current.value.id) await flushDirtyLines();
-		await openRequest(id);
-	}
-
-	async function deleteLine(line: SupplyLine) {
-		const requestId = current.value?.id;
-		if (!requestId || working.value) return;
-		working.value = true;
-		try {
-			afterWrite(await service.deleteLine(requestId, line.id));
-			deleteTarget.value = null;
-			toast.success(`Đã xoá dòng ${line.name}.`);
-		} catch (e) {
-			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_PERIOD_LOCKED' || code === 'OFFICE_SUPPLY_LINE_HAS_OTHER_SHARES') {
-				toast.warning(officeErrorMessage(e, 'Kỳ đã đóng, bạn liên hệ HCNS.'));
-				deleteTarget.value = null;
-				await openRequest(requestId);
-			} else if (await reloadIfStale(e, requestId)) {
-				deleteTarget.value = null;
-			} else {
-				toast.error(officeErrorMessage(e, 'Chưa xoá được dòng này. Bạn thử lại sau ít phút.'));
-			}
-		} finally {
-			working.value = false;
-		}
-	}
-
-	async function copyPrevious() {
-		const requestId = current.value?.id;
-		if (!requestId || working.value) return;
-		working.value = true;
-		try {
-			const result = await service.copyPrevious(requestId);
-			afterWrite(result.request);
-			copySkipped.value = result.skippedItems;
-			const message = copyPreviousSummary(result);
-			// Câu có danh sách dòng bỏ qua thì dài, nên giữ toast lâu hơn mặc định ba giây.
-			if (result.skippedItems.length || !result.previousTitle) {
-				toast.warning(message, { duration: 12000 });
-			} else {
-				toast.success(message);
-			}
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa lấy được số của kỳ trước. Bạn thử lại sau ít phút.'));
-		} finally {
-			working.value = false;
-		}
-	}
-
-	/** Câu nhắc khi bấm "Lưu đầu mối" mà chưa chọn ai. */
-	const contactError = ref('');
-
-	async function saveContact() {
-		if (savingContact.value) return;
-		// Chưa chọn ai mà vẫn gửi thì máy chủ hiểu là BỎ đầu mối, nên người dùng vô tình xoá đầu
-		// mối đang có; nói ra thay vì gửi một `null` mà họ không chủ ý.
-		if (contactEmployeeId.value == null) {
-			contactError.value = 'Bạn chọn một nhân viên của phòng, hoặc bấm Bỏ đầu mối nếu muốn trả việc nhận hàng về trưởng phòng.';
-			return;
-		}
-		contactError.value = '';
-		savingContact.value = true;
-		try {
-			contact.value = await service.setSupplyContact({ employeeId: contactEmployeeId.value });
-			showContactForm.value = false;
-			toast.success(
-				contact.value.contact
-					? `Đã chỉ định ${contact.value.contact.fullName} làm đầu mối nhận văn phòng phẩm của phòng.`
-					: 'Đã bỏ đầu mối, việc nhận hàng trở về trưởng phòng.',
-			);
-			// Cờ `canReceive` của phiếu phụ thuộc đầu mối, nên phiếu đang mở cũng phải tải lại.
-			if (current.value) await openRequest(current.value.id);
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa lưu được đầu mối. Bạn thử lại sau ít phút.'));
-		} finally {
-			savingContact.value = false;
-		}
-	}
-
-	/** Bỏ đầu mối: việc nhận hàng trở về trưởng phòng. */
-	async function clearContact() {
-		if (savingContact.value) return;
-		contactEmployeeId.value = null;
-		contactError.value = '';
-		savingContact.value = true;
-		try {
-			contact.value = await service.setSupplyContact({ employeeId: null });
-			showContactForm.value = false;
-			toast.success('Đã bỏ đầu mối, việc nhận hàng trở về trưởng phòng.');
-			if (current.value) await openRequest(current.value.id);
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa bỏ được đầu mối. Bạn thử lại sau ít phút.'));
-		} finally {
-			savingContact.value = false;
-		}
+	async function confirmDelete() {
+		const row = deleteTarget.value;
+		if (!row || deleting.value) return;
+		deleting.value = true;
+		if (await supplies.deleteLine(row)) deleteTarget.value = null;
+		deleting.value = false;
 	}
 
 	function onReceived(updated: SupplyRequest) {
 		showReceive.value = false;
-		afterWrite(updated);
+		supplies.apply(updated);
 	}
+
+	onMounted(() => supplies.init());
+
+	/** Rời trang khi còn số chưa lưu thì lưu trước, không để số biến mất lặng lẽ. */
+	onBeforeRouteLeave(async () => {
+		await supplies.flush();
+	});
+
+	// ─── Hướng dẫn theo tính năng ─────────────────────────────────────────────
+	// Mở từ nút Hướng dẫn nổi bên phải, không tự hiện.
+	const tourContext: OfficeSuppliesTourContext = {
+		hasRequests: () => requests.value.length > 0,
+		hasOtherRequests: () => showTabs.value || showOtherMenu.value,
+		canEdit: () => canEdit.value,
+		hasRows: () => filteredGroups.value.length > 0,
+		hasContact: () => !!contact.value,
+		isDepartmentManager: () => isDepartmentManager.value,
+		isContactFormOpen: () => contactOpen.value,
+		closeContactForm: () => (contactOpen.value = false),
+	};
+	useGuideTour('office-supply-register', () => officeSupplyRegisterTour(tourContext));
+	useGuideTour('office-supply-contact', () => officeSupplyContactTour(tourContext));
 </script>
 
 <template>
-	<!-- `pb-24`: chừa chỗ cho nút trợ lý nổi ở góc dưới phải, nếu không nó đè lên dòng cuối trang. -->
-	<div class="space-y-3 pb-24">
+	<div class="space-y-3">
 		<UiPageHeader
 			title="Văn phòng phẩm của phòng"
-			description="Cả phòng cùng nhập vào một phiếu cho mỗi kỳ và không có nút nộp: tới hạn chót phiếu tự khoá, nên bạn nhập sớm rồi vẫn sửa lại được."
+			description="Mọi mặt hàng phòng được đặt hiện sẵn theo nhóm. Bạn gõ số mình cần vào ô của mặt hàng rồi bấm Enter, hoặc bấm + và −, số tự lưu. Cả phòng cùng nhập vào một phiếu: ô là phần của bạn, còn Phòng là tổng cả phòng. Không có nút nộp, tới hạn chót phiếu tự khoá."
 		/>
 
 		<CommonAppModuleNotice module="OFFICE" />
 
-		<!-- Đầu mối của phòng -->
-		<section
-			v-if="contact"
-			class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
-		>
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div>
-					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Đầu mối nhận hàng</h2>
-					<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-						Phòng {{ contact.departmentName }} ·
-						{{
-							contact.contact
-								? `đầu mối là ${contact.contact.fullName}`
-								: contact.manager
-									? `chưa chỉ định đầu mối, việc nhận hàng thuộc trưởng phòng ${contact.manager.fullName}`
-									: 'chưa chỉ định đầu mối và phòng chưa có trưởng phòng'
-						}}
-					</p>
-				</div>
-				<CommonAppButton
-					v-if="isDepartmentManager"
-					size="sm"
-					variant="outline"
-					@click="showContactForm = !showContactForm"
-				>
-					Chọn đầu mối
-				</CommonAppButton>
-			</div>
-
-			<div v-if="showContactForm" class="mt-3">
-				<div class="flex flex-wrap items-end gap-3">
-					<div class="w-full max-w-xs">
-						<UiSelectInput
-							:model-value="contactEmployeeId"
-							:options="contactOptions"
-							placeholder="Chọn nhân viên của phòng"
-							search-placeholder="Tìm nhân viên"
-							@update:model-value="
-								contactEmployeeId = Number($event);
-								contactError = '';
-							"
-						/>
-					</div>
-					<CommonAppButton variant="primary" size="sm" :loading="savingContact" @click="saveContact">Lưu đầu mối</CommonAppButton>
-					<!-- Chưa có đầu mối thì không có gì để bỏ, nên nút cũng không hiện. -->
-					<CommonAppButton
-						v-if="contact.contact"
-						variant="ghost"
-						size="sm"
-						:loading="savingContact"
-						@click="clearContact"
-					>
-						Bỏ đầu mối
-					</CommonAppButton>
-				</div>
-				<p v-if="contactError" class="mt-2 text-sm text-red-500">{{ contactError }}</p>
-			</div>
-		</section>
-
-		<!-- Danh sách phiếu -->
-		<div v-if="loadingList" class="space-y-3">
-			<div v-for="i in 2" :key="i" class="h-20 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+		<div v-if="loadingList" class="space-y-3" aria-busy="true">
+			<div class="h-28 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+			<div v-for="i in 4" :key="i" class="h-12 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
 		</div>
 
 		<div
@@ -938,7 +219,7 @@
 			class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300"
 		>
 			<p>{{ listError }}</p>
-			<CommonAppButton class="mt-3" size="sm" variant="outline" @click="loadList">Thử lại</CommonAppButton>
+			<CommonAppButton class="mt-3" size="sm" variant="outline" @click="supplies.loadList()">Thử lại</CommonAppButton>
 		</div>
 
 		<!--
@@ -949,17 +230,11 @@
 			v-else-if="!requests.length"
 			class="rounded-xl border border-gray-200 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
 		>
-			<!--
-				Người có quyền quản lý kỳ thì chính họ là HCNS, nên bảo "báo HCNS" là bảo họ đi tìm
-				chính mình; chỉ đường sang trang Kỳ văn phòng phẩm là việc họ thật sự cần làm.
-			-->
 			<template v-if="!user?.department">
 				Bạn chưa thuộc phòng ban nào nên không có phiếu văn phòng phẩm.
 				<template v-if="canManagePeriods">
 					Bạn mở và theo dõi kỳ đăng ký của các phòng ở
-					<NuxtLink
-						to="/management/office/supply-periods"
-						class="text-brand-600 hover:underline dark:text-brand-400"
+					<NuxtLink to="/management/office/supply-periods" class="text-brand-600 hover:underline dark:text-brand-400"
 						>Kỳ văn phòng phẩm</NuxtLink
 					>.
 				</template>
@@ -971,65 +246,137 @@
 		</p>
 
 		<template v-else>
-			<div class="flex flex-wrap gap-2">
+			<!-- Thẻ các phiếu đang đăng ký, chỉ khi có từ hai phiếu trở lên. -->
+			<div v-if="showTabs" data-tour="supply-request-tabs" role="tablist" class="flex flex-wrap gap-2">
 				<button
-					v-for="req in requests"
+					v-for="req in openTabs"
 					:key="req.id"
 					type="button"
+					role="tab"
+					:aria-selected="current?.id === req.id"
 					:class="[
-						'rounded-lg border px-3 py-1.5 text-left text-sm transition-colors',
+						'rounded-lg border px-3 py-1.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
 						current?.id === req.id
-							? 'border-brand-500 bg-brand-50 dark:border-brand-500 dark:bg-brand-900/20'
-							: 'border-gray-200 bg-white hover:border-brand-300 dark:border-gray-700 dark:bg-gray-900',
+							? 'border-brand-500 bg-brand-50 font-medium text-brand-800 dark:border-brand-500 dark:bg-brand-900/20 dark:text-brand-200'
+							: 'border-gray-200 bg-white text-gray-700 hover:border-brand-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300',
 					]"
-					@click="selectRequest(req.id)"
+					@click="supplies.selectRequest(req.id)"
 				>
-					<span class="block font-medium text-gray-900 dark:text-white">
-						{{ req.period.title }}
-						<template v-if="req.isSupplement"> · bổ sung {{ req.sequence }}</template>
-					</span>
-					<!--
-						Tên văn phòng nằm ngay trên thẻ: phòng làm việc ở hai văn phòng thì cùng một tháng có
-						hai phiếu trùng tên, và không có cách nào biết thẻ nào của văn phòng nào.
-					-->
-					<span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-						{{ req.period.officeSite.name }} · {{ req.statusLabel }} · {{ req.lineCount }} dòng
-					</span>
+					{{ requestLabel(req) }}
+					<span class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">{{ req.lineCount }} dòng</span>
 				</button>
 			</div>
 
-			<div v-if="loadingDetail" class="space-y-3">
-				<div v-for="i in 3" :key="i" class="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
-			</div>
+			<!-- Thanh kỳ: một khối cho kỳ, hạn chót, mốc khoá, đầu mối và các nút của phiếu. -->
+			<section
+				data-tour="supply-period-bar"
+				class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+			>
+				<div v-if="loadingDetail" class="space-y-2" aria-busy="true">
+					<div class="h-5 w-2/3 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+					<div class="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+					<div class="h-4 w-1/3 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+				</div>
 
-			<template v-else-if="current">
-				<!-- Thông tin phiếu -->
-				<section class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-					<div class="flex flex-wrap items-center justify-between gap-3">
-						<div>
-							<h2 class="font-semibold text-gray-900 dark:text-white">
-								{{ current.period.title }}
-								<span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-									· {{ current.period.officeSite.name }}
-									<template v-if="monthSuffix"> · {{ monthSuffix }}</template>
+				<div v-else-if="detailError" class="text-sm text-rose-700 dark:text-rose-300">
+					<p>{{ detailError }}</p>
+					<CommonAppButton
+						v-if="pendingRequestId"
+						class="mt-2"
+						size="sm"
+						variant="outline"
+						@click="supplies.openRequest(pendingRequestId)"
+					>
+						Thử lại
+					</CommonAppButton>
+				</div>
+
+				<p v-else-if="!current" class="text-sm text-gray-500 dark:text-gray-400">Bạn chọn một phiếu để xem.</p>
+
+				<template v-else>
+					<div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+						<div class="min-w-0">
+							<h2 class="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-gray-900 dark:text-white">
+								<span>
+									{{ current.period.title }}
+									<span class="font-normal text-gray-500 dark:text-gray-400">
+										· {{ current.period.officeSite.name }}
+										<template v-if="monthSuffix"> · {{ monthSuffix }}</template>
+										<template v-if="current.isSupplement"> · phiếu bổ sung {{ current.sequence }}</template>
+									</span>
+								</span>
+								<span
+									:class="[
+										'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+										supplyStatusMeta(current.status).class,
+									]"
+								>
+									{{ supplyStatusLabel(current.status, current.lines.length) }}
+								</span>
+								<span
+									v-if="current.period.status === 'CLOSED'"
+									:class="['inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium', SUPPLY_STATUS.CLOSED.class]"
+								>
+									Kỳ {{ SUPPLY_STATUS.CLOSED.label.toLocaleLowerCase('vi') }}
 								</span>
 							</h2>
-							<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
+							<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
 								Hạn chót {{ formatDate(current.period.deadline) }}
 								<template v-if="countdown">
-									·
-									<span class="text-amber-600 dark:text-amber-400">{{ countdown }}</span>
+									· <span class="font-medium text-amber-600 dark:text-amber-400">{{ countdown }}</span>
+									· Phiếu tự khoá lúc {{ supplyLockLabel(current.period.lockAt) }}
 								</template>
 							</p>
-							<p v-if="current.note" class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-								Ghi chú phiếu: {{ current.note }}
-							</p>
 						</div>
+
 						<div class="flex flex-wrap items-center gap-2">
-							<span :class="['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', STATUS_CLASS[current.status]]">
-								{{ current.statusLabel }}
-							</span>
-							<CommonAppButton v-if="canEdit" size="sm" variant="outline" :loading="working" @click="copyPrevious">
+							<div v-if="showOtherMenu" ref="otherMenuRoot" class="relative" :data-tour="showTabs ? undefined : 'supply-request-tabs'">
+								<CommonAppButton
+									size="sm"
+									variant="ghost"
+									data-popover-trigger
+									:aria-expanded="otherMenuOpen"
+									@click="toggleOtherMenu()"
+								>
+									Phiếu khác
+								</CommonAppButton>
+								<ul
+									v-if="otherMenuOpen"
+									role="menu"
+									:class="[
+										'absolute z-40 max-h-80 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-gray-700 dark:bg-gray-900',
+										otherMenuAbove ? 'bottom-full mb-1' : 'top-full mt-1',
+										otherMenuAlignEnd ? 'right-0' : 'left-0',
+									]"
+								>
+									<li v-for="req in otherRequests" :key="req.id">
+										<button
+											type="button"
+											role="menuitem"
+											:aria-current="current.id === req.id ? 'true' : undefined"
+											:class="[
+												'w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none dark:hover:bg-gray-800 dark:focus:bg-gray-800',
+												current.id === req.id ? 'bg-brand-50 dark:bg-brand-900/20' : '',
+											]"
+											@click="pickRequest(req.id)"
+										>
+											<span class="block font-medium text-gray-900 dark:text-white">{{ requestLabel(req) }}</span>
+											<span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+												{{ supplyStatusLabel(req.status, req.lineCount) }} · {{ req.lineCount }} dòng
+												<template v-if="current.id === req.id"> · đang xem</template>
+											</span>
+										</button>
+									</li>
+								</ul>
+							</div>
+							<CommonAppButton
+								v-if="canEdit"
+								data-tour="supply-copy-previous"
+								size="sm"
+								variant="outline"
+								:loading="copying"
+								@click="supplies.copyPrevious()"
+							>
 								Lấy số tháng trước
 							</CommonAppButton>
 							<CommonAppButton v-if="current.canReceive" size="sm" variant="primary" @click="showReceive = true">
@@ -1037,423 +384,347 @@
 							</CommonAppButton>
 						</div>
 					</div>
-					<p v-if="!canEdit && current.status === 'OPEN'" class="mt-2 text-sm text-amber-600 dark:text-amber-400">
-						Phiếu này đang ở chế độ chỉ xem.
-					</p>
-					<!-- Kỳ bị khoá: nói rõ khoá lúc nào và làm gì tiếp, vì hạn chót ghi ở trên vẫn là ngày cũ. -->
-					<p
-						v-if="lockedNotice"
-						class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-					>
-						{{ lockedNotice }}
-					</p>
-					<p v-if="current.receivedAt" class="mt-2 text-sm text-emerald-600 dark:text-emerald-400">
+
+					<div v-if="contact" class="mt-1.5">
+						<SupplyContactPicker
+							v-model:open="contactOpen"
+							:contact="contact"
+							:options="contactOptions"
+							:is-manager="isDepartmentManager"
+							:saving="savingContact"
+							:save="supplies.saveContact"
+						/>
+					</div>
+
+					<p v-if="current.note" class="mt-1.5 text-sm text-gray-700 dark:text-gray-300">Ghi chú phiếu: {{ current.note }}</p>
+					<p v-if="current.receivedAt" class="mt-1.5 text-sm text-emerald-600 dark:text-emerald-400">
 						{{ current.receivedByProxy ? 'HCNS ghi đã giao' : 'Phòng đã nhận' }} lúc
 						{{ formatDateTime(current.receivedAt) }}
 						<template v-if="current.receiverName"> cho {{ current.receiverName }}</template>
 						<template v-else-if="current.receivedBy"> bởi {{ current.receivedBy.fullName }}</template>.
 					</p>
-				</section>
+				</template>
+			</section>
 
-				<!-- Thêm dòng -->
-				<section
-					v-if="canEdit"
-					class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+			<template v-if="current && !loadingDetail">
+				<!-- Phiếu chỉ xem: nói rõ vì sao, vì hạn chót ghi ở trên có khi vẫn là ngày cũ. -->
+				<div
+					v-if="readOnlyNotice"
+					role="status"
+					class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
 				>
-					<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Thêm mặt hàng</h2>
-					<!--
-						Mọi ô của hai hàng cao đúng 36px (`h-9`), bằng ô chọn mặt hàng cỡ `sm`. `[&_input]` nhắm
-						vào ô nhập NẰM TRONG `QtyInput`, vì class gắn lên component chỉ rơi vào khung bọc của nó;
-						câu nhắc gõ sai bên dưới ô số vẫn giữ chiều cao tự nhiên.
-					-->
-					<div class="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-[1fr_110px_1fr_auto] lg:items-start">
-						<UiSelectInput
-							:model-value="addItemId"
-							:options="itemOptions"
-							size="sm"
-							placeholder="Chọn mặt hàng"
-							search-placeholder="Tìm mặt hàng, gõ không dấu cũng được"
-							@update:model-value="pickItem($event)"
-						/>
-						<QtyInput
-							v-model="addQty"
-							v-model:invalid="addQtyInvalid"
-							class="[&_input]:h-9 [&_input]:py-1"
-							placeholder="Số lượng"
-							aria-label="Số lượng cần xin"
-							@save="addLine"
-						/>
-						<input
-							v-model="addNote"
-							type="text"
-							maxlength="500"
-							class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-							placeholder="Ghi chú (không bắt buộc)"
-						/>
-						<!-- Nút không bị xám: thiếu mặt hàng hay thiếu số thì câu nhắc hiện ngay dưới form. -->
-						<CommonAppButton variant="primary" class="h-9" :loading="working" @click="addLine">Thêm</CommonAppButton>
-					</div>
-					<!--
-						Câu gợi ý màu xám trung tính: chọn mặt hàng đã có là việc bình thường, không phải lỗi,
-						nên không tô cam hay đỏ. Chỉ phần "cần ghi lý do" mới đổi màu, vì đó là việc phải làm.
-					-->
-					<p v-if="addItem" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-						<template v-if="addExistingLine">
-							Phiếu đang có {{ addExistingLine.requestedQty }} {{ unitWord(addExistingLine.unit) }}, bấm Thêm sẽ cộng
-							vào dòng này.
-						</template>
-						<template v-if="addItem.quota != null">
-							Định mức của phòng là {{ addItem.quota }} {{ addItem.unit }} mỗi tháng.
-							<span v-if="addOverQuota" class="text-amber-600 dark:text-amber-400">
-								{{ addExistingLine ? 'Tổng sau khi cộng' : 'Số bạn gõ' }} vượt định mức nên cần ghi lý do.
-							</span>
-							<template v-else-if="addTotalOverQuota">
-								Tổng sau khi cộng vượt định mức, dòng đã có lý do nên phiếu giữ lý do đó.
-							</template>
-						</template>
-						<template v-else>Mặt hàng này không giới hạn định mức.</template>
-					</p>
-					<div v-if="addNeedsReason || addOverQuota" class="mt-3">
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-							Lý do vượt định mức <span class="text-red-500">*</span>
-						</label>
-						<input
-							v-model="addReason"
-							type="text"
-							maxlength="500"
-							class="mt-1 w-full max-w-xl rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:border-amber-700 dark:bg-gray-800 dark:text-gray-100"
-							placeholder="VD: Tháng này quyết toán, in nhiều"
-						/>
-					</div>
-					<p v-if="addError" class="mt-2 text-sm text-red-500">{{ addError }}</p>
+					<p class="font-medium">Phiếu đã khoá, chỉ xem</p>
+					<p class="mt-0.5">{{ readOnlyNotice }}</p>
+				</div>
 
-					<div class="mt-1">
-						<!--
-							`py-2` trên điện thoại: chữ nhỏ mà không có đệm thì ô bấm chỉ cao hai mươi pixel,
-							ngón tay không trúng. Màn lớn bấm bằng chuột nên thu lại cho gọn.
-						-->
+				<!-- Dòng kỳ trước không chép được: người dùng phải tự nhập lại nên danh sách ở lại trên màn. -->
+				<div
+					v-if="copySkipped.length"
+					class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-900/20"
+				>
+					<div class="flex items-start justify-between gap-3">
+						<p class="font-medium text-amber-800 dark:text-amber-300">
+							{{ copySkipped.length }} dòng của kỳ trước chưa được thêm, bạn nhập lại nếu còn cần:
+						</p>
 						<button
 							type="button"
-							class="py-2 text-sm text-brand-600 hover:underline lg:py-1 dark:text-brand-400"
-							@click="showCustomForm = !showCustomForm"
+							class="px-2 py-1 text-xs text-amber-700 hover:underline dark:text-amber-400"
+							@click="copySkipped = []"
 						>
-							{{ showCustomForm ? 'Thôi, không thêm mặt hàng ngoài danh mục' : 'Mặt hàng không có trong danh mục' }}
+							Ẩn
 						</button>
-						<div v-if="showCustomForm" class="mt-1 grid grid-cols-1 gap-2 lg:grid-cols-[1fr_1fr_110px_auto] lg:items-start">
-							<div>
-								<!-- `maxlength` theo đúng giới hạn của API: 200 cho tên, 30 cho đơn vị. -->
-								<input
-									v-model="customName"
-									type="text"
-									maxlength="200"
-									class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-									placeholder="Tên mặt hàng, VD: Pin 3A"
-									@input="customNameError = ''"
-								/>
-								<p v-if="customNameError" class="mt-1 text-xs text-red-500">{{ customNameError }}</p>
-							</div>
-							<div>
-								<input
-									v-model="customUnit"
-									type="text"
-									maxlength="30"
-									class="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-									placeholder="Đơn vị, VD: Đôi"
-									@input="customUnitError = ''"
-								/>
-								<p v-if="customUnitError" class="mt-1 text-xs text-red-500">{{ customUnitError }}</p>
-							</div>
-							<QtyInput
-								v-model="customQty"
-								v-model:invalid="customQtyInvalid"
-								class="[&_input]:h-9 [&_input]:py-1"
-								placeholder="Số lượng"
-								aria-label="Số lượng mặt hàng ngoài danh mục"
-								@save="addCustomLine"
+					</div>
+					<ul class="mt-1 list-inside list-disc text-amber-700 dark:text-amber-400">
+						<li v-for="item in copySkipped" :key="item.name">{{ item.name }} — {{ item.reason }}</li>
+					</ul>
+				</div>
+
+				<div
+					v-if="itemsError"
+					class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300"
+				>
+					<span>{{ itemsError }} Các dòng phòng đã đăng ký vẫn sửa được.</span>
+					<CommonAppButton size="sm" variant="outline" :loading="loadingItems" @click="supplies.loadItems()">
+						Thử lại
+					</CommonAppButton>
+				</div>
+
+				<!--
+					Thanh công cụ dính dưới đầu trang: tìm, lọc nhóm, chỉ đã chọn. `-top-4 lg:-top-6` bù phần
+					đệm của `<main>`, nếu không dòng danh mục lọt qua khe phía trên thanh khi cuộn. Chip nhóm
+					nằm một hàng và cuộn ngang khi chật, để thanh luôn cao hai dòng ở mọi khổ màn.
+				-->
+				<div
+					ref="toolbarRef"
+					data-tour="supply-toolbar"
+					class="sticky -top-4 z-20 -mx-4 space-y-2 bg-gray-50/95 px-4 py-2 backdrop-blur lg:-top-6 lg:-mx-6 lg:px-6 dark:bg-gray-950/95"
+				>
+					<div class="flex items-center gap-3">
+						<div class="relative min-w-0 max-w-md flex-1">
+							<svg
+								class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+								aria-hidden="true"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
+							</svg>
+							<input
+								v-model="search"
+								type="search"
+								aria-label="Tìm mặt hàng"
+								placeholder="Tìm mặt hàng (gõ không dấu cũng được)"
+								class="h-9 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-3 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 							/>
-							<CommonAppButton variant="outline" class="h-9" :loading="working" @click="addCustomLine">Thêm</CommonAppButton>
 						</div>
-						<p v-if="customError" class="mt-2 text-sm text-red-500">{{ customError }}</p>
+	
+						<label class="ml-auto inline-flex shrink-0 cursor-pointer select-none items-center gap-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+							<input v-model="onlySelected" type="checkbox" class="peer sr-only" />
+							<span
+								class="relative h-5 w-9 rounded-full bg-gray-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-brand-600 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 peer-focus-visible:ring-offset-2 dark:bg-gray-600"
+								aria-hidden="true"
+							/>
+							Chỉ đã chọn ({{ myCount }})
+						</label>
 					</div>
 
-					<!-- Dòng kỳ trước không chép được: người dùng phải tự nhập lại nên danh sách ở lại trên màn. -->
-					<div
-						v-if="copySkipped.length"
-						class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-900/20"
+					<div class="-mb-1 flex items-center gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Lọc theo nhóm">
+						<button
+							type="button"
+							:aria-pressed="!groupFilter"
+							:class="[
+								'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500',
+								!groupFilter
+									? 'border-brand-500 bg-brand-600 text-white'
+									: 'border-gray-300 bg-white text-gray-700 hover:border-brand-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
+							]"
+							@click="groupFilter = null"
+						>
+							Tất cả {{ totalRows }}
+						</button>
+						<button
+							v-for="chip in groupChips"
+							:key="chip.name"
+							type="button"
+							:title="chip.name"
+							:aria-pressed="groupFilter === chip.name"
+							:class="[
+								'max-w-[18rem] shrink-0 truncate rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500',
+								groupFilter === chip.name
+									? 'border-brand-500 bg-brand-600 text-white'
+									: 'border-gray-300 bg-white text-gray-700 hover:border-brand-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
+							]"
+							@click="groupFilter = groupFilter === chip.name ? null : chip.name"
+						>
+							{{ chip.name }} {{ chip.count }}
+						</button>
+					</div>
+				</div>
+
+				<p v-if="!canEdit && filteredGroups.length" class="text-xs text-gray-500 dark:text-gray-400">
+					Ô số là phần của bạn, Phòng là tổng cả phòng đã xin.
+				</p>
+
+				<!-- Danh mục -->
+				<div ref="listRef" class="space-y-3">
+					<template v-if="loadingItems && !filteredGroups.length">
+						<div v-for="i in 6" :key="i" class="h-11 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+					</template>
+
+					<section
+						v-for="(group, groupIndex) in filteredGroups"
+						:key="group.name"
+						class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
 					>
-						<div class="flex items-start justify-between gap-3">
-							<p class="font-medium text-amber-800 dark:text-amber-300">
-								{{ copySkipped.length }} dòng của kỳ trước chưa được thêm, bạn nhập lại nếu còn cần:
-							</p>
+						<h3
+							class="sticky z-10 rounded-t-xl border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+							:style="{ top: `${toolbarBottom}px` }"
+						>
 							<button
 								type="button"
-								class="px-2 py-2 text-xs text-amber-700 hover:underline dark:text-amber-400"
-								@click="copySkipped = []"
+								:aria-expanded="searching || !collapsed.has(group.name)"
+								class="flex w-full items-center gap-2 px-4 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
+								@click="toggleGroup(group.name)"
 							>
-								Ẩn
-							</button>
-						</div>
-						<ul class="mt-1 list-inside list-disc text-amber-700 dark:text-amber-400">
-							<li v-for="item in copySkipped" :key="item.name">{{ item.name }} — {{ item.reason }}</li>
-						</ul>
-					</div>
-				</section>
-
-				<!-- Dòng của phiếu -->
-				<p
-					v-if="!current.lines.length"
-					class="rounded-xl border border-gray-200 bg-white py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
-				>
-					Phiếu chưa có dòng nào. Bạn thêm mặt hàng ở trên, hoặc bấm Lấy số tháng trước.
-				</p>
-
-				<section
-					v-for="group in groupedLines"
-					:key="group.groupName"
-					class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
-				>
-					<h3
-						class="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-100"
-					>
-						{{ group.groupName }}
-						<span class="ml-1 text-xs font-normal text-gray-400">{{ group.lines.length }} dòng</span>
-					</h3>
-					<div class="divide-y divide-gray-100 dark:divide-gray-800">
-						<!--
-							Dòng phiếu giữ đệm mỏng và chữ cỡ nhỏ, ô số cao 32px: phiếu cả phòng thường có vài chục
-							dòng, mỗi dòng cao gấp rưỡi thì phải cuộn mãi mới thấy hết.
-						-->
-						<div v-for="line in group.lines" :key="line.id" class="px-4 py-2">
-							<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-								<div class="min-w-0 flex-1">
-									<p class="text-sm">
-										<span class="font-medium text-gray-900 dark:text-white">{{ line.name }}</span>
-										<span class="text-gray-500 dark:text-gray-400"> · {{ line.unit || '—' }}</span>
-									</p>
-									<p class="text-xs text-gray-500 dark:text-gray-400">
-										<!-- Định mức phải có đơn vị: "Định mức 10" không nói 10 cái hay 10 hộp. -->
-										<template v-if="line.quota != null">
-											Định mức {{ line.quota }} {{ line.unit || 'đơn vị' }} mỗi tháng ·
-										</template>
-										<template v-if="line.previousQty != null">kỳ trước {{ line.previousQty }} · </template>
-										sửa cuối bởi {{ line.updatedBy.fullName }} lúc {{ formatDateTime(line.updatedAt) }}
-									</p>
-									<!-- Ai xin bao nhiêu trong tổng; phiếu bổ sung do HCNS nhập thay phòng nên không có phần. -->
-									<p v-if="line.shares.length" class="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
-										Đăng ký: {{ sharesLabel(line) }}
-									</p>
-									<p v-if="line.note" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ghi chú: {{ line.note }}</p>
-
-									<!--
-										Ba con số của một dòng đi theo thứ tự việc đã xảy ra: phòng xin, HCNS chốt, phòng
-										nhận. Số nào đang quyết định thì nổi nhất, và thành tiền đứng cạnh ĐÚNG số dùng
-										để tính nó — trước đây thành tiền nằm cạnh số chốt dù tiền tính theo số đã nhận.
-									-->
-									<!--
-										Phiếu không còn sửa được thì "Số xin" nằm NGAY TRƯỚC số chốt và số nhận, trong cùng
-										một khối, để đọc từ trên xuống là đúng thứ tự việc đã xảy ra. Trước đây nó ở cột
-										bên phải nên trên điện thoại rơi xuống dưới cùng, sau cả "Đã nhận".
-									-->
-									<p v-if="!canEdit" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-										Số xin
-										<span class="font-medium text-gray-700 dark:text-gray-300">
-											{{ line.requestedQty }} {{ line.unit }}
-										</span>
-									</p>
-									<p v-if="line.finalQty != null" class="mt-1 text-sm">
-										<span
-											:class="[
-												'text-indigo-700 dark:text-indigo-300',
-												line.receivedQty == null ? 'font-semibold' : '',
-											]"
-										>
-											HCNS chốt {{ line.finalQty }} {{ line.unit }}
-										</span>
-										<span v-if="line.finalNote" class="text-xs text-gray-500 dark:text-gray-400">
-											· {{ line.finalNote }}
-										</span>
-										<span
-											v-if="line.amount != null && line.receivedQty == null"
-											class="text-xs text-gray-600 dark:text-gray-300"
-										>
-											· thành tiền {{ officeMoney(line.amount) }}
-										</span>
-									</p>
-									<p v-if="line.receivedQty != null" class="mt-1 text-sm">
-										<span class="font-semibold text-emerald-700 dark:text-emerald-300">
-											Đã nhận {{ line.receivedQty }} {{ line.unit }}
-										</span>
-										<span v-if="line.receivedNote" class="text-xs text-gray-500 dark:text-gray-400">
-											· {{ line.receivedNote }}
-										</span>
-										<span v-if="line.amount != null" class="text-xs text-gray-600 dark:text-gray-300">
-											· thành tiền {{ officeMoney(line.amount) }}
-										</span>
-									</p>
-								</div>
-
-								<!--
-									Ô số là phần của người đang xem; tổng của dòng đứng ngay trước ô và đổi theo số đang
-									gõ, để người dùng thấy mình chỉ đổi phần mình chứ không đổi số của cả phòng.
-								-->
-								<div v-if="canEdit" class="flex flex-wrap items-start gap-1.5">
-									<span class="pt-1.5 text-xs text-gray-500 dark:text-gray-400">
-										Tổng
-										<span class="font-semibold text-gray-800 dark:text-gray-100">{{ previewTotal(line) }}</span>
-										· phần của bạn
-									</span>
-									<div class="w-20">
-										<QtyInput
-											v-model="editQty[line.id]"
-											class="[&_input]:h-8 [&_input]:py-1"
-											:max="100000"
-											:aria-label="`Phần của bạn ở ${line.name}`"
-											@update:invalid="lineQtyInvalid[line.id] = $event"
-											@save="saveLine(line)"
-											@leave="saveLineIfDirty(line)"
-										/>
-									</div>
-									<CommonAppButton
-										v-if="lineDirty(line)"
-										size="sm"
-										variant="primary"
-										:loading="working"
-										@click="saveLine(line)"
-									>
-										Lưu
-									</CommonAppButton>
-									<CommonAppButton
-										v-if="current.canEditAllShares && hasOtherShares(line)"
-										size="sm"
-										variant="ghost"
-										@click="toggleShareEdit(line)"
-									>
-										{{ shareEditLineId === line.id ? 'Đóng' : 'Sửa phần' }}
-									</CommonAppButton>
-									<!-- Xoá luôn hỏi lại: nút Xoá nằm sát nút Lưu, trên điện thoại rất dễ bấm trượt. -->
-									<CommonAppButton
-										v-if="canDeleteLine(line)"
-										size="sm"
-										variant="ghost"
-										:loading="working"
-										@click="deleteTarget = line"
-									>
-										Xoá
-									</CommonAppButton>
-									<CommonAppButton
-										v-else-if="line.myQty > 0"
-										size="sm"
-										variant="ghost"
-										:loading="working"
-										@click="withdrawShare(line)"
-									>
-										Rút phần của tôi
-									</CommonAppButton>
-								</div>
-							</div>
-
-							<!-- Trưởng phòng, đầu mối sửa phần của từng người đã đăng ký; 0 là rút phần người đó. -->
-							<div
-								v-if="canEdit && shareEditLineId === line.id"
-								class="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/40"
-							>
-								<p class="text-xs text-gray-500 dark:text-gray-400">
-									Sửa phần của từng người. Nhập 0 để rút phần của người đó.
-								</p>
-								<div
-									v-for="share in line.shares"
-									:key="share.employee.id"
-									class="mt-1.5 flex flex-wrap items-start gap-1.5"
+								<svg
+									:class="[
+										'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform',
+										searching || !collapsed.has(group.name) ? 'rotate-90' : '',
+									]"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2.5"
+									aria-hidden="true"
 								>
-									<span class="min-w-0 flex-1 truncate pt-1.5 text-sm text-gray-800 dark:text-gray-100">
-										{{ share.isMine ? 'Bạn' : share.employee.fullName }}
-									</span>
-									<div class="w-20">
-										<QtyInput
-											v-model="shareEdits[share.employee.id]"
-											class="[&_input]:h-8 [&_input]:py-1"
-											:max="100000"
-											:aria-label="`Phần của ${share.employee.fullName} ở ${line.name}`"
-											@update:invalid="shareEditInvalid[share.employee.id] = $event"
-											@save="saveShare(line, share.employee.id)"
-										/>
-									</div>
-									<CommonAppButton
-										v-if="shareDirty(line, share.employee.id)"
-										size="sm"
-										variant="primary"
-										:loading="working"
-										@click="saveShare(line, share.employee.id)"
-									>
-										Lưu
-									</CommonAppButton>
-								</div>
-							</div>
-
-							<!--
-								Ô lý do chỉ mọc ra khi dòng THẬT SỰ cần lý do vượt định mức, không mọc theo mọi câu
-								lỗi của dòng: xoá trắng ô số là lỗi của ô số, chẳng liên quan gì tới định mức.
-							-->
-							<div
-								v-if="canEdit && (line.overQuota || lineNeedsReason[line.id] || editReason[line.id])"
-								class="mt-1"
-							>
-								<label class="block text-xs font-medium text-amber-700 dark:text-amber-400">
-									Lý do vượt định mức
-								</label>
-								<input
-									v-model="editReason[line.id]"
-									type="text"
-									maxlength="500"
-									class="mt-1 w-full max-w-xl rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:border-amber-700 dark:bg-gray-800 dark:text-gray-100"
-									placeholder="VD: Tháng này quyết toán, in nhiều"
-								/>
-							</div>
-							<p v-else-if="line.overQuota" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-								Vượt định mức: {{ line.overQuotaReason || 'chưa ghi lý do' }}
-							</p>
-							<!-- Câu lỗi của dòng đứng riêng, nên nó không kéo theo ô lý do nào. -->
-							<p v-if="lineError[line.id]" class="mt-1 text-xs text-red-500">{{ lineError[line.id] }}</p>
+									<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+								</svg>
+								<span class="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">
+									{{ group.name }}
+								</span>
+								<span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">
+									<template v-if="canEdit">{{ group.selected }}/{{ group.total }} đã chọn</template>
+									<template v-else>{{ group.total }} dòng</template>
+								</span>
+							</button>
+						</h3>
+						<div v-show="searching || !collapsed.has(group.name)" class="divide-y divide-gray-100 dark:divide-gray-800">
+							<SupplyCatalogRow
+								v-for="(row, rowIndex) in group.rows"
+								:key="row.key"
+								:data-tour="groupIndex === 0 && rowIndex === 0 ? 'supply-lines' : undefined"
+								:row="row"
+								:state="rowState[row.key]"
+								:qty="supplies.shownQty(row)"
+								:can-edit="canEdit"
+								:can-edit-all-shares="current.canEditAllShares"
+								:saved="!!savedFlash[row.key]"
+								:undoable="!!undo[row.key]"
+								:highlighted="highlighted.has(row.key)"
+								:show-final="hasFinalQty"
+								:show-received="hasReceivedQty"
+								:notice="notices[row.key]"
+								:save-note="note => supplies.saveNote(row, note)"
+								:save-share="(employeeId, qty) => supplies.saveShare(row, employeeId, qty)"
+								@input="(value, invalid) => supplies.setDraft(row, value, invalid)"
+								@commit="supplies.commit(row.key)"
+								@bump="supplies.bump(row, $event)"
+								@move="moveFocus"
+								@reason="supplies.setReason(row, $event)"
+								@retry="supplies.retry(row.key)"
+								@restore="supplies.restore(row.key)"
+								@delete="deleteTarget = row"
+							/>
 						</div>
-					</div>
-				</section>
+					</section>
 
-				<p v-if="current.totalAmount != null" class="text-right text-sm font-semibold text-gray-900 dark:text-white">
-					Tổng tiền phiếu: {{ officeMoney(current.totalAmount) }}
-				</p>
+					<!-- Tìm không ra: mời thêm ngoài danh mục với tên đã gõ. -->
+					<div
+						v-if="noResults"
+						class="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-400"
+					>
+						<p>Không có mặt hàng nào khớp “{{ search.trim() }}”.</p>
+						<button
+							v-if="canEdit"
+							type="button"
+							class="mt-2 font-medium text-brand-600 hover:underline dark:text-brand-400"
+							@click="openCustom(search.trim())"
+						>
+							Không thấy “{{ search.trim() }}”? Thêm mặt hàng ngoài danh mục
+						</button>
+					</div>
+
+					<p
+						v-else-if="!filteredGroups.length && !loadingItems && !onlySelected && !groupFilter"
+						class="rounded-xl border border-gray-200 bg-white py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+					>
+						<template v-if="canEdit">
+							Danh mục chưa có mặt hàng nào phòng bạn đặt được. Cần gì bạn báo HCNS, hoặc thêm mặt hàng ngoài danh mục.
+						</template>
+						<template v-else>Phiếu này không có dòng nào.</template>
+					</p>
+
+					<p
+						v-else-if="!filteredGroups.length && onlySelected && !loadingItems"
+						class="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+					>
+						Bạn chưa chọn mặt hàng nào. Tắt "Chỉ đã chọn" để xem cả danh mục.
+					</p>
+
+					<div
+						v-if="canEdit && !noResults"
+						data-tour="supply-custom"
+						class="flex flex-wrap items-center gap-2 px-1 text-sm text-gray-500 dark:text-gray-400"
+					>
+						Không thấy mặt hàng cần?
+						<button
+							type="button"
+							class="rounded font-medium text-brand-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-400"
+							@click="openCustom()"
+						>
+							+ Thêm mặt hàng ngoài danh mục
+						</button>
+					</div>
+
+					<p v-if="current.totalAmount != null" class="text-right text-sm font-semibold text-gray-900 dark:text-white">
+						Tổng tiền phiếu: {{ officeMoney(current.totalAmount) }}
+					</p>
+				</div>
+
+				<!--
+					Thanh dưới dính đáy: không cộng tổng số lượng vì mỗi mặt hàng một đơn vị (chiếc, hộp, ram).
+					`pr-24` chừa chỗ cho nút trợ lý nổi ở góc dưới phải; `-bottom-4 lg:-bottom-6` bù phần đệm
+					của `<main>` như thanh công cụ.
+				-->
+				<div
+					data-tour="supply-footer"
+					class="sticky -bottom-4 z-20 -mx-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-gray-200 bg-white/95 py-2.5 pl-4 pr-24 text-sm backdrop-blur lg:-bottom-6 lg:-mx-6 lg:pl-6 dark:border-gray-700 dark:bg-gray-900/95"
+				>
+					<p class="text-gray-700 dark:text-gray-300">
+						Bạn đã chọn <span class="font-semibold">{{ myCount }}</span> mặt hàng · Cả phòng
+						<span class="font-semibold">{{ roomCount }}</span> mặt hàng
+					</p>
+					<p role="status" aria-live="polite" class="flex min-h-[1.25rem] items-center gap-2">
+						<template v-if="saveStatus.tone === 'saving'">
+							<span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" aria-hidden="true" />
+							<span class="text-gray-600 dark:text-gray-300">{{ saveStatus.text }}</span>
+						</template>
+						<template v-else-if="saveStatus.tone === 'error'">
+							<span class="font-medium text-rose-600 dark:text-rose-400">{{ saveStatus.text }}</span>
+							<button
+								type="button"
+								class="font-medium text-rose-600 underline hover:no-underline dark:text-rose-400"
+								@click="supplies.retryAll()"
+							>
+								Thử lại
+							</button>
+						</template>
+						<span v-else-if="saveStatus.tone === 'saved'" class="text-emerald-600 dark:text-emerald-400">
+							✓ {{ saveStatus.text }}
+						</span>
+					</p>
+				</div>
 			</template>
 		</template>
 
-		<SupplyReceiveModal
-			v-if="showReceive && current"
-			:request="current"
-			@received="onReceived"
-			@close="showReceive = false"
+		<SupplyReceiveModal v-if="showReceive && current" :request="current" @received="onReceived" @close="showReceive = false" />
+
+		<SupplyCustomItemModal
+			v-if="customOpen"
+			:initial-name="customName"
+			:submit="supplies.addCustom"
+			@close="customOpen = false"
 		/>
 
 		<!--
-			Hỏi lại trước khi xoá, nêu đủ tên, số và người nhập: cả phòng cùng nhập một phiếu, nên dòng
-			bị xoá có thể là dòng của người khác và không có cách nào lấy lại.
+			Xoá cả dòng là xoá luôn phần của từng người trên dòng đó, nên hỏi lại và kể ra ai mất bao nhiêu.
+			Bỏ phần của mình thì chỉ cần đưa ô về 0, không qua hộp này.
 		-->
 		<Teleport to="body">
 			<div
-				v-if="deleteTarget"
+				v-if="deleteTarget?.line"
 				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
 				role="dialog"
 				aria-modal="true"
-				aria-label="Xác nhận xoá dòng"
+				aria-labelledby="supply-delete-title"
 				@click.self="deleteTarget = null"
 			>
 				<div class="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
-					<h3 class="font-semibold text-gray-900 dark:text-white">Xoá dòng khỏi phiếu</h3>
+					<h3 id="supply-delete-title" class="font-semibold text-gray-900 dark:text-white">Xoá cả dòng khỏi phiếu</h3>
 					<p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
-						Bạn xoá {{ deleteTarget.name }}, số đang xin {{ deleteTarget.requestedQty }}
-						{{ deleteTarget.unit || '' }}, do {{ deleteTarget.updatedBy.fullName }} nhập lần cuối. Dòng đã xoá thì
-						không lấy lại được, nhưng bạn thêm lại mặt hàng này khi kỳ còn mở.
+						Bạn xoá {{ deleteTarget.name }}, phòng đang xin {{ deleteTarget.line.requestedQty }}
+						{{ deleteTarget.unit || '' }}.
+						<template v-if="deleteTarget.line.shares.length">
+							Mỗi người có phần riêng trên dòng này, xoá dòng là xoá luôn phần của mọi người:
+							{{ supplySharesLabel(deleteTarget.line) }}.
+						</template>
+						Dòng đã xoá thì không lấy lại được, nhưng từng người vẫn đăng ký lại được khi kỳ còn mở.
 					</p>
 					<div class="mt-6 flex justify-end gap-3">
 						<CommonAppButton variant="outline" @click="deleteTarget = null">Thôi</CommonAppButton>
-						<CommonAppButton variant="danger" :loading="working" @click="deleteLine(deleteTarget)">Xoá dòng</CommonAppButton>
+						<CommonAppButton variant="danger" :loading="deleting" @click="confirmDelete">Xoá cả dòng</CommonAppButton>
 					</div>
 				</div>
 			</div>

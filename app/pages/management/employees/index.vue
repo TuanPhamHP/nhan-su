@@ -4,6 +4,12 @@
 	import EmployeeEmployeeStatusBadge from '~/components/modules/employee/EmployeeStatusBadge.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 	import EmployeeImportModal from '~/components/modules/employee/EmployeeImportModal.vue';
+	import {
+		employeeAccountOpenTour,
+		employeeCreateOpenTour,
+		employeeImportTour,
+		employeeViewOpenTour,
+	} from '~/tours/employee-list';
 
 	definePageMeta({ title: 'Nhân viên' });
 
@@ -165,6 +171,33 @@
 			},
 		];
 	}
+
+	// ─── Hướng dẫn ───────────────────────────────────────────────────────────────
+	const tour = useTour();
+	const listState = { hasItems: () => items.value.length > 0, isLoading: () => loading.value };
+
+	useGuideTour('employee-create', () => employeeCreateOpenTour({ canCreate: () => canCreate.value }));
+	useGuideTour('employee-import', () =>
+		employeeImportTour({
+			canImport: () => canImport.value,
+			isModalOpen: () => showImportModal.value,
+			closeModal: () => (showImportModal.value = false),
+		}),
+	);
+	useGuideTour('employee-view', () => employeeViewOpenTour(listState));
+	useGuideTour('employee-account', () => employeeAccountOpenTour(listState));
+
+	/** Hướng dẫn có nửa sau ở trang khác: bấm nút chuyển trang trong lúc chúng chạy thì chạy tiếp ở đó. */
+	const HAND_OFF_TOURS = ['employee-create', 'employee-view', 'employee-account'];
+
+	/**
+	 * Đổi trang là tour tắt, nên xếp hướng dẫn đang chạy vào hàng chờ: trang thêm mới hoặc hồ sơ
+	 * đăng ký cùng `tourId` và chạy tiếp phần của nó.
+	 */
+	function handOffTour() {
+		const id = tour.state.value?.tour.id;
+		if (id && HAND_OFF_TOURS.includes(id)) tour.pending.value = id;
+	}
 </script>
 
 <template>
@@ -176,7 +209,7 @@
 				<p v-if="meta" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Tổng {{ meta.total }} nhân viên</p>
 			</div>
 			<div class="flex items-center gap-2">
-				<CommonAppButton v-if="canImport" variant="primary" @click="showImportModal = true">
+				<CommonAppButton v-if="canImport" data-tour="emp-import-open" variant="primary" @click="showImportModal = true">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"
@@ -186,7 +219,7 @@
 					</svg>
 					Import Excel
 				</CommonAppButton>
-				<NuxtLink v-if="canCreate" to="/management/employees/new">
+				<NuxtLink v-if="canCreate" to="/management/employees/new" data-tour="emp-create-open" @click="handOffTour">
 					<CommonAppButton>
 						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
@@ -198,7 +231,7 @@
 		</div>
 
 		<!-- Filters -->
-		<div class="flex flex-col sm:flex-row gap-3">
+		<div data-tour="emp-filters" class="flex flex-col sm:flex-row gap-3">
 			<div class="flex-1">
 				<CommonAppInput
 					:model-value="searchInput"
@@ -303,12 +336,21 @@
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
-						<tr v-for="emp in items" :key="emp.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-							<td
-								class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:underline"
-								@click="router.push(`/management/employees/${emp.id}`)"
-							>
-								{{ emp.employeeCode }}
+						<tr
+							v-for="(emp, idx) in items"
+							:key="emp.id"
+							class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+						>
+							<td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+								<!-- Liên kết thật (không phải ô bắt click) để hướng dẫn bấm giúp được và mở được tab mới. -->
+								<NuxtLink
+									:to="`/management/employees/${emp.id}`"
+									:data-tour="idx === 0 ? 'emp-row-open' : undefined"
+									class="hover:underline"
+									@click="handOffTour"
+								>
+									{{ emp.employeeCode }}
+								</NuxtLink>
 							</td>
 							<td class="px-6 py-4">
 								<div class="font-medium text-gray-900 dark:text-white">{{ emp.fullName }}</div>

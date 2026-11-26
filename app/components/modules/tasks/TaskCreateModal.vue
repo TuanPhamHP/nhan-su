@@ -47,9 +47,10 @@
 				title: z.string({ required_error: 'Nhập tiêu đề' }).trim().min(1, 'Nhập tiêu đề').max(500, 'Tiêu đề tối đa 500 ký tự'),
 				assigneeIds: z.array(z.number()).min(1, 'Chọn người thực hiện'),
 				reviewerIds: z.array(z.number()),
-				dueDate: z.string({ required_error: 'Chọn hạn' }).min(1, 'Chọn hạn'),
+				// Hạn và điểm không bắt buộc: không hạn thì không bao giờ quá hạn, chưa có điểm thì tính 0.
+				dueDate: z.string().optional(),
 				startDate: z.string().optional(),
-				points: z.number({ required_error: 'Chọn điểm khối lượng', invalid_type_error: 'Chọn điểm khối lượng' }),
+				points: z.number().optional(),
 				priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
 				projectId: z.string(),
 				description: z.string(),
@@ -157,7 +158,7 @@
 				title: v.title.trim(),
 				assigneeId: v.assigneeIds[0]!,
 				reviewerId: v.reviewerIds[0],
-				dueDate: v.dueDate,
+				dueDate: v.dueDate || undefined,
 				startDate: v.startDate || undefined,
 				points: v.points,
 				priority: v.priority,
@@ -228,7 +229,7 @@
 
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div>
-							<UiDatePicker v-model="dueDate" label="Hạn *" :error="errors.dueDate" />
+							<UiDatePicker v-model="dueDate" label="Hạn" :error="errors.dueDate" />
 							<div class="mt-1.5 flex flex-wrap gap-1.5">
 								<button
 									v-for="o in dueOptions"
@@ -241,6 +242,7 @@
 									{{ o.label }}
 								</button>
 							</div>
+							<p class="mt-1 text-xs text-gray-500">Bỏ trống thì việc không có hạn và không bị tính quá hạn.</p>
 						</div>
 						<UiDatePicker v-model="startDate" label="Ngày bắt đầu" :error="errors.startDate" />
 					</div>
@@ -248,9 +250,9 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div>
 							<span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-								Điểm khối lượng <span class="text-red-500">*</span>
+								Điểm khối lượng
 							</span>
-							<div class="mt-1 flex gap-1.5" role="radiogroup" aria-label="Điểm khối lượng">
+							<div class="mt-1 flex gap-1.5" role="radiogroup" aria-label="Điểm khối lượng, bấm lại để bỏ">
 								<button
 									v-for="p in POINT_SCALE"
 									:key="p"
@@ -259,13 +261,15 @@
 									:aria-checked="points === p"
 									class="h-9 w-10 rounded-md border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
 									:class="points === p ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300' : errors.points ? 'border-rose-500 text-gray-700 dark:text-gray-300' : 'border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300'"
-									@click="points = p"
+									@click="points = points === p ? undefined : p"
 								>
 									{{ p }}
 								</button>
 							</div>
 							<p v-if="errors.points" class="mt-1 text-xs text-rose-600">{{ errors.points }}</p>
-							<p v-else class="mt-1 text-xs text-gray-500">Việc càng nặng điểm càng cao: 1 rất nhẹ, 8 rất nặng.</p>
+							<p v-else class="mt-1 text-xs text-gray-500">
+								Việc càng nặng điểm càng cao: 1 rất nhẹ, 8 rất nặng. Bỏ trống thì tính 0 điểm, bấm lại số đang chọn để bỏ.
+							</p>
 						</div>
 						<UiSelect
 							:model-value="priority"

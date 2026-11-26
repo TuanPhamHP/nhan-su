@@ -68,12 +68,17 @@ Giao diện **không tự tính** các luật này: dùng `allowedActions`, `col
 
 - **Số hiệu** (`code`): `<mã dự án>-<số>` (`HQ-12`) hoặc `CV-<số>` với việc lẻ. Số tăng nguyên tử, hai người tạo cùng lúc
   không trùng.
-- **Điểm khối lượng** `points`: bắt buộc, một trong 1, 2, 3, 5, 8, kể cả việc con (BR-12, D-Q3).
-- **Hạn**: ngày `YYYY-MM-DD` theo giờ Việt Nam. `originalDueDate` là hạn lúc giao, không bao giờ đổi; `dueDate` là hạn
-  hiện tại; `dueChangeCount` số lần đổi. **"Quá hạn" là nhãn, không phải trạng thái**: `overdue: true` khi chưa báo xong
-  (`TODO`, `IN_PROGRESS`) và hạn đã qua (quá hạn từ 00:00 ngày hôm sau, BR-10).
+- **Điểm khối lượng** `points: number | null`: **không bắt buộc** (sửa 26/11/2026, thay BR-12, D-Q3). Có thì là một trong
+  1, 2, 3, 5, 8; `null` là chưa có điểm, tính là **0** ở mọi chỗ cộng hay so sánh (khối lượng KPI, báo cáo, tổng điểm việc
+  con, nhóm việc, đợt). Nghiệm thu không bị chặn vì thiếu điểm.
+- **Hạn**: ngày `YYYY-MM-DD` theo giờ Việt Nam, **không bắt buộc**: `dueDate: string | null`, `originalDueDate: string | null`.
+  `originalDueDate` là hạn lúc giao, không bao giờ đổi (việc tạo không hạn thì vẫn `null` kể cả sau khi đặt hạn); `dueDate`
+  là hạn hiện tại; `dueChangeCount` số lần đổi. **"Quá hạn" là nhãn, không phải trạng thái**: `overdue: true` khi chưa báo
+  xong (`TODO`, `IN_PROGRESS`) và hạn đã qua (quá hạn từ 00:00 ngày hôm sau, BR-10). Việc không hạn (`dueDate: null`) **không
+  bao giờ quá hạn** (`overdue` luôn false), không được nhắc hạn, không vào biểu đồ tiến độ và lịch. Giao diện hiện "Chưa có
+  hạn".
 - **Việc con** một cấp: `parent` có giá trị; lấy dự án của việc cha. `subtasks { total, done, points }` của việc cha
-  (`points` là tổng điểm việc con chưa huỷ, hiện cạnh điểm của việc cha).
+  (`points: number` là tổng điểm việc con chưa huỷ, việc con chưa có điểm tính 0, hiện cạnh điểm của việc cha).
 - `description` và `body` bình luận là **HTML lưu nguyên** từ Tiptap; web phải lọc bằng DOMPurify khi hiển thị, như bảng tin.
 - `version` tăng mỗi lần việc đổi (sửa, chuyển trạng thái, đổi hạn, kéo thẻ trên bảng chung). Danh sách kiểm tra, người
   theo dõi, bình luận, file **không** đổi `version`.
@@ -132,7 +137,7 @@ Giao diện **không tự tính** các luật này: dùng `allowedActions`, `col
   "attachments": [{ "id": 31, "fileName": "tờ khai 1052.pdf", "mimeType": "application/pdf", "size": 182044,
                     "commentId": null, "uploadedBy": { "id": 6, "fullName": "Đỗ Minh Đức", "avatarUrl": null },
                     "createdAt": "…" }],
-  "dueChanges": [{ "oldDueDate": "2026-11-25", "newDueDate": "2026-11-28", "reason": "Khách gửi chứng từ muộn",
+  "dueChanges": [{ "oldDueDate": "2026-11-25" /* null: đặt hạn lần đầu */, "newDueDate": "2026-11-28", "reason": "Khách gửi chứng từ muộn",
                    "changedBy": { "id": 5, "fullName": "Lê Thị Lan", "avatarUrl": null }, "createdAt": "…" }],
   "children": [ /* TaskListItemDto của việc con người xem xem được */ ],
   "warning": null
@@ -156,7 +161,7 @@ Giao diện **không tự tính** các luật này: dùng `allowedActions`, `col
 | GET | `/v1/tasks/scope` | | `{ seesAllTasks, managedDepartments: [{ id, name }] }`: phạm vi người gọi. Hiện mục Việc của phòng khi `managedDepartments` khác rỗng hoặc `seesAllTasks` (khi đó cho chọn phòng) |
 | GET | `/v1/tasks/:code` | `:code` là số hiệu (`HQ-12`, không phân biệt hoa thường) hoặc id số | `TaskDetailDto` |
 | POST | `/v1/tasks` | Mục 3.2 | 201 `TaskDetailDto` |
-| PATCH | `/v1/tasks/:id` | `{ version, title?, description?, priority?, points?, startDate?, assigneeId?, reviewerId? }` | `TaskDetailDto` |
+| PATCH | `/v1/tasks/:id` | `{ version, title?, description?, priority?, points? (số trong thang, hoặc null để bỏ điểm), startDate?, assigneeId?, reviewerId? }` | `TaskDetailDto` |
 | POST | `/v1/tasks/:id/transition` | `{ action, version, reason?, qualityScore? }` | 201 `TaskDetailDto` |
 | POST | `/v1/tasks/:id/due-date` | `{ dueDate, reason, version }` | 201 `TaskDetailDto` |
 | POST | `/v1/tasks/:id/move` | `{ status?, beforeId?, afterId?, version, board?, reason?, qualityScore? }` | 201 `TaskDetailDto` |
@@ -178,10 +183,11 @@ Các route POST trả **201** (cả `transition`, `due-date`, `move`).
 | `projectId`, `departmentId` | Dự án; phòng hiện tại của người thực hiện |
 | `assigneeIds`, `assignerIds` | Danh sách id cách nhau dấu phẩy: `assigneeIds=6,7` |
 | `status`, `priority` | Danh sách mã cách nhau dấu phẩy: `status=TODO,IN_PROGRESS` |
+| `points` | Lọc điểm khối lượng kiểu JQL, mục 3.1a: `points=>=3`, `points=>=2,<=5` |
 | `due` | `overdue` (chưa báo xong và hạn đã qua) · `today` · `this_week` · `next_week` (tuần bắt đầu thứ Hai) · `range` với `dueFrom`, `dueTo` |
 | `topLevel=true` | Bỏ việc con. `parentId=` chỉ việc con của một việc |
 | `q` | Tìm không dấu theo tiêu đề (`unaccent`), hoặc theo số hiệu (`hq-12`) |
-| `sort` | `dueDate` (mặc định) · `-dueDate` · `priority` · `-priority` (Gấp trước) · `createdAt` · `-createdAt` · `updatedAt` · `-updatedAt` · `code` · `board` (thứ tự bảng việc) |
+| `sort` | `dueDate` (mặc định) · `-dueDate` · `priority` · `-priority` (Gấp trước) · `createdAt` · `-createdAt` · `updatedAt` · `-updatedAt` · `code` · `board` (thứ tự bảng việc). Xếp theo hạn (`dueDate`, `-dueDate`, và hạn là khoá phụ của `priority`) thì việc không hạn **luôn ở cuối**, cả tăng lẫn giảm |
 | `page`, `limit` | Mặc định 1, 20; tối đa 100 |
 
 Bảng việc: bốn cột `TODO`, `IN_PROGRESS`, `IN_REVIEW`, `DONE` (thêm `CANCELLED` khi `includeCancelled=true`), mỗi cột tối đa
@@ -190,20 +196,41 @@ nhất; cột Đã huỷ chỉ 14 ngày. `status=` lọc bớt cột. `view=my` 
 thì theo `boardOrder`). Gom nhóm (`groupBy` trong thiết kế) làm ở giao diện.
 
 "Việc của tôi" (UI-01) gợi ý gọi: `view=my&status=TODO,IN_PROGRESS,IN_REVIEW&sort=dueDate` rồi chia nhóm Quá hạn (`overdue`),
-Hôm nay, Sắp tới 7 ngày, Sau đó ở giao diện; khối "Chờ tôi nghiệm thu" là `view=review`.
+Hôm nay, Sắp tới 7 ngày, Sau đó, Chưa có hạn (`dueDate: null`) ở giao diện; khối "Chờ tôi nghiệm thu" là `view=review`.
+
+### 3.1a Lọc theo điểm (`points`)
+
+`GET /v1/tasks`, `/v1/tasks/board` (và `/tasks/timeline`, `/tasks/calendar`, dùng chung bộ lọc) nhận query `points`: một hay
+nhiều điều kiện `<toán tử><số>` cách nhau dấu phẩy, các điều kiện nối bằng **VÀ**.
+
+- Toán tử: `=`, `!=`, `>`, `>=`, `<`, `<=`. Số nguyên 0–100. Cho phép khoảng trắng quanh toán tử, số và dấu phẩy.
+- Việc chưa có điểm (`points: null`) **tính là 0** khi so sánh: `=0` ra việc chưa có điểm; `<3` gồm việc chưa có điểm; `>0` và
+  `!=0` bỏ việc chưa có điểm.
+- Nhớ mã hoá URL khi gửi từ code (`encodeURIComponent('>=2,<=5')`); gõ tay `?points=>=3` trình duyệt vẫn nhận.
+
+| Query | Nghĩa |
+|---|---|
+| `points=>=3` | Từ 3 điểm trở lên |
+| `points=<=1` | Tối đa 1 điểm, gồm việc chưa có điểm |
+| `points=>=2,<=5` | Từ 2 đến 5 điểm |
+| `points==0` | Việc chưa có điểm (giá trị là `=0`) |
+| `points=!=0` | Việc đã có điểm |
+
+Sai cú pháp (thiếu toán tử, số lẻ, số âm, quá 100, dấu phẩy thừa, `==3`, `=>3`) → 400 `BAD_REQUEST` như lỗi kiểm dữ liệu
+chung, `message`: "Bộ lọc điểm không hợp lệ: dùng =, !=, >, >=, <, <= kèm số, ví dụ >=3 hoặc >=2,<=5."
 
 ### 3.2 Giao việc
 
 ```json
 POST /v1/tasks
 {
-  "title": "Đối chiếu công nợ khách hàng tháng 11",
-  "assigneeId": 6,
-  "dueDate": "2026-11-28",
-  "points": 3,
+  "title": "Đối chiếu công nợ khách hàng tháng 11",   // bắt buộc
+  "assigneeId": 6,          // bắt buộc
+  "dueDate": "2026-11-28",  // tuỳ chọn; không gửi, null hay "" là việc không hạn
+  "points": 3,              // tuỳ chọn; không gửi, null hay "" là chưa có điểm (tính 0)
   "reviewerId": 5,          // tuỳ chọn, mặc định người giao
   "priority": "NORMAL",     // tuỳ chọn
-  "startDate": "2026-11-26",// tuỳ chọn, không sau hạn
+  "startDate": "2026-11-26",// tuỳ chọn, không sau hạn (chỉ kiểm khi có hạn)
   "description": "<p>…</p>",// tuỳ chọn, HTML
   "projectId": 2,           // tuỳ chọn; trống là việc lẻ CV-n
   "parentId": 15,           // tuỳ chọn; tạo việc con, bỏ qua projectId
@@ -212,7 +239,9 @@ POST /v1/tasks
 }
 ```
 
-- Thiếu hay sai `points` → 400 `TASK_POINTS_REQUIRED`. Hạn trong quá khứ vẫn nhận (nhập việc cũ).
+- Chỉ `title` và `assigneeId` là bắt buộc (sửa 26/11/2026), cả dòng tạo nhanh lẫn form đầy đủ. `points` có gửi mà ngoài thang
+  1, 2, 3, 5, 8 → 400 `TASK_POINTS_INVALID`. Hạn trong quá khứ vẫn nhận (nhập việc cũ). Không hạn thì `dueDate`,
+  `originalDueDate` đều `null`.
 - Người thực hiện, người nghiệm thu, người theo dõi phải đang làm việc → 400 `TASK_PERSON_INVALID`.
 - Giao cho người khác mà chọn chính người thực hiện làm người nghiệm thu → 400 `TASK_REVIEWER_INVALID`. Tự giao cho mình
   thì `source: SELF`, nút chính là **Đóng việc** (`self_close`), không qua nghiệm thu (BR-04).
@@ -265,6 +294,8 @@ trước → 409 `TASK_VERSION_CONFLICT`, `error.details.task` là bản mới r
     "dueDate": "2026-11-28", "assigneeId": 6, "reviewerId": 5, "boardOrder": 3000, "updatedAt": "…" } } } }
 ```
 
+`details.task.dueDate` là `null` với việc không hạn.
+
 Giao diện đặt thẻ về đúng cột mới theo `details.task.status`, hiện `message`, rồi tải lại việc nếu cần.
 
 ### 3.6 Đổi hạn
@@ -273,6 +304,8 @@ Giao diện đặt thẻ về đúng cột mới theo `details.task.status`, hi�
 Người thực hiện gọi → 403 "Người thực hiện không tự đổi hạn. Bạn nhờ người giao đổi giúp." Thiếu lý do → 400
 `TASK_REASON_REQUIRED`; trùng hạn cũ → 400 `TASK_DUE_UNCHANGED`; hạn mới trước ngày bắt đầu → 400 `TASK_DATE_INVALID`.
 `originalDueDate` không đổi, `dueChangeCount + 1`, thêm một dòng `dueChanges`, người thực hiện nhận N-08.
+Việc chưa có hạn cũng dùng API này để **đặt hạn lần đầu**: dòng `dueChanges` có `oldDueDate: null`, nhật ký `from: null`,
+thông báo N-08 là "Việc … có hạn …" thay cho "đổi hạn từ … sang …"; `originalDueDate` vẫn `null`. Chưa có API bỏ hạn.
 
 ---
 
@@ -386,7 +419,8 @@ việc). Dùng cho huy hiệu menu Công việc và ô trang chủ; danh sách t
 | `TASK_ACTION_NOT_ALLOWED` | 403 | Sai người cho thao tác; `message` là câu lý do hiện thẳng |
 | `TASK_STATUS_INVALID` | 409 | Việc không còn ở trạng thái cho phép; `details.task` |
 | `TASK_VERSION_CONFLICT` | 409 | Lệch phiên bản; `details.task` |
-| `TASK_POINTS_REQUIRED` | 400 | Thiếu hay sai thang điểm |
+| `TASK_POINTS_INVALID` | 400 | Công việc: điểm có gửi nhưng ngoài thang 1, 2, 3, 5, 8 (điểm không bắt buộc) |
+| `TASK_POINTS_REQUIRED` | 400 | Chỉ việc định kỳ: thiếu hay sai thang điểm |
 | `TASK_REASON_REQUIRED` | 400 | Thiếu lý do trả lại, mở lại, huỷ, đổi hạn |
 | `TASK_QUALITY_INVALID` | 400 | Điểm chất lượng ngoài 1–5 hoặc gửi kèm thao tác khác nghiệm thu |
 | `TASK_SUBTASK_DEPTH` | 400 | Việc con của việc con |
@@ -416,7 +450,8 @@ việc). Dùng cho huy hiệu menu Công việc và ô trang chủ; danh sách t
 | `TASK_PROJECT_STATUS_INVALID` | 409 | Đóng dự án đã đóng, mở dự án đang chạy |
 | `MODULE_NOT_SUBSCRIBED`, `MODULE_SUSPENDED`, `MODULE_READ_ONLY`, `MODULE_EXPIRED`, `MODULE_LAPSED` | 403 | Cổng module |
 
-Lỗi kiểm dữ liệu chung (thiếu `dueDate`, sai kiểu) là 400 `BAD_REQUEST` với câu tiếng Việt có tên ô.
+Lỗi kiểm dữ liệu chung (thiếu `title`, `assigneeId`, sai kiểu, bộ lọc `points` sai cú pháp) là 400 `BAD_REQUEST` với câu
+tiếng Việt có tên ô.
 
 ---
 
@@ -642,7 +677,8 @@ POST /v1/task-recurrences
   404 `TASK_DEPENDENCY_NOT_FOUND`.
 - Biểu đồ tiến độ: việc có khoảng [`startDate`, `dueDate`] giao với [`from`, `to`]; việc không có ngày bắt đầu thì chỉ xét hạn
   (vẽ một chấm ở hạn). Xếp theo ngày bắt đầu, hạn. `links` chỉ gồm đường nối giữa các việc có trong `tasks`; `late: true` vẽ
-  đường đỏ. Vạch hạn ban đầu dùng `originalDueDate` khi `dueChangeCount > 0`. Tay cầm kéo đổi hạn chỉ hiện khi
+  đường đỏ. Vạch hạn ban đầu dùng `originalDueDate` khi `dueChangeCount > 0` và `originalDueDate` khác null. Việc không hạn
+  không có trên biểu đồ và lịch; việc trước không hạn không bao giờ làm `late`. Tay cầm kéo đổi hạn chỉ hiện khi
   `permissions.changeDue`; thả thì mở hộp Đổi hạn (`POST /tasks/:id/due-date`, bắt buộc lý do). Gom theo nhóm việc dùng
   `group` của từng việc.
 - Lịch: việc có hạn trong khoảng, xếp theo hạn rồi ưu tiên. Cả hai: Đã huỷ ẩn trừ khi lọc `status`; tối đa 500 việc
@@ -679,14 +715,14 @@ DIRECTOR (người khác 404).
 
 | Ô (`metric`) | Cách tính (mục 4.7, BR-20) |
 |---|---|
-| `assigned` Được giao | Việc cấp trên, người khác giao, hạn ban đầu trong khoảng (gồm cả việc đã huỷ) |
+| `assigned` Được giao | Việc cấp trên, người khác giao, hạn ban đầu trong khoảng; việc tạo không hạn thì xét **ngày tạo** (giờ Việt Nam) trong khoảng (gồm cả việc đã huỷ) |
 | `cancelled` Đã huỷ | Được giao và đã huỷ (hiện riêng, BR-07) |
 | `done` Hoàn thành | Được giao, chưa huỷ, đã nghiệm thu |
-| `onTimeOriginal` | Được giao, chưa huỷ, ngày báo xong lần đầu (giờ Việt Nam) không sau hạn ban đầu |
+| `onTimeOriginal` | Được giao, chưa huỷ, ngày báo xong lần đầu (giờ Việt Nam) không sau hạn ban đầu; không có hạn ban đầu thì đã báo xong là đúng hạn |
 | `onTimeCurrent` | Như trên, so với hạn hiện tại |
-| `overdueOpen` Quá hạn còn mở | Được giao, chưa huỷ, đang Chưa làm hoặc Đang làm, hạn đã qua tại cuối ngày `to` (khoảng chưa hết thì tại hôm nay) |
+| `overdueOpen` Quá hạn còn mở | Được giao, chưa huỷ, đang Chưa làm hoặc Đang làm, hạn đã qua tại cuối ngày `to` (khoảng chưa hết thì tại hôm nay). Việc không hạn không bao giờ vào ô này |
 | `returned` Bị trả lại | Được giao, chưa huỷ, đã bị trả lại hoặc mở lại ít nhất một lần |
-| `points` Khối lượng | Tổng điểm việc cấp trên người khác giao **nghiệm thu trong khoảng** (BR-21) |
+| `points` Khối lượng | Tổng điểm việc cấp trên người khác giao **nghiệm thu trong khoảng** (BR-21); việc chưa có điểm cộng 0 nhưng vẫn có trong danh sách |
 | `quality` Chất lượng | Trung bình điểm chất lượng của các việc ở ô `points` có chấm (`qualityCount` là số việc có chấm) |
 
 Các tỷ lệ `…Pct` chia cho `assigned - cancelled`, null khi mẫu số 0. Việc tự giao, việc con, việc dự án mẫu không vào báo cáo.
@@ -697,7 +733,7 @@ tổng) trả đúng các việc làm nên con số: `meta.total` bằng con s�
 
 **Excel:** file `bao-cao-tien-do-cong-viec-<from>_<to>.xlsx` (STT, Mã NV, Họ tên, Phòng, rồi đúng các cột trên kèm hai cột tỷ lệ,
 dòng Tổng cuối) và `viec-qua-han-<ngày>.xlsx` (Số hiệu, Tiêu đề, Dự án, Người thực hiện, Người giao, Hạn, Hạn ban đầu, Số ngày quá
-hạn, Trạng thái, Ưu tiên). Tải như các file Excel khác (`authFetch` với `responseType: 'blob'`). Không có cột nào về lương.
+hạn, Trạng thái, Ưu tiên; ô hạn trống ghi "Chưa có hạn"). Tải như các file Excel khác (`authFetch` với `responseType: 'blob'`). Không có cột nào về lương.
 
 ```json
 // ProjectOverviewDto (GET /task-reports/project/:id)

@@ -98,7 +98,7 @@ export type DueTone = 'overdue' | 'today' | 'soon' | 'normal' | 'done';
 export function dueTone(task: Pick<TaskListItem, 'dueDate' | 'overdue' | 'status'>, today: string): DueTone {
 	if (task.status === 'DONE' || task.status === 'CANCELLED') return 'done';
 	if (task.overdue) return 'overdue';
-	if (task.status === 'IN_REVIEW') return 'normal';
+	if (task.status === 'IN_REVIEW' || !task.dueDate) return 'normal';
 	const days = differenceInCalendarDays(parseISO(task.dueDate), parseISO(today));
 	if (days === 0) return 'today';
 	if (days > 0 && days <= 2) return 'soon';
@@ -120,8 +120,16 @@ export function shortDate(ymd: string | null | undefined, today: string = vnToda
 	return ymd.slice(0, 4) === today.slice(0, 4) ? format(d, 'dd/MM') : format(d, 'dd/MM/yyyy');
 }
 
-/** Chữ ngắn cho hạn trên thẻ: "Hôm nay", "Ngày mai", "Quá 2 ngày", hoặc ngày. */
+export const NO_DUE_TEXT = 'Chưa có hạn';
+
+/** Việc có hạn: biểu đồ tiến độ và lịch chỉ đặt được những việc này lên trục ngày. */
+export function hasDueDate<T extends { dueDate: string | null }>(task: T): task is T & { dueDate: string } {
+	return !!task.dueDate;
+}
+
+/** Chữ ngắn cho hạn trên thẻ: "Hôm nay", "Ngày mai", "Quá 2 ngày", ngày, hoặc "Chưa có hạn". */
 export function taskDueText(task: Pick<TaskListItem, 'dueDate' | 'overdue' | 'status'>, today: string): string {
+	if (!task.dueDate) return NO_DUE_TEXT;
 	const days = differenceInCalendarDays(parseISO(task.dueDate), parseISO(today));
 	if (task.status !== 'DONE' && task.status !== 'CANCELLED') {
 		if (task.overdue && days < 0) return `Quá ${-days} ngày`;
@@ -131,26 +139,31 @@ export function taskDueText(task: Pick<TaskListItem, 'dueDate' | 'overdue' | 'st
 	return shortDate(task.dueDate, today);
 }
 
-export type MyGroupKey = 'overdue' | 'today' | 'upcoming' | 'later';
+export type MyGroupKey = 'overdue' | 'today' | 'upcoming' | 'later' | 'noDue';
 
 export const MY_GROUP_LABELS: Record<MyGroupKey, string> = {
 	overdue: 'Quá hạn',
 	today: 'Hôm nay',
 	upcoming: 'Sắp tới 7 ngày',
 	later: 'Sau đó',
+	noDue: NO_DUE_TEXT,
 };
 
 /**
- * Chia Việc của tôi thành Quá hạn, Hôm nay, Sắp tới 7 ngày, Sau đó (UI-01). Việc đã báo xong
- * (Chờ nghiệm thu) không bao giờ "quá hạn" vì máy chủ chỉ gắn cờ đó khi chưa báo xong, nên nó rơi
- * vào nhóm theo ngày như mọi việc khác.
+ * Chia Việc của tôi thành Quá hạn, Hôm nay, Sắp tới 7 ngày, Sau đó, Chưa có hạn (UI-01). Việc đã báo
+ * xong (Chờ nghiệm thu) không bao giờ "quá hạn" vì máy chủ chỉ gắn cờ đó khi chưa báo xong, nên nó rơi
+ * vào nhóm theo ngày như mọi việc khác. Việc không có hạn không bao giờ quá hạn, nằm nhóm cuối.
  */
 export function groupMyTasks<T extends Pick<TaskListItem, 'dueDate' | 'overdue' | 'status'>>(
 	tasks: T[],
 	today: string,
 ): Record<MyGroupKey, T[]> {
-	const groups: Record<MyGroupKey, T[]> = { overdue: [], today: [], upcoming: [], later: [] };
+	const groups: Record<MyGroupKey, T[]> = { overdue: [], today: [], upcoming: [], later: [], noDue: [] };
 	for (const task of tasks) {
+		if (!task.dueDate) {
+			groups.noDue.push(task);
+			continue;
+		}
 		const days = differenceInCalendarDays(parseISO(task.dueDate), parseISO(today));
 		if (task.overdue) groups.overdue.push(task);
 		else if (days <= 0) groups.today.push(task);
@@ -180,6 +193,85 @@ export function quickDueOptions(today: string): QuickDueOption[] {
 	options.push({ label: 'Tuần sau', value: ymd(addDays(base, toNextMonday)) });
 	return options;
 }
+
+// ─── Điểm ──────────────────────────────────────────────────────────────────────
+
+/** Chữ điểm trên thẻ và dòng việc: "3 đ", hoặc "—" khi chưa chấm điểm. */
+export function taskPointsText(points: number | null | undefined): string {
+	return points == null ? '—' : `${points} đ`;
+}
+
+export type PointsOperator = '=' | '!=' | '>' | '>=' | '<' | '<=';
+
+export interface PointsCondition {
+	op: PointsOperator;
+	value: number;
+}
+
+const POINTS_CONDITION = /^(!=|>=|<=|=|>|<)\s*(\d{1,3})$/;
+const POINTS_OPERATORS: readonly PointsOperator[] = ['=', '!=', '>', '>=', '<', '<='];
+
+function isPointsOperator(v: string | undefined): v is PointsOperator {
+	return POINTS_OPERATORS.some(op => op === v);
+}
+
+/**
+ * Đọc bộ lọc điểm kiểu JQL (`>=3`, `>=2,<=5`, `=0`): các điều kiện cách dấu phẩy, ghép bằng VÀ. Trả
+ * `null` khi có điều kiện sai cú pháp, để ô lọc báo lỗi ngay thay vì đợi máy chủ trả 400. Chuỗi rỗng là
+ * không lọc (mảng rỗng).
+ */
+export function parsePointsFilter(raw: string): PointsCondition[] | null {
+	const parts = raw
+		.split(',')
+		.map(p => p.trim())
+		.filter(Boolean);
+	const out: PointsCondition[] = [];
+	for (const part of parts) {
+		const m = POINTS_CONDITION.exec(part.replace(/\s+/g, ''));
+		const op = m?.[1];
+		if (!m || !isPointsOperator(op)) return null;
+		out.push({ op, value: Number(m[2]) });
+	}
+	return out;
+}
+
+/** Chuỗi gửi máy chủ, đã bỏ khoảng trắng: `>=2,<=5`. */
+export function pointsFilterParam(conditions: PointsCondition[]): string {
+	return conditions.map(c => `${c.op}${c.value}`).join(',');
+}
+
+/**
+ * Tham số `points` cho API từ giá trị trên đường dẫn. Rỗng hoặc sai cú pháp (đường dẫn dán tay) thì
+ * không lọc, để máy chủ không trả 400 cho cả trang.
+ */
+export function pointsQuery(raw: string | null | undefined): string | undefined {
+	const parsed = raw ? parsePointsFilter(raw) : null;
+	return parsed?.length ? pointsFilterParam(parsed) : undefined;
+}
+
+const POINTS_OP_TEXT: Record<PointsOperator, string> = {
+	'=': 'bằng',
+	'!=': 'khác',
+	'>': 'lớn hơn',
+	'>=': 'từ',
+	'<': 'nhỏ hơn',
+	'<=': 'tối đa',
+};
+
+/** Câu đọc của bộ lọc cho nhãn và trình đọc màn hình: "Điểm từ 2 và tối đa 5", "Chưa có điểm". */
+export function pointsFilterLabel(conditions: PointsCondition[]): string {
+	if (conditions.length === 1 && conditions[0]?.op === '=' && conditions[0].value === 0) return 'Chưa có điểm';
+	return `Điểm ${conditions.map(c => `${POINTS_OP_TEXT[c.op]} ${c.value}`).join(' và ')}`;
+}
+
+/** Gợi ý bấm nhanh trong ô lọc điểm. */
+export const POINTS_FILTER_PRESETS: Array<{ label: string; value: string }> = [
+	{ label: 'Chưa có điểm', value: '=0' },
+	{ label: 'Có điểm', value: '>0' },
+	{ label: 'Từ 3 điểm', value: '>=3' },
+	{ label: 'Từ 5 điểm', value: '>=5' },
+	{ label: 'Từ 2 tới 5', value: '>=2,<=5' },
+];
 
 // ─── Lỗi máy chủ ──────────────────────────────────────────────────────────────
 

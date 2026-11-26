@@ -139,6 +139,7 @@
 			state.cancelled,
 			state.taskGroup,
 			state.sprint,
+			state.points,
 			JSON.stringify(props.base),
 		],
 		() => {
