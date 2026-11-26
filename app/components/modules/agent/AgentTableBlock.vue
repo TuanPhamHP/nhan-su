@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import type { AgentTable } from '~/types/agent.types';
+	import { isSafeInternalPath } from '~/utils/agent-markdown';
 
 	/**
 	 * Bảng chi tiết do server dựng, đính kèm câu trả lời của trợ lý.
@@ -9,7 +10,19 @@
 	 * chuỗi hoàn chỉnh do tool dựng từ dữ liệu thật; FE tự chế biến thêm là con số trên
 	 * bảng khác con số trong câu trả lời, mà người xem không có cách nào biết bên nào đúng.
 	 */
-	defineProps<{ table: AgentTable }>();
+	const props = defineProps<{
+		table: AgentTable;
+		/**
+		 * Ô mà CẢ giá trị là đường dẫn nội bộ an toàn (cột "Mở phiếu" của phiếu chờ chấm) thành link.
+		 * Cú bấm do AgentMessageBubble bắt và đi bằng router. Tắt ở màn ADMIN xem lại hội thoại.
+		 */
+		links?: boolean;
+	}>();
+
+	/** Chữ trong ô vẫn y nguyên server gửi; chỉ thêm thẻ `<a>` bọc quanh. */
+	function linkOf(value: string): string | null {
+		return props.links && isSafeInternalPath(value) ? value : null;
+	}
 
 	/**
 	 * Thiếu khoá thì để TRỐNG, không in `undefined` và cũng không tự điền `'—'`.
@@ -89,7 +102,14 @@
 								isNumberCol(col.align) ? 'text-right tabular-nums' : 'text-left',
 							]"
 						>
-							{{ cell(row, col.key) }}
+							<a
+								v-if="linkOf(cell(row, col.key))"
+								:href="cell(row, col.key)"
+								data-agent-link=""
+								class="text-[var(--color-accent)] underline underline-offset-2 hover:decoration-2"
+								>{{ cell(row, col.key) }}</a
+							>
+							<template v-else>{{ cell(row, col.key) }}</template>
 						</td>
 					</tr>
 				</tbody>

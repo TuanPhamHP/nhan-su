@@ -3,7 +3,7 @@
 	import AgentMessageBubble from '~/components/modules/agent/AgentMessageBubble.vue';
 	import AgentComposer from '~/components/modules/agent/AgentComposer.vue';
 	import AgentEmptyState from '~/components/modules/agent/AgentEmptyState.vue';
-	import { AGENT_SUGGESTIONS, type AgentFeedbackRating } from '~/types/agent.types';
+	import { agentSuggestions, type AgentFeedbackRating } from '~/types/agent.types';
 
 	/**
 	 * Cửa sổ chat nhanh với trợ lý, nổi ở góc phải như bong bóng chat của Messenger.
@@ -29,6 +29,18 @@
 	const toast = useToast();
 	const { scroller, forceScroll, onScroll, showScrollDown, scrollToBottom, onComposerFocus } =
 		useAgentAutoScroll(messages);
+	const { canUse } = useModuleAccess();
+	/** Gợi ý theo phân hệ công ty đang dùng: tắt Công việc và KPI thì không mời hỏi việc. */
+	const suggestions = computed(() => agentSuggestions({ tasks: canUse('TASKS') }));
+
+	/**
+	 * Bấm đường dẫn trong câu trả lời: trên điện thoại cửa sổ này phủ kín màn hình, trang mới mở ra
+	 * nằm khuất phía sau và người dùng tưởng bấm không ăn. Thu nhỏ lại để thấy trang, hội thoại vẫn
+	 * giữ nguyên trong cửa sổ đã thu nhỏ. Máy tính thì cửa sổ chỉ chiếm góc phải, cứ để mở.
+	 */
+	function onNavigate(): void {
+		if (window.matchMedia('(max-width: 639px)').matches) emit('minimize');
+	}
 
 	function ask(text?: string): void {
 		forceScroll.value = true;
@@ -137,7 +149,7 @@
 		<div class="relative flex min-h-0 flex-1 flex-col bg-gray-50 dark:bg-gray-900/30">
 			<!-- `overscroll-contain`: cuộn tới đáy khung chat không kéo trang bên dưới trôi theo. -->
 			<div ref="scroller" class="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3" @scroll.passive="onScroll">
-				<AgentEmptyState v-if="!messages.length" compact :suggestions="AGENT_SUGGESTIONS" @pick="ask($event)" />
+				<AgentEmptyState v-if="!messages.length" compact :suggestions="suggestions" @pick="ask($event)" />
 
 				<div v-else class="flex w-full flex-col gap-3">
 					<AgentMessageBubble
@@ -149,6 +161,7 @@
 						@confirm="onConfirm"
 						@cancel="cancelPending"
 						@rate="onRate"
+						@navigate="onNavigate"
 					/>
 				</div>
 			</div>

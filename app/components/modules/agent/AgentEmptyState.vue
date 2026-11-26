@@ -43,7 +43,17 @@
 			</p>
 		</div>
 
-		<div :class="['grid w-full gap-2', compact ? '' : 'max-w-3xl sm:grid-cols-3 sm:gap-3']">
+		<!--
+			Ba gợi ý thì ba cột; bốn gợi ý (công ty dùng phân hệ Công việc và KPI) thì hai cột, để
+			không còn một thẻ lẻ loi ở hàng dưới.
+		-->
+		<div
+			:class="[
+				'grid w-full gap-2',
+				compact ? '' : 'max-w-3xl sm:gap-3',
+				compact ? '' : suggestions.length % 3 === 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
+			]"
+		>
 			<button
 				v-for="s in suggestions"
 				:key="s.label"
