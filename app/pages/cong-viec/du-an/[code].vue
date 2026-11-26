@@ -259,7 +259,8 @@
 				>
 					{{ project.statusLabel }}
 				</span>
-				<span v-if="project.myRoleLabel">Bạn là {{ project.myRoleLabel.toLowerCase() }}</span>
+				<span v-if="project.viaDepartment">Bạn xem với tư cách trưởng phòng</span>
+				<span v-else-if="project.myRoleLabel">Bạn là {{ project.myRoleLabel.toLowerCase() }}</span>
 				<span v-if="project.department">{{ project.department.name }}</span>
 				<span v-if="counts">{{ counts.TODO }} chưa làm · {{ counts.IN_PROGRESS }} đang làm · {{ counts.IN_REVIEW }} chờ nghiệm thu · {{ counts.DONE }} hoàn thành</span>
 			</div>
@@ -268,6 +269,10 @@
 			</p>
 			<p v-if="project.status === 'CLOSED'" class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
 				Dự án đã đóng nên không thêm việc mới được. Việc đang có vẫn làm tiếp bình thường.
+			</p>
+			<!-- Trưởng phòng của một thành viên, không là thành viên (bridge mục 24): chỉ đọc. -->
+			<p v-else-if="project.viaDepartment" class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100" data-testid="project-via-department">
+				Bạn xem với tư cách trưởng phòng vì có người trong phòng bạn tham gia dự án này. Bạn chỉ xem được, không sửa dự án, thành viên, nhóm hay đợt.
 			</p>
 			<p v-else-if="project.myRole === 'VIEWER'" class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300" data-testid="project-viewer-note">
 				Bạn là người xem của dự án này nên chỉ xem được, không tạo việc, đổi nhóm hay bình luận.

@@ -7,6 +7,7 @@
 	import TaskFilterBar from '~/components/modules/tasks/TaskFilterBar.vue';
 	import TaskList from '~/components/modules/tasks/TaskList.vue';
 	import { useTasksService } from '~/services/tasks.service';
+	import type { TaskFilterState } from '~/composables/useTaskFilters';
 	import type {
 		TaskBoard as TaskBoardData,
 		TaskDetail,
@@ -186,7 +187,24 @@
 		state.status = 'DONE';
 	}
 
-	defineExpose({ reload: () => load() });
+	/** Hoàn tác báo xong trong toast: thay dòng ngay. */
+	const actions = useTaskActions();
+	watch(
+		() => actions.externalChange.value,
+		t => {
+			if (t) onChanged(t);
+		},
+	);
+
+	/**
+	 * Trang chứa đặt bộ lọc từ ngoài (bấm một người ở dải tóm tắt Việc của phòng): ghi vào trạng thái lọc,
+	 * đường dẫn và danh sách tự theo.
+	 */
+	function setFilters(patch: Partial<TaskFilterState>) {
+		Object.assign(state, { mode: state.mode === 'board' ? 'board' : 'list', ...patch });
+	}
+
+	defineExpose({ reload: () => load(), setFilters, state });
 </script>
 
 <template>

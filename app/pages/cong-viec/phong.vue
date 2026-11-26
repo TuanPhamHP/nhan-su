@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import TaskActionDialogHost from '~/components/modules/tasks/TaskActionDialogHost.vue';
+	import TaskDeptSummary from '~/components/modules/tasks/TaskDeptSummary.vue';
 	import TaskEmptyState from '~/components/modules/tasks/TaskEmptyState.vue';
 	import TaskWorkspace from '~/components/modules/tasks/TaskWorkspace.vue';
 	import { useDirectoryStore } from '~/stores/directory';
@@ -43,7 +44,8 @@
 	});
 	const allowed = computed(() => taskScope.hasDepartmentView.value);
 	const selectedDept = computed<number | null>(() => {
-		const raw = Number(route.query.dept ?? 0);
+		// `departmentId` là tên tham số trong đường dẫn của thông báo gom việc quá hạn (bridge mục 27).
+		const raw = Number(route.query.dept ?? route.query.departmentId ?? 0);
 		if (raw && deptOptions.value.some(o => o.value === String(raw))) return raw;
 		const first = deptOptions.value[0];
 		return first ? Number(first.value) : null;
@@ -54,6 +56,21 @@
 
 	const base = computed<TaskListQuery>(() => ({ view: 'department', departmentId: selectedDept.value ?? undefined }));
 	const deptName = computed(() => deptOptions.value.find(o => o.value === String(selectedDept.value))?.label ?? '');
+
+	/**
+	 * Dải tóm tắt theo người (bridge mục 26): bấm người thì lọc danh sách theo người đó, bấm số quá hạn thì lọc
+	 * thêm việc quá hạn. Bộ lọc nằm trong `TaskWorkspace` (đường dẫn `assignee`, `due`), nên đặt qua `setFilters`.
+	 */
+	const workspaceRef = ref<InstanceType<typeof TaskWorkspace> | null>(null);
+	const summaryRef = ref<InstanceType<typeof TaskDeptSummary> | null>(null);
+	const activeAssignee = computed(() => String(route.query.assignee ?? ''));
+	const activeOverdue = computed(() => route.query.due === 'overdue');
+	function onPick(employeeId: number | null, overdue: boolean) {
+		workspaceRef.value?.setFilters({
+			assignee: employeeId ? String(employeeId) : '',
+			due: employeeId && overdue ? 'overdue' : '',
+		});
+	}
 </script>
 
 <template>
@@ -95,7 +112,16 @@
 		/>
 		<template v-else-if="selectedDept">
 			<p class="text-sm text-gray-600 dark:text-gray-300">Phòng {{ deptName }}</p>
+			<TaskDeptSummary
+				ref="summaryRef"
+				:key="`summary-${selectedDept}`"
+				:department-id="selectedDept"
+				:active-assignee="activeAssignee"
+				:active-overdue="activeOverdue"
+				@pick="onPick"
+			/>
 			<TaskWorkspace
+				ref="workspaceRef"
 				:key="String(selectedDept)"
 				:base="base"
 				:storage-key="`tasks-filters:dept:${selectedDept}`"
@@ -104,6 +130,7 @@
 				:read-only="readOnly"
 				empty-title="Phòng chưa có việc nào"
 				empty-description="Khi người trong phòng được giao việc, việc sẽ hiện ở đây."
+				@changed="summaryRef?.reload()"
 			/>
 		</template>
 		<TaskActionDialogHost />

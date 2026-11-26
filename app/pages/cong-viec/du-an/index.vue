@@ -207,7 +207,8 @@
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
 						{{ p.openTaskCount }} việc đang mở · {{ p.memberCount }} thành viên<template v-if="p.department"> · {{ p.department.name }}</template>
 					</p>
-					<p v-if="p.myRoleLabel" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Bạn là {{ p.myRoleLabel.toLowerCase() }}</p>
+					<p v-if="p.viaDepartment" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Bạn xem với tư cách trưởng phòng</p>
+					<p v-else-if="p.myRoleLabel" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Bạn là {{ p.myRoleLabel.toLowerCase() }}</p>
 				</NuxtLink>
 			</li>
 		</ul>
