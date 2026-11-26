@@ -145,15 +145,18 @@
 			</div>
 
 			<!-- Tabs -->
-			<!-- Năm ngăn kèm số không vừa khung 96 (và màn 390px): cho cuộn ngang trong hàng ngăn, trang không cuộn. -->
-			<div class="flex overflow-x-auto border-b border-gray-100 dark:border-gray-700 flex-shrink-0 px-1 [scrollbar-width:none]" role="tablist" aria-label="Nhóm thông báo">
+			<!--
+				Năm ngăn rộng theo chữ, khoảng trống dàn đều, số chưa đọc nằm dưới nhãn: nhãn kèm số trên một hàng không vừa
+				khung 384px (và màn 390px), phải cuộn ngang nên ngăn đầu hoặc ngăn cuối luôn bị khuất một nửa.
+			-->
+			<div class="flex justify-between gap-1 border-b border-gray-100 dark:border-gray-700 flex-shrink-0 px-2" role="tablist" aria-label="Nhóm thông báo">
 				<button
 					v-for="tab in tabs"
 					:key="tab.key"
 					role="tab"
 					:aria-selected="activeTab === tab.key"
 					:data-testid="`notif-tab-${tab.key}`"
-					class="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px"
+					class="flex shrink-0 flex-col items-center justify-start gap-0.5 px-1 pb-1.5 pt-2 text-xs font-medium leading-tight transition-colors border-b-2 -mb-px"
 					:class="
 						activeTab === tab.key
 							? 'border-brand-600 text-brand-600 dark:text-brand-400'
@@ -161,9 +164,11 @@
 					"
 					@click="activeTab = tab.key"
 				>
-					{{ tab.label }}
+					<span class="whitespace-nowrap">{{ tab.label }}</span>
+					<!-- Giữ chỗ cả khi không có số, để năm ngăn cùng chiều cao. -->
+					<span v-if="tabUnreadCount(tab.key) === 0" class="h-[18px]" aria-hidden="true" />
 					<span
-						v-if="tabUnreadCount(tab.key) > 0"
+						v-else
 						class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold rounded-full"
 						:class="activeTab === tab.key ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'"
 					>
