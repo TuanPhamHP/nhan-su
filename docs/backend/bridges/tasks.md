@@ -5,7 +5,9 @@ Lô 1 là **lõi công việc**: dự án và thành viên, công việc và vi�
 huỷ, người theo dõi, bình luận nhắc tên, file, Việc của tôi, danh sách, bảng việc kéo thả, thông báo N-01 đến N-08, nhắc hạn
 J-02, J-03 và kênh thời gian thực `/tasks`. **Lô 2** (mục 12 trở đi): nhóm việc, đợt và việc chờ xếp, việc định kỳ, phụ
 thuộc và biểu đồ tiến độ, lịch, báo cáo tiến độ và xuất Excel, cảnh báo nghỉ việc, dự án mẫu. KPI (lô 3) ở
-`docs/bridges/kpi.md`.
+`docs/bridges/kpi.md`. **Sửa sau thử nghiệm người dùng 27/11/2026** (mục 23 trở đi): rút lại báo xong, phiếu xin dời hạn,
+đặt hạn lần đầu không cần lý do, trưởng phòng xem dự án có người phòng mình, tóm tắt Việc của phòng, thông báo mới, mã dự
+án có chữ số, báo cáo tách việc chưa có hạn.
 
 Mọi response bọc `{ success, data }` (danh sách thêm `meta { page, limit, total, totalPages }`), lỗi là
 `{ success: false, error: { code, message, details? } }` như các module khác. `message` là câu tiếng Việt đời thường, hiện
@@ -30,7 +32,8 @@ thẳng cho người dùng được.
 
 Một việc xem được khi người xem: là ADMIN hoặc DIRECTOR; hoặc là người giao, người thực hiện, người nghiệm thu, người theo
 dõi của việc (hoặc của việc cha nếu là việc con); hoặc là thành viên dự án của việc (cả ba vai); hoặc là trưởng phòng
-(`Department.managerId`) của phòng **hiện tại** của người thực hiện. HR không có quyền xem riêng.
+(`Department.managerId`) của phòng **hiện tại** của người thực hiện; hoặc (từ 27/11/2026) là trưởng phòng của một thành
+viên dự án: người này xem cả dự án ở vai Người xem, chỉ đọc (mục 24). HR không có quyền xem riêng.
 
 Danh sách, bảng việc, số đếm đều lọc bằng đúng điều kiện này. Mở chi tiết việc không xem được thì 404 `TASK_NOT_VISIBLE`,
 `error.details` chỉ có `{ code, assignerName }` để hiện "Bạn không xem được việc này, người giao là …" (UI-02); không lộ
@@ -43,6 +46,9 @@ tiêu đề.
 | Sửa tiêu đề, mô tả, ưu tiên, điểm, ngày bắt đầu | Người giao, quản lý dự án, ADMIN |
 | Đổi người thực hiện, người nghiệm thu, đổi hạn, huỷ | Như trên, thêm trưởng phòng của **người giao** |
 | Bắt đầu, báo xong, về Chưa làm | Người thực hiện |
+| Rút lại báo xong (`withdraw`, mục 23) | Người thực hiện, khi việc đang Chờ nghiệm thu |
+| Xin dời hạn (mục 25) | Người thực hiện không tự đổi hạn được (`permissions.requestDue`) |
+| Duyệt, từ chối phiếu xin dời hạn | Ai đổi được hạn (`permissions.changeDue`) |
 | Nghiệm thu, trả lại | Người nghiệm thu; thay được bởi trưởng phòng của người giao, quản lý dự án, ADMIN (BR-06) |
 | Tự đóng (`self_close`) | Người thực hiện khi chính họ là người giao (việc tự giao) |
 | Mở lại việc đã hoàn thành | Người nghiệm thu, quản lý dự án, ADMIN |
@@ -263,7 +269,8 @@ POST /v1/tasks
 |---|---|---|---|
 | `start` | Chưa làm | Đang làm | |
 | `back_to_todo` | Đang làm | Chưa làm | |
-| `submit` | Chưa làm, Đang làm | Chờ nghiệm thu | Ghi `firstSubmittedAt` lần đầu, `lastSubmittedAt` mỗi lần; còn việc con mở thì có `warning` |
+| `submit` | Chưa làm, Đang làm | Chờ nghiệm thu | Ghi `firstSubmittedAt` lần đầu, `lastSubmittedAt` mỗi lần; còn việc con mở hay việc phải chờ chưa xong thì có `warning` |
+| `withdraw` | Chờ nghiệm thu | Đang làm | Chỉ người thực hiện (mục 23); bỏ `lastSubmittedAt`, bỏ cả `firstSubmittedAt` nếu đây là lần báo xong duy nhất |
 | `accept` | Chờ nghiệm thu | Hoàn thành | `qualityScore` 1–5 tuỳ chọn; người thay nghiệm thu thì nhật ký ghi `onBehalfOf` |
 | `return` | Chờ nghiệm thu | Đang làm | Bắt buộc `reason`; `returnCount + 1` |
 | `self_close` | Chưa làm, Đang làm | Hoàn thành | Chỉ việc tự giao; `selfClosed: true` |
@@ -307,12 +314,17 @@ Giao diện đặt thẻ về đúng cột mới theo `details.task.status`, hi�
 
 ### 3.6 Đổi hạn
 
-`POST /tasks/:id/due-date { dueDate, reason, version }`: người giao, quản lý dự án, trưởng phòng của người giao, ADMIN.
-Người thực hiện gọi → 403 "Người thực hiện không tự đổi hạn. Bạn nhờ người giao đổi giúp." Thiếu lý do → 400
-`TASK_REASON_REQUIRED`; trùng hạn cũ → 400 `TASK_DUE_UNCHANGED`; hạn mới trước ngày bắt đầu → 400 `TASK_DATE_INVALID`.
-`originalDueDate` không đổi, `dueChangeCount + 1`, thêm một dòng `dueChanges`, người thực hiện nhận N-08.
-Việc chưa có hạn cũng dùng API này để **đặt hạn lần đầu**: dòng `dueChanges` có `oldDueDate: null`, nhật ký `from: null`,
-thông báo N-08 là "Việc … có hạn …" thay cho "đổi hạn từ … sang …"; `originalDueDate` vẫn `null`. Chưa có API bỏ hạn.
+`POST /tasks/:id/due-date { dueDate, reason?, version }`: người giao, quản lý dự án, trưởng phòng của người giao, ADMIN.
+Người thực hiện gọi → 403 "Người thực hiện không tự đổi hạn được. Bạn bấm Xin dời hạn để người giao duyệt." (họ dùng phiếu
+xin dời hạn, mục 25). Đổi hạn đã có: thiếu lý do → 400 `TASK_REASON_REQUIRED`; trùng hạn cũ → 400 `TASK_DUE_UNCHANGED`; hạn
+mới trước ngày bắt đầu → 400 `TASK_DATE_INVALID`. `originalDueDate` không đổi, `dueChangeCount + 1`, thêm một dòng
+`dueChanges`, người thực hiện nhận N-08.
+
+**Đặt hạn lần đầu** cho việc chưa có hạn (đổi 27/11/2026): **không cần lý do** (ô lý do để trống được), `originalDueDate`
+nhận chính hạn đó, `dueChangeCount` **không** tăng, dòng `dueChanges` có `oldDueDate: null` và lý do lưu là "Đặt hạn lần
+đầu", thông báo N-08 là "Việc … có hạn …" không kèm câu lý do. Giao diện ẩn hoặc để không bắt buộc ô lý do khi việc chưa có
+hạn. Đang có phiếu xin dời hạn chờ mà người có quyền đổi hạn trực tiếp: phiếu tự đóng (đúng ngày đang xin thì ghi là duyệt,
+khác ngày thì ghi là từ chối kèm ghi chú). Chưa có API bỏ hạn.
 
 ---
 
@@ -415,6 +427,9 @@ khi huỷ theo việc cha), `ASSIGNEE_CHANGED`, `REVIEWER_CHANGED` (`payload.fro
 không ở trạng thái dùng đầy đủ. **Không cộng vào `total`** (total là huy hiệu trang Duyệt đơn; nghiệm thu làm ở trang Công
 việc). Dùng cho huy hiệu menu Công việc và ô trang chủ; danh sách tương ứng là `GET /tasks?view=review`.
 
+Từ 27/11/2026 thêm `taskDueRequests`: số phiếu xin dời hạn đang chờ ở các việc người gọi giao, cũng không cộng vào `total`
+(mục 25.4).
+
 ---
 
 ## 7. Mã lỗi
@@ -428,7 +443,7 @@ việc). Dùng cho huy hiệu menu Công việc và ô trang chủ; danh sách t
 | `TASK_VERSION_CONFLICT` | 409 | Lệch phiên bản; `details.task` |
 | `TASK_POINTS_INVALID` | 400 | Công việc: điểm có gửi nhưng ngoài thang 1, 2, 3, 5, 8 (điểm không bắt buộc) |
 | `TASK_POINTS_REQUIRED` | 400 | Chỉ việc định kỳ: thiếu hay sai thang điểm |
-| `TASK_REASON_REQUIRED` | 400 | Thiếu lý do trả lại, mở lại, huỷ, đổi hạn |
+| `TASK_REASON_REQUIRED` | 400 | Thiếu lý do trả lại, mở lại, huỷ, đổi hạn (trừ đặt hạn lần đầu), xin dời hạn |
 | `TASK_QUALITY_INVALID` | 400 | Điểm chất lượng ngoài 1–5 hoặc gửi kèm thao tác khác nghiệm thu |
 | `TASK_SUBTASK_DEPTH` | 400 | Việc con của việc con |
 | `TASK_PARENT_CLOSED` | 400 | Thêm việc con vào việc đã hoàn thành, đã huỷ |
@@ -436,7 +451,11 @@ việc). Dùng cho huy hiệu menu Công việc và ô trang chủ; danh sách t
 | `TASK_PERSON_INVALID` | 400 | Người không có hoặc đã nghỉ việc |
 | `TASK_REVIEWER_INVALID` | 400 | Người thực hiện tự nghiệm thu việc người khác giao |
 | `TASK_DATE_INVALID` | 400 | Ngày sai, ngày bắt đầu sau hạn |
-| `TASK_DUE_UNCHANGED` | 400 | Hạn mới trùng hạn cũ |
+| `TASK_DUE_UNCHANGED` | 400 | Hạn mới trùng hạn cũ (cả khi xin dời hạn đúng hạn hiện tại) |
+| `TASK_DUE_REQUEST_PENDING` | 409 | Xin dời hạn khi đã có một phiếu đang chờ (mục 25) |
+| `TASK_DUE_REQUEST_NOT_NEEDED` | 400 | Người tự đổi hạn được mà vẫn gọi xin dời hạn |
+| `TASK_DUE_REQUEST_NOT_FOUND` | 404 | Phiếu không có hoặc không thuộc việc này |
+| `TASK_DUE_REQUEST_DECIDED` | 409 | Duyệt, từ chối, huỷ phiếu đã được xử lý |
 | `TASK_MOVE_INVALID` | 400 | Thẻ cạnh không ở cột đích, khác dự án |
 | `TASK_MENTION_LIMIT` | 400 | Nhắc quá 20 người |
 | `TASK_COMMENT_EMPTY` | 400 | Bình luận rỗng |
@@ -448,7 +467,7 @@ việc). Dùng cho huy hiệu menu Công việc và ô trang chủ; danh sách t
 | `TASK_CHECKLIST_LIMIT` | 400 | Quá 100 mục |
 | `TASK_PROJECT_NOT_FOUND` | 404 | Dự án không có hoặc không là thành viên |
 | `TASK_PROJECT_CLOSED` | 400 | Thêm việc vào dự án đã đóng |
-| `TASK_PROJECT_CODE_INVALID` | 400 | Mã dự án sai dạng hoặc là CV |
+| `TASK_PROJECT_CODE_INVALID` | 400 | Mã dự án sai dạng (2 đến 6 ký tự, chữ cái đầu rồi chữ hoặc số, mục 29) hoặc là CV |
 | `TASK_PROJECT_CODE_EXISTS` | 409 | Mã dự án trùng |
 | `TASK_PROJECT_DEPARTMENT_INVALID` | 400 | Phòng chủ quản không có |
 | `TASK_PROJECT_LAST_MANAGER` | 409 | Bỏ quản lý dự án cuối cùng |
@@ -479,6 +498,9 @@ Mọi thông báo của module có `category: 'TASK'`, `refType: 'task'`, `refId
 | N-06 | `TASK_CANCELLED` | Người thực hiện, người theo dõi, người làm việc con bị huỷ theo |
 | N-07 | `TASK_DUE_SOON`, `TASK_OVERDUE` | 08:00 mỗi sáng: người thực hiện; quá hạn thêm người giao; một email gom mỗi người |
 | N-08 | `TASK_DUE_CHANGED` | Người thực hiện |
+
+Các loại thêm ngày 27/11/2026 (`TASK_WITHDRAWN`, `TASK_DUE_REQUESTED`, `TASK_DUE_REQUEST_DECIDED`, `TASK_WATCHED_UPDATED`,
+`TASK_UNASSIGNED`, tin gom quá hạn cho trưởng phòng) ở mục 27; hai loại có `actionType`, `refType` khác bảng trên.
 
 Câu chữ: `docs/notifications/notification-content-map.md` mục "Công việc". Không gửi cho chính người làm thao tác.
 Web thêm `TASK` vào bảng category và icon thông báo.
@@ -906,3 +928,163 @@ Mobile không dùng các tham số này. Đường dẫn web gửi qua chat, n�
 7. Tiến độ: Tuần, lùi một kỳ, tắt Theo nhóm việc, F5 và gửi đường dẫn đều giữ; danh sách dự án lọc và tìm giữ; thẻ Lịch sử giữ.
 8. Màn 390 điểm ảnh: khung chiếm toàn màn, F5 giữ, Quay lại đóng.
 
+
+---
+
+# Sửa sau thử nghiệm người dùng (27/11/2026)
+
+Nguồn: thử nghiệm năm vai ngày 26/11/2026, kế hoạch `docs/templates/tasks/uat-2026-11-26-ke-hoach-sua.md`. Có migration
+`20261126220752_add_task_due_requests_and_uat_notification_types` (bảng `task_due_requests`, thêm giá trị enum), phát hành
+bằng `npm run tenancy:migrate-all`.
+
+## 23. Rút lại báo xong (`withdraw`)
+
+Người thực hiện báo nhầm thì rút lại khi việc còn Chờ nghiệm thu: `POST /tasks/:id/transition { action: 'withdraw', version }`,
+việc về Đang làm. Người khác gọi → 403 `TASK_ACTION_NOT_ALLOWED`; việc không còn Chờ nghiệm thu → 409 `TASK_STATUS_INVALID`.
+`allowedActions` có `withdraw` khi được phép. Kéo thẻ từ Chờ nghiệm thu về Đang làm: người thực hiện (không phải người nghiệm
+thu) là `withdraw`, người nghiệm thu là `return` như cũ.
+
+- Bỏ `lastSubmittedAt`; nếu đây là lần báo xong duy nhất thì bỏ cả `firstSubmittedAt` (báo cáo đúng hạn tính lại theo lần báo
+  xong thật).
+- Người nghiệm thu nhận `TASK_WITHDRAWN`, thông báo "cần nghiệm thu" trước đó của họ chuyển đã đọc. Lịch sử có sự kiện
+  `WITHDRAWN` ("Rút lại báo xong").
+- Web: nút **Rút lại báo xong** ở khung việc; sau khi bấm Báo xong hiện thông báo nhỏ có nút **Hoàn tác** khoảng 10 giây, bấm
+  thì gọi `withdraw` với `version` mới.
+
+## 24. Trưởng phòng xem dự án có người phòng mình
+
+Trưởng phòng của một thành viên dự án (không cần là thành viên) xem được dự án và mọi việc trong đó ở vai Người xem:
+
+- `GET /task-projects` liệt kê thêm các dự án này; `TaskProjectDto.viaDepartment: true`, `myRole: 'VIEWER'`,
+  `canManage: false`. Web ghi "Bạn xem với tư cách trưởng phòng", ẩn mọi nút sửa.
+- Việc trong dự án mở được (`GET /tasks/:code` 200), `permissions` như Người xem. Sửa dự án → 403. Trưởng phòng không có ai
+  trong dự án → 404 như cũ.
+- Kênh `/tasks`: `join` phòng dự án nhận cả trưởng phòng này.
+
+## 25. Phiếu xin dời hạn
+
+Người thực hiện không tự đổi hạn được (`permissions.requestDue: true`) thì xin; người có quyền đổi hạn duyệt một chạm.
+
+### 25.1 Xin
+
+`POST /tasks/:id/due-requests { dueDate, reason }` → 201, trả `TaskDetailDto` có `pendingDueRequest`.
+
+| Lỗi | Khi nào |
+|---|---|
+| 403 `TASK_ACTION_NOT_ALLOWED` | Không phải người thực hiện |
+| 400 `TASK_DUE_REQUEST_NOT_NEEDED` | Người thực hiện tự đổi hạn được (chính họ giao, quản lý dự án…) |
+| 400 `TASK_NOT_EDITABLE` | Việc đã hoàn thành, đã huỷ |
+| 400 `TASK_REASON_REQUIRED` | Lý do trống (tối đa 500 ký tự) |
+| 400 `TASK_DUE_UNCHANGED` | Trùng hạn hiện tại |
+| 400 `TASK_DATE_INVALID` | Trước hôm nay, hoặc trước ngày bắt đầu của việc |
+| 409 `TASK_DUE_REQUEST_PENDING` | Đã có một phiếu đang chờ |
+
+Việc chưa có hạn cũng xin được (`oldDueDate: null`).
+
+### 25.2 Duyệt, từ chối, huỷ
+
+| API | Ai | Kết quả |
+|---|---|---|
+| `POST /tasks/:id/due-requests/:requestId/approve` (không body) | Ai có `permissions.changeDue` | Đổi hạn như `due-date` với lý do của phiếu; `dueChangeCount + 1` (việc chưa có hạn thì là đặt hạn lần đầu) |
+| `POST /tasks/:id/due-requests/:requestId/reject { note? }` | Như trên | Hạn giữ nguyên; `note` (tối đa 500, nhận cả tên `reason`) gửi kèm thông báo |
+| `POST /tasks/:id/due-requests/:requestId/cancel` | Chính người xin | Phiếu huỷ |
+
+Cả ba trả 201 với `TaskDetailDto` mới. Sai người → 403; phiếu không có hoặc khác việc → 404 `TASK_DUE_REQUEST_NOT_FOUND`;
+phiếu đã xử lý → 409 `TASK_DUE_REQUEST_DECIDED`. Duyệt không cần `version`; phiếu đổi hạn trên bản mới nhất.
+
+Phiếu cũng tự đóng khi: người có quyền đổi hạn trực tiếp bằng `due-date` (cùng ngày đang xin thì ghi là duyệt, khác ngày
+thì ghi là từ chối kèm ghi chú), hoặc việc được nghiệm thu, tự đóng, huỷ (ghi là huỷ).
+
+### 25.3 Dữ liệu
+
+- `TaskDetailDto.pendingDueRequest: { id, requestedBy, oldDueDate, proposedDueDate, reason, createdAt } | null`.
+- `permissions.requestDue`: hiện nút **Xin dời hạn** thay cho **Đổi hạn** với người thực hiện.
+- Lịch sử: `DUE_REQUESTED` ("Xin dời hạn", `payload { requestId, from, to, reason }`), `DUE_REQUEST_DECIDED` ("Quyết xin dời
+  hạn", `payload { requestId, approved, cancelled?, note? }`); duyệt thì kèm `DUE_CHANGED` như đổi hạn thường.
+
+### 25.4 Thông báo và huy hiệu
+
+- Người duyệt (người giao; người giao đã nghỉ việc thì trưởng phòng của người giao) nhận `TASK_DUE_REQUESTED` với
+  `actionType: 'APPROVE_REJECT'` và `actionPayload { approveEndpoint, rejectEndpoint, label, refType: 'task_due_request',
+  refId }`: chuông duyệt, từ chối ngay được (từ chối gửi `{ note }` hoặc `{ reason }`). `refType`, `refId` cấp ngoài của
+  thông báo vẫn là `task` và id việc. Web thêm loại này vào danh sách thông báo có nút duyệt nhanh.
+- Người xin nhận `TASK_DUE_REQUEST_DECIDED` (được duyệt hay không, kèm ghi chú). Thông báo xin của người duyệt chuyển đã đọc
+  khi phiếu được quyết hoặc bị huỷ.
+- `GET /approval/counts.taskDueRequests`: số phiếu chờ ở việc người gọi giao; không cộng vào `total`.
+
+## 26. Tóm tắt Việc của phòng theo người
+
+`GET /tasks/department-summary?departmentId=` → `{ department: { id, name }, people: [{ employee, todo, inProgress, inReview,
+overdue, openPoints }] }`. Mọi nhân viên đang làm việc của phòng (kể cả người chưa có việc), người nhiều việc quá hạn rồi
+nhiều việc mở lên trước; `openPoints` tính việc chưa có điểm là 0.
+
+- Trưởng phòng: bỏ `departmentId` là phòng mình đầu tiên; phòng khác → 403.
+- ADMIN, DIRECTOR: bắt buộc `departmentId` (thiếu → 403 "Bạn chọn phòng cần xem.").
+- Người khác (kể cả HR) → 403 `TASK_ACTION_NOT_ALLOWED`. HR xem số việc của một người qua phiếu KPI (`docs/bridges/kpi.md`).
+
+Web: dải thẻ ở đầu Việc của phòng, mỗi người một thẻ; bấm thẻ lọc danh sách theo người đó (`assigneeIds`), bấm số quá hạn
+thì thêm `due=overdue`.
+
+## 27. Thông báo thêm
+
+Câu chữ ở `docs/notifications/notification-content-map.md` mục "Công việc".
+
+| `type` | Người nhận | Ghi chú |
+|---|---|---|
+| `TASK_WITHDRAWN` | Người nghiệm thu | Người làm rút lại báo xong |
+| `TASK_DUE_REQUESTED` | Người duyệt phiếu | `APPROVE_REJECT`, mục 25.4 |
+| `TASK_DUE_REQUEST_DECIDED` | Người xin | Duyệt, không duyệt |
+| `TASK_WATCHED_UPDATED` | Người theo dõi | Bắt đầu, báo xong, nghiệm thu, tự đóng, trả lại, mở lại, rút lại, đổi hạn; trừ người đã nhận tin riêng cho cùng việc |
+| `TASK_UNASSIGNED` | Người thực hiện cũ khi đổi người | Kèm lý do nếu có |
+| `TASK_OVERDUE` với `refType: 'task_department'`, `refId` là id phòng | Trưởng phòng, 08:00 mỗi ngày một tin cho mỗi phòng | Gom việc quá hạn của người trong phòng; mở `/cong-viec/phong?departmentId={id}&due=overdue`. Thư nhắc hạn buổi sáng của trưởng phòng cũng liệt kê từng việc đó, ghi tên người làm |
+
+`GET /notifications/unread-count` có thêm `task` (số chưa đọc nhóm `TASK`), cho tab Công việc ở trang thông báo.
+
+## 28. Chi tiết việc và cảnh báo việc phải chờ
+
+- `TaskDetailDto.lastReturn: { reason, reopened, at, by } | null`: lần trả lại hoặc mở lại gần nhất. Web hiện dải "Bị trả
+  lại: {lý do}" (hoặc "Được mở lại") ở đầu khung việc khi việc đang Đang làm.
+- `dependencies.openBlockers: string[]` (dòng việc và chi tiết): số hiệu việc phải chờ chưa xong. Có thì trước khi bắt đầu,
+  báo xong, nghiệm thu, web hỏi lại "Việc này đang phải chờ {số hiệu} chưa xong. Vẫn tiếp tục?" (chỉ cảnh báo, không chặn);
+  danh sách ghi "Chờ {số hiệu}". Server vẫn trả `warning` kèm thao tác như cũ.
+
+## 29. Mã dự án có chữ số
+
+Mã dự án 2 đến 6 ký tự, chữ cái đầu rồi chữ hoặc số (`/^[A-Z][A-Z0-9]{1,5}$/`), ví dụ `L25`, `KT2`; số hiệu việc `L25-1`.
+`1AB` → 400 `TASK_PROJECT_CODE_INVALID`. Web sửa mọi chỗ nhận biết số hiệu (tìm kiếm, đường dẫn, ô nhập mã).
+
+## 30. Đổi người làm có lý do
+
+`PATCH /tasks/:id { assigneeId, reason?, version }`: `reason` (tối đa 500) ghi vào lịch sử (`ASSIGNEE_CHANGED.payload.reason`)
+và gửi người bị đổi đi (`TASK_UNASSIGNED`). Web thêm ô "Lý do (không bắt buộc)" khi đổi người làm.
+
+## 31. Báo cáo tiến độ: việc chưa có hạn
+
+- Ô mới `noDue` ("Chưa có hạn"): việc tính tỷ lệ mà chưa có hạn. Việc này **không** tính đúng hạn và không vào mẫu số tỷ lệ
+  đúng hạn. Lọc danh sách: `GET /task-reports/progress/tasks?metric=noDue`.
+- Đổi nhãn: `onTimeOriginal` là "Báo xong đúng hạn ban đầu", `onTimeCurrent` là "Báo xong đúng hạn hiện tại".
+  `onTimeOriginalPct` chia cho số việc có hạn ban đầu, `onTimeCurrentPct` chia cho số việc có hạn hiện tại.
+- Excel thêm cột "Chưa có hạn" và dòng ghi chú cách tính.
+
+## 32. Khác
+
+- `GET /departments` trả thêm `manager: { id, fullName } | null` (trưởng phòng), dùng cho ô giao việc "nhờ phòng…".
+- Nội dung do trợ lý AI soạn (mô tả việc, bình luận, lý do) có đuôi `⟦Trợ lý AI⟧ Soạn qua Trợ lý AI · {người} xác nhận lúc
+  {giờ}` để truy vết. Web cắt đuôi này khi hiện nội dung và thay bằng nhãn nhỏ "Soạn qua Trợ lý AI" (giữ nguyên dữ liệu).
+
+## 33. Kịch bản phải thử trên web (phần 2)
+
+1. Người làm báo xong rồi bấm Hoàn tác trong 10 giây: việc về Đang làm; người nghiệm thu thấy tin rút lại, tin cần nghiệm thu
+   đã đọc. Rút lại từ khung việc cũng vậy.
+2. Người làm xin dời hạn: thiếu lý do, ngày trước hôm nay, ngày trước ngày bắt đầu đều báo lỗi đúng câu; xin lần hai khi còn
+   chờ báo lỗi; huỷ phiếu được.
+3. Người giao duyệt, từ chối ngay trong chuông và trong khung việc; hạn đổi, huy hiệu `taskDueRequests` giảm.
+4. Việc chưa có hạn: đặt hạn không cần lý do; lần đổi sau bắt lý do.
+5. Trưởng phòng mở dự án phòng khác có người mình: chỉ đọc, ghi rõ tư cách; trưởng phòng không liên quan không thấy.
+6. Việc của phòng: dải tóm tắt đúng số, bấm người lọc đúng, bấm quá hạn lọc đúng; nhân viên, HR vào trang báo không có quyền.
+7. Tin gom quá hạn của trưởng phòng mở đúng Việc của phòng lọc quá hạn.
+8. Việc còn chờ việc khác: bắt đầu, báo xong, nghiệm thu đều hỏi lại; danh sách ghi "Chờ …".
+9. Việc bị trả lại hiện dải lý do; đổi người làm có ô lý do, người cũ nhận tin.
+10. Tạo dự án mã `L25`, mở `L25-1` từ ô tìm kiếm và đường dẫn.
+11. Báo cáo: cột Chưa có hạn, nhãn đúng hạn mới, Excel có cột mới.
+12. Trang thông báo có tab Công việc với số chưa đọc; nội dung trợ lý AI hiện nhãn, không hiện ký hiệu ⟦⟧.

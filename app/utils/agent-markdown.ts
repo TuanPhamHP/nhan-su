@@ -49,7 +49,8 @@ export function isSafeInternalPath(s: string): boolean {
 	return SAFE_INTERNAL_PATH.test(s);
 }
 
-export type AgentTextSegment = { type: 'text'; value: string } | { type: 'link'; value: string };
+/** `label`: chữ hiện của link markdown `[Mở việc HQ-2](/cong-viec?task=HQ-2)`; không có thì hiện chính đường dẫn. */
+export type AgentTextSegment = { type: 'text'; value: string } | { type: 'link'; value: string; label?: string };
 
 /**
  * Ứng viên: một cụm không có khoảng trắng bắt đầu bằng `/`, đứng đầu chuỗi hoặc sau khoảng trắng,
@@ -90,6 +91,36 @@ export function splitInternalPaths(text: string): AgentTextSegment[] {
 		last = start + path.length;
 	}
 	pushText(text.slice(last));
+	return out;
+}
+
+/** Link markdown trong chữ THUẦN (chưa escape): `[chữ](đích)`, đích không có khoảng trắng, không có `)`. */
+const MD_LINK_RAW = /\[([^\]\n]+)\]\(([^)\s]*)\)/g;
+
+/**
+ * Như `splitInternalPaths`, thêm link markdown có chữ: từ 27/11/2026 câu báo của confirm (và câu trả lời) ghi
+ * `[Mở việc HQ-2](/cong-viec?task=HQ-2)` thay cho đường dẫn trần. Đích phải qua `isSafeInternalPath`; đích khác
+ * (`javascript:`, `//host`, `http:`) thì cả cụm giữ nguyên là chữ.
+ */
+export function splitAgentLinks(text: string): AgentTextSegment[] {
+	const out: AgentTextSegment[] = [];
+	const push = (segs: AgentTextSegment[]): void => {
+		for (const seg of segs) {
+			const prev = out[out.length - 1];
+			if (seg.type === 'text' && prev?.type === 'text') prev.value += seg.value;
+			else out.push(seg);
+		}
+	};
+	let last = 0;
+	for (const m of text.matchAll(MD_LINK_RAW)) {
+		const target = m[2]!.trim();
+		if (!isSafeInternalPath(target)) continue;
+		const start = m.index ?? 0;
+		push(splitInternalPaths(text.slice(last, start)));
+		out.push({ type: 'link', value: target, label: m[1]!.trim() });
+		last = start + m[0].length;
+	}
+	push(splitInternalPaths(text.slice(last)));
 	return out;
 }
 
