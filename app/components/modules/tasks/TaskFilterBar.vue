@@ -1,4 +1,5 @@
 <script setup lang="ts">
+	import TaskFilterSheet from '~/components/modules/tasks/TaskFilterSheet.vue';
 	import TaskPointsFilter from '~/components/modules/tasks/TaskPointsFilter.vue';
 	import type { TaskFilterState, TaskViewMode } from '~/composables/useTaskFilters';
 	import { BOARD_STATUSES, PRIORITY_LABELS, STATUS_LABELS } from '~/utils/tasks.utils';
@@ -79,6 +80,13 @@
 	/** Ô Trạng thái có ở mọi chế độ trừ Bảng việc (bảng đã chia cột theo trạng thái). */
 	const showStatus = computed(() => props.state.mode !== 'board');
 
+	/** Số ô lọc đang bật, ghi trên nút Lọc ở điện thoại. */
+	const activeCount = computed(() => {
+		const s = props.state;
+		const on = [s.assignee, showStatus.value ? s.status : '', s.due, s.priority, s.points, s.taskGroup, s.sprint].filter(Boolean).length;
+		return on + (s.mode === 'board' && s.cancelled ? 1 : 0);
+	});
+
 	/* eslint-disable vue/no-mutating-props -- các ô dưới ghi thẳng vào state dùng chung */
 	function set<K extends keyof TaskFilterState>(key: K, value: TaskFilterState[K]) {
 		props.state[key] = value;
@@ -122,7 +130,7 @@
 				/>
 			</div>
 		</div>
-		<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+		<TaskFilterSheet :count="activeCount">
 			<UiSelect class="sm:w-48" :model-value="state.assignee" :options="peopleOptions" searchable @update:model-value="v => set('assignee', v == null ? '' : String(v))" />
 			<UiSelect v-if="showStatus" class="sm:w-40" :model-value="state.status" :options="statusOptions" @update:model-value="v => set('status', v == null ? '' : String(v))" />
 			<UiSelect class="sm:w-36" :model-value="state.due" :options="dueOptions" @update:model-value="v => set('due', (v == null ? '' : String(v)) as TaskFilterState['due'])" />
@@ -168,6 +176,6 @@
 			>
 				Về mặc định
 			</button>
-		</div>
+		</TaskFilterSheet>
 	</div>
 </template>

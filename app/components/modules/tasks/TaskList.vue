@@ -51,6 +51,7 @@
 
 	const actions = useTaskActions();
 	const today = vnToday();
+	const narrow = useNarrowScreen();
 	const rows = ref<TaskListItem[]>([]);
 	watch(
 		() => props.tasks,
@@ -205,7 +206,78 @@
 </script>
 
 <template>
-	<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" data-testid="task-list">
+	<!--
+		Màn hẹp: mỗi việc là một thẻ (tiêu đề, người làm, hạn tô đỏ khi trễ, trạng thái). Bảng 58–70rem trên
+		điện thoại chỉ còn thấy số hiệu và tiêu đề, phải vuốt ngang mới thấy người làm và hạn.
+	-->
+	<div v-if="narrow !== false" class="space-y-3 sm:hidden" data-testid="task-list-cards">
+		<section
+			v-for="g in groups"
+			:key="g.key"
+			class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+		>
+			<button
+				v-if="groupBy !== 'none'"
+				type="button"
+				class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 dark:text-gray-100"
+				:aria-expanded="!collapsed[g.key]"
+				@click="toggleGroup(g.key)"
+			>
+				<Icon name="heroicons:chevron-down" class="h-4 w-4 transition-transform" :class="collapsed[g.key] ? '-rotate-90' : ''" aria-hidden="true" />
+				<span class="min-w-0 truncate">{{ g.label }}</span>
+				<span class="shrink-0 font-normal text-gray-500 dark:text-gray-400">{{ g.tasks.length }} việc · {{ groupPoints(g) }} điểm</span>
+			</button>
+			<ul v-if="!collapsed[g.key]" class="divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+				<li
+					v-for="t in g.tasks"
+					:key="t.id"
+					class="flex items-start gap-2 px-3 py-2.5"
+					:class="activeCode === t.code ? 'bg-brand-50/60 dark:bg-brand-900/20' : ''"
+					:data-task-code="t.code"
+					data-testid="task-card-row"
+				>
+					<div class="min-w-0 flex-1">
+						<button
+							type="button"
+							class="block max-w-full text-left text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-gray-100"
+							@click="emit('open', t)"
+						>
+							<span class="mr-1 text-xs font-normal text-gray-500 dark:text-gray-400">{{ t.code }}</span>{{ t.title }}
+						</button>
+						<p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+							<TaskStatusBadge :status="t.status" :label="t.statusLabel" />
+							<span :class="DUE_TONE_CLASS[dueTone(t, today)]">{{ taskDueText(t, today) }}</span>
+							<span class="inline-flex min-w-0 items-center gap-1">
+								<CommonAppAvatar :src="t.assignee.avatarUrl" :name="t.assignee.fullName" size="xs" />
+								<span class="truncate">{{ t.assignee.fullName }}</span>
+							</span>
+							<span v-if="t.points != null">{{ t.points }} điểm</span>
+							<span v-if="t.dependencies?.late" class="text-rose-600 dark:text-rose-400">phải chờ việc khác đang trễ hạn</span>
+							<span v-if="showProject && t.project" class="truncate">{{ t.project.name }}</span>
+						</p>
+					</div>
+					<TaskCardMenu
+						v-if="!disabled"
+						:task="t"
+						@open="emit('open', t)"
+						@status="s => onMenuStatus(t, s)"
+						@change-due="doDue(t)"
+						@reassign="doReassign(t)"
+					/>
+				</li>
+				<li v-if="quickCreate && !disabled" class="px-3 py-2">
+					<TaskQuickCreate
+						:project-id="quickCreate.projectId"
+						:group-id="g.groupId ?? null"
+						:default-assignee-id="g.defaultAssigneeId ?? quickCreate.defaultAssigneeId"
+						@created="t => { rows.push(t); emit('created', t); }"
+					/>
+				</li>
+			</ul>
+		</section>
+	</div>
+	<!-- `relative`: chữ `sr-only` (định vị tuyệt đối) trong đầu bảng không thoát khỏi khung cuộn và làm trang rộng ra. -->
+	<div v-if="narrow !== true" class="relative hidden overflow-x-auto rounded-xl border border-gray-200 bg-white sm:block dark:border-gray-700 dark:bg-gray-900" data-testid="task-list">
 		<table class="w-full text-sm" :class="showProject || showGroupCol ? 'min-w-[70rem]' : 'min-w-[58rem]'">
 			<thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
 				<tr>

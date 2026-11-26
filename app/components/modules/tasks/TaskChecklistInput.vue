@@ -66,7 +66,7 @@
 		document.removeEventListener('pointerup', onPointerUp, true);
 	});
 
-	defineExpose({ commitDraft });
+	defineExpose({ commitDraft, hasDraft: () => !!draft.value.trim() });
 
 	function remove(index: number) {
 		items.value = items.value.filter((_, i) => i !== index);

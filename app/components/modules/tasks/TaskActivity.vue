@@ -43,15 +43,18 @@
 	const { employees } = storeToRefs(directoryStore);
 	const today = vnToday();
 
-	/** Thẻ đang xem nằm trên đường dẫn (`?activity=all|history`, bỏ khi là Bình luận), ở khung lẫn trang đầy đủ. */
+	/**
+	 * Thẻ đang xem nằm trên đường dẫn (`?activity=comments|history`, bỏ khi là Tất cả), ở khung lẫn trang đầy
+	 * đủ. Mặc định Tất cả: lý do trả lại, đổi hạn nằm ở lịch sử, mặc định Bình luận thì người làm không thấy.
+	 */
 	const route = useRoute();
 	const router = useRouter();
 	const kind = computed<TaskActivityKind>({
 		get: () => {
 			const v = String(route.query.activity ?? '');
-			return v === 'all' || v === 'history' ? v : 'comments';
+			return v === 'comments' || v === 'history' ? v : 'all';
 		},
-		set: v => router.replace({ query: { ...route.query, activity: v === 'comments' ? undefined : v } }),
+		set: v => router.replace({ query: { ...route.query, activity: v === 'all' ? undefined : v } }),
 	});
 	const items = ref<TaskActivityItem[]>([]);
 	const page = ref(1);

@@ -17,6 +17,8 @@
 		showAssignee?: boolean;
 		readOnly?: boolean;
 		busy?: boolean;
+		/** Khi tìm ở mọi ngăn: việc này nằm ở ngăn nào của người xem ("Tôi làm", "Tôi giao"…). */
+		relation?: string;
 	}>();
 
 	const emit = defineEmits<{
@@ -49,6 +51,13 @@
 					<span class="mr-1 text-xs font-normal text-gray-500 dark:text-gray-400">{{ task.code }}</span>{{ task.title }}
 				</button>
 				<p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+					<span
+						v-if="relation"
+						class="rounded bg-gray-100 px-1.5 font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+						data-testid="row-relation"
+					>
+						{{ relation }}
+					</span>
 					<span :class="DUE_TONE_CLASS[tone]">{{ taskDueText(task, today) }}</span>
 					<TaskPriorityBadge :priority="task.priority" only-high />
 					<span>{{ task.points == null ? 'Chưa có điểm' : `${task.points} điểm` }}</span>
@@ -60,7 +69,7 @@
 						Việc định kỳ
 					</span>
 					<span v-if="task.dependencies?.late" class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400" data-testid="task-late-dot">
-						<span class="h-1.5 w-1.5 rounded-full bg-rose-500" />đang chờ việc bị trễ
+						<span class="h-1.5 w-1.5 rounded-full bg-rose-500" />phải chờ việc khác đang trễ hạn
 					</span>
 					<span v-if="task.project" class="truncate">{{ task.project.name }}</span>
 					<span v-if="showAssignee">làm: {{ task.assignee.fullName }}</span>
@@ -94,6 +103,7 @@
 			<TaskCardMenu
 				v-if="!readOnly"
 				:task="task"
+				:primary-shown="main.length"
 				@open="emit('open')"
 				@status="s => emit('status', s)"
 				@change-due="emit('changeDue')"

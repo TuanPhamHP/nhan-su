@@ -73,7 +73,7 @@
 
 <template>
 	<section
-		class="relative flex w-[85vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-xl bg-gray-50 transition-opacity sm:w-64 2xl:w-72 dark:bg-gray-800/40"
+		class="relative flex w-[78vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-xl bg-gray-50 transition-opacity sm:w-64 2xl:w-72 dark:bg-gray-800/40"
 		:class="blockedReason ? 'opacity-50' : ''"
 		:aria-label="`Cột ${label}, ${total} việc`"
 		:data-column="status"

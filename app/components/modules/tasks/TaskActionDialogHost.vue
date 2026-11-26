@@ -1,7 +1,9 @@
 <script setup lang="ts">
 	import { storeToRefs } from 'pinia';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
+	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { ACTION_LABELS, actionNeedsReason, checklistLeft, needsChecklistWarning, shortDate, vnToday } from '~/utils/tasks.utils';
 
 	/**
@@ -14,13 +16,15 @@
 	 */
 	const { dialog, liveMessage } = useTaskActions();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 
 	const reason = ref('');
 	const quality = ref<number | null>(null);
 	const dueDate = ref<string | undefined>(undefined);
 	const assignee = ref<number[]>([]);
+	const reviewer = ref<number[]>([]);
 	const touched = ref(false);
+	const authStore = useAuthStore();
 	const boxRef = ref<HTMLElement | null>(null);
 
 	watch(dialog, req => {
@@ -29,6 +33,7 @@
 		touched.value = false;
 		dueDate.value = req?.kind === 'due' ? (req.presetDate ?? req.task.dueDate ?? undefined) : undefined;
 		assignee.value = req?.kind === 'reassign' ? [req.task.assignee.id] : [];
+		reviewer.value = req?.kind === 'reassign' ? [req.task.reviewer.id] : [];
 		if (req?.kind === 'reassign') directoryStore.load().catch(() => {});
 		if (req) {
 			nextTick(() => {
@@ -88,8 +93,21 @@
 	});
 
 	const people = computed<PickablePerson[]>(() =>
-		employees.value.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(employees.value, departments.value),
 	);
+
+	/** Chữ dưới năm sao của hộp Nghiệm thu, để người chấm biết mỗi mức nghĩa là gì. */
+	const QUALITY_LABELS = ['Kém', 'Chưa đạt', 'Đạt', 'Tốt', 'Rất tốt'] as const;
+
+	/**
+	 * Đổi người làm mà người nghiệm thu vẫn là người bị đổi đi (việc tự làm tự nghiệm thu, hoặc người cũ
+	 * được giao nghiệm thu) thì gợi ý chuyển người nghiệm thu sang chính người đang đổi.
+	 */
+	const reviewerIsLeaving = computed(() => {
+		const req = dialog.value;
+		return req?.kind === 'reassign' && reviewer.value[0] === req.task.assignee.id && assignee.value[0] !== req.task.assignee.id;
+	});
+	const meId = computed(() => authStore.user?.id ?? null);
 
 	const reasonError = computed(() => (touched.value && needsReason.value && !reason.value.trim() ? `Nhập ${reasonLabel.value.toLowerCase()}` : ''));
 	const dueError = computed(() => {
@@ -118,6 +136,8 @@
 			qualityScore: quality.value ?? undefined,
 			dueDate: dueDate.value,
 			assigneeId: assignee.value[0],
+			// Chỉ gửi người nghiệm thu khi đổi thật, để không ghi thêm một dòng lịch sử thừa.
+			reviewerId: req.kind === 'reassign' && reviewer.value[0] && reviewer.value[0] !== req.task.reviewer.id ? reviewer.value[0] : undefined,
 		});
 	}
 
@@ -217,13 +237,20 @@
 								type="button"
 								role="radio"
 								:aria-checked="quality === n"
-								:aria-label="`${n} sao`"
+								:aria-label="`${n} sao, ${QUALITY_LABELS[n - 1]}`"
 								:data-autofocus="n === 1 ? '' : undefined"
-								class="rounded-lg p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+								class="flex w-14 flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
 								:class="quality != null && n <= quality ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400 dark:text-gray-600'"
 								@click="quality = quality === n ? null : n"
 							>
 								<Icon name="heroicons:star-solid" class="h-7 w-7" />
+								<span
+									class="text-[11px] leading-tight"
+									:class="quality === n ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'"
+									data-testid="task-quality-label"
+								>
+									{{ n }} {{ QUALITY_LABELS[n - 1] }}
+								</span>
 							</button>
 						</div>
 					</div>
@@ -238,12 +265,37 @@
 								{{ dialog.task.dueChangeCount }} lần
 							</template>
 						</p>
-						<UiDatePicker v-model="dueDate" label="Hạn mới" :error="dueError || undefined" />
+						<UiDatePicker v-model="dueDate" label="Hạn mới" :error="dueError || undefined" warn-far-year />
 					</div>
 
 					<!-- Đổi người thực hiện -->
-					<div v-if="dialog.kind === 'reassign'">
+					<div v-if="dialog.kind === 'reassign'" class="space-y-3">
 						<EmployeePicker v-model="assignee" :people="people" single label="Người thực hiện" />
+						<div data-testid="task-dialog-reviewer">
+							<EmployeePicker
+								v-model="reviewer"
+								:people="people"
+								single
+								label="Người nghiệm thu"
+								hint="Giữ nguyên nếu không cần đổi."
+							/>
+							<div
+								v-if="reviewerIsLeaving"
+								class="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+								data-testid="task-dialog-reviewer-hint"
+							>
+								Người nghiệm thu đang là {{ dialog.task.assignee.fullName }}, người bị đổi khỏi việc này.
+								<button
+									v-if="meId && meId !== reviewer[0]"
+									type="button"
+									class="font-medium text-brand-700 underline dark:text-brand-300"
+									data-testid="task-dialog-reviewer-me"
+									@click="reviewer = [meId]"
+								>
+									Để tôi nghiệm thu
+								</button>
+							</div>
+						</div>
 					</div>
 
 					<div v-if="needsReason" class="space-y-1">

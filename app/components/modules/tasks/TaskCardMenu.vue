@@ -1,6 +1,6 @@
 <script setup lang="ts">
 	import type { TaskListItem, TaskStatus } from '~/types/tasks.types';
-	import { BOARD_STATUSES, STATUS_LABELS } from '~/utils/tasks.utils';
+	import { BOARD_STATUSES, STATUS_LABELS, primaryActions } from '~/utils/tasks.utils';
 
 	/**
 	 * Menu ba chấm của một việc, cũng mở bằng chuột phải. Đây là cách làm thay cho kéo thả
@@ -15,6 +15,13 @@
 		reorder?: boolean;
 		/** Nút nhỏ (thẻ bảng việc) hay vừa (dòng danh sách). */
 		compact?: boolean;
+		/**
+		 * Số nút thao tác chính đang bày cạnh menu (dòng Việc của tôi 1, đầu khung chi tiết 2). Dòng chuyển
+		 * trạng thái trùng các nút đó ("Chuyển sang Chờ nghiệm thu" khi đã có Báo xong) không hiện lại.
+		 */
+		primaryShown?: number;
+		/** Menu nằm trong khung chi tiết của chính việc này: bỏ dòng "Mở việc". */
+		inDetail?: boolean;
 	}>();
 
 	const emit = defineEmits<{
@@ -41,8 +48,15 @@
 		run?: () => void;
 	}
 
+	const shownActions = computed(() => (props.primaryShown ? primaryActions(props.task.allowedActions, props.primaryShown) : []));
+
 	const statusEntries = computed<MenuEntry[]>(() =>
-		BOARD_STATUSES.filter(s => s !== props.task.status).map(s => {
+		BOARD_STATUSES.filter(s => s !== props.task.status)
+			.filter(s => {
+				const action = props.task.columnRules[s]?.action;
+				return !(props.task.columnRules[s]?.allowed && action && shownActions.value.includes(action));
+			})
+			.map(s => {
 			const rule = props.task.columnRules[s];
 			const label = s === 'CANCELLED' ? 'Huỷ việc' : `Chuyển sang ${STATUS_LABELS[s]}`;
 			if (rule?.allowed) return { key: `s-${s}`, label, danger: s === 'CANCELLED', run: () => emit('status', s) };
@@ -170,7 +184,7 @@
 			:style="{ left: `${pos.x}px`, top: `${pos.y}px` }"
 			@keydown="onKeydown"
 		>
-			<button type="button" role="menuitem" :class="ITEM" @click="pick({ key: 'open', label: '', run: () => emit('open') })">
+			<button v-if="!inDetail" type="button" role="menuitem" :class="ITEM" @click="pick({ key: 'open', label: '', run: () => emit('open') })">
 				Mở việc
 			</button>
 			<button type="button" role="menuitem" :class="ITEM" @click="pick({ key: 'copy', label: '', run: copyLink })">

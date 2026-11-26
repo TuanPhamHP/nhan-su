@@ -63,8 +63,8 @@ describe('Công việc lô 1: chia nhóm Việc của tôi', () => {
 });
 
 describe('Công việc: điểm và bộ lọc điểm', () => {
-	it('chữ điểm: có điểm thì "3 đ", chưa chấm thì gạch', () => {
-		expect(taskPointsText(3)).toBe('3 đ');
+	it('chữ điểm: có điểm thì "3 điểm" (không viết "3 đ" dễ đọc thành tiền), chưa chấm thì gạch', () => {
+		expect(taskPointsText(3)).toBe('3 điểm');
 		expect(taskPointsText(null)).toBe('—');
 	});
 

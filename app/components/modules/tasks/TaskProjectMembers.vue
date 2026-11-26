@@ -4,6 +4,7 @@
 	import RecruitConfirmModal from '~/components/modules/recruitment/RecruitConfirmModal.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskProjectDetail, TaskProjectMember, TaskProjectRole } from '~/types/tasks.types';
 	import { taskErrorInfo } from '~/utils/tasks.utils';
@@ -20,7 +21,7 @@
 	const toast = useToast();
 	const authStore = useAuthStore();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 
 	const ROLES: Array<{ value: TaskProjectRole; label: string; hint: string }> = [
 		{ value: 'MANAGER', label: 'Quản lý dự án', hint: 'Thêm người, đổi vai, đóng dự án, sửa mọi việc' },
@@ -35,9 +36,10 @@
 	const saving = ref(false);
 
 	const people = computed<PickablePerson[]>(() =>
-		employees.value
-			.filter(e => !props.project.members.some(m => m.employee.id === e.id))
-			.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(
+			employees.value.filter(e => !props.project.members.some(m => m.employee.id === e.id)),
+			departments.value,
+		),
 	);
 
 	function openAdd() {
@@ -45,17 +47,30 @@
 		directoryStore.load().catch(() => toast.error('Chưa tải được danh sách nhân viên.'));
 	}
 
+	/**
+	 * Thêm nhiều người một lượt, cùng một vai. API nhận từng người nên gọi lần lượt; người nào lỗi thì giữ
+	 * lại trong ô chọn kèm câu lỗi, người đã thêm được thì bỏ khỏi ô.
+	 */
 	async function add() {
-		if (!pick.value[0]) return;
+		if (!pick.value.length) return;
 		saving.value = true;
+		const added: string[] = [];
+		const failed: number[] = [];
 		try {
-			const m = await service.addProjectMember(props.project.id, pick.value[0], role.value);
-			toast.success(`Đã thêm ${m.employee.fullName} vào dự án`);
-			pick.value = [];
-			adding.value = false;
-			emit('changed');
-		} catch (err) {
-			toast.error(taskErrorInfo(err).message);
+			for (const id of pick.value) {
+				try {
+					const m = await service.addProjectMember(props.project.id, id, role.value);
+					added.push(m.employee.fullName);
+				} catch (err) {
+					failed.push(id);
+					const name = employees.value.find(e => e.id === id)?.fullName ?? 'Một người';
+					toast.error(`${name}: ${taskErrorInfo(err).message}`);
+				}
+			}
+			if (added.length) toast.success(`Đã thêm ${added.join(', ')} vào dự án`);
+			pick.value = failed;
+			if (!failed.length) adding.value = false;
+			if (added.length) emit('changed');
 		} finally {
 			saving.value = false;
 		}
@@ -99,7 +114,7 @@
 		</div>
 
 		<div v-if="adding" class="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-			<EmployeePicker v-model="pick" :people="people" single label="Người cần thêm" />
+			<EmployeePicker v-model="pick" :people="people" label="Người cần thêm" hint="Chọn được nhiều người một lượt, mọi người nhận cùng một vai." />
 			<fieldset>
 				<legend class="text-sm font-medium text-gray-700 dark:text-gray-300">Vai trong dự án</legend>
 				<div class="mt-1 grid gap-2 sm:grid-cols-3">
@@ -119,7 +134,7 @@
 			</fieldset>
 			<div class="flex justify-end gap-2">
 				<CommonAppButton size="sm" variant="secondary" @click="adding = false">Huỷ</CommonAppButton>
-				<CommonAppButton size="sm" :loading="saving" :disabled="!pick.length" data-testid="member-add-submit" @click="add">Thêm vào dự án</CommonAppButton>
+				<CommonAppButton size="sm" :loading="saving" :disabled="!pick.length" data-testid="member-add-submit" @click="add">{{ pick.length > 1 ? `Thêm ${pick.length} người vào dự án` : 'Thêm vào dự án' }}</CommonAppButton>
 			</div>
 		</div>
 

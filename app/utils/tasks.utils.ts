@@ -3,6 +3,7 @@ import { vnCalendarDate } from '~/utils/date';
 import type {
 	TaskAction,
 	TaskConflictSnapshot,
+	TaskDependency,
 	TaskListItem,
 	TaskPriority,
 	TaskStatus,
@@ -190,6 +191,41 @@ export function groupMyTasks<T extends Pick<TaskListItem, 'dueDate' | 'overdue' 
 	return groups;
 }
 
+/**
+ * Khi tìm ở mọi ngăn, việc này thuộc ngăn nào của người xem: "Tôi làm", "Tôi giao", "Tôi theo dõi",
+ * "Tôi nghiệm thu", còn lại (việc của phòng mình, của dự án mình) là "Việc bạn xem được". Việc tự giao
+ * cho mình tính là Tôi làm.
+ */
+export function taskRelation(
+	task: Pick<TaskListItem, 'id' | 'assignee' | 'assigner' | 'reviewer'>,
+	meId: number | null | undefined,
+	watchingIds: ReadonlySet<number> = new Set(),
+): string {
+	if (meId != null && task.assignee.id === meId) return 'Tôi làm';
+	if (meId != null && task.assigner.id === meId) return 'Tôi giao';
+	if (watchingIds.has(task.id)) return 'Tôi theo dõi';
+	if (meId != null && task.reviewer.id === meId) return 'Tôi nghiệm thu';
+	return 'Việc bạn xem được';
+}
+
+/**
+ * Câu nói rõ việc phải chờ nào đang làm trễ việc này, thay cho "Đang chờ việc bị trễ" khó hiểu: nêu số
+ * hiệu và hai cái hạn để người đọc thấy ngay vì sao. Không có việc phải chờ nào trễ thì trả `null`.
+ */
+export function lateBlockerText(
+	task: Pick<TaskListItem, 'dueDate'>,
+	blockers: Array<Pick<TaskDependency, 'code' | 'dueDate' | 'late' | 'visible'>>,
+	today: string = vnToday(),
+): string | null {
+	const b = blockers.find(x => x.late);
+	if (!b) return null;
+	if (!b.visible) return 'Phải chờ một việc bạn không xem được, việc đó đang trễ hạn.';
+	if (b.dueDate && task.dueDate && b.dueDate > task.dueDate) {
+		return `Phải chờ ${b.code}, hạn ${b.code} (${shortDate(b.dueDate, today)}) muộn hơn hạn việc này (${shortDate(task.dueDate, today)}).`;
+	}
+	return `Phải chờ ${b.code}, việc đó đang trễ hạn.`;
+}
+
 export interface QuickDueOption {
 	label: string;
 	value: string;
@@ -213,9 +249,9 @@ export function quickDueOptions(today: string): QuickDueOption[] {
 
 // ─── Điểm ──────────────────────────────────────────────────────────────────────
 
-/** Chữ điểm trên thẻ và dòng việc: "3 đ", hoặc "—" khi chưa chấm điểm. */
+/** Chữ điểm trên thẻ và dòng việc: "3 điểm" ("3 đ" dễ đọc thành 3 đồng), hoặc "—" khi chưa chấm điểm. */
 export function taskPointsText(points: number | null | undefined): string {
-	return points == null ? '—' : `${points} đ`;
+	return points == null ? '—' : `${points} điểm`;
 }
 
 export type PointsOperator = '=' | '!=' | '>' | '>=' | '<' | '<=';
@@ -274,6 +310,37 @@ const POINTS_OP_TEXT: Record<PointsOperator, string> = {
 	'<': 'nhỏ hơn',
 	'<=': 'tối đa',
 };
+
+export interface PointsRange {
+	from: number | null;
+	to: number | null;
+}
+
+/**
+ * Bộ lọc điểm cho người mới: hai ô "Từ … đến … điểm" ghép thành cú pháp `>=2,<=5`. Hai ô trống là không
+ * lọc. Người quen vẫn gõ cú pháp ở ô Nâng cao, hai cách cùng ra một tham số.
+ */
+export function pointsRangeParam(range: PointsRange): string {
+	const parts: string[] = [];
+	if (range.from != null) parts.push(`>=${range.from}`);
+	if (range.to != null) parts.push(`<=${range.to}`);
+	return parts.join(',');
+}
+
+/**
+ * Đọc ngược bộ lọc thành hai ô Từ, Đến. Bộ lọc không viết được bằng hai ô (`!=3`, `>2`, hai điều kiện
+ * "từ") thì trả `null`, để ô Từ, Đến để trống và ô Nâng cao giữ nguyên chữ.
+ */
+export function pointsRangeOf(conditions: PointsCondition[]): PointsRange | null {
+	const range: PointsRange = { from: null, to: null };
+	for (const c of conditions) {
+		if (c.op === '>=' && range.from == null) range.from = c.value;
+		else if (c.op === '<=' && range.to == null) range.to = c.value;
+		else if (c.op === '=' && range.from == null && range.to == null && conditions.length === 1) return { from: c.value, to: c.value };
+		else return null;
+	}
+	return range;
+}
 
 /** Câu đọc của bộ lọc cho nhãn và trình đọc màn hình: "Điểm từ 2 và tối đa 5", "Chưa có điểm". */
 export function pointsFilterLabel(conditions: PointsCondition[]): string {
@@ -374,7 +441,7 @@ export const TASK_HINTS = {
 	sprint: 'Đợt là một khoảng ngắn, thường một hai tuần. Cả nhóm chọn việc làm trong khoảng đó rồi đóng đợt.',
 	backlog: 'Việc chờ xếp là việc của dự án chưa đưa vào đợt nào.',
 	points: 'Điểm khối lượng: việc càng nặng điểm càng cao, từ 1 rất nhẹ tới 8 rất nặng.',
-	group: 'Nhóm việc gom các việc cùng một phần của dự án, ví dụ một giai đoạn.',
+	group: 'Nhóm việc gom các việc cùng một phần của dự án, ví dụ Chứng từ hay Tờ khai. Khoảng thời gian thì dùng đợt.',
 	dependency: 'Việc này chỉ nên bắt đầu khi việc nó chờ đã xong. Hệ thống chỉ cảnh báo, không chặn.',
 	wip: 'Số thẻ tối đa nên có trong cột. Vượt thì cột báo đỏ, vẫn kéo thẻ vào được.',
 } as const;

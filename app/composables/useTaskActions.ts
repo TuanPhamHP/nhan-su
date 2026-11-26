@@ -27,6 +27,8 @@ export interface TaskDialogResult {
 	qualityScore?: number;
 	dueDate?: string;
 	assigneeId?: number;
+	/** Hộp Đổi người thực hiện: có khi người dùng đổi luôn người nghiệm thu. */
+	reviewerId?: number;
 }
 
 export type TaskActionResult =
@@ -136,8 +138,13 @@ export function useTaskActions() {
 		busy.value = true;
 		try {
 			const updated = await service.move(task.id, { ...body, version: task.version, ...extra });
-			const where = toStatus && toStatus !== task.status ? `sang ${updated.statusLabel}` : 'trong cột';
-			return done(updated, `Đã chuyển ${task.title} ${where}.`);
+			// Thả lại đúng cột cũ là đổi thứ tự, không phải chuyển trạng thái: nói rõ để người kéo trên điện
+			// thoại biết thẻ chưa sang cột khác.
+			const text =
+				toStatus && toStatus !== task.status
+					? `Đã chuyển ${task.title} sang ${updated.statusLabel}.`
+					: `Đã đổi thứ tự ${task.title}, việc vẫn ở cột ${updated.statusLabel}.`;
+			return done(updated, text);
 		} catch (err) {
 			return { ok: false, cancelled: false, ...reportError(err) };
 		} finally {
@@ -165,11 +172,26 @@ export function useTaskActions() {
 		}
 	}
 
-	/** Đổi người thực hiện bằng hộp chọn người (từ menu ba chấm). */
+	/**
+	 * Đổi người thực hiện bằng hộp chọn người (từ menu ba chấm), kèm người nghiệm thu nếu đổi luôn. Nơi gọi
+	 * thay dòng bằng `task` trả về ngay, không đợi tải lại.
+	 */
 	async function reassign(task: TaskListItem): Promise<TaskActionResult> {
 		const answer = await openDialog<'reassign'>({ kind: 'reassign', task });
 		if (!answer?.assigneeId) return { ok: false, cancelled: true, conflict: null, message: null };
-		return updateFields(task, { assigneeId: answer.assigneeId });
+		if (answer.assigneeId === task.assignee.id && !answer.reviewerId) return { ok: false, cancelled: true, conflict: null, message: null };
+		const result = await updateFields(task, {
+			assigneeId: answer.assigneeId === task.assignee.id ? undefined : answer.assigneeId,
+			reviewerId: answer.reviewerId,
+		});
+		if (result.ok) {
+			toast.success(
+				answer.assigneeId !== task.assignee.id
+					? `Đã chuyển ${task.code} cho ${result.task.assignee.fullName}`
+					: `Đã đổi người nghiệm thu ${task.code} thành ${result.task.reviewer.fullName}`,
+			);
+		}
+		return result;
 	}
 
 	/** Sửa trên ô (ưu tiên, người thực hiện, tiêu đề...): gửi kèm `version` đang hiện. */

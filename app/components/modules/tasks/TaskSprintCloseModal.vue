@@ -153,8 +153,8 @@
 										class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
 									/>
 									<div class="grid gap-2 sm:grid-cols-2">
-										<UiDatePicker v-model="newStart" label="Bắt đầu" />
-										<UiDatePicker v-model="newEnd" label="Kết thúc" />
+										<UiDatePicker v-model="newStart" label="Bắt đầu" warn-far-year />
+										<UiDatePicker v-model="newEnd" label="Kết thúc" warn-far-year />
 									</div>
 								</div>
 								<label :class="[RADIO, moveTo === 'backlog' ? 'border-brand-500' : 'border-gray-200 dark:border-gray-700']">

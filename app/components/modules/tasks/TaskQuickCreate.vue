@@ -6,6 +6,7 @@
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskDetail } from '~/types/tasks.types';
 	import { POINT_SCALE, quickDueOptions, shortDate, taskErrorInfo, vnToday } from '~/utils/tasks.utils';
@@ -46,7 +47,7 @@
 
 	const authStore = useAuthStore();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 	const service = useTasksService();
 	const toast = useToast();
 	const today = vnToday();
@@ -89,7 +90,7 @@
 	const effectiveAssigneeId = computed(() => assigneeId.value ?? authStore.user?.id);
 
 	const people = computed<PickablePerson[]>(() =>
-		employees.value.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(employees.value, departments.value),
 	);
 	const personModel = computed<number[]>({
 		get: () => (effectiveAssigneeId.value ? [effectiveAssigneeId.value] : []),
@@ -330,7 +331,7 @@
 							{{ o.label }}
 						</button>
 					</div>
-					<UiDatePicker :model-value="dueDate" label="Chọn ngày khác" @update:model-value="pickDue" />
+					<UiDatePicker :model-value="dueDate" label="Chọn ngày khác" warn-far-year @update:model-value="pickDue" />
 					<button
 						v-if="dueDate"
 						type="button"

@@ -152,6 +152,10 @@
 
 <template>
 	<div class="space-y-4" data-testid="project-settings">
+		<!-- Người thử nghiệm hay lẫn nhóm và đợt: một câu đặt trên cả hai phần. -->
+		<p class="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-900/20 dark:text-sky-200" data-testid="settings-group-sprint-note">
+			Nhóm là phần việc (Chứng từ, Tờ khai). Đợt là khoảng thời gian (tuần này, tuần sau).
+		</p>
 		<!-- Đợt -->
 		<section :class="CARD" aria-label="Đợt">
 			<div class="flex items-start gap-3">
@@ -217,7 +221,7 @@
 			<p class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">Nhóm đã cất vẫn giữ trên việc cũ nhưng không chọn được cho việc mới.</p>
 
 			<form v-if="!readOnly" class="mt-3 flex gap-2" @submit.prevent="addGroup">
-				<input v-model="newName" type="text" maxlength="100" placeholder="Tên nhóm mới, ví dụ Giai đoạn 1" aria-label="Tên nhóm mới" :class="[INPUT, 'flex-1']" data-testid="settings-group-name" />
+				<input v-model="newName" type="text" maxlength="100" placeholder="Tên nhóm mới, ví dụ Chứng từ" aria-label="Tên nhóm mới" :class="[INPUT, 'flex-1']" data-testid="settings-group-name" />
 				<CommonAppButton type="submit" size="sm" :loading="adding" :disabled="!newName.trim()" data-testid="settings-group-add">Thêm nhóm</CommonAppButton>
 			</form>
 

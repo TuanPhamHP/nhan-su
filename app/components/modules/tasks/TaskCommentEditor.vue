@@ -24,7 +24,7 @@
 			disabled?: boolean;
 			autofocus?: boolean;
 		}>(),
-		{ placeholder: 'Viết bình luận, gõ @ để nhắc tên', disabled: false, autofocus: false },
+		{ placeholder: 'Viết trao đổi, gõ @ để nhắc tên người', disabled: false, autofocus: false },
 	);
 
 	const emit = defineEmits<{

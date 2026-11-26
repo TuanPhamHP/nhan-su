@@ -37,6 +37,29 @@ export interface SortableListOptions {
 
 const ITEM_SELECTOR = '[data-sortable-id]';
 
+/** Bề rộng vùng sát mép (px) mà kéo thẻ vào đó thì khung tự cuộn. */
+const SCROLL_EDGE = 72;
+
+/**
+ * SortableJS (chế độ kéo bằng chạm, `forceFallback`) giữ một bộ hẹn giờ gọi lại việc tự cuộn bằng toạ độ
+ * cũ, nên ngón tay đã rời mép mà bảng vẫn cuộn tiếp và thẻ rơi vào cột xa hơn cột người dùng nhắm. Ở đây
+ * xét lại vị trí ngón tay mới nhất: còn trong vùng mép mới cho cuộn (`'continue'`), rời mép thì bỏ qua.
+ */
+function stopWhenLeftEdge(
+	offsetX: number,
+	offsetY: number,
+	_evt: Event,
+	touchEvt: TouchEvent | PointerEvent | MouseEvent | null,
+	el: HTMLElement,
+): 'continue' | void {
+	const p = touchEvt && 'touches' in touchEvt ? touchEvt.touches[0] : touchEvt;
+	if (!p || !el) return 'continue';
+	const r = el.getBoundingClientRect();
+	const nearX = offsetX > 0 ? r.right - p.clientX <= SCROLL_EDGE : offsetX < 0 ? p.clientX - r.left <= SCROLL_EDGE : false;
+	const nearY = offsetY > 0 ? r.bottom - p.clientY <= SCROLL_EDGE : offsetY < 0 ? p.clientY - r.top <= SCROLL_EDGE : false;
+	if (nearX || nearY) return 'continue';
+}
+
 function idOf(el: Element | null): number | null {
 	const raw = el?.getAttribute('data-sortable-id');
 	return raw ? Number(raw) : null;
@@ -70,6 +93,11 @@ export function useSortableList(el: Ref<HTMLElement | null | undefined>, options
 			delayOnTouchOnly: true,
 			scroll: true,
 			bubbleScroll: true,
+			// Cột rộng gần hết màn điện thoại: vùng tự cuộn ở mép phải đủ rộng cho ngón tay (mặc định 30px là
+			// quá hẹp) và cuộn đủ nhanh để thấy cột bên cạnh trước khi thả.
+			scrollSensitivity: SCROLL_EDGE,
+			scrollSpeed: 16,
+			scrollFn: stopWhenLeftEdge,
 			ghostClass: 'task-sortable-ghost',
 			chosenClass: 'task-sortable-chosen',
 			dragClass: 'task-sortable-drag',

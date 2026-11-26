@@ -9,6 +9,7 @@
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
 	import type {
@@ -33,6 +34,7 @@
 		TASK_FILE_MAX_MB,
 		dueTone,
 		primaryActions,
+		lateBlockerText,
 		shortDate,
 		TASK_HINTS,
 		taskDueText,
@@ -57,7 +59,7 @@
 	const toast = useToast();
 	const authStore = useAuthStore();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 	const { canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
 	const today = vnToday();
@@ -233,6 +235,13 @@
 	const fileModel = ref<File | File[] | null>(null);
 	const uploading = ref(false);
 	const showUpload = ref(false);
+	const dropzone = ref<{ openPicker: () => void } | null>(null);
+	/** Một lần bấm "Tải file lên" là mở ngay hộp chọn file; vùng thả vẫn hiện để kéo thả trên máy tính. */
+	async function startUpload() {
+		showUpload.value = true;
+		await nextTick();
+		dropzone.value?.openPicker();
+	}
 	watch(fileModel, async v => {
 		const t = task.value;
 		const files = Array.isArray(v) ? v : v ? [v] : [];
@@ -272,9 +281,10 @@
 	const addingWatchers = ref(false);
 	const watcherPick = ref<number[]>([]);
 	const people = computed<PickablePerson[]>(() =>
-		employees.value
-			.filter(e => !task.value?.watchers.some(w => w.id === e.id))
-			.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(
+			employees.value.filter(e => !task.value?.watchers.some(w => w.id === e.id)),
+			departments.value,
+		),
 	);
 	async function addWatchers() {
 		const t = task.value;
@@ -536,7 +546,7 @@
 					<span v-if="task.recurrenceId" class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Việc định kỳ</span>
 					<span v-if="task.group" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">{{ task.group.name }}</span>
 					<span v-if="task.sprint" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{{ task.sprint.name }}</span>
-					<span v-if="task.dependencies?.late" class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Việc phải chờ đang trễ</span>
+					<span v-if="task.dependencies?.late" class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" data-testid="task-late-blocker">{{ lateBlockerText(task, task.blockers, today) ?? 'Phải chờ việc khác đang trễ hạn.' }}</span>
 					<div class="ml-auto flex flex-wrap items-center gap-2" data-tour="task-primary">
 						<CommonAppButton
 							v-for="(a, i) in primary"
@@ -552,6 +562,8 @@
 						<TaskCardMenu
 							v-if="!readOnly"
 							:task="task"
+							in-detail
+							:primary-shown="primary.length"
 							@open="() => {}"
 							@status="onMenuStatus"
 							@change-due="changeDue"
@@ -771,7 +783,7 @@
 								</button>
 							</div>
 							<div v-if="editingDesc" class="mt-2 space-y-2">
-								<CommonTiptapEditor v-model="descDraft" placeholder="Mô tả việc cần làm, kết quả mong đợi" />
+								<CommonTiptapEditor v-model="descDraft" placeholder="Mô tả việc cần làm, kết quả mong đợi" no-headings />
 								<div class="flex justify-end gap-2">
 									<CommonAppButton size="sm" variant="secondary" @click="editingDesc = false">Huỷ</CommonAppButton>
 									<CommonAppButton size="sm" @click="saveDesc">Lưu mô tả</CommonAppButton>
@@ -959,13 +971,14 @@
 									v-if="task.permissions.comment && !readOnly"
 									type="button"
 									class="text-xs text-brand-600 hover:underline dark:text-brand-400"
-									@click="showUpload = !showUpload"
+									data-testid="task-file-upload"
+									@click="startUpload"
 								>
 									Tải file lên
 								</button>
 							</div>
 							<div v-if="showUpload" class="mt-2">
-								<UiFileDropzone v-model="fileModel" :accept="TASK_FILE_ACCEPT" :max-size-mb="TASK_FILE_MAX_MB" multiple :disabled="uploading" />
+								<UiFileDropzone ref="dropzone" v-model="fileModel" :accept="TASK_FILE_ACCEPT" :max-size-mb="TASK_FILE_MAX_MB" multiple :disabled="uploading" />
 							</div>
 							<ul v-if="taskFiles.length" class="mt-2 space-y-1">
 								<li v-for="a in taskFiles" :key="a.id">
