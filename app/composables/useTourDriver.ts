@@ -1,8 +1,11 @@
 import type { TourRect } from '~/types/tour.types';
 import { padRect, placeTourBox, roundedRectPath, sheetSide, unionRects } from '~/utils/tour';
 
-/** Chờ phần tử của một bước tối đa bấy lâu rồi bỏ bước đó (đang tải, không có quyền, danh sách rỗng). */
-const WAIT_MS = 4000;
+/**
+ * Chờ phần tử của một bước tối đa bấy lâu rồi bỏ bước đó (đang tải, không có quyền, danh sách rỗng).
+ * Đang chờ thì nút Tiếp vẫn bấm được để bỏ bước ngay, không bắt người dùng ngồi đợi.
+ */
+const WAIT_MS = 2000;
 /** Chờ ngắn thì không hiện chữ "đang chờ", tránh chớp hộp khi khung nhập vừa mở. */
 const WAIT_NOTICE_MS = 300;
 const HOLE_PAD = 8;
@@ -42,7 +45,7 @@ function sameRect(a: TourRect | null, b: TourRect | null) {
  */
 export function useTourDriver() {
 	const tour = useTour();
-	const { state, counter, currentStep, move, skipCurrent, markShown, finish } = tour;
+	const { state, counter, isLast, currentStep, move, skipCurrent, markShown, finish } = tour;
 	const route = useRoute();
 
 	const targetEls = shallowRef<HTMLElement[]>([]);
@@ -57,7 +60,6 @@ export function useTourDriver() {
 	const mode = computed(() => step.value?.mode ?? 'info');
 	const shown = computed(() => state.value?.phase === 'shown');
 	const isPhone = computed(() => view.width > 0 && view.width < 640);
-	const isLast = computed(() => counter.value.total > 0 && counter.value.number === counter.value.total);
 	const canBack = computed(() => counter.value.number > 1);
 
 	let token = 0;
@@ -202,7 +204,15 @@ export function useTourDriver() {
 	// ─── Nút trong hộp ───────────────────────────────────────────────────────────
 
 	function onPrimary() {
-		if (!shown.value) return;
+		if (!shown.value) {
+			// Đã báo "đang hiện ra" mà người dùng bấm Tiếp: bỏ bước này, sang bước sau. Chưa báo thì
+			// bỏ qua cú bấm, kẻo bấm đúp nút Tiếp làm mất luôn bước kế tiếp.
+			if (state.value && waitingLong.value) {
+				clearTimers();
+				skipCurrent();
+			}
+			return;
+		}
 		if (mode.value === 'click') {
 			const el = targetEls.value[0];
 			const btn = el ? clickableOf(el) : null;

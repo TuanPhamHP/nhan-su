@@ -59,8 +59,14 @@ route dài nhất trong `routes` của phân hệ.
    cho trang vẽ xong rồi chạy tour.
 4. Sau 8 giây mà trang đích vẫn chưa đăng ký tour thì huỷ `pending` và báo toast. Thường là quên gọi
    `useGuideTour` ở trang, hoặc gõ sai `tourId`.
-5. Mỗi bước chờ phần tử của nó tối đa 4 giây. Không thấy thì bỏ qua bước đó và đánh lại số bước.
-   Đây là lý do mốc `data-tour` bị xoá khi sửa giao diện sẽ làm tour hỏng mà không báo lỗi.
+5. Mỗi bước chờ phần tử của nó tối đa 2 giây; đang chờ thì bấm **Tiếp** cũng bỏ được bước đó. Không
+   thấy thì bỏ qua bước đó. Đây là lý do mốc `data-tour` bị xoá khi sửa giao diện sẽ làm tour hỏng mà
+   không báo lỗi.
+6. Hộp ghi "Bước n/tổng", tổng đếm lúc bắt đầu theo `when` của các bước. Số bước khác đi giữa chừng
+   (một bước bị bỏ, dữ liệu về làm `when` đổi) thì từ đó hộp chỉ ghi "Bước n", không đổi tổng.
+7. Tour tự hiện (`usePageTour`) chỉ được nhớ "đã xem" khi người dùng bấm **Xong** hoặc **Bỏ qua**
+   (cả phím Esc). Đổi trang, tải lại giữa chừng thì lần sau tour hiện lại từ đầu. Tour đó mở bằng tay
+   từ tab Hướng dẫn mà bấm Xong hoặc Bỏ qua cũng được nhớ.
 
 ## 4. Phân quyền
 

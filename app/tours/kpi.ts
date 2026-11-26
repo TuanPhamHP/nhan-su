@@ -2,7 +2,7 @@ import type { TourDefinition } from '~/types/tour.types';
 
 /**
  * Hướng dẫn bốn màn KPI (mục 9.2): mỗi màn tối đa năm bước, câu ngắn như đồng nghiệp chỉ nhau, chỉ trỏ, không
- * bấm nút ghi nào. Bước nào trang chưa có phần tử thì tự bỏ. Mở từ tab Hướng dẫn bên phải nên trang chưa có dữ
+ * bấm nút ghi nào. Bước nào trang chưa có phần tử sau 2 giây thì tự bỏ. Mở từ tab Hướng dẫn bên phải nên trang chưa có dữ
  * liệu vẫn mở được tour: lúc đó còn một bước không trỏ nói vì sao chưa có gì. Bước đó đứng cuối, và trang coi
  * "đang tải" là "có dữ liệu", để tour mở ngay lúc chuyển trang không báo trống khi dữ liệu chưa về.
  */

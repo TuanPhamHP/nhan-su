@@ -5,7 +5,7 @@ import type { TourRect, TourStep } from '~/types/tour.types';
  * Tách khỏi `useTour` để kiểm thử được mà không cần trình duyệt.
  */
 
-function stepEnabled(step: TourStep): boolean {
+export function stepEnabled(step: TourStep): boolean {
 	try {
 		return step.when ? step.when() : true;
 	} catch {
@@ -48,10 +48,18 @@ export function tourTextParts(text: string): TourTextPart[] {
 	return parts;
 }
 
-/** "Bước 3/12": chỉ đếm những bước thật sự hiện. */
-export function stepCounter(steps: TourStep[], index: number, skipped: number[] = []) {
-	const visible = steps.map((s, i) => i).filter(i => !skipped.includes(i) && stepEnabled(steps[i]!));
-	return { number: visible.indexOf(index) + 1, total: visible.length };
+/** Số bước sẽ hiện nếu đi hết từ đầu: bỏ bước `when` trả false và bước đã bị bỏ. */
+export function countSteps(steps: TourStep[], skipped: number[] = []): number {
+	return steps.filter((s, i) => !skipped.includes(i) && stepEnabled(s)).length;
+}
+
+/**
+ * Số trên hộp: "Bước 2/4" khi tổng đếm lúc bắt đầu vẫn đúng, "Bước 2" khi đã sai (một bước không
+ * tìm thấy phần tử, dữ liệu về làm đổi số bước). Tổng không bao giờ đổi giữa chừng: sai một lần là
+ * thôi ghi tổng tới hết tour, để người xem không thấy "3/4" rồi "3/3".
+ */
+export function tourCounter(shown: number, plannedTotal: number, exact: boolean): { number: number; total: number | null } {
+	return { number: shown, total: exact ? plannedTotal : null };
 }
 
 /** Khoá "đã xem" riêng cho từng công ty, từng người, từng tour và từng phiên bản nội dung. */
