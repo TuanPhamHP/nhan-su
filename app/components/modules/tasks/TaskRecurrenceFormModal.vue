@@ -195,6 +195,14 @@
 			toast.error(taskErrorInfo(err).message);
 		}
 	});
+	/** Chữ gõ dở trong ô danh sách kiểm tra thành mục trước khi gửi; quá dài thì không gửi. */
+	const checklistInput = ref<InstanceType<typeof TaskChecklistInput> | null>(null);
+	async function submit() {
+		if (checklistInput.value && !checklistInput.value.commitDraft()) return;
+		await nextTick();
+		await onSubmit();
+	}
+
 	useEscapeKey(() => emit('close'), () => !isSubmitting.value);
 
 	const LABEL = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
@@ -211,7 +219,7 @@
 				aria-modal="true"
 				:aria-label="editing ? 'Sửa việc định kỳ' : 'Đặt việc định kỳ'"
 				data-testid="recurrence-form"
-				@submit.prevent="onSubmit"
+				@submit.prevent="submit"
 			>
 				<div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ editing ? 'Sửa việc định kỳ' : 'Đặt việc định kỳ' }}</h2>
@@ -386,7 +394,7 @@
 					/>
 					<p v-else-if="recurrence?.project" class="text-sm text-gray-600 dark:text-gray-300">Dự án {{ recurrence.project.name }} (không đổi được)</p>
 
-					<TaskChecklistInput id="rec-checklist" v-model="checklistItems" label="Danh sách kiểm tra mỗi lần" />
+					<TaskChecklistInput id="rec-checklist" ref="checklistInput" v-model="checklistItems" label="Danh sách kiểm tra mỗi lần" />
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">

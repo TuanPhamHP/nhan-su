@@ -6,7 +6,8 @@
 	 * Thêm, mục hiện thành dòng phía trên ô với ô tick mờ (lúc tạo chưa tick được) và nút xoá.
 	 *
 	 * Nằm trong form khác nên không dùng `<form>` riêng: Enter trong ô chỉ thêm mục, không gửi form ngoài.
-	 * Giới hạn theo API: tối đa 100 mục, mỗi mục 300 ký tự.
+	 * Chữ gõ dở tự thành mục khi rời ô; form cha gọi `commitDraft()` trước khi gửi, phòng khi gửi bằng
+	 * Enter ở ô khác. Giới hạn theo API: tối đa 100 mục, mỗi mục 300 ký tự.
 	 */
 	const props = defineProps<{ id?: string; label?: string }>();
 	const items = defineModel<string[]>({ required: true });
@@ -24,6 +25,48 @@
 		draft.value = '';
 		input.value?.focus();
 	}
+
+	/**
+	 * Chữ gõ dở mà chưa Enter: hợp lệ thì thành mục, để người gõ mục cuối rồi bấm luôn nút gửi không
+	 * mất chữ. Trả `false` khi chữ quá dài: form không được gửi, con trỏ quay về ô đang báo lỗi.
+	 */
+	function commitDraft(): boolean {
+		if (tooLong.value) {
+			input.value?.focus();
+			input.value?.scrollIntoView({ block: 'center' });
+			return false;
+		}
+		if (draft.value.trim() && !full.value) items.value = [...items.value, draft.value.trim()];
+		draft.value = '';
+		return true;
+	}
+
+	/**
+	 * Rời ô thì chữ gõ dở thành mục. Rời ô vì bấm chuột (vào nút Giao việc chẳng hạn) thì chờ nhả chuột
+	 * xong mới thêm: thêm ngay thì danh sách dài ra, đẩy nút xuống khỏi con trỏ và cú bấm bị mất. Nút gửi
+	 * tự gọi `commitDraft()` trước khi gửi nên không mất chữ.
+	 */
+	let pointerDown = false;
+	const onPointerDown = () => (pointerDown = true);
+	const onPointerUp = () => (pointerDown = false);
+	function onBlur() {
+		if (tooLong.value) return;
+		if (!pointerDown) {
+			commitDraft();
+			return;
+		}
+		window.addEventListener('pointerup', () => setTimeout(() => !tooLong.value && commitDraft()), { once: true, capture: true });
+	}
+	onMounted(() => {
+		document.addEventListener('pointerdown', onPointerDown, true);
+		document.addEventListener('pointerup', onPointerUp, true);
+	});
+	onBeforeUnmount(() => {
+		document.removeEventListener('pointerdown', onPointerDown, true);
+		document.removeEventListener('pointerup', onPointerUp, true);
+	});
+
+	defineExpose({ commitDraft });
 
 	function remove(index: number) {
 		items.value = items.value.filter((_, i) => i !== index);
@@ -60,8 +103,10 @@
 				:class="tooLong ? 'border-rose-500' : 'border-gray-300 dark:border-gray-600'"
 				data-testid="checklist-input"
 				@keydown.enter.prevent="add"
+				@blur="onBlur"
 			/>
-			<CommonAppButton type="button" variant="secondary" :disabled="!canAdd" data-testid="checklist-input-add" @click="add">Thêm</CommonAppButton>
+			<!-- Giữ con trỏ trong ô khi bấm Thêm, để gõ mục tiếp ngay. -->
+			<CommonAppButton type="button" variant="secondary" :disabled="!canAdd" data-testid="checklist-input-add" @mousedown.prevent @click="add">Thêm</CommonAppButton>
 		</div>
 		<p v-if="tooLong" class="mt-1 text-xs text-rose-600">Mỗi mục tối đa {{ CHECKLIST_ITEM_MAX }} ký tự, mục này đang có {{ draft.trim().length }}.</p>
 		<p v-else-if="full" class="mt-1 text-xs text-gray-500">Tối đa {{ CHECKLIST_MAX_ITEMS }} mục.</p>

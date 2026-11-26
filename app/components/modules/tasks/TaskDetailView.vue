@@ -25,6 +25,7 @@
 	} from '~/types/tasks.types';
 	import {
 		ACTION_LABELS,
+		CHECKLIST_ITEM_MAX,
 		DUE_TONE_CLASS,
 		POINT_SCALE,
 		PRIORITY_LABELS,
@@ -941,7 +942,7 @@
 								<input
 									v-model="newItem"
 									type="text"
-									maxlength="500"
+									:maxlength="CHECKLIST_ITEM_MAX"
 									placeholder="Thêm mục kiểm tra"
 									aria-label="Thêm mục kiểm tra"
 									class="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"

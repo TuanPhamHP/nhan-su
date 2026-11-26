@@ -173,6 +173,14 @@
 		}
 	});
 
+	/** Chữ gõ dở trong ô danh sách kiểm tra thành mục trước khi gửi; quá dài thì không gửi. */
+	const checklistInput = ref<InstanceType<typeof TaskChecklistInput> | null>(null);
+	async function submit() {
+		if (checklistInput.value && !checklistInput.value.commitDraft()) return;
+		await nextTick();
+		await onSubmit();
+	}
+
 	useEscapeKey(() => emit('close'), () => !isSubmitting.value);
 </script>
 
@@ -185,7 +193,7 @@
 				aria-modal="true"
 				aria-label="Tạo việc"
 				data-testid="task-create-modal"
-				@submit.prevent="onSubmit"
+				@submit.prevent="submit"
 			>
 				<div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Tạo việc</h2>
@@ -313,7 +321,7 @@
 
 					<EmployeePicker v-model="watcherIds" :people="people" label="Người theo dõi" />
 
-					<TaskChecklistInput id="task-checklist" v-model="checklist" />
+					<TaskChecklistInput id="task-checklist" ref="checklistInput" v-model="checklist" />
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">
