@@ -1,5 +1,13 @@
-import { addDays, format, parseISO, startOfWeek } from 'date-fns';
-import type { SummaryRow } from '~/types/office.types';
+import { addDays, addMonths, endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
+import { formatVnDateTime } from '~/utils/date';
+import { vnSearchText } from '~/utils/vn-text';
+import type {
+	SummaryRow,
+	SupplyItem,
+	SupplyLine,
+	SupplyPeriodStatus,
+	SupplyRequestStatus,
+} from '~/types/office.types';
 
 /**
  * Hàm thuần của module Hành chính văn phòng: đổi giờ Việt Nam, đếm ngược tới hạn chót, xếp
@@ -32,6 +40,15 @@ const VN_DATE = new Intl.DateTimeFormat('en-CA', {
 /** Giờ phút theo giờ Việt Nam, dạng `HH:mm`. */
 export function vnTimeLabel(at: string | Date): string {
 	return VN_TIME.format(new Date(at));
+}
+
+/** Độ dài một lượt họp: "30 phút", "1 giờ", "1 giờ 30 phút". */
+export function bookingDurationLabel(startAt: string | Date, endAt: string | Date): string {
+	const minutes = Math.max(0, Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000));
+	const hours = Math.floor(minutes / 60);
+	const rest = minutes % 60;
+	if (!hours) return `${rest} phút`;
+	return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
 }
 
 /** Số phút kể từ 00:00 giờ Việt Nam của một thời điểm. */
@@ -296,6 +313,89 @@ export function weekRangeLabel(days: string[]): string {
 }
 
 /**
+ * Các ngày của lịch tháng chứa một ngày: từ thứ Hai của tuần có ngày mùng một tới Chủ nhật của
+ * tuần có ngày cuối tháng, nên luôn là bốn tới sáu tuần trọn.
+ *
+ * Vẽ đủ tuần như Google Calendar để cột nào cũng đúng thứ; ngày của tháng bên cạnh vẫn hiện, chỉ
+ * mờ đi, nên cuộc họp đầu tháng sau vẫn thấy được từ cuối tháng này.
+ */
+export function monthGridDaysYmd(dateYmd: string): string[] {
+	const first = startOfWeek(startOfMonth(parseISO(dateYmd)), { weekStartsOn: 1 });
+	const last = endOfWeek(endOfMonth(parseISO(dateYmd)), { weekStartsOn: 1 });
+	const days: string[] = [];
+	for (let d = first; d <= last; d = addDays(d, 1)) days.push(format(d, 'yyyy-MM-dd'));
+	return days;
+}
+
+/** Cộng hoặc trừ số tháng trên một ngày `YYYY-MM-DD`; ngày 31 sang tháng ngắn hơn thì về ngày cuối. */
+export function addMonthsYmd(dateYmd: string, months: number): string {
+	return format(addMonths(parseISO(dateYmd), months), 'yyyy-MM-dd');
+}
+
+/** Một lượt trên cột ngày của lịch giờ: vị trí dọc tính bằng phút, vị trí ngang bằng cột con. */
+export interface DayEventSlot<T> {
+	booking: T;
+	/** Phút bắt đầu và kết thúc giờ Việt Nam, đã cắt về trong ngày. */
+	startMin: number;
+	endMin: number;
+	/** Cột con của lượt trong cụm chồng giờ, và số cột của cả cụm. */
+	column: number;
+	columns: number;
+}
+
+/**
+ * Xếp các lượt của một ngày thành cột con, kiểu Google Calendar: lượt chồng giờ nhau đứng cạnh
+ * nhau thay vì đè lên nhau.
+ *
+ * Gom lượt thành cụm, mỗi cụm là một chuỗi lượt liền nhau có chồng giờ; trong cụm, lượt nào cũng
+ * vào cột trống đầu tiên, rồi cả cụm chia đều bề ngang. Chia theo cụm chứ không theo cả ngày, để
+ * hai cuộc họp trùng giờ buổi sáng không làm cuộc họp một mình buổi chiều bị hẹp đi một nửa.
+ * Lượt đã huỷ không vẽ. Lượt vắt qua nửa đêm thì kéo tới hết ngày.
+ */
+export function layoutDayEvents<T extends { status: string; startAt: string; endAt: string }>(
+	bookings: T[],
+): DayEventSlot<T>[] {
+	const items = bookings
+		.filter(b => b.status !== 'CANCELLED')
+		.map(booking => {
+			const startMin = vnMinutesOfDay(booking.startAt);
+			const rawEnd = vnMinutesOfDay(booking.endAt);
+			const endMin = rawEnd <= startMin ? 24 * 60 : rawEnd;
+			return { booking, startMin, endMin, column: 0, columns: 1 };
+		})
+		.sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
+
+	const result: DayEventSlot<T>[] = [];
+	let cluster: DayEventSlot<T>[] = [];
+	/** Giờ kết thúc của lượt cuối cùng trong mỗi cột của cụm đang xét. */
+	let columnEnds: number[] = [];
+	let clusterEnd = -1;
+
+	const closeCluster = () => {
+		for (const item of cluster) item.columns = columnEnds.length;
+		result.push(...cluster);
+		cluster = [];
+		columnEnds = [];
+	};
+
+	for (const item of items) {
+		if (cluster.length && item.startMin >= clusterEnd) closeCluster();
+		let column = columnEnds.findIndex(end => end <= item.startMin);
+		if (column === -1) {
+			column = columnEnds.length;
+			columnEnds.push(item.endMin);
+		} else {
+			columnEnds[column] = item.endMin;
+		}
+		item.column = column;
+		cluster.push(item);
+		clusterEnd = cluster.length === 1 ? item.endMin : Math.max(clusterEnd, item.endMin);
+	}
+	if (cluster.length) closeCluster();
+	return result;
+}
+
+/**
  * Câu trạng thái của một phòng lúc này, từ cờ `now` của máy chủ.
  *
  * `until` rỗng khi đang trống nghĩa là trống tới hết ngày; nói thẳng câu đó thay vì để trống chỗ.
@@ -411,7 +511,7 @@ export function copyPreviousSummary(result: {
 		return `Phiếu đã có đủ các mặt hàng của ${result.previousTitle}, không có gì để thêm.`;
 	}
 
-	let head = `Đã thêm ${result.added} dòng từ ${result.previousTitle}.`;
+	let head = `Đã lấy ${result.added} mặt hàng từ ${result.previousTitle}.`;
 	// Mặt hàng phiếu đã có KHÔNG phải là dòng bị loại: nói rõ chúng được giữ nguyên.
 	if (result.existing) head += ` ${result.existing} mặt hàng phiếu đã có nên giữ nguyên số của phòng.`;
 	if (!result.skippedItems.length) return head;
@@ -476,4 +576,535 @@ export function downloadOfficeFile(blob: Blob, fileName: string): void {
 	link.click();
 	document.body.removeChild(link);
 	URL.revokeObjectURL(url);
+}
+
+// ─── Trang văn phòng phẩm của phòng tôi ───────────────────────────────────────
+
+export type SupplyStatus = SupplyPeriodStatus | SupplyRequestStatus;
+
+/** Nhãn và màu của một trạng thái kỳ hoặc phiếu văn phòng phẩm. */
+export interface SupplyStatusMeta {
+	/** Nhãn đầy đủ, nói cả việc tiếp theo: "Đã chốt, chờ cấp". */
+	label: string;
+	/** Nhãn ngắn cho số đếm và chỗ hẹp: "Đã chốt". */
+	shortLabel: string;
+	class: string;
+}
+
+/**
+ * Nhãn trạng thái của kỳ và phiếu văn phòng phẩm, MỘT bảng cho cả hai cấp.
+ *
+ * Kỳ và phiếu cùng nằm trên một thanh, nên OPEN và LOCKED phải đọc giống nhau ở cả hai cấp:
+ * trước đây kỳ ghi "Đang nhận đăng ký" còn phiếu ghi "Đang đăng ký", người đọc tưởng là hai việc
+ * khác nhau. Nhãn dài của các bước sau khoá giữ đúng chữ của máy chủ. Khai báo bằng `Record` đủ
+ * khoá nên máy chủ thêm trạng thái mới mà chưa có nhãn thì build báo lỗi ngay.
+ */
+export const SUPPLY_STATUS: Record<SupplyStatus, SupplyStatusMeta> = {
+	OPEN: {
+		label: 'Đang đăng ký',
+		shortLabel: 'Đang đăng ký',
+		class: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+	},
+	LOCKED: {
+		label: 'Đã khoá',
+		shortLabel: 'Đã khoá',
+		class: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+	},
+	CLOSED: {
+		label: 'Đã đóng',
+		shortLabel: 'Đã đóng',
+		class: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+	},
+	FINALIZED: {
+		label: 'Đã chốt, chờ cấp',
+		shortLabel: 'Đã chốt',
+		class: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+	},
+	ISSUED: {
+		label: 'Đã cấp, chờ nhận',
+		shortLabel: 'Đã cấp',
+		class: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400',
+	},
+	RECEIVED: {
+		label: 'Đã nhận',
+		shortLabel: 'Đã nhận',
+		class: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+	},
+};
+
+/** Phiếu không có dòng nào khi đã khoá; cùng chữ với máy chủ. */
+export const SUPPLY_EMPTY_REQUEST_LABEL = 'Không đăng ký';
+
+/**
+ * Nhãn hiện cho một kỳ hoặc một phiếu.
+ *
+ * Biết số dòng thì phiếu rỗng sau khi khoá ghi "Không đăng ký" thay vì nhãn chung "Đã khoá", để
+ * HCNS và phòng thấy ngay phòng không xin gì kỳ đó.
+ */
+export function supplyStatusLabel(status: string, lineCount?: number): string {
+	if (status !== 'OPEN' && lineCount === 0) return SUPPLY_EMPTY_REQUEST_LABEL;
+	return supplyStatusMeta(status).label;
+}
+
+const SUPPLY_STATUS_UNKNOWN_CLASS = 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+
+function isSupplyStatus(status: string): status is SupplyStatus {
+	return Object.prototype.hasOwnProperty.call(SUPPLY_STATUS, status);
+}
+
+/**
+ * Nhãn và màu của một trạng thái, kể cả trạng thái trang chưa biết.
+ *
+ * Máy chủ thêm trạng thái mới trước khi web kịp phát hành thì trang vẫn chạy: hiện nguyên mã trạng
+ * thái trên nền xám thay vì ném lỗi làm trắng cả danh sách.
+ */
+export function supplyStatusMeta(status: string): SupplyStatusMeta {
+	if (isSupplyStatus(status)) return SUPPLY_STATUS[status];
+	return { label: status, shortLabel: status, class: SUPPLY_STATUS_UNKNOWN_CLASS };
+}
+
+/** Mốc phiếu tự khoá theo giờ Việt Nam: "00:00 ngày 28/11/2026". */
+export function supplyLockLabel(lockAt: string): string {
+	const [year, month, day] = vnDateYmd(lockAt).split('-');
+	return `${vnTimeLabel(lockAt)} ngày ${day}/${month}/${year}`;
+}
+
+/** Một dòng của form danh mục: mặt hàng được phép đặt, kèm dòng phiếu nếu phòng đã đăng ký. */
+export interface SupplyCatalogRow {
+	/** `i<itemId>` với mặt hàng danh mục, `c<lineId>` với dòng ngoài danh mục. */
+	key: string;
+	itemId: number | null;
+	name: string;
+	unit: string | null;
+	groupName: string;
+	/** Định mức tháng của phòng; `null` là không giới hạn. */
+	quota: number | null;
+	line: SupplyLine | null;
+	/** Tên đã bỏ dấu, để ô tìm không phải chuẩn hoá lại mỗi lần gõ. */
+	searchText: string;
+}
+
+export interface SupplyCatalogGroup {
+	name: string;
+	isCustom: boolean;
+	rows: SupplyCatalogRow[];
+}
+
+/**
+ * Ghép danh mục với dòng của phiếu thành các nhóm của form.
+ *
+ * Nhóm và mặt hàng giữ thứ tự máy chủ trả về. Dòng của phiếu mà danh mục không còn (mặt hàng ngừng
+ * dùng, nhóm chỉ HCNS đặt do HCNS nhập thay) vẫn phải hiện, nên chúng xếp cuối nhóm của mình; dòng
+ * ngoài danh mục luôn ở nhóm cuối cùng. `onlyLines` bỏ những mặt hàng phòng chưa đăng ký, dùng
+ * khi phiếu chỉ còn để xem.
+ */
+export function buildSupplyCatalog(items: SupplyItem[], lines: SupplyLine[], onlyLines = false): SupplyCatalogGroup[] {
+	const lineByItem = new Map<number, SupplyLine>();
+	for (const line of lines) if (line.itemId != null) lineByItem.set(line.itemId, line);
+
+	const groups = new Map<string, SupplyCatalogRow[]>();
+	const push = (row: SupplyCatalogRow) => {
+		if (onlyLines && !row.line) return;
+		const list = groups.get(row.groupName) ?? [];
+		list.push(row);
+		groups.set(row.groupName, list);
+	};
+
+	const listed = new Set<number>();
+	for (const item of items) {
+		listed.add(item.id);
+		const line = lineByItem.get(item.id) ?? null;
+		push({
+			key: `i${item.id}`,
+			itemId: item.id,
+			name: item.name,
+			unit: item.unit,
+			groupName: item.groupName,
+			quota: line ? line.quota : (item.quota ?? null),
+			line,
+			searchText: vnSearchText(item.name),
+		});
+	}
+
+	const custom: SupplyCatalogRow[] = [];
+	for (const line of lines) {
+		if (line.itemId != null && listed.has(line.itemId)) continue;
+		const row: SupplyCatalogRow = {
+			key: line.itemId != null ? `i${line.itemId}` : `c${line.id}`,
+			itemId: line.itemId,
+			name: line.name,
+			unit: line.unit,
+			groupName: line.itemId != null && line.groupName ? line.groupName : CUSTOM_GROUP_NAME,
+			quota: line.quota,
+			line,
+			searchText: vnSearchText(line.name),
+		};
+		if (row.groupName === CUSTOM_GROUP_NAME) custom.push(row);
+		else push(row);
+	}
+
+	const result = [...groups.entries()]
+		.filter(([name]) => name !== CUSTOM_GROUP_NAME)
+		.map(([name, rows]) => ({ name, isCustom: false, rows }));
+	if (custom.length) result.push({ name: CUSTOM_GROUP_NAME, isCustom: true, rows: custom });
+	return result;
+}
+
+/** Câu "Bạn 16 · Nguyễn Thị Hương Quỳnh 5": ai xin bao nhiêu trong tổng của dòng. */
+export function supplySharesLabel(line: SupplyLine): string {
+	return line.shares.map(s => `${s.isMine ? 'Bạn' : s.employee.fullName} ${s.qty}`).join(' · ');
+}
+
+// ─── Trang Kỳ văn phòng phẩm và hộp Mở kỳ ─────────────────────────────────────
+
+/** Tháng hiện tại theo giờ Việt Nam, dạng `YYYY-MM`; máy đặt múi giờ khác vẫn ra đúng tháng. */
+export function vnMonthValue(now: Date = new Date()): string {
+	return vnDateYmd(now).slice(0, 7);
+}
+
+/** Cộng tháng cho chuỗi `YYYY-MM`, không qua `Date` để khỏi lệch múi giờ. */
+export function addMonthsYm(month: string, months: number): string {
+	const [year, mon] = month.split('-').map(Number);
+	const index = (year ?? 0) * 12 + (mon ?? 1) - 1 + months;
+	return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+/** Số tháng từ `from` tới `to`, cả hai dạng `YYYY-MM`. */
+function monthsBetween(from: string, to: string): number {
+	const [fy, fm] = from.split('-').map(Number);
+	const [ty, tm] = to.split('-').map(Number);
+	return ((ty ?? 0) - (fy ?? 0)) * 12 + ((tm ?? 0) - (fm ?? 0));
+}
+
+function daysInMonth(month: string): number {
+	const [year, mon] = month.split('-').map(Number);
+	return new Date(Date.UTC(year ?? 0, mon ?? 1, 0)).getUTCDate();
+}
+
+/** Kỳ có tháng muộn nhất của một văn phòng (trùng tháng thì kỳ mở sau). */
+export function latestPeriodOf<T extends { id: number; month: string; officeSite: { id: number } }>(
+	periods: T[],
+	siteId: number,
+): T | null {
+	let latest: T | null = null;
+	for (const period of periods) {
+		if (period.officeSite.id !== siteId) continue;
+		if (!latest || period.month > latest.month || (period.month === latest.month && period.id > latest.id)) {
+			latest = period;
+		}
+	}
+	return latest;
+}
+
+/** Kỳ có tháng muộn nhất trong mọi văn phòng; dùng để chọn sẵn văn phòng khi mở kỳ. */
+export function latestPeriod<T extends { id: number; month: string }>(periods: T[]): T | null {
+	return periods.reduce<T | null>(
+		(best, p) => (!best || p.month > best.month || (p.month === best.month && p.id > best.id) ? p : best),
+		null,
+	);
+}
+
+/**
+ * Tháng chi phí mặc định khi mở kỳ: tháng sau kỳ gần nhất của văn phòng, nhưng không trước tháng
+ * hiện tại vì máy chủ không cho mở kỳ của tháng đã qua. Chưa có kỳ nào thì tháng hiện tại.
+ */
+export function defaultPeriodMonth(latest: { month: string } | null, nowMonth: string): string {
+	if (!latest) return nowMonth;
+	const next = addMonthsYm(latest.month, 1);
+	return next > nowMonth ? next : nowMonth;
+}
+
+/**
+ * Hạn chót mặc định cho kỳ của `month`, theo thói quen của kỳ gần nhất.
+ *
+ * Giữ nguyên ngày trong tháng và cả khoảng cách giữa tháng hạn chót với tháng chi phí: kỳ tháng 12
+ * hạn ngày 27/11 thì kỳ tháng 1 hạn ngày 27/12, kỳ tháng 11 hạn ngày 27/11 thì kỳ tháng 12 hạn 27/12.
+ * Tháng đích ngắn hơn thì kẹp về ngày cuối tháng (31 thành 28/2). Ngày tính ra đã qua, hoặc chưa có
+ * kỳ trước, thì để trống cho người dùng chọn.
+ */
+export function defaultPeriodDeadline(
+	latest: { month: string; deadline: string } | null,
+	month: string,
+	todayYmd: string,
+): string {
+	if (!latest) return '';
+	const offset = monthsBetween(latest.month, latest.deadline.slice(0, 7));
+	const deadlineMonth = addMonthsYm(month, offset);
+	const day = Math.min(Number(latest.deadline.slice(8, 10)), daysInMonth(deadlineMonth));
+	const ymd = `${deadlineMonth}-${String(day).padStart(2, '0')}`;
+	return ymd < todayYmd ? '' : ymd;
+}
+
+const WEEKDAYS = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+/** Thứ trong tuần của một ngày `YYYY-MM-DD`; tính theo UTC nên không lệch ngày vì múi giờ máy. */
+export function weekdayOf(ymd: string): { label: string; weekend: boolean } {
+	const [year, month, day] = ymd.split('-').map(Number);
+	const index = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1)).getUTCDay();
+	return { label: WEEKDAYS[index] ?? '', weekend: index === 0 || index === 6 };
+}
+
+/** Thời điểm phiếu tự khoá của một hạn chót: 00:00 giờ Việt Nam ngày hôm sau, dạng ISO. */
+export function lockAtOfDeadline(deadlineYmd: string): string {
+	return `${addDaysYmd(deadlineYmd, 1)}T00:00:00+07:00`;
+}
+
+/** Số ngày theo lịch từ `fromYmd` tới `toYmd`; số âm là đã qua. */
+export function daysBetweenYmd(fromYmd: string, toYmd: string): number {
+	const toUtc = (ymd: string) => {
+		const [y, m, d] = ymd.split('-').map(Number);
+		return Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1);
+	};
+	return Math.round((toUtc(toYmd) - toUtc(fromYmd)) / 86_400_000);
+}
+
+/** Kỳ đã có của một văn phòng trong một tháng; máy chủ không cho mở kỳ thứ hai. */
+export function findPeriodFor<T extends { month: string; officeSite: { id: number } }>(
+	periods: T[],
+	siteId: number,
+	month: string,
+): T | null {
+	return periods.find(p => p.officeSite.id === siteId && p.month === month) ?? null;
+}
+
+export interface NextPeriodSuggestion<S> {
+	site: S;
+	/** Tháng nên mở, `YYYY-MM`. */
+	month: string;
+}
+
+/**
+ * Văn phòng nên mở kỳ tiếp theo: kỳ gần nhất đã khoá hoặc đã đóng mà chưa có kỳ của tháng sau.
+ *
+ * Kỳ gần nhất còn đang đăng ký thì không nhắc, vì nhắc lúc các phòng còn đang nhập chỉ là nhắc sớm.
+ * Văn phòng chưa có kỳ nào cũng không nhắc: việc đó là "Mở kỳ đầu tiên" ở trạng thái trống.
+ */
+export function nextPeriodSuggestions<
+	S extends { id: number },
+	P extends { id: number; month: string; status: string; officeSite: { id: number } },
+>(sites: S[], periods: P[], nowMonth: string): NextPeriodSuggestion<S>[] {
+	const result: NextPeriodSuggestion<S>[] = [];
+	for (const site of sites) {
+		const latest = latestPeriodOf(periods, site.id);
+		if (!latest || latest.status === 'OPEN') continue;
+		const month = defaultPeriodMonth(latest, nowMonth);
+		if (findPeriodFor(periods, site.id, month)) continue;
+		result.push({ site, month });
+	}
+	return result;
+}
+
+/** Kỳ đang diễn ra (OPEN, LOCKED) ở trên, kỳ đã đóng ở dưới; trong nhóm tháng mới trước. */
+export function groupSupplyPeriods<T extends { id: number; month: string; status: string }>(
+	periods: T[],
+): { active: T[]; closed: T[] } {
+	const sorted = [...periods].sort((a, b) => (a.month === b.month ? b.id - a.id : a.month < b.month ? 1 : -1));
+	return {
+		active: sorted.filter(p => p.status !== 'CLOSED'),
+		closed: sorted.filter(p => p.status === 'CLOSED'),
+	};
+}
+
+/** Tiến độ đăng ký của kỳ; kỳ không có phòng nào thì 0%, không chia cho 0. */
+export function periodProgress(period: { departmentsTotal?: number; departmentsWithLines?: number }): {
+	done: number;
+	total: number;
+	percent: number;
+} {
+	const total = period.departmentsTotal ?? 0;
+	const done = Math.min(period.departmentsWithLines ?? 0, total);
+	return { done, total, percent: total > 0 ? Math.round((done / total) * 100) : 0 };
+}
+
+// ─── Chi tiết kỳ: giai đoạn, phòng đã đăng ký, bảng tổng hợp ───────────────────
+
+export interface PeriodStageStep {
+	status: 'OPEN' | 'LOCKED' | 'CLOSED';
+	label: string;
+	state: 'done' | 'current' | 'todo';
+	/** Câu thời điểm dưới bước: đã xảy ra thì giờ thật, chưa tới thì "dự kiến" nếu tính được. */
+	at: string;
+}
+
+/** Ba bước của kỳ theo đúng enum OPEN → LOCKED → CLOSED, kèm thời điểm có trong dữ liệu. */
+export function periodStageSteps(period: {
+	status: string;
+	lockAt: string;
+	lockedAt: string | null;
+	closedAt: string | null;
+}): PeriodStageStep[] {
+	const order = ['OPEN', 'LOCKED', 'CLOSED'] as const;
+	const current = Math.max(order.findIndex(status => status === period.status), 0);
+	const at: Record<(typeof order)[number], string> = {
+		OPEN: '',
+		LOCKED: period.lockedAt
+			? `Khoá lúc ${formatVnDateTime(period.lockedAt)}`
+			: current === 0
+				? `Dự kiến ${supplyLockLabel(period.lockAt)}`
+				: '',
+		CLOSED: period.closedAt ? `Đóng lúc ${formatVnDateTime(period.closedAt)}` : '',
+	};
+	return order.map((status, index) => ({
+		status,
+		label: SUPPLY_STATUS[status].label,
+		state: index < current ? 'done' : index === current ? 'current' : 'todo',
+		at: at[status],
+	}));
+}
+
+interface SummaryDepartmentLike {
+	departmentId: number;
+	name: string;
+	requests: Array<{ id: number; sequence: number; status: string; lineCount: number }>;
+}
+
+/** Phòng đã đăng ký = phòng có ít nhất một dòng ở phiếu chính hoặc phiếu bổ sung; đếm theo phòng. */
+export function departmentRegistration(departments: SummaryDepartmentLike[]): { done: number; total: number } {
+	return {
+		done: departments.filter(d => d.requests.some(r => r.lineCount > 0)).length,
+		total: departments.length,
+	};
+}
+
+/**
+ * Tiến độ phiếu sau khi khoá, đếm theo phiếu có dòng (phiếu rỗng là "Không đăng ký", không có gì để
+ * chốt hay cấp). Mỗi bước đếm cả phiếu đã đi qua nó: phiếu đã nhận cũng đã chốt và đã cấp.
+ */
+export function requestStageCounts(departments: SummaryDepartmentLike[]): {
+	total: number;
+	finalized: number;
+	issued: number;
+	received: number;
+} {
+	const requests = departments.flatMap(d => d.requests).filter(r => r.lineCount > 0);
+	const reached = (statuses: string[]) => requests.filter(r => statuses.includes(r.status)).length;
+	return {
+		total: requests.length,
+		finalized: reached(['FINALIZED', 'ISSUED', 'RECEIVED']),
+		issued: reached(['ISSUED', 'RECEIVED']),
+		received: reached(['RECEIVED']),
+	};
+}
+
+export interface PeriodNextStep {
+	kind: 'finalize' | 'issue' | 'close';
+	/** Phiếu cần mở cho bước chốt hay cấp; bước đóng kỳ thì không có. */
+	requestId?: number;
+	departmentName?: string;
+	/** 0 là phiếu chính, lớn hơn 0 là phiếu bổ sung. */
+	sequence?: number;
+}
+
+/**
+ * Việc tiếp theo của HCNS trên kỳ đã khoá, theo đúng các nút đang có: chốt phiếu đầu tiên chưa chốt,
+ * rồi cấp phiếu đầu tiên đã chốt, xong hết (hoặc phiếu nào cũng rỗng) thì đóng kỳ. Còn phiếu đã cấp
+ * chờ phòng bấm Đã nhận thì không có việc chính, trả `null`.
+ */
+export function periodNextStep(periodStatus: string, departments: SummaryDepartmentLike[]): PeriodNextStep | null {
+	if (periodStatus !== 'LOCKED') return null;
+	const withLines = departments.flatMap(d => d.requests.filter(r => r.lineCount > 0).map(r => ({ ...r, name: d.name })));
+	const toFinalize = withLines.find(r => r.status === 'LOCKED');
+	if (toFinalize) {
+		return { kind: 'finalize', requestId: toFinalize.id, departmentName: toFinalize.name, sequence: toFinalize.sequence };
+	}
+	const toIssue = withLines.find(r => r.status === 'FINALIZED');
+	if (toIssue) return { kind: 'issue', requestId: toIssue.id, departmentName: toIssue.name, sequence: toIssue.sequence };
+	if (withLines.every(r => r.status === 'RECEIVED')) return { kind: 'close' };
+	return null;
+}
+
+/**
+ * Chưa có đơn giá: `null` hoặc trống. Đơn giá 0 là ĐÃ có giá, nên không kiểm tra kiểu falsy.
+ *
+ * Một tiêu chí cho cả danh mục (Cài đặt hành chính) lẫn bảng tổng hợp kỳ, để "N mặt hàng chưa có
+ * đơn giá" ở hai nơi luôn đếm cùng một thứ.
+ */
+export function isPriceMissing(unitPrice: number | null | undefined): boolean {
+	return unitPrice == null;
+}
+
+/**
+ * Dòng bảng tổng hợp thiếu đơn giá, cùng tiêu chí máy chủ dùng để đếm `unpricedRows`: có số cần mua
+ * mà chưa có đơn giá (máy chủ để thành tiền `null` đúng khi thiếu giá).
+ */
+export function isRowUnpriced(row: { purchaseQty: number; unitPrice: number | null }): boolean {
+	return row.purchaseQty > 0 && isPriceMissing(row.unitPrice);
+}
+
+/** Ô nhập của bảng tổng hợp đang khác giá trị đã lưu; ô trống so với `null` là chưa đổi. */
+export function isDraftDirty(draft: number | undefined, saved: number | null | undefined): boolean {
+	return (draft ?? null) !== (saved ?? null);
+}
+
+// ─── Cài đặt hành chính: danh mục văn phòng phẩm ──────────────────────────────
+
+interface CatalogGroupLike {
+	id: number;
+	name: string;
+	hrOnly: boolean;
+	isActive: boolean;
+}
+
+interface CatalogItemLike {
+	groupId: number;
+	name: string;
+	unitPrice: number | null;
+	isActive: boolean;
+}
+
+export interface CatalogSection<G, I> {
+	group: G;
+	items: I[];
+}
+
+export interface CatalogView<G, I> {
+	sections: CatalogSection<G, I>[];
+	/** Chip lọc nhóm, kèm số mặt hàng của nhóm (theo công tắc ngừng dùng, chưa tính ô tìm). */
+	chips: Array<{ group: G; count: number }>;
+	/** Tổng mặt hàng cho chip "Tất cả". */
+	total: number;
+	/** Mặt hàng đang hiện (theo công tắc ngừng dùng) mà chưa có đơn giá; đúng tập công tắc "Thiếu đơn giá" lọc ra. */
+	unpriced: number;
+}
+
+/**
+ * Danh mục đã lọc, chia theo nhóm, giữ thứ tự nhóm và mặt hàng máy chủ trả về (theo `sortOrder`).
+ *
+ * Tìm theo tên không dấu, lọc một nhóm, chỉ mặt hàng thiếu đơn giá (cùng tiêu chí `isPriceMissing`
+ * với kỳ), và ẩn nhóm, mặt hàng đã ngừng dùng trừ khi bật xem. Nhóm trống vẫn hiện khi không tìm,
+ * không lọc thiếu giá, để còn nút thêm mặt hàng ngay trong nhóm đó.
+ */
+export function filterCatalogSections<G extends CatalogGroupLike, I extends CatalogItemLike>(
+	groups: G[],
+	items: I[],
+	options: { search: string; groupId?: number; onlyUnpriced: boolean; showInactive: boolean },
+): CatalogView<G, I> {
+	const q = vnSearchText(options.search);
+	const visibleGroups = groups.filter(g => options.showInactive || g.isActive);
+	const shownGroupIds = new Set(visibleGroups.map(g => g.id));
+	// Mặt hàng còn dùng mà nằm trong nhóm đã ngừng thì cũng ẩn theo nhóm, để số đếm khớp danh sách.
+	const visibleItems = items.filter(i => (options.showInactive || i.isActive) && shownGroupIds.has(i.groupId));
+	const byGroup = new Map<number, I[]>();
+	for (const item of visibleItems) {
+		const list = byGroup.get(item.groupId) ?? [];
+		list.push(item);
+		byGroup.set(item.groupId, list);
+	}
+	const chips = visibleGroups.map(group => ({ group, count: byGroup.get(group.id)?.length ?? 0 }));
+	const narrowing = !!q || options.onlyUnpriced;
+	const sections = visibleGroups
+		.filter(group => !options.groupId || group.id === options.groupId)
+		.map(group => ({
+			group,
+			items: (byGroup.get(group.id) ?? []).filter(
+				item => (!q || vnSearchText(item.name).includes(q)) && (!options.onlyUnpriced || isPriceMissing(item.unitPrice)),
+			),
+		}))
+		.filter(section => section.items.length > 0 || !narrowing);
+	return {
+		sections,
+		chips,
+		total: chips.reduce((sum, chip) => sum + chip.count, 0),
+		unpriced: visibleItems.filter(item => isPriceMissing(item.unitPrice)).length,
+	};
 }

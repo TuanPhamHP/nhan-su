@@ -1,148 +1,82 @@
 <script setup lang="ts">
+	import OfficeDialog from '~/components/modules/office/OfficeDialog.vue';
+	import OfficeFullscreen from '~/components/modules/office/OfficeFullscreen.vue';
+	import PeriodDeadlineDialog from '~/components/modules/office/PeriodDeadlineDialog.vue';
+	import PeriodDepartmentsCard from '~/components/modules/office/PeriodDepartmentsCard.vue';
+	import PeriodStageBar from '~/components/modules/office/PeriodStageBar.vue';
+	import PeriodSummaryTable from '~/components/modules/office/PeriodSummaryTable.vue';
 	import RequestDetailModal from '~/components/modules/office/RequestDetailModal.vue';
 	import SupplementModal from '~/components/modules/office/SupplementModal.vue';
-	import { useOfficeService } from '~/services/office.service';
-	import {
-		downloadOfficeFile,
-		groupSummaryRows,
-		monthLabel,
-		officeErrorCode,
-		officeErrorMessage,
-		officeMoney,
-	} from '~/utils/office.utils';
-	import { formatDate, todayYmd, vnCalendarDaysBetween } from '~/utils/date';
-	import { OFFICE_PERMISSIONS } from '~/utils/permission';
-	import type { SupplyPeriodSummary, SupplyRequestStatus } from '~/types/office.types';
+	import { useSupplyPeriodDetail } from '~/composables/useSupplyPeriodDetail';
+	import { monthLabel, officeMoney, supplyStatusMeta } from '~/utils/office.utils';
+	import { vnCalendarDaysBetween } from '~/utils/date';
+	import type { DropdownMenuItem } from '~/components/ui/DropdownMenu.vue';
 
 	/**
-	 * Bảng tổng hợp một kỳ đăng ký (UI-02): ma trận mặt hàng × phòng ban như file đăng ký của
-	 * HCNS, cộng dự trù, số cần mua, đơn giá thực và thành tiền.
+	 * Chi tiết một kỳ đăng ký (UI-02): kỳ đang ở bước nào, phòng nào đã đăng ký, và bảng tổng hợp mỗi mặt
+	 * hàng một dòng (số từng phòng ở dòng con mở ra được), cộng dự trù, số cần mua, đơn giá thực và thành tiền.
 	 *
-	 * Trưởng phòng mở trang này chỉ nhận về cột phòng mình và không có dự trù (máy chủ lọc), nên
-	 * mọi ô nhập và nút ghi ở đây đều hỏi `office:supply:manage` trước khi hiện.
+	 * Trưởng phòng mở trang này chỉ nhận về số của phòng mình và không có dự trù (máy chủ lọc), nên mọi ô
+	 * nhập và nút ghi ở đây đều hỏi `office:supply:manage` trước khi hiện.
 	 */
 	definePageMeta({ title: 'Bảng tổng hợp kỳ đăng ký' });
 
-	const route = useRoute();
-	const router = useRouter();
-	const toast = useToast();
-	const service = useOfficeService();
-	const { hasPermission } = usePermissions();
-	const { canWrite } = useModuleAccess();
-
-	const periodId = computed(() => Number(route.params.id));
-	const canManage = computed(() => hasPermission(OFFICE_PERMISSIONS.supplyManage) && canWrite('OFFICE'));
-
-	const summary = ref<SupplyPeriodSummary | null>(null);
-	const loading = ref(true);
-	const loadError = ref<string | null>(null);
-	const savingItems = ref(false);
-	const working = ref(false);
-	const exporting = ref(false);
-
-	/** Dự trù và đơn giá đang sửa trên màn, theo `itemId`. */
-	const reserveQty = reactive<Record<number, number | undefined>>({});
-	const unitPrice = reactive<Record<number, number | undefined>>({});
-
-	const showDeadlineForm = ref(false);
-	const newDeadline = ref('');
-	const deadlineError = ref('');
-	const showSupplement = ref(false);
-	const openRequestId = ref<number | null>(null);
-
-	const showAddDepartments = ref(false);
-	const addDepartmentIds = ref<number[]>([]);
-	const confirmCancelPeriod = ref(false);
-	const confirmLockPeriod = ref(false);
-	const confirmClosePeriod = ref(false);
+	const detail = useSupplyPeriodDetail();
+	const {
+		canManage,
+		canEditPeriod,
+		departmentScope,
+		summary,
+		period,
+		departments,
+		rows,
+		loading,
+		loadError,
+		notFound,
+		now,
+		registration,
+		stageCounts,
+		nextStep,
+		departmentsWithoutLines,
+		periodUntouched,
+		reserveDraft,
+		priceDraft,
+		isDirty,
+		setDraft,
+		dirtyCount,
+		hasChanges,
+		saving,
+		saveError,
+		saveStatus,
+		saveItems,
+		discardChanges,
+		search,
+		onlyRegistered,
+		onlyUnpriced,
+		hasFilter,
+		clearFilters,
+		unpricedRows,
+		groups,
+		working,
+		exporting,
+		load,
+		exportExcel,
+		saveDeadline,
+		lockPeriod,
+		closePeriod,
+		addDepartments,
+		cancelPeriod,
+		leavePending,
+		answerLeave,
+	} = detail;
 
 	const directoryStore = useDirectoryStore();
 	const { departments: allDepartments } = storeToRefs(directoryStore);
 
-	const STATUS_CLASS: Record<SupplyRequestStatus, string> = {
-		OPEN: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-		LOCKED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-		FINALIZED: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-		ISSUED: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400',
-		RECEIVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-	};
-
-	function fillInputs(data: SupplyPeriodSummary) {
-		summary.value = data;
-		for (const row of data.rows) {
-			if (row.itemId == null) continue;
-			// Phạm vi phòng ban không có dự trù (`null`): ô nhập để trống chứ không hiện số 0.
-			reserveQty[row.itemId] = row.reserveQty ?? undefined;
-			unitPrice[row.itemId] = row.unitPrice ?? undefined;
-		}
-	}
-
-	async function load() {
-		loading.value = true;
-		loadError.value = null;
-		try {
-			fillInputs(await service.findPeriodSummary(periodId.value));
-		} catch (e) {
-			summary.value = null;
-			loadError.value = officeErrorMessage(e, 'Chưa mở được kỳ này. Bạn quay lại danh sách kỳ.');
-		} finally {
-			loading.value = false;
-		}
-	}
-
-	onMounted(() => {
-		load();
-		directoryStore.load().catch(() => {
-			// Thiếu danh sách phòng ban thì chỉ mất nút Thêm phòng, bảng tổng hợp vẫn đọc được.
-		});
-	});
-
-	const period = computed(() => summary.value?.period ?? null);
-
-	/**
-	 * Phạm vi dữ liệu của người đang xem, theo cờ `scope` của máy chủ.
-	 *
-	 * Trưởng phòng nhận `DEPARTMENT`: máy chủ không gửi dự trù (`reserveQty` là `null`) và `purchaseQty`
-	 * chỉ là số của phòng họ. Giữ hai cột đó thì trưởng phòng đọc "Cần mua 13" và tưởng phòng mình
-	 * được 13, trong khi 13 là số HCNS mua cho cả văn phòng.
-	 */
-	const departmentScope = computed(() => summary.value?.scope === 'DEPARTMENT');
-
-	/** Số cột của bảng ma trận, để dòng tiêu đề nhóm và dòng tổng trải đúng chiều ngang. */
-	const quantityColumns = computed(() => (departmentScope.value ? 0 : 2));
-	const totalColumns = computed(() => departments.value.length + 6 + quantityColumns.value);
-
-	/** Còn bao nhiêu ngày nữa tới hạn chót, để hộp hỏi lại nói rõ khoá sớm là sớm bao nhiêu. */
-	const daysToDeadline = computed(() => {
-		if (!period.value) return 0;
-		return Math.max(vnCalendarDaysBetween(new Date(), `${period.value.deadline}T00:00:00+07:00`), 0);
-	});
-
-	/** Phòng chưa nhập dòng nào: khoá sớm là khoá luôn cửa của họ, nên phải nói ra. */
-	const departmentsWithoutLines = computed(
-		() =>
-			(summary.value?.departments ?? []).filter(dept => dept.requests.every(req => req.lineCount === 0)).length,
-	);
-
-	/**
-	 * Kỳ đã đóng thì khoá hẳn: mọi nút ghi ẩn đi.
-	 *
-	 * Ẩn chứ không chỉ để máy chủ từ chối, vì người dùng bấm vào một nút rồi nhận lỗi sẽ tưởng
-	 * hệ thống hỏng, trong khi đây là quy định nghiệp vụ.
-	 */
-	const periodClosed = computed(() => period.value?.status === 'CLOSED');
-	const canEditPeriod = computed(() => canManage.value && !periodClosed.value);
-
-	/** Phòng chưa tham gia kỳ, để thêm vào kỳ còn mở. */
-	const addableDepartments = computed(() => {
-		const joined = new Set((summary.value?.departments ?? []).map(d => d.departmentId));
-		return allDepartments.value.filter(d => d.isActive && !joined.has(d.id));
-	});
-
-	/** Chưa phòng nào nhập dòng nào thì kỳ mới huỷ được. */
-	const periodUntouched = computed(() =>
-		(summary.value?.departments ?? []).every(dept => dept.requests.every(req => req.lineCount === 0)),
-	);
+	const openRequestId = ref<number | null>(null);
+	const showSupplement = ref(false);
+	const dialog = ref<'deadline' | 'lock' | 'close' | 'cancel' | 'add' | 'export' | null>(null);
+	const addDepartmentIds = ref<number[]>([]);
 
 	/** Tên kỳ thường đã là "Tháng 12/2026", nên chỉ nhắc lại tháng khi tiêu đề kỳ khác đi. */
 	const monthSuffix = computed(() => {
@@ -150,78 +84,97 @@
 		const label = monthLabel(period.value.month);
 		return period.value.title.trim() === label ? '' : label;
 	});
-	const groups = computed(() => groupSummaryRows(summary.value?.rows ?? []));
-	const departments = computed(() => summary.value?.departments ?? []);
 
-	/** Ô của một dòng cho một phòng; không có nghĩa phòng đó không xin mặt hàng này. */
-	function cellQty(cells: Array<{ departmentId: number; qty: number }>, departmentId: number): string {
-		const cell = cells.find(c => c.departmentId === departmentId);
-		return cell ? String(cell.qty) : '';
-	}
+	const isOpen = computed(() => period.value?.status === 'OPEN');
+	const isLocked = computed(() => period.value?.status === 'LOCKED');
 
-	async function saveItems() {
-		const data = summary.value;
-		if (!data || savingItems.value) return;
-		savingItems.value = true;
-		try {
-			const items = data.rows
-				.filter(row => row.itemId != null)
-				.map(row => ({
-					itemId: row.itemId as number,
-					reserveQty: reserveQty[row.itemId as number] ?? 0,
-					unitPrice: unitPrice[row.itemId as number],
-				}));
-			fillInputs(await service.savePeriodItems(data.period.id, items));
-			toast.success('Đã lưu dự trù và đơn giá của kỳ này.');
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa lưu được dự trù và đơn giá. Bạn thử lại sau ít phút.'));
-		} finally {
-			savingItems.value = false;
-		}
-	}
+	/** Còn bao nhiêu ngày tới hạn chót, để hộp hỏi lại nói rõ khoá sớm là sớm bao nhiêu. */
+	const daysToDeadline = computed(() =>
+		period.value ? Math.max(vnCalendarDaysBetween(new Date(), `${period.value.deadline}T00:00:00+07:00`), 0) : 0,
+	);
 
-	function openDeadlineForm() {
-		newDeadline.value = period.value?.deadline ?? '';
-		deadlineError.value = '';
-		showDeadlineForm.value = !showDeadlineForm.value;
-	}
+	/** Đã qua giờ khoá mà job khoá kỳ (00:05) chưa chạy. */
+	const lockPassed = computed(() => !!period.value && new Date(period.value.lockAt).getTime() <= now.value.getTime());
 
-	/**
-	 * Người dùng vừa sửa ngày thì câu lỗi cũ hết đúng.
-	 *
-	 * Để treo lại thì hai chuyện xảy ra: họ sửa đúng rồi vẫn thấy câu đỏ, và câu của biểu mẫu che
-	 * luôn câu của ô ngày (ví dụ "Ngày 31/11/2026 không có thật"), nên không ai biết mình sai gì.
-	 */
-	watch(newDeadline, () => {
-		deadlineError.value = '';
+	/** Phòng chưa tham gia kỳ, để thêm vào kỳ còn mở. */
+	const addableDepartments = computed(() => {
+		const joined = new Set(departments.value.map(d => d.departmentId));
+		return allDepartments.value.filter(d => d.isActive && !joined.has(d.id));
 	});
 
-	/** Đổi hạn chót cả hai chiều: lùi lại để chờ thêm, hoặc rút ngắn để chốt sớm (Q6). */
-	async function saveDeadline() {
-		const data = period.value;
-		if (!data || !newDeadline.value || working.value) return;
-		working.value = true;
-		deadlineError.value = '';
-		try {
-			await service.updatePeriod(data.id, { deadline: newDeadline.value });
-			showDeadlineForm.value = false;
-			toast.success(`Đã đổi hạn chót thành ngày ${formatDate(newDeadline.value)}. Các phòng vừa nhận thông báo.`);
-			await load();
-		} catch (e) {
-			const code = officeErrorCode(e);
-			if (code === 'OFFICE_SUPPLY_DEADLINE_PAST' || code === 'OFFICE_SUPPLY_DEADLINE_INVALID') {
-				deadlineError.value = officeErrorMessage(e, 'Hạn chót phải là ngày từ hôm nay trở đi.');
-			} else {
-				toast.error(officeErrorMessage(e, 'Chưa đổi được hạn chót. Bạn thử lại sau ít phút.'));
-			}
-		} finally {
-			working.value = false;
-		}
+	/**
+	 * Việc ít dùng hoặc có rủi ro nằm trong menu: khoá sớm, huỷ kỳ không quay lại được nên không đứng
+	 * ngang hàng với Xuất Excel. Điều kiện hiện của từng việc giữ đúng như trước khi đổi bố cục.
+	 */
+	const menuItems = computed<DropdownMenuItem[]>(() => [
+		{
+			label: 'Thêm phòng',
+			icon: 'heroicons:user-group',
+			action: () => {
+				addDepartmentIds.value = [];
+				dialog.value = 'add';
+			},
+			hidden: !(canEditPeriod.value && isOpen.value && addableDepartments.value.length),
+		},
+		{
+			label: 'Phiếu bổ sung',
+			icon: 'heroicons:document-plus',
+			action: () => (showSupplement.value = true),
+			hidden: !(canEditPeriod.value && isLocked.value),
+		},
+		{
+			label: 'Đóng kỳ',
+			icon: 'heroicons:archive-box',
+			action: () => (dialog.value = 'close'),
+			hidden: !(canEditPeriod.value && isLocked.value && nextStep.value?.kind !== 'close'),
+		},
+		{
+			label: 'Khoá sớm',
+			icon: 'heroicons:lock-closed',
+			action: () => (dialog.value = 'lock'),
+			variant: 'danger',
+			hidden: !(canEditPeriod.value && isOpen.value),
+		},
+		{
+			label: 'Huỷ kỳ',
+			icon: 'heroicons:trash',
+			action: () => (dialog.value = 'cancel'),
+			variant: 'danger',
+			hidden: !(canEditPeriod.value && isOpen.value && periodUntouched.value),
+		},
+	]);
+	const hasMenu = computed(() => menuItems.value.some(item => !item.hidden));
+
+	/** Nút chính theo giai đoạn: chốt phiếu chưa chốt, cấp phiếu đã chốt, rồi đóng kỳ. */
+	const primaryLabel = computed(() => {
+		const step = nextStep.value;
+		if (!step) return '';
+		const supplement = step.sequence ? ` (bổ sung ${step.sequence})` : '';
+		if (step.kind === 'finalize') return `Chốt phiếu ${step.departmentName}${supplement}`;
+		if (step.kind === 'issue') return `Cấp hàng ${step.departmentName}${supplement}`;
+		return 'Đóng kỳ';
+	});
+
+	function onPrimary() {
+		const step = nextStep.value;
+		if (!step) return;
+		if (step.kind === 'close') dialog.value = 'close';
+		else if (step.requestId) openRequestId.value = step.requestId;
 	}
 
-	function openAddDepartments() {
-		addDepartmentIds.value = [];
-		showAddDepartments.value = !showAddDepartments.value;
+	/** Xuất Excel khi còn số chưa lưu thì hỏi: file lấy theo số đã lưu trên máy chủ. */
+	function onExport() {
+		if (hasChanges.value) dialog.value = 'export';
+		else exportExcel();
+	}
+
+	async function saveThenExport() {
+		dialog.value = null;
+		if (await saveItems()) await exportExcel();
+	}
+
+	async function confirm(task: () => Promise<boolean>) {
+		if (await task()) dialog.value = null;
 	}
 
 	function toggleAddDepartment(id: number) {
@@ -230,504 +183,311 @@
 			: [...addDepartmentIds.value, id];
 	}
 
-	/** Thêm phòng bị quên vào kỳ đang mở; mỗi phòng mới có sẵn một phiếu rỗng (Q4). */
-	async function addDepartments() {
-		const data = period.value;
-		if (!data || !addDepartmentIds.value.length || working.value) return;
-		working.value = true;
-		try {
-			await service.addPeriodDepartments(data.id, { departmentIds: addDepartmentIds.value });
-			toast.success(
-				`Đã thêm ${addDepartmentIds.value.length} phòng vào kỳ. Nhân viên các phòng đó vừa nhận thông báo.`,
-			);
-			showAddDepartments.value = false;
-			addDepartmentIds.value = [];
-			await load();
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa thêm được phòng vào kỳ. Bạn thử lại sau ít phút.'));
-		} finally {
-			working.value = false;
+	/** Đến mặt hàng thiếu đơn giá đầu tiên: cuộn tới dòng và đặt con trỏ vào ô đơn giá. */
+	async function goToFirstUnpriced() {
+		const target = unpricedRows.value.find(row => row.itemId != null) ?? unpricedRows.value[0];
+		if (!target) return;
+		search.value = '';
+		await nextTick();
+		const id = target.itemId;
+		if (id == null) {
+			onlyUnpriced.value = true;
+			return;
 		}
-	}
-
-	/** Huỷ kỳ mở nhầm: kỳ bị xoá hẳn nên quay về danh sách thay vì tải lại trang trống (Q4). */
-	async function cancelPeriod() {
-		const data = period.value;
-		if (!data || working.value) return;
-		working.value = true;
-		try {
-			await service.cancelPeriod(data.id);
-			toast.success(`Đã huỷ kỳ ${data.title}. Bạn mở lại kỳ của tháng này khi cần.`);
-			await router.push('/management/office/supply-periods');
-		} catch (e) {
-			confirmCancelPeriod.value = false;
-			toast.error(officeErrorMessage(e, 'Chưa huỷ được kỳ. Bạn thử lại sau ít phút.'));
-		} finally {
-			working.value = false;
-		}
-	}
-
-	/**
-	 * Khoá sớm và đóng kỳ đều hỏi lại, và hộp hỏi nói rõ hậu quả.
-	 *
-	 * Hai việc này không có đường quay lại: khoá sớm là cắt cửa nhập của mọi phòng trước hạn, đóng
-	 * kỳ là chốt sổ chi phí. Trước đây bấm một cái là xong, nên HCNS khoá kỳ lúc còn bảy ngày mà
-	 * không ai kịp nhận ra.
-	 */
-	async function lockPeriod() {
-		const data = period.value;
-		if (!data || working.value) return;
-		working.value = true;
-		try {
-			await service.lockPeriod(data.id);
-			confirmLockPeriod.value = false;
-			toast.success('Đã khoá kỳ. Các phòng không nhập thêm được nữa, bạn chốt từng phiếu rồi cấp hàng.');
-			await load();
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa khoá được kỳ. Bạn thử lại sau ít phút.'));
-		} finally {
-			working.value = false;
-		}
-	}
-
-	async function closePeriod() {
-		const data = period.value;
-		if (!data || working.value) return;
-		working.value = true;
-		try {
-			await service.closePeriod(data.id);
-			confirmClosePeriod.value = false;
-			toast.success('Đã đóng kỳ.');
-			await load();
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa đóng được kỳ. Bạn thử lại sau ít phút.'));
-		} finally {
-			working.value = false;
-		}
-	}
-
-	async function exportExcel() {
-		const data = period.value;
-		if (!data || exporting.value) return;
-		exporting.value = true;
-		try {
-			const file = await service.exportPeriod(data.id);
-			// Máy chủ đặt tên theo kỳ và văn phòng; tên dự phòng chỉ dùng khi header không tới nơi.
-			const name = file.fileName || `tong-hop-van-phong-pham-${data.month}.xlsx`;
-			downloadOfficeFile(file.blob, name);
-			toast.success(`Đã tải file ${name}.`);
-		} catch (e) {
-			toast.error(officeErrorMessage(e, 'Chưa xuất được file Excel. Bạn thử lại sau ít phút.'));
-		} finally {
-			exporting.value = false;
-		}
+		document.getElementById(`summary-row-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		document.querySelector<HTMLInputElement>(`#price-cell-${id} input`)?.focus({ preventScroll: true });
 	}
 
 	function onRequestChanged() {
 		// Chốt hay cấp một phiếu đổi cả ma trận (số đã chốt, thành tiền), nên tải lại bảng.
-		load();
+		load(true);
 	}
 
 	function onSupplementCreated() {
 		showSupplement.value = false;
-		load();
+		load(true);
 	}
 
-	const inputCls =
-		'w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
+	const lockedReason = computed(() => (period.value?.status === 'CLOSED' ? 'Kỳ đã đóng nên không sửa được.' : ''));
+
+	// ─── Giải thích cách tính, mở từ dấu ⓘ cạnh tiêu đề bảng ─────────────────
+	const { open: helpOpen, root: helpRoot, alignEnd: helpAlignEnd, toggle: toggleHelp } = usePopover();
+
+	// ─── Bảng toàn màn hình ───────────────────────────────────────────────────
+	const tableFullscreen = ref(false);
+	const fullscreenBtn = ref<HTMLButtonElement | null>(null);
+
+	/** Đóng xong thì con trỏ về nút mở, vì khi bảng chuyển chỗ trình duyệt đã bỏ mất con trỏ. */
+	function setTableFullscreen(open: boolean) {
+		tableFullscreen.value = open;
+		if (!open) nextTick(() => fullscreenBtn.value?.focus());
+	}
+
+	onMounted(() => {
+		directoryStore.load().catch(() => {
+			// Thiếu danh sách phòng ban thì chỉ mất việc Thêm phòng, bảng tổng hợp vẫn đọc được.
+		});
+	});
 </script>
 
 <template>
-	<!-- `pb-24`: chừa chỗ cho nút trợ lý nổi ở góc dưới phải, nếu không nó đè lên dòng cuối bảng. -->
-	<div class="space-y-5 pb-24">
-		<button
-			type="button"
-			class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-			@click="router.push('/management/office/supply-periods')"
+	<div class="space-y-4">
+		<NuxtLink
+			to="/management/office/supply-periods"
+			class="inline-flex items-center gap-1 rounded text-sm text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-400 dark:hover:text-gray-200"
 		>
-			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
 				<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
 			</svg>
-			Danh sách kỳ đăng ký
-		</button>
+			Kỳ đăng ký văn phòng phẩm
+		</NuxtLink>
 
-		<div v-if="loading" class="space-y-3">
-			<div v-for="i in 4" :key="i" class="h-20 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+		<div v-if="loading" class="space-y-3" aria-busy="true">
+			<div class="h-24 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+			<div class="h-16 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+			<div class="h-80 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
 		</div>
 
 		<div
 			v-else-if="loadError"
+			role="alert"
 			class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300"
 		>
 			<p>{{ loadError }}</p>
-			<CommonAppButton class="mt-3" size="sm" variant="outline" @click="load">Thử lại</CommonAppButton>
+			<div class="mt-3 flex flex-wrap gap-2">
+				<CommonAppButton v-if="!notFound" size="sm" variant="outline" @click="load()">Thử lại</CommonAppButton>
+				<CommonAppButton size="sm" variant="outline" @click="navigateTo('/management/office/supply-periods')">
+					Về danh sách kỳ
+				</CommonAppButton>
+			</div>
 		</div>
 
 		<template v-else-if="period && summary">
-			<!--
-				Dòng dưới tiêu đề ở đây là DỮ LIỆU của kỳ (văn phòng, hạn chót, trạng thái) nên vẫn hiện
-				thẳng; chỉ câu giải thích cách dùng trang mới nằm sau dấu hỏi.
-			-->
 			<UiPageHeader
 				:title="period.title"
-				description="Bảng tổng hợp gộp số của mọi phòng trong kỳ theo từng mặt hàng. Bạn nhập dự trù và đơn giá ở đây, rồi mở từng phiếu để chốt, cấp và theo dõi phòng đã nhận hàng chưa."
+				description="Đầu trang cho biết kỳ đang ở bước nào và phòng nào đã đăng ký. Bấm chip một phòng để mở phiếu của phòng đó: chốt, cấp và theo dõi đã nhận hàng chưa. Ở bảng tổng hợp bạn nhập dự trù và đơn giá; số vừa sửa được đánh dấu và lưu bằng nút ở thanh dưới cùng."
 			>
-				<div class="flex flex-wrap gap-2">
-					<CommonAppButton variant="outline" :loading="exporting" @click="exportExcel">Xuất Excel</CommonAppButton>
-					<template v-if="canEditPeriod">
-						<CommonAppButton v-if="period.status === 'OPEN'" variant="outline" @click="openDeadlineForm">
-							Đổi hạn chót
-						</CommonAppButton>
-						<CommonAppButton
-							v-if="period.status === 'OPEN' && addableDepartments.length"
-							variant="outline"
-							@click="openAddDepartments"
-						>
-							Thêm phòng
-						</CommonAppButton>
-						<CommonAppButton v-if="period.status === 'OPEN'" variant="outline" @click="confirmLockPeriod = true">
-							Khoá sớm
-						</CommonAppButton>
-						<CommonAppButton
-							v-if="period.status === 'OPEN' && periodUntouched"
-							variant="danger_outline"
-							@click="confirmCancelPeriod = true"
-						>
-							Huỷ kỳ
-						</CommonAppButton>
-						<CommonAppButton v-if="period.status === 'LOCKED'" variant="outline" @click="showSupplement = true">
-							Phiếu bổ sung
-						</CommonAppButton>
-						<CommonAppButton v-if="period.status === 'LOCKED'" variant="primary" @click="confirmClosePeriod = true">
-							Đóng kỳ
-						</CommonAppButton>
-					</template>
-				</div>
+				<CommonAppButton variant="outline" :loading="exporting" @click="onExport">Xuất Excel</CommonAppButton>
+				<CommonAppButton v-if="canEditPeriod && isOpen" variant="outline" @click="dialog = 'deadline'">
+					Đổi hạn chót
+				</CommonAppButton>
+				<CommonAppButton v-if="primaryLabel" data-tour="period-next-step" variant="primary" @click="onPrimary">
+					{{ primaryLabel }}
+				</CommonAppButton>
+				<UiDropdownMenu v-if="hasMenu" :items="menuItems" label="Khác" />
 			</UiPageHeader>
 
-			<p class="-mt-2 text-sm text-gray-600 dark:text-gray-400">
-				{{ period.officeSite.name }}
-				<template v-if="monthSuffix"> · {{ monthSuffix }}</template>
-				· hạn chót {{ formatDate(period.deadline) }} · {{ period.statusLabel }}
-			</p>
+			<div class="-mt-2 flex flex-wrap items-center gap-2">
+				<span :class="['inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium', supplyStatusMeta(period.status).class]">
+					{{ supplyStatusMeta(period.status).label }}
+				</span>
+				<span v-if="monthSuffix" class="text-sm text-gray-600 dark:text-gray-400">{{ monthSuffix }}</span>
+				<span v-if="period.status === 'LOCKED' && period.statusLabel !== supplyStatusMeta('LOCKED').label" class="text-sm text-gray-600 dark:text-gray-400">
+					· {{ period.statusLabel }}
+				</span>
+			</div>
 
 			<CommonAppModuleNotice module="OFFICE" />
 
-			<div
-				v-if="showDeadlineForm"
-				class="rounded-xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-700 dark:bg-gray-900"
+			<PeriodStageBar :period="period" :now="now" :counts="stageCounts" />
+
+			<PeriodDepartmentsCard
+				:key="period.status"
+				:departments="departments"
+				:period-status="period.status"
+				:can-act="canEditPeriod"
+				:registered="registration.done"
+				@open="openRequestId = $event"
+			/>
+
+			<!--
+				Bảng tổng hợp và thanh lưu đi cùng nhau khi mở toàn màn hình: ở đó vẫn nhập, lọc và lưu được
+				như trong trang, không phải đóng ra mới bấm Lưu.
+			-->
+			<OfficeFullscreen
+				:open="tableFullscreen"
+				:title="`Bảng tổng hợp · ${period.title}`"
+				inline-class="space-y-4"
+				@close="setTableFullscreen(false)"
 			>
-				<div class="flex flex-wrap items-end gap-3">
-					<div class="w-48">
-						<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Hạn chót mới</label>
-						<UiDatePicker v-model="newDeadline" :min="todayYmd()" :error="deadlineError" />
-					</div>
-					<CommonAppButton variant="primary" :disabled="!newDeadline" :loading="working" @click="saveDeadline">
-						Lưu hạn chót
-					</CommonAppButton>
-					<CommonAppButton variant="secondary" @click="showDeadlineForm = false">Thôi</CommonAppButton>
-				</div>
-				<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-					Bạn lùi hạn để chờ thêm, hoặc rút ngắn để chốt sớm. Các phòng đã nhận thông báo mở kỳ sẽ được báo hạn mới.
-				</p>
-			</div>
-
-			<div
-				v-if="showAddDepartments"
-				class="rounded-xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-700 dark:bg-gray-900"
-			>
-				<p class="text-sm font-medium text-gray-700 dark:text-gray-300">
-					Thêm phòng vào kỳ
-					<span class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
-						đã chọn {{ addDepartmentIds.length }} phòng
-					</span>
-				</p>
-				<div class="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700">
-					<label
-						v-for="dept in addableDepartments"
-						:key="dept.id"
-						class="flex min-h-11 cursor-pointer items-center gap-2 rounded px-1 text-sm text-gray-800 hover:bg-gray-50 sm:min-h-0 sm:py-1 dark:text-gray-200 dark:hover:bg-gray-800"
-					>
-						<input
-							type="checkbox"
-							class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-							:checked="addDepartmentIds.includes(dept.id)"
-							@change="toggleAddDepartment(dept.id)"
-						/>
-						{{ dept.name }}
-					</label>
-				</div>
-				<div class="mt-3 flex flex-wrap gap-3">
-					<CommonAppButton
-						variant="primary"
-						:disabled="!addDepartmentIds.length"
-						:loading="working"
-						@click="addDepartments"
-					>
-						Thêm vào kỳ
-					</CommonAppButton>
-					<CommonAppButton variant="secondary" @click="showAddDepartments = false">Thôi</CommonAppButton>
-				</div>
-			</div>
-
-			<!-- Hộp hỏi lại trước khi khoá sớm: nói còn mấy ngày và phòng nào chưa nhập gì. -->
-			<div
-				v-if="confirmLockPeriod"
-				class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
-			>
-				<p class="text-sm text-amber-900 dark:text-amber-200">
-					Khoá kỳ {{ period.title }} ngay bây giờ thì các phòng không nhập hay sửa được nữa, dù hạn chót còn
-					{{ daysToDeadline }} ngày.
-					<template v-if="departmentsWithoutLines > 0">
-						Hiện còn {{ departmentsWithoutLines }} phòng chưa nhập dòng nào, các phòng đó sẽ không kịp đăng ký.
-					</template>
-					Sau khi khoá, phòng cần thêm thì bạn tạo phiếu bổ sung.
-				</p>
-				<div class="mt-3 flex flex-wrap gap-3">
-					<CommonAppButton variant="primary" :loading="working" @click="lockPeriod">Khoá kỳ ngay</CommonAppButton>
-					<CommonAppButton variant="secondary" @click="confirmLockPeriod = false">Thôi</CommonAppButton>
-				</div>
-			</div>
-
-			<!-- Hộp hỏi lại trước khi đóng kỳ: đóng kỳ là chốt sổ, không sửa số được nữa. -->
-			<div
-				v-if="confirmClosePeriod"
-				class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
-			>
-				<p class="text-sm text-amber-900 dark:text-amber-200">
-					Đóng kỳ {{ period.title }} thì kỳ chốt sổ: bạn không sửa số chốt, số thực nhận hay đơn giá được nữa, và
-					chi phí của kỳ giữ nguyên như bảng hiện tại. Bạn kiểm tra các phòng đã nhận hàng xong chưa trước khi đóng.
-				</p>
-				<div class="mt-3 flex flex-wrap gap-3">
-					<CommonAppButton variant="primary" :loading="working" @click="closePeriod">Đóng kỳ này</CommonAppButton>
-					<CommonAppButton variant="secondary" @click="confirmClosePeriod = false">Thôi</CommonAppButton>
-				</div>
-			</div>
-
-			<div
-				v-if="confirmCancelPeriod"
-				class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-900/20"
-			>
-				<p class="text-sm text-rose-800 dark:text-rose-300">
-					Huỷ kỳ {{ period.title }} thì kỳ này biến mất khỏi danh sách và các phiếu rỗng của nó cũng mất. Bạn mở
-					lại kỳ của tháng này bất cứ lúc nào.
-				</p>
-				<div class="mt-3 flex flex-wrap gap-3">
-					<CommonAppButton variant="danger" :loading="working" @click="cancelPeriod">Huỷ kỳ này</CommonAppButton>
-					<CommonAppButton variant="secondary" @click="confirmCancelPeriod = false">Thôi</CommonAppButton>
-				</div>
-			</div>
-
-			<!-- Phiếu của từng phòng -->
-			<section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-				<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Phiếu của từng phòng</h2>
-				<p v-if="!departments.length" class="py-6 text-sm text-gray-500 dark:text-gray-400">
-					Kỳ này chưa có phòng nào tham gia.
-				</p>
-				<div v-else class="mt-3 space-y-2">
-					<div
-						v-for="dept in departments"
-						:key="dept.departmentId"
-						class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2 dark:border-gray-800"
-					>
-						<p class="text-sm font-medium text-gray-900 dark:text-white">{{ dept.name }}</p>
-						<div class="flex flex-wrap items-center gap-2">
-							<button
-								v-for="req in dept.requests"
-								:key="req.id"
-								type="button"
-								class="inline-flex max-w-full items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-1.5 text-left text-xs transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-gray-700 dark:hover:border-brand-700 dark:hover:bg-brand-900/20"
-								:title="req.note ?? undefined"
-								@click="openRequestId = req.id"
-							>
-								<span class="text-gray-700 dark:text-gray-200">
-									{{ req.sequence === 0 ? 'Phiếu chính' : `Bổ sung ${req.sequence}` }} · {{ req.lineCount }} dòng
-									<!-- Ghi chú phiếu bổ sung nói vì sao phát sinh, nên hiện luôn chứ không giấu. -->
-									<span v-if="req.note" class="block text-gray-500 dark:text-gray-400">{{ req.note }}</span>
-								</span>
-								<span :class="['flex-shrink-0 rounded-full px-2 py-0.5 font-medium', STATUS_CLASS[req.status]]">
-									{{ req.statusLabel }}
-								</span>
-							</button>
-							<span v-if="!dept.requests.length" class="text-xs text-gray-400">Chưa có phiếu</span>
-						</div>
-					</div>
-				</div>
-			</section>
-
-			<!-- Ma trận mặt hàng × phòng -->
-			<section class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-					<div>
-						<h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100">
-							Bảng tổng hợp
-							<!--
-								Tổng tiền hiện ở ĐẦU bảng chứ không chỉ ở dòng cuối: dòng cuối nằm sát đáy trang,
-								chỗ nút trợ lý nổi che mất, nên người đọc phải cuộn thêm mới thấy con số quan trọng nhất.
-							-->
-							<span class="ml-2 font-normal text-gray-600 dark:text-gray-300">
-								Tổng tiền kỳ {{ officeMoney(summary.totalAmount) }}
-							</span>
-						</h2>
-						<!--
-							Nói rõ con số tiền ở bảng này là tiền CẦN MUA.
-							Cùng một kỳ có hai con số tiền hợp lệ mà khác nghĩa: bảng này tính theo số cần mua
-							(gồm dự trù), còn phiếu của phòng và báo cáo chi phí tính theo số phòng thực nhận.
-							Không nói ra thì người đọc thấy 650.000 ở đây và 585.000 ở báo cáo rồi đi hỏi chỗ nào sai.
-						-->
-						<p class="text-xs text-gray-500 dark:text-gray-400">
-							Số của mỗi phòng là số đã chốt; phiếu chưa chốt thì là số phòng xin.
-							<template v-if="!departmentScope">Số cần mua bằng tổng số các phòng cộng dự trù.</template>
-							<template v-else>Bạn đang xem phạm vi phòng mình, nên bảng không có dự trù của cả văn phòng.</template>
-							Thành tiền ở bảng này là số cần mua nhân đơn giá, tức tiền phải mua; chi phí thực của từng
-							phòng tính theo số thực nhận và nằm ở báo cáo chi phí.
-						</p>
-					</div>
-					<CommonAppButton v-if="canEditPeriod" variant="primary" size="sm" :loading="savingItems" @click="saveItems">
-						Lưu dự trù và đơn giá
-					</CommonAppButton>
-				</div>
-
-				<p
-					v-if="summary.unpricedRows > 0"
-					class="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+				<section
+					:class="
+						tableFullscreen
+							? 'flex min-h-0 flex-1 flex-col bg-white dark:bg-gray-900'
+							: 'rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900'
+					"
+					aria-labelledby="period-summary-title"
 				>
-					{{ summary.unpricedRows }} mặt hàng chưa có đơn giá nên chưa tính vào tổng tiền. Bạn nhập đơn giá ở cột
-					Đơn giá rồi lưu lại.
-				</p>
+					<div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+						<div ref="helpRoot" class="relative flex items-center gap-1.5">
+							<h2 id="period-summary-title" class="text-sm font-semibold text-gray-800 dark:text-gray-100">Bảng tổng hợp</h2>
+							<button
+								type="button"
+								data-popover-trigger
+								:aria-expanded="helpOpen"
+								aria-label="Cách tính của bảng tổng hợp"
+								class="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+								@click="toggleHelp()"
+							>
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+									<circle cx="12" cy="12" r="9" />
+									<path stroke-linecap="round" d="M12 11v5M12 8h.01" />
+								</svg>
+							</button>
+							<!--
+								Nói rõ con số tiền ở bảng này là tiền CẦN MUA: bảng này tính theo số cần mua (gồm dự trù),
+								còn phiếu của phòng và báo cáo chi phí tính theo số phòng thực nhận.
+							-->
+							<div
+								v-if="helpOpen"
+								role="dialog"
+								aria-label="Cách tính của bảng tổng hợp"
+								:class="[
+									'absolute top-full z-40 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white p-3 text-xs leading-relaxed text-gray-600 shadow-xl dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300',
+									helpAlignEnd ? 'right-0' : 'left-0',
+								]"
+							>
+								Số của mỗi phòng là số đã chốt; phiếu chưa chốt thì là số phòng xin.
+								<template v-if="!departmentScope">Số cần mua bằng tổng số các phòng cộng dự trù.</template>
+								<template v-else>Bạn đang xem phạm vi phòng mình, nên bảng không có dự trù của cả văn phòng.</template>
+								Thành tiền ở bảng này là số cần mua nhân đơn giá, tức tiền phải mua; chi phí thực của từng phòng tính
+								theo số thực nhận và nằm ở báo cáo chi phí.
+							</div>
+						</div>
 
-				<p v-if="!summary.rows.length" class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-					Chưa có phòng nào nhập dòng nào trong kỳ này.
-				</p>
+						<div class="relative w-full sm:w-64">
+							<svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
+							</svg>
+							<input
+								v-model="search"
+								type="search"
+								aria-label="Tìm mặt hàng"
+								placeholder="Tìm mặt hàng"
+								class="h-9 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-3 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+							/>
+						</div>
+						<label class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+							<input v-model="onlyRegistered" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+							Chỉ mặt hàng có đăng ký
+						</label>
+						<label v-if="unpricedRows.length" class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+							<input v-model="onlyUnpriced" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+							Thiếu đơn giá ({{ unpricedRows.length }})
+						</label>
+						<button
+							v-if="rows.length"
+							ref="fullscreenBtn"
+							type="button"
+							:aria-label="tableFullscreen ? 'Thu nhỏ bảng' : 'Xem bảng toàn màn hình'"
+							:title="tableFullscreen ? 'Thu nhỏ bảng (Esc)' : 'Xem bảng toàn màn hình'"
+							class="ml-auto flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-400 hover:bg-brand-100 hover:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-brand-300"
+							@click="setTableFullscreen(!tableFullscreen)"
+						>
+							<svg v-if="tableFullscreen" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25"
+								/>
+							</svg>
+							<svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
+								/>
+							</svg>
+						</button>
+					</div>
 
-				<div v-else class="overflow-x-auto">
-					<table class="w-full min-w-[900px] text-sm">
-						<thead>
-							<tr class="border-b border-gray-200 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-								<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left dark:bg-gray-900">Mặt hàng</th>
-								<th class="px-2 py-2 text-left">ĐVT</th>
-								<th v-for="dept in departments" :key="dept.departmentId" class="px-2 py-2 text-right">
-									{{ dept.name }}
-								</th>
-								<th class="px-2 py-2 text-right">Tổng</th>
-								<!-- Phạm vi phòng ban không có hai cột này: xem ghi chú ở `departmentScope`. -->
-								<template v-if="!departmentScope">
-									<th class="px-2 py-2 text-right">Dự trù</th>
-									<th class="px-2 py-2 text-right">Cần mua</th>
-								</template>
-								<th class="px-2 py-2 text-right">Đơn giá</th>
-								<!--
-									Điện thoại KHÔNG có cột Thành tiền: ghim nó ở mép phải thì nó đè lên cột số của
-									phòng ban (tiêu đề chỉ còn "Tài c" và không thấy số nào). Thay vào đó mỗi dòng in
-									thành tiền ngay dưới tên mặt hàng, ở ô dính bên trái, nơi còn chỗ.
-								-->
-								<th class="hidden px-2 py-2 text-right sm:table-cell">Thành tiền</th>
-								<th class="px-2 py-2 text-left">Ghi chú</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-							<template v-for="group in groups" :key="group.groupName">
-								<tr class="bg-gray-50 dark:bg-gray-800/60">
-									<td
-										class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300"
-										:colspan="totalColumns"
-									>
-										{{ group.numeral }}. {{ group.groupName }}
-									</td>
-								</tr>
-								<!--
-									Dòng có phòng xin vượt định mức được tô vàng: HCNS phải đọc lý do ở cột Ghi chú
-									trước khi chốt, mà trong một bảng mấy chục dòng thì không ai tự soi ra.
-								-->
-								<tr
-									v-for="row in group.rows"
-									:key="`${group.groupName}-${row.itemId ?? row.name}`"
-									:class="row.overQuota ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''"
-								>
-									<td
-										:class="[
-											'sticky left-0 z-10 px-3 py-2 text-gray-900 dark:text-white',
-											row.overQuota ? 'bg-amber-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-900',
-										]"
-									>
-										{{ row.name }}
-										<span v-if="row.overQuota" class="block text-xs font-medium text-amber-700 dark:text-amber-400">
-											có phòng xin vượt định mức
-										</span>
-										<!-- Thành tiền của dòng, chỉ trên điện thoại (bảng không có cột này ở đó). -->
-										<span class="block text-xs text-gray-600 sm:hidden dark:text-gray-300">
-											Thành tiền {{ officeMoney(row.amount) }}
-										</span>
-									</td>
-									<td class="px-2 py-2 text-gray-600 dark:text-gray-300">{{ row.unit || '—' }}</td>
-									<td
-										v-for="dept in departments"
-										:key="dept.departmentId"
-										class="px-2 py-2 text-right text-gray-700 dark:text-gray-200"
-									>
-										{{ cellQty(row.cells, dept.departmentId) }}
-									</td>
-									<td class="px-2 py-2 text-right font-medium text-gray-900 dark:text-white">{{ row.totalQty }}</td>
-									<template v-if="!departmentScope">
-										<td class="px-2 py-2 text-right">
-											<UiNumberInput
-												v-if="canEditPeriod && row.itemId != null"
-												v-model="reserveQty[row.itemId]"
-												:min="0"
-												:max="100000"
-												:input-class="`${inputCls} text-right`"
-											/>
-											<span v-else class="text-gray-700 dark:text-gray-200">{{ row.reserveQty ?? '—' }}</span>
-										</td>
-										<td class="px-2 py-2 text-right font-semibold text-gray-900 dark:text-white">
-											{{ row.purchaseQty }}
-										</td>
-									</template>
-									<td class="px-2 py-2 text-right">
-										<UiNumberInput
-											v-if="canEditPeriod && row.itemId != null"
-											v-model="unitPrice[row.itemId]"
-											:min="0"
-											:max="1000000000"
-											:input-class="`${inputCls} text-right`"
-										/>
-										<span v-else class="text-gray-700 dark:text-gray-200">{{ officeMoney(row.unitPrice) }}</span>
-									</td>
-									<td class="hidden px-2 py-2 text-right text-gray-900 sm:table-cell dark:text-white">
-										{{ officeMoney(row.amount) }}
-									</td>
-									<td class="px-2 py-2 text-xs text-gray-600 dark:text-gray-300">
-										<p v-for="(note, idx) in row.notes" :key="idx">{{ note }}</p>
-									</td>
-								</tr>
-							</template>
-						</tbody>
-						<tfoot>
-							<tr class="border-t border-gray-200 dark:border-gray-700">
-								<!--
-									Ô nhãn trải hết phần đầu bảng để ô tiền đứng đúng dưới cột Thành tiền. Số cột đổi
-									theo phạm vi, nên lấy `totalColumns` trừ hai ô cuối (thành tiền và ghi chú).
-								-->
-								<td class="px-3 py-2 font-medium text-gray-700 dark:text-gray-200" :colspan="totalColumns - 2">
-									Tổng tiền kỳ
-									<!-- Điện thoại không có cột Thành tiền, nên tổng tiền đi kèm nhãn ngay ở đây. -->
-									<span class="font-semibold text-gray-900 sm:hidden dark:text-white">
-										{{ officeMoney(summary.totalAmount) }}
-									</span>
-								</td>
-								<td class="hidden px-2 py-2 text-right font-semibold text-gray-900 sm:table-cell dark:text-white">
-									{{ officeMoney(summary.totalAmount) }}
-								</td>
-								<td />
-							</tr>
-						</tfoot>
-					</table>
+					<div
+						v-if="unpricedRows.length"
+						data-tour="period-unpriced"
+						class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+					>
+						<span>{{ unpricedRows.length }} mặt hàng chưa có đơn giá nên chưa tính vào tổng tiền.</span>
+						<button
+							v-if="canEditPeriod"
+							type="button"
+							class="rounded font-medium underline hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+							@click="goToFirstUnpriced"
+						>
+							Đến mặt hàng đầu tiên
+						</button>
+					</div>
+
+					<p v-if="!rows.length" class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+						Chưa có phòng nào đăng ký dòng nào trong kỳ này.
+					</p>
+					<div v-else-if="!groups.length" class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+						<p>Không có mặt hàng phù hợp.</p>
+						<CommonAppButton v-if="hasFilter" class="mt-3" size="sm" variant="outline" @click="clearFilters">Xoá bộ lọc</CommonAppButton>
+					</div>
+					<PeriodSummaryTable
+						v-else
+						data-tour="period-summary"
+						:groups="groups"
+						:departments="departments"
+						:department-scope="departmentScope"
+						:can-edit="canEditPeriod"
+						:locked-reason="lockedReason"
+						:reserve-draft="reserveDraft"
+						:price-draft="priceDraft"
+						:is-dirty="isDirty"
+						:fill="tableFullscreen"
+						@draft="setDraft"
+					/>
+					<p v-if="canManage" class="border-t border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
+						Mặt hàng ngoài danh mục không có ô dự trù và ô đơn giá ở đây: đơn giá của chúng nhập khi bạn chốt phiếu của
+						phòng.
+					</p>
+				</section>
+
+				<!--
+					Thanh dưới dính đáy: tổng tiền kỳ luôn thấy khi đang nhập giá, và nút lưu duy nhất của bảng.
+					`-bottom-4 lg:-bottom-6` bù phần đệm của `<main>` như trang Văn phòng phẩm; `pr-24` chừa chỗ
+					cho nút trợ lý nổi ở góc dưới phải. Ở chế độ toàn màn hình thanh nằm đáy khung, không cần dính.
+				-->
+				<div
+					data-tour="period-save-bar"
+					:class="[
+						'z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-gray-200 bg-white/95 py-2.5 pl-4 pr-24 text-sm backdrop-blur dark:border-gray-700 dark:bg-gray-900/95',
+						tableFullscreen ? '' : 'sticky -bottom-4 -mx-4 lg:-bottom-6 lg:-mx-6 lg:pl-6',
+					]"
+				>
+					<p class="text-gray-700 dark:text-gray-300">
+						Tổng tiền kỳ
+						<span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ officeMoney(summary.totalAmount) }} đ</span>
+						<template v-if="unpricedRows.length">
+							<span class="text-amber-700 dark:text-amber-400"> · chưa gồm {{ unpricedRows.length }} mặt hàng chưa có đơn giá</span>
+							<button
+								type="button"
+								class="ml-1 rounded font-medium text-brand-600 underline hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-400"
+								@click="goToFirstUnpriced"
+							>
+								Xem
+							</button>
+						</template>
+						<span v-if="hasChanges" class="block text-xs text-gray-500 dark:text-gray-400">Tổng tiền tính theo số đã lưu.</span>
+					</p>
+					<div v-if="canEditPeriod" class="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
+						<template v-if="saveError">
+							<span class="font-medium text-rose-600 dark:text-rose-400">{{ saveError }}</span>
+						</template>
+						<template v-if="hasChanges">
+							<span class="font-medium text-amber-700 dark:text-amber-400">
+								<span class="tabular-nums">{{ dirtyCount }}</span> thay đổi chưa lưu
+							</span>
+							<CommonAppButton size="sm" variant="ghost" :disabled="saving" @click="discardChanges">Huỷ thay đổi</CommonAppButton>
+							<CommonAppButton size="sm" variant="primary" :loading="saving" @click="saveItems">
+								{{ saveError ? 'Thử lại' : 'Lưu dự trù và đơn giá' }}
+							</CommonAppButton>
+						</template>
+						<span v-else-if="saveStatus" class="text-emerald-600 dark:text-emerald-400">✓ {{ saveStatus }}</span>
+					</div>
 				</div>
-				<p v-if="canManage" class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
-					Mặt hàng ngoài danh mục không có ô dự trù và ô đơn giá ở đây: đơn giá của chúng nhập khi bạn chốt phiếu
-					của phòng.
-				</p>
-			</section>
+			</OfficeFullscreen>
 		</template>
 
 		<RequestDetailModal
@@ -746,5 +506,120 @@
 			@created="onSupplementCreated"
 			@close="showSupplement = false"
 		/>
+
+		<PeriodDeadlineDialog
+			v-if="dialog === 'deadline' && period"
+			:current="period.deadline"
+			:saving="working"
+			:save="saveDeadline"
+			@close="dialog = null"
+		/>
+
+		<!--
+			Khoá sớm: nói đúng hệ quả theo máy chủ. Khoá là cắt cửa đăng ký của mọi phòng trước hạn, trưởng
+			phòng và đầu mối nhận thông báo, và không có đường mở lại; phòng cần thêm thì tạo phiếu bổ sung.
+		-->
+		<OfficeDialog v-if="dialog === 'lock' && period" title="Khoá kỳ ngay bây giờ?" :busy="working" @close="dialog = null">
+			<p>
+				Khoá kỳ {{ period.title }} thì các phòng không đăng ký hay sửa được nữa<template v-if="lockPassed"
+					>. Hạn chót đã qua, máy chủ tự khoá kỳ ở lần chạy kế tiếp lúc 00:05</template
+				><template v-else-if="daysToDeadline > 0">, dù hạn chót còn {{ daysToDeadline }} ngày</template
+				><template v-else>, dù hôm nay mới là hạn chót</template>.
+				<template v-if="departmentsWithoutLines > 0">
+					Hiện còn {{ departmentsWithoutLines }} phòng chưa đăng ký dòng nào, các phòng đó sẽ không kịp đăng ký.
+				</template>
+			</p>
+			<p class="mt-2">
+				Trưởng phòng và đầu mối của các phòng nhận thông báo kỳ đã khoá. Kỳ đã khoá không mở lại được; phòng cần thêm thì
+				bạn tạo phiếu bổ sung.
+			</p>
+			<template #actions>
+				<CommonAppButton variant="secondary" :disabled="working" @click="dialog = null">Thôi</CommonAppButton>
+				<CommonAppButton variant="danger" :loading="working" @click="confirm(lockPeriod)">Khoá kỳ ngay</CommonAppButton>
+			</template>
+		</OfficeDialog>
+
+		<OfficeDialog v-if="dialog === 'close' && period" title="Đóng kỳ?" :busy="working" @close="dialog = null">
+			<p>
+				Đóng kỳ {{ period.title }} thì kỳ chốt sổ: bạn không sửa số chốt, số thực nhận hay đơn giá được nữa, và chi phí
+				của kỳ giữ nguyên như bảng hiện tại. Bạn kiểm tra các phòng đã nhận hàng xong chưa trước khi đóng.
+			</p>
+			<template #actions>
+				<CommonAppButton variant="secondary" :disabled="working" @click="dialog = null">Thôi</CommonAppButton>
+				<CommonAppButton variant="primary" :loading="working" @click="confirm(closePeriod)">Đóng kỳ này</CommonAppButton>
+			</template>
+		</OfficeDialog>
+
+		<OfficeDialog v-if="dialog === 'cancel' && period" title="Huỷ kỳ?" :busy="working" @close="dialog = null">
+			<p>
+				Huỷ kỳ {{ period.title }} thì kỳ này biến mất khỏi danh sách và các phiếu rỗng của nó cũng mất. Bạn mở lại kỳ
+				của tháng này bất cứ lúc nào.
+			</p>
+			<template #actions>
+				<CommonAppButton variant="secondary" :disabled="working" @click="dialog = null">Thôi</CommonAppButton>
+				<CommonAppButton variant="danger" :loading="working" @click="confirm(cancelPeriod)">Huỷ kỳ này</CommonAppButton>
+			</template>
+		</OfficeDialog>
+
+		<OfficeDialog v-if="dialog === 'add'" title="Thêm phòng vào kỳ" :busy="working" @close="dialog = null">
+			<p class="text-xs text-gray-500 dark:text-gray-400">
+				Mỗi phòng thêm vào có sẵn một phiếu rỗng và nhân viên phòng đó nhận thông báo mở kỳ. Đã chọn
+				{{ addDepartmentIds.length }} phòng.
+			</p>
+			<div class="mt-2 grid max-h-60 grid-cols-1 gap-x-3 overflow-y-auto rounded-lg border border-gray-200 p-2 sm:grid-cols-2 dark:border-gray-700">
+				<label
+					v-for="dept in addableDepartments"
+					:key="dept.id"
+					class="flex cursor-pointer items-start gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+				>
+					<input
+						type="checkbox"
+						class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+						:checked="addDepartmentIds.includes(dept.id)"
+						@change="toggleAddDepartment(dept.id)"
+					/>
+					<span class="[overflow-wrap:anywhere]">{{ dept.name }}</span>
+				</label>
+			</div>
+			<template #actions>
+				<CommonAppButton variant="secondary" :disabled="working" @click="dialog = null">Thôi</CommonAppButton>
+				<CommonAppButton
+					variant="primary"
+					:disabled="!addDepartmentIds.length"
+					:loading="working"
+					@click="confirm(() => addDepartments(addDepartmentIds))"
+				>
+					Thêm {{ addDepartmentIds.length || '' }} phòng vào kỳ
+				</CommonAppButton>
+			</template>
+		</OfficeDialog>
+
+		<OfficeDialog v-if="dialog === 'export'" title="Còn thay đổi chưa lưu" :busy="saving || exporting" @close="dialog = null">
+			<p>
+				Bảng còn {{ dirtyCount }} thay đổi chưa lưu. File Excel lấy số đã lưu trên máy chủ, nên bạn lưu trước nếu muốn file
+				có các số vừa sửa.
+			</p>
+			<template #actions>
+				<CommonAppButton variant="secondary" @click="dialog = null">Huỷ</CommonAppButton>
+				<CommonAppButton
+					variant="outline"
+					@click="
+						dialog = null;
+						exportExcel();
+					"
+				>
+					Xuất bản đã lưu
+				</CommonAppButton>
+				<CommonAppButton variant="primary" :loading="saving" @click="saveThenExport">Lưu rồi xuất</CommonAppButton>
+			</template>
+		</OfficeDialog>
+
+		<OfficeDialog v-if="leavePending" title="Rời trang khi chưa lưu?" @close="answerLeave(false)">
+			<p>Bảng còn {{ dirtyCount }} thay đổi dự trù, đơn giá chưa lưu. Rời trang thì các số này mất.</p>
+			<template #actions>
+				<CommonAppButton variant="primary" @click="answerLeave(false)">Ở lại</CommonAppButton>
+				<CommonAppButton variant="danger_outline" @click="answerLeave(true)">Bỏ thay đổi và rời trang</CommonAppButton>
+			</template>
+		</OfficeDialog>
 	</div>
 </template>

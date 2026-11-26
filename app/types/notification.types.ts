@@ -1,4 +1,4 @@
-export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE' | 'REQUEST';
+export type NotificationCategory = 'EVENT' | 'ATTENDANCE' | 'LEAVE' | 'REQUEST' | 'TASK';
 
 export type NotificationActionType = 'NAVIGATE_ONLY' | 'APPROVE_REJECT' | null;
 
@@ -80,6 +80,28 @@ export type NotificationType =
 	// nhận mở hồ sơ mới, HR và admin công ty cũ mở hồ sơ cũ để làm thủ tục nghỉ việc.
 	| 'EMPLOYEE_TRANSFERRED_IN'
 	| 'EMPLOYEE_TRANSFERRED_OUT'
+	// Công việc lô 1 (`docs/backend/bridges/tasks.md` mục 8): category `TASK`, refType `task`, refId là
+	// id việc, `targetUrl` là `/cong-viec/<số hiệu>`.
+	| 'TASK_ASSIGNED'
+	| 'TASK_MENTIONED'
+	| 'TASK_COMMENTED'
+	| 'TASK_REVIEW_NEEDED'
+	| 'TASK_ACCEPTED'
+	| 'TASK_RETURNED'
+	| 'TASK_REOPENED'
+	| 'TASK_CANCELLED'
+	| 'TASK_DUE_SOON'
+	| 'TASK_OVERDUE'
+	| 'TASK_DUE_CHANGED'
+	// Lô 2 (bridge mục 18): cho nghỉ người còn việc đang mở. refType `task_offboarding`, refId là id người
+	// nghỉ, mở danh sách việc của người đó để giao lại.
+	| 'TASK_OFFBOARDING_OPEN'
+	// KPI, lô 3 (`docs/backend/bridges/kpi.md` mục 8): category `TASK`, `NAVIGATE_ONLY`. refType `kpi_review` (refId id
+	// phiếu) cho người chấm và nhân viên, `kpi_period` (refId id kỳ) cho nhân sự.
+	| 'KPI_REVIEW_NEEDED'
+	| 'KPI_FEEDBACK_NEEDED'
+	| 'KPI_PUBLISHED'
+	| 'KPI_REVIEW_OVERDUE'
 	| 'TEST';
 
 export interface NotificationActionPayload {

@@ -11,6 +11,8 @@
 		type UpdateEmployeeDto,
 	} from '~/types/employee.types';
 	import type { UserRole } from '~/types/auth.types';
+	import { FACE_PERMISSIONS } from '~/utils/permission';
+	import { contractCreateTour, employeeAccountTour, employeeViewTour } from '~/tours/employee-detail';
 	import { usePositionService } from '~/services/position.service';
 	import { useEmployeeService } from '~/services/employee.service';
 	import type { PositionSummary } from '~/types/position.types';
@@ -19,6 +21,7 @@
 	import EmployeeSocialInsurance from '~/components/modules/employee/EmployeeSocialInsurance.vue';
 	import EmployeeCitizenId from '~/components/modules/employee/EmployeeCitizenId.vue';
 	import EmployeePassport from '~/components/modules/employee/EmployeePassport.vue';
+	import EmployeeFace from '~/components/modules/employee/EmployeeFace.vue';
 	import EmploymentTypeBadge from '~/components/modules/employee/EmploymentTypeBadge.vue';
 	import EmployeeAssets from '~/components/modules/asset/EmployeeAssets.vue';
 	import EmployeeExtraProfile from '~/components/modules/employee/EmployeeExtraProfile.vue';
@@ -47,6 +50,8 @@
 	// canEdit (role-based) giữ nguyên chỉ cho "Reset mật khẩu" — feature riêng của HR/ADMIN.
 	const canEdit = computed(() => authStore.user?.role === 'HR' || authStore.user?.role === 'ADMIN');
 	const canUpdate = computed(() => hasPermission('employee:update'));
+	// Máy chủ đòi cả vai trò HR/ADMIN lẫn `employee:update` mới cho reset mật khẩu.
+	const canResetPassword = computed(() => canEdit.value && canUpdate.value);
 	const canDelete = computed(() => hasPermission('employee:delete'));
 	// Thủ tục nghỉ việc tách khỏi khóa tài khoản: quyền riêng `employee:terminate`, BE KHÔNG
 	// tick sẵn cho vai trò nào (chỉ ADMIN bypass) → không có quyền thì ẩn hẳn nút.
@@ -80,6 +85,8 @@
 	// Tab Tài sản thuộc module ASSET: công ty chưa mở thì ẩn, kể cả với ADMIN.
 	const canReadAssets = computed(() => canUse('ASSET') && hasPermission('asset:read'));
 	const canManageAssets = computed(() => canWrite('ASSET') && hasPermission('asset:manage'));
+	// Khuôn mặt chấm công ở tab Định danh: xem ảnh đăng ký và xoá để nhân viên đăng ký lại.
+	const canManageFace = computed(() => hasPermission(FACE_PERMISSIONS.manage));
 
 	const { currentEmployee, detailLoading, fetchOne, update, deactivate, terminate, resetPassword } = useEmployee();
 	const { departments, fetchAll: fetchDepartments } = useDepartment();
@@ -509,6 +516,43 @@
 		'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50';
 	const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1';
 	const valueCls = 'text-sm text-gray-900 dark:text-white';
+
+	// ─── Hướng dẫn ───────────────────────────────────────────────────────────────
+	// Nửa sau của "Xem thông tin nhân viên" và "Reset mật khẩu, khóa tài khoản"; nửa đầu là bước bấm
+	// mở hồ sơ ở trang danh sách.
+	const tourDetail = {
+		failed: () => !detailLoading.value && !currentEmployee.value,
+		isEditing: () => isEditing.value,
+		showInfo: () => (activeTab.value = 'info'),
+	};
+	useGuideTour('employee-view', () => employeeViewTour({ ...tourDetail, canUpdate: () => canUpdate.value }));
+	useGuideTour('employee-account', () =>
+		employeeAccountTour({
+			...tourDetail,
+			canReset: () => canResetPassword.value,
+			canLock: () => canDelete.value,
+			canTerminate: () => canTerminate.value,
+			isLocked: () => currentEmployee.value?.status === 'INACTIVE',
+		}),
+	);
+
+	// Nửa sau của "Thêm hợp đồng", bắt đầu từ trang Quản lý hợp đồng. Thẻ Hợp đồng chỉ dựng khi đang
+	// mở, nên quyền thêm tính ở đây theo đúng luật của nút trong `EmployeeContracts`, còn hộp nhập
+	// thì hỏi thẳng component.
+	const contractsRef = ref<{ isFormOpen: () => boolean; closeForm: () => void } | null>(null);
+	const canCreateContract = computed(
+		() => canReadContracts.value && canWrite('CONTRACT_INSURANCE') && canEdit.value && hasPermission('contract:create'),
+	);
+	useGuideTour('contract-create', () =>
+		contractCreateTour({
+			failed: tourDetail.failed,
+			isEditing: tourDetail.isEditing,
+			canCreate: () => canCreateContract.value,
+			showContracts: () => (activeTab.value = 'contracts'),
+			isFormOpen: () => contractsRef.value?.isFormOpen() ?? false,
+			closeForm: () => contractsRef.value?.closeForm(),
+		}),
+	);
 </script>
 
 <template>
@@ -526,7 +570,7 @@
 			</NuxtLink>
 
 			<div v-if="currentEmployee && (activeTab === 'info') && !isEditing" class="flex items-center gap-2">
-				<CommonAppButton v-if="canUpdate" variant="primary" @click="startEditing">
+				<CommonAppButton v-if="canUpdate" data-tour="emp-detail-edit" variant="primary" @click="startEditing">
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"
@@ -536,7 +580,12 @@
 					</svg>
 					Chỉnh sửa
 				</CommonAppButton>
-				<CommonAppButton v-if="canEdit" variant="danger_outline" @click="confirmResetPassword = true">
+				<CommonAppButton
+					v-if="canResetPassword"
+					data-tour="emp-reset"
+					variant="danger_outline"
+					@click="confirmResetPassword = true"
+				>
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"
@@ -546,7 +595,12 @@
 					</svg>
 					Reset mật khẩu
 				</CommonAppButton>
-				<CommonAppButton v-if="canTerminate" variant="danger_outline" @click="openTerminateModal">
+				<CommonAppButton
+					v-if="canTerminate"
+					data-tour="emp-terminate"
+					variant="danger_outline"
+					@click="openTerminateModal"
+				>
 					<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path
 							stroke-linecap="round"
@@ -558,6 +612,7 @@
 				</CommonAppButton>
 				<CommonAppButton
 					v-if="canDelete && currentEmployee.status !== 'INACTIVE'"
+					data-tour="emp-lock"
 					variant="danger"
 					@click="confirmDeactivate = true"
 				>
@@ -605,7 +660,10 @@
 
 		<template v-else-if="currentEmployee">
 			<!-- Profile header card -->
-			<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+			<div
+				data-tour="emp-detail-head"
+				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6"
+			>
 				<div class="flex flex-col sm:flex-row sm:items-center gap-4">
 					<CommonAppAvatar
 						:src="currentEmployee.avatarUrl"
@@ -637,7 +695,7 @@
 			<!-- Tab bar -->
 			<div class="border-b border-gray-200 dark:border-gray-700">
 				<!-- Lô 3a thêm hai tab nữa nên hàng tab phải cuộn ngang được trên điện thoại. -->
-				<nav class="-mb-px flex gap-1 overflow-x-auto whitespace-nowrap">
+				<nav data-tour="emp-detail-tabs" class="-mb-px flex gap-1 overflow-x-auto whitespace-nowrap">
 					<button
 						type="button"
 						class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
@@ -752,6 +810,7 @@
 				<!-- View mode -->
 				<div
 					v-if="!isEditing"
+					data-tour="emp-detail-info"
 					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm"
 				>
 					<div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
@@ -1008,7 +1067,7 @@
 				v-else-if="activeTab === 'contracts' && canReadContracts"
 				class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6"
 			>
-				<EmployeeContracts :employee-id="id" />
+				<EmployeeContracts ref="contractsRef" :employee-id="id" />
 			</div>
 
 			<!-- Tab: BHXH & Thuế -->
@@ -1021,6 +1080,11 @@
 			<div v-else-if="activeTab === 'identity'" class="space-y-6">
 				<EmployeeCitizenId :employee-id="id" />
 				<EmployeePassport :employee-id="id" />
+				<EmployeeFace
+					v-if="canManageFace"
+					:employee-id="id"
+					:employee-name="currentEmployee?.fullName ?? 'nhân viên này'"
+				/>
 			</div>
 
 			<!-- Tab: Tài sản -->

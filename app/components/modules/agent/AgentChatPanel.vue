@@ -4,7 +4,7 @@
 	import AgentConversationList from '~/components/modules/agent/AgentConversationList.vue';
 	import AgentComposer from '~/components/modules/agent/AgentComposer.vue';
 	import AgentEmptyState from '~/components/modules/agent/AgentEmptyState.vue';
-	import { AGENT_SUGGESTIONS, type AgentFeedbackRating } from '~/types/agent.types';
+	import { agentSuggestions, type AgentFeedbackRating } from '~/types/agent.types';
 
 	const {
 		messages,
@@ -28,9 +28,11 @@
 	const toast = useToast();
 	const route = useRoute();
 	const router = useRouter();
-	const { canWrite } = useModuleAccess();
+	const { canWrite, canUse } = useModuleAccess();
 	/** Module chỉ xem: đọc lại được hội thoại cũ, không hỏi thêm được. */
 	const readOnly = computed(() => !canWrite('AI_AGENT'));
+	/** Gợi ý theo phân hệ công ty đang dùng: tắt Công việc và KPI thì không mời hỏi việc. */
+	const suggestions = computed(() => agentSuggestions({ tasks: canUse('TASKS') }));
 
 	const { scroller, forceScroll, onScroll, showScrollDown, scrollToBottom, onComposerFocus } =
 		useAgentAutoScroll(messages);
@@ -290,7 +292,7 @@
 
 						<AgentEmptyState
 							v-else-if="!messages.length"
-							:suggestions="readOnly ? [] : AGENT_SUGGESTIONS"
+							:suggestions="readOnly ? [] : suggestions"
 							@pick="ask($event)"
 						/>
 

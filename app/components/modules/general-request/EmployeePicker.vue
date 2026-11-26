@@ -1,4 +1,5 @@
 <script setup lang="ts">
+	import { vnSearchIncludes } from '~/utils/vn-text';
 	/**
 	 * Ô chọn người: gõ để tìm, bấm để thêm, thẻ tên có nút bỏ.
 	 *
@@ -50,10 +51,11 @@
 	const atLimit = computed(() => !props.single && props.modelValue.length >= props.max);
 
 	const matches = computed(() => {
-		const q = query.value.trim().toLowerCase();
+		// Tìm không dấu (`vnSearchIncludes`): gõ "lan" ra "Lê Thị Lan" cả khi máy không bật bộ gõ tiếng Việt.
+		const q = query.value.trim();
 		return props.people
 			.filter(p => !props.modelValue.includes(p.id))
-			.filter(p => !q || p.fullName.toLowerCase().includes(q) || (p.hint ?? '').toLowerCase().includes(q))
+			.filter(p => !q || vnSearchIncludes(p.fullName, q) || vnSearchIncludes(p.hint ?? '', q))
 			.slice(0, 8);
 	});
 

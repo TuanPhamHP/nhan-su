@@ -215,6 +215,16 @@ export const PLAYBOOK_LABELS: Record<string, string> = {
 	'asset-value': 'Giá trị, chi phí tài sản',
 	'recruit-my': 'Phỏng vấn của tôi',
 	'recruit-overview': 'Tổng quan tuyển dụng',
+	// Hành chính văn phòng (module OFFICE).
+	'office-room-booking': 'Đặt phòng họp',
+	'office-supply-my': 'Văn phòng phẩm của phòng',
+	'office-overview': 'Tiến độ, chi phí văn phòng phẩm',
+	// Công việc và KPI (module TASKS).
+	'task-my': 'Việc của tôi',
+	'task-assign': 'Giao việc',
+	'task-team': 'Việc của phòng, dự án',
+	'kpi-my': 'KPI của tôi',
+	'kpi-review': 'Chấm, kết quả KPI',
 	capabilities: 'Hỏi trợ lý làm được gì',
 	unsupported: 'Ngoài phạm vi chat',
 	fallback: 'Không xác định được',

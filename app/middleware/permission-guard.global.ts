@@ -36,6 +36,10 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; permission: string | string[] }
 	{ prefix: '/management/roles', permission: 'role:read' },
 	// Địa điểm chấm công: xem cần quyền đọc, còn thêm sửa xoá gán hỏi quyền riêng ngay trong trang.
 	{ prefix: '/management/settings/locations', permission: 'check-in-location:read' },
+	// KPI (lô 3): kỳ đánh giá và cài đặt chỉ cho người có `kpi:manage` (ADMIN luôn có). Máy chủ trả 403 `KPI_FORBIDDEN`.
+	{ prefix: '/management/kpi', permission: 'kpi:manage' },
+	// Chấm công bằng khuôn mặt: người bật tắt hoặc HR quản lý khuôn mặt; trong trang tự ẩn phần mình không có quyền.
+	{ prefix: '/management/settings/face-attendance', permission: [FACE_PERMISSIONS.setting, FACE_PERMISSIONS.manage] },
 ];
 
 export default defineNuxtRouteMiddleware(to => {

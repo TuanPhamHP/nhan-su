@@ -32,7 +32,16 @@ export interface NavItem {
 	 * cấu hình là dữ liệu tĩnh, không với tay vào store được. Sidebar dịch khoá này sang
 	 * số thật (xem `badgeValue`).
 	 */
-	badgeKey?: 'approval' | 'unreadAnnouncement' | 'pendingAsset';
+	badgeKey?: 'approval' | 'unreadAnnouncement' | 'pendingAsset' | 'taskReviews' | 'kpiReviews';
+	/**
+	 * Điều kiện hiện mục lấy từ dữ liệu máy chủ chứ không từ vai trò hay quyền. `taskDepartments`:
+	 * chỉ hiện khi `GET /v1/tasks/scope` cho biết người này xem mọi việc hoặc làm trưởng phòng.
+	 * `taskReports`: báo cáo công việc, hiện cho ADMIN, người có `task:report`, trưởng phòng, quản lý dự án.
+	 * `kpiReviewer`: Đánh giá nhân viên (KPI), hiện khi có phiếu chờ chấm hoặc người xem là quản lý, trưởng phòng.
+	 * `kpiResults`: Kết quả KPI, hiện cho giám đốc, ADMIN và trưởng phòng không có `kpi:manage` (người có mã này xem
+	 * kết quả ngay trong Kỳ đánh giá).
+	 */
+	showWhen?: 'taskDepartments' | 'taskReports' | 'kpiReviewer' | 'kpiResults';
 	/**
 	 * `personal` = màn hình dữ liệu của CHÍNH người đang đăng nhập (`/attendance/my`,
 	 * `/users/leave-requests`…), ai cũng xem được kể cả quản lý. Bỏ trống = màn hình quản

@@ -13,7 +13,8 @@ export type ModuleCode =
 	| 'ANNOUNCEMENT'
 	| 'ASSET'
 	| 'RECRUIT'
-	| 'OFFICE';
+	| 'OFFICE'
+	| 'TASKS';
 
 export type ModuleState = 'ENABLED' | 'READ_ONLY' | 'DISABLED';
 

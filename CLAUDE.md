@@ -330,6 +330,45 @@ await directoryStore.load();
 - Gọi toast ở component/composable sau action, không gọi trong store
 - Xem pattern: @docs/forms.md#toast
 
+### Hướng dẫn theo tính năng (guide tour)
+
+Tab "Hướng dẫn" dính mép phải liệt kê hướng dẫn từng bước của **phân hệ đang mở**, lọc theo quyền;
+chọn một cái thì chuyển tới đúng trang rồi chạy tour. Tài liệu đầy đủ, kèm checklist và danh mục
+hiện có: **`docs/frontend/feature-guides.md` — ĐỌC HẾT trước khi thêm hoặc sửa hướng dẫn.**
+
+Mỗi hướng dẫn mới phải có đủ 5 phần, thiếu một phần là chưa xong:
+
+1. Tour ở `app/tours/<phân-hệ>-<trang>.ts`: `XxxTourContext` + `xxxTour(ctx): TourDefinition`,
+   một việc, 3–6 bước.
+2. Mốc `data-tour="<tiền-tố-trang>-<phần>"` trên từng phần tử được trỏ; danh sách dài chỉ gắn mốc
+   cho phần tử đầu tiên.
+3. Trang đích đăng ký bằng `useGuideTour('<tourId>', () => xxxTour(ctx))`. Tour cũng tự bật cho
+   người mới thì dùng `usePageTour` thay vào, không gọi cả hai.
+4. Một dòng trong `FEATURE_GUIDES` (`app/config/feature-guides.ts`), có `access` chép từ mục menu
+   dẫn tới trang đó trong `app-modules.ts` rồi siết thêm nếu việc cần quyền cao hơn quyền xem trang.
+   Phân hệ nhiều mục menu (Hồ sơ & Hợp đồng) thì đặt `group` bằng tên mục menu để danh sách thành
+   cây `Nhân viên > …`.
+5. Cập nhật bảng ở mục 7 của `docs/frontend/feature-guides.md`: thêm hướng dẫn và các mốc
+   `data-tour` mới.
+
+Quy tắc khi viết:
+
+- Bước nào phụ thuộc quyền, dữ liệu hay trạng thái thì có `when` (truyền hàm). Thiếu điều kiện
+  tiên quyết (chưa có dữ liệu, không phải trưởng phòng…) thì thêm bước không `target` giải thích
+  và chỉ đường. Không để tour trỏ vào nút người dùng không có, hay còn 0 bước với nhóm quyền nào.
+- Bước đầu đưa trang về đúng trạng thái (chuyển thẻ, mở phần thu gọn) qua `onEnter`.
+- `mode: 'click'` chỉ dùng để mở khung mà bước sau trỏ vào, kèm `action`; tour có `onEnd` đóng
+  khung. Tour không gọi API và không ghi dữ liệu.
+- Trỏ bằng `[data-tour="..."]`, không bằng class hay cấu trúc DOM.
+- Trong `body` và `action`, tên nút, thẻ, cột, khối, ô nhập hay trạng thái viết đúng chữ trên giao
+  diện và in đậm bằng `**Tên nút**` (VD `'Bấm **Tải file mẫu** rồi điền.'`), không dùng ngoặc kép.
+  Hộp hướng dẫn chỉ hiểu cú pháp này, không nhận HTML.
+- **Sửa giao diện một trang có mốc `data-tour` thì giữ nguyên mốc trên phần tử tương ứng.** Mất
+  mốc thì tour bỏ qua bước đó sau 4 giây mà không báo lỗi. Tra mốc của từng trang ở mục 7 tài liệu
+  trên.
+- Kiểm tra: `npm run build`, rồi chạy thử bằng tài khoản từng nhóm quyền, khi đang ở trang khác và
+  khi dữ liệu rỗng.
+
 ## Checklist trước khi submit code
 
 - [ ] API calls qua composable, không gọi `$fetch` trực tiếp trong component
@@ -342,6 +381,7 @@ await directoryStore.load();
 - [ ] Route có role restriction → có middleware check
 - [ ] Không lưu token thủ công vào localStorage
 - [ ] Components trong `modules/` được **explicit import**, không dùng auto-import name
+- [ ] Sửa trang có mốc `data-tour` thì mốc vẫn còn trên đúng phần tử; thêm hướng dẫn mới thì đủ 5 phần ở mục "Hướng dẫn theo tính năng"
 
 ### Checklist Notification
 
@@ -375,5 +415,6 @@ await directoryStore.load();
 - api endpoints: @docs/api-enpoint.json
 - backend bridges: `../hr-system-be/docs/bridges/` (ở repo backend, không phải repo này)
 - front-end docs: @docs/frontend/nuxt-conventions.md
+- Hướng dẫn theo tính năng (guide tour), checklist thêm hướng dẫn cho phân hệ: `docs/frontend/feature-guides.md`
 - Realtime / WebSocket rules: @docs/realtime-websocket.md
 - Code review checklist: @docs/review.md

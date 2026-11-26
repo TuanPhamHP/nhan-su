@@ -11,6 +11,7 @@
 	import ThemeSelector from '~/components/modules/theme/ThemeSelector.vue';
 	import ProfileSocialInsurance from '~/components/modules/profile/ProfileSocialInsurance.vue';
 	import ProfileIdentity from '~/components/modules/profile/ProfileIdentity.vue';
+	import ProfileFaceCard from '~/components/modules/profile/ProfileFaceCard.vue';
 	import ProfileBasicCard from '~/components/modules/profile/ProfileBasicCard.vue';
 	import ProfileContactCard from '~/components/modules/profile/ProfileContactCard.vue';
 	import ProfilePrivateCard from '~/components/modules/profile/ProfilePrivateCard.vue';
@@ -333,6 +334,9 @@
 
 				<!-- Chỉ đọc, có cửa mật khẩu. Không nhận employeeId: server lấy từ JWT. -->
 				<ProfileIdentity />
+
+				<!-- Khuôn mặt dùng để so khi chấm công; đăng ký lại phải nhờ phòng nhân sự xoá cái cũ. -->
+				<ProfileFaceCard />
 
 				<ProfileWorkExperiences
 					:pending-requests="pendingExperiences"

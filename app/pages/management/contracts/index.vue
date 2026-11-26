@@ -3,6 +3,7 @@
 	import type { ContractStatus, ContractType } from '~/types/contract.types';
 	import { useContractService } from '~/services/contract.service';
 	import ContractImportModal from '~/components/modules/contract/ContractImportModal.vue';
+	import { contractCreateOpenTour } from '~/tours/contract-list';
 
 	definePageMeta({ title: 'Quản lý hợp đồng' });
 
@@ -138,6 +139,31 @@
 		if (amount === null) return '—';
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 	}
+
+	// ─── Hướng dẫn ───────────────────────────────────────────────────────────────
+	// Nửa đầu của "Thêm hợp đồng": hợp đồng thêm trong hồ sơ nhân viên, nên tour dẫn sang đó.
+	const tour = useTour();
+	const { hasPermission } = usePermissions();
+	// Cùng luật với nút Thêm hợp đồng trong hồ sơ (`EmployeeContracts`).
+	const canCreate = computed(
+		() =>
+			canWrite('CONTRACT_INSURANCE') &&
+			(authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HR') &&
+			hasPermission('contract:create'),
+	);
+	useGuideTour('contract-create', () =>
+		contractCreateOpenTour({
+			canCreate: () => canCreate.value,
+			canImport: () => canImport.value,
+			hasItems: () => contracts.value.length > 0,
+			isLoading: () => loading.value,
+		}),
+	);
+
+	/** Bấm Xem chi tiết trong lúc "Thêm hợp đồng" đang chạy thì hồ sơ chạy tiếp phần của nó. */
+	function handOffTour() {
+		if (tour.state.value?.tour.id === 'contract-create') tour.pending.value = 'contract-create';
+	}
 </script>
 
 <template>
@@ -147,7 +173,7 @@
 			<div>
 				<UiPageHeader title="Quản lý hợp đồng" description="Hợp đồng lao động toàn công ty" />
 			</div>
-			<CommonAppButton v-if="canImport" variant="primary" @click="showImportModal = true">
+			<CommonAppButton v-if="canImport" variant="primary" data-tour="contract-import" @click="showImportModal = true">
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path
 						stroke-linecap="round"
@@ -388,7 +414,7 @@
 					</thead>
 					<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
 						<tr
-							v-for="c in contracts"
+							v-for="(c, idx) in contracts"
 							:key="c.id"
 							class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/40"
 							:class="c.isExpiringSoon ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''"
@@ -450,7 +476,9 @@
 							<td class="px-4 py-3 text-right">
 								<NuxtLink
 									:to="`/management/employees/${c.employee.id}?tab=contracts`"
+									:data-tour="idx === 0 ? 'contract-row-open' : undefined"
 									class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+									@click="handOffTour"
 								>
 									Xem chi tiết
 								</NuxtLink>

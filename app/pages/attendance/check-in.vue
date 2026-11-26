@@ -2,9 +2,12 @@
 	import { useAttendanceService } from '~/services/attendance.service';
 	import { useViolationRequestService } from '~/services/violation-request.service';
 	import ViolationRequestModal from '~/components/modules/violation/ViolationRequestModal.vue';
+	import FaceRegisterModal from '~/components/modules/attendance/FaceRegisterModal.vue';
+	import FaceMismatchDialog from '~/components/modules/attendance/FaceMismatchDialog.vue';
 	import type { AttendanceRecordDetail, CheckAttendanceResponseDto } from '~/types/attendance.types';
 	import type { MyViolationStatus, ViolationRequestType } from '~/types/violation.types';
 	import { formatVNTime } from '~/utils/attendance.utils';
+	import { faceFailureStep, needsFaceRegistration } from '~/utils/attendance-face.utils';
 
 	definePageMeta({ title: 'Check-in / Check-out' });
 
@@ -137,6 +140,12 @@
 			}
 			// result.isAvailableShift = false;
 			locationInfo.value = result;
+			// Lần đầu thấy cần đăng ký thì đưa thẳng sang bước đăng ký; đóng lại thì vẫn còn thẻ nhắc
+			// và nút Clock In mở lại bước này, không tự bật lên mỗi lần kiểm vị trí.
+			if (needsFaceRegistration(result) && result.isAvailableShift && !faceRegisterPrompted) {
+				faceRegisterPrompted = true;
+				showFaceRegister.value = true;
+			}
 			if (!result.isAvailableShift) {
 				locationStatus.value = 'no_shift';
 			} else {
@@ -218,11 +227,18 @@
 	async function openCamera(action: 'check-in' | 'check-out') {
 		pendingAction = action;
 
+		// Công ty bật khuôn mặt mà mình chưa đăng ký: đăng ký trước, xong thì quay lại đúng việc này.
+		if (needsFaceRegistration(locationInfo.value)) {
+			showFaceRegister.value = true;
+			return;
+		}
+
 		if (!navigator.mediaDevices?.getUserMedia) {
 			fileInputRef.value?.click();
 			return;
 		}
 
+		const requestedAt = Date.now();
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({
 				video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -239,7 +255,8 @@
 		} catch (err) {
 			const domErr = err as DOMException;
 			if (domErr.name === 'NotAllowedError' || domErr.name === 'PermissionDeniedError') {
-				await checkCameraPermission();
+				// Bị từ chối gần như tức thì nghĩa là trình duyệt không hiện hộp hỏi: đã chặn vĩnh viễn.
+				cameraPermission.value = Date.now() - requestedAt < PERM_PROMPT_MIN_MS ? 'permanently_denied' : 'denied';
 				// Nếu chặn vĩnh viễn, dùng file input như fallback cuối
 				if (cameraPermission.value === 'permanently_denied') fileInputRef.value?.click();
 			} else {
@@ -266,6 +283,7 @@
 			blob => {
 				if (!blob) return;
 				stopCamera();
+				faceMismatch.value = null;
 				submitAction(new File([blob], 'selfie.jpg', { type: 'image/jpeg' }));
 			},
 			'image/jpeg',
@@ -327,34 +345,79 @@
 		showViolationModal.value = false;
 	}
 
-	// ─── Submit ───────────────────────────────────────────────────────────────────
-	async function submitAction(photo: File) {
-		if (!currentCoords.value || !pendingAction) return;
-		isProcessing.value = true;
-		const action = pendingAction;
+	// ─── Face ─────────────────────────────────────────────────────────────────────
+	const showFaceRegister = ref(false);
+	let faceRegisterPrompted = false;
+	const needsFaceRegister = computed(() => needsFaceRegistration(locationInfo.value));
+
+	/** Hộp thoại khuôn mặt chưa khớp; giữ ảnh vừa chụp để "Vẫn xác nhận" gửi lại đúng ảnh đó. */
+	const faceMismatch = ref<{
+		message: string;
+		attemptsLeft: number | null;
+		canRetake: boolean;
+		action: 'check-in' | 'check-out';
+		photo: File;
+	} | null>(null);
+
+	/** Đăng ký xong thì đi tiếp việc đang dở, không bắt bấm Clock In lại. */
+	function onFaceRegistered() {
+		showFaceRegister.value = false;
+		if (locationInfo.value) locationInfo.value = { ...locationInfo.value, faceRegistered: true };
+		const action = pendingAction ?? (canCheckInAction.value ? 'check-in' : canCheckOutAction.value ? 'check-out' : null);
 		pendingAction = null;
+		if (action === 'check-in') openCamera('check-in');
+		else if (action === 'check-out') showConfirmCheckOut.value = true;
+	}
+
+	function onFaceRegisterClose() {
+		showFaceRegister.value = false;
+		pendingAction = null;
+	}
+
+	function onFaceRetake() {
+		const action = faceMismatch.value?.action;
+		faceMismatch.value = null;
+		if (action) openCamera(action);
+	}
+
+	function onFaceConfirm() {
+		const current = faceMismatch.value;
+		if (!current) return;
+		submitAction(current.photo, current.action, true);
+	}
+
+	// ─── Submit ───────────────────────────────────────────────────────────────────
+	async function submitAction(photo: File, forAction?: 'check-in' | 'check-out', confirmFaceMismatch = false) {
+		const action = forAction ?? pendingAction;
+		if (!currentCoords.value || !action) return;
+		isProcessing.value = true;
+		pendingAction = null;
+		const params = {
+			latitude: currentCoords.value.latitude,
+			longitude: currentCoords.value.longitude,
+			photo,
+			confirmFaceMismatch,
+		};
 		try {
-			if (action === 'check-in') {
-				const result = await attendanceService.checkIn({
-					latitude: currentCoords.value.latitude,
-					longitude: currentCoords.value.longitude,
-					photo,
-				});
-				todayRecord.value = result;
-				successAction.value = 'check-in';
-			} else {
-				const result = await attendanceService.checkOut({
-					latitude: currentCoords.value.latitude,
-					longitude: currentCoords.value.longitude,
-					photo,
-				});
-				todayRecord.value = result;
-				successAction.value = 'check-out';
-			}
+			todayRecord.value =
+				action === 'check-in' ? await attendanceService.checkIn(params) : await attendanceService.checkOut(params);
+			successAction.value = action;
+			faceMismatch.value = null;
 			showSuccess.value = true;
 			toast.success(action === 'check-in' ? 'Check-in thành công' : 'Check-out thành công');
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
+			const step = faceFailureStep(e);
+			if (step.kind === 'mismatch') {
+				faceMismatch.value = { ...step, action, photo };
+			} else if (step.kind === 'register') {
+				faceMismatch.value = null;
+				if (locationInfo.value) locationInfo.value = { ...locationInfo.value, faceRequired: true, faceRegistered: false };
+				pendingAction = action;
+				toast.info(step.message);
+				showFaceRegister.value = true;
+			} else {
+				toast.error(step.message);
+			}
 		} finally {
 			isProcessing.value = false;
 		}
@@ -429,6 +492,25 @@
 					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
 				</svg>
 				{{ isRequestingLocation ? 'Đang xin quyền...' : 'Cho phép truy cập vị trí' }}
+			</button>
+		</div>
+
+		<!-- Công ty bật chấm công bằng khuôn mặt mà mình chưa đăng ký -->
+		<div
+			v-if="needsFaceRegister && locationStatus !== 'no_shift'"
+			class="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/20"
+			data-testid="face-register-banner"
+		>
+			<p class="text-sm font-semibold text-sky-800 dark:text-sky-300">Bạn cần đăng ký khuôn mặt</p>
+			<p class="mt-0.5 text-xs text-sky-700 dark:text-sky-400">
+				Công ty đã bật chấm công bằng khuôn mặt. Bạn đăng ký một lần rồi chấm công như thường.
+			</p>
+			<button
+				type="button"
+				class="mt-3 w-full rounded-lg bg-sky-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+				@click="showFaceRegister = true"
+			>
+				Đăng ký khuôn mặt
 			</button>
 		</div>
 
@@ -939,6 +1021,21 @@
 			</div>
 		</div>
 	</Teleport>
+
+	<!-- Đăng ký khuôn mặt lần đầu -->
+	<FaceRegisterModal v-if="showFaceRegister" @registered="onFaceRegistered" @close="onFaceRegisterClose" />
+
+	<!-- Khuôn mặt chưa khớp: Chụp lại / Vẫn xác nhận -->
+	<FaceMismatchDialog
+		v-if="faceMismatch"
+		:message="faceMismatch.message"
+		:attempts-left="faceMismatch.attemptsLeft"
+		:can-retake="faceMismatch.canRetake"
+		:busy="isProcessing"
+		@retake="onFaceRetake"
+		@confirm="onFaceConfirm"
+		@close="faceMismatch = null"
+	/>
 
 	<!-- Violation request modal -->
 	<ViolationRequestModal

@@ -64,6 +64,15 @@ import { isManagementRole } from '~/utils/role';
  * | office_supply_request     | /office/supplies?request_id=:id                |
  * | office_supply_period      | /management/office/supply-periods/:id          |
  * | office_room_booking       | /office/rooms?booking_id=:id                   |
+ *
+ * Công việc lô 1 (module `TASKS`) không rẽ theo vai trò: mọi người nhận mở cùng trang chi tiết việc.
+ * | task                      | /cong-viec/:refId (trang nhận cả id số lẫn số hiệu) |
+ * | task_offboarding          | /cong-viec?assigneeIds=:refId (refId là id người nghỉ) |
+ *
+ * KPI lô 3 cũng không rẽ theo vai trò mà theo loại thông báo, vì cùng refType `kpi_review` gửi cho hai phía:
+ * | kpi_review, KPI_REVIEW_NEEDED (người chấm) | /kpi/danh-gia?reviewId=:id |
+ * | kpi_review, KPI_FEEDBACK_NEEDED, KPI_PUBLISHED (nhân viên) | /kpi?reviewId=:id |
+ * | kpi_period, KPI_REVIEW_OVERDUE (nhân sự) | /management/kpi/ky?periodId=:id |
  */
 /**
  * Tab cần mở ở trang chi tiết tài sản theo loại thông báo, để người bấm thấy ngay việc cần làm
@@ -232,6 +241,25 @@ export function resolveNotificationRoute(
 
 		case 'office_room_booking':
 			return id ? `/office/rooms?booking_id=${id}` : '/office/rooms';
+
+		// Mười một loại `TASK_*`. `refId` là id việc; trang `/cong-viec/[code]` nhận cả id số, mở xong thì
+		// tự đổi đường dẫn sang số hiệu. `targetUrl` máy chủ dựng sẵn cũng trỏ đúng trang này.
+		case 'task':
+			return id ? `/cong-viec/${id}` : '/cong-viec';
+
+		// Lô 2 `TASK_OFFBOARDING_OPEN`: `refId` là id NGƯỜI NGHỈ, không phải id việc. Trang Việc của tôi
+		// đọc `assigneeIds` trên đường dẫn và hiện việc đang mở của người đó để giao lại.
+		case 'task_offboarding':
+			return id ? `/cong-viec?assigneeIds=${id}` : '/cong-viec';
+
+		// KPI: N-22 tới người chấm mở màn Đánh giá nhân viên; N-23, N-24 tới nhân viên mở KPI của tôi.
+		case 'kpi_review':
+			if (type === 'KPI_REVIEW_NEEDED') return id ? `/kpi/danh-gia?reviewId=${id}` : '/kpi/danh-gia';
+			return id ? `/kpi?reviewId=${id}` : '/kpi';
+
+		// Nhắc nhân sự phiếu chờ người chấm quá 3 ngày: mở đúng kỳ ở màn Kỳ đánh giá.
+		case 'kpi_period':
+			return id ? `/management/kpi/ky?periodId=${id}` : '/management/kpi/ky';
 
 		case 'company_announcement': {
 			// Chỉ HR/ADMIN có quyền vào trang quản lý; các role còn lại (MANAGER, CHIEF,

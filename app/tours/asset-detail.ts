@@ -20,8 +20,8 @@ export function assetDetailTour(ctx: AssetDetailTourContext): TourDefinition {
 	};
 
 	const tabsBody = service
-		? `Các mục này cho biết ai đang dùng, các lần gia hạn và giấy tờ của dịch vụ.${manage ? ' Muốn thu hồi ghế thì vào mục Ghế.' : ''}`
-		: `Các mục này cho biết ai đang giữ, tài sản đã sửa chữa những gì và có giấy tờ nào.${manage ? ' Muốn thu hồi thì vào mục Người dùng.' : ''}`;
+		? `Các mục này cho biết ai đang dùng, các lần gia hạn và giấy tờ của dịch vụ.${manage ? ' Muốn thu hồi ghế thì vào mục **Ghế**.' : ''}`
+		: `Các mục này cho biết ai đang giữ, tài sản đã sửa chữa những gì và có giấy tờ nào.${manage ? ' Muốn thu hồi thì vào mục **Người dùng**.' : ''}`;
 
 	return {
 		id: 'asset-detail',
@@ -41,8 +41,8 @@ export function assetDetailTour(ctx: AssetDetailTourContext): TourDefinition {
 				target: '[data-tour="asset-actions"]',
 				mode: 'click',
 				title: 'Làm gì với tài sản',
-				body: 'Muốn làm gì với tài sản này thì bấm Tác vụ.',
-				action: 'Bạn bấm thử vào nút Tác vụ.',
+				body: 'Muốn làm gì với tài sản này thì bấm **Tác vụ**.',
+				action: 'Bạn bấm thử vào nút **Tác vụ**.',
 				when: () => ctx.canManage(),
 				onEnter: closeMenu,
 			},

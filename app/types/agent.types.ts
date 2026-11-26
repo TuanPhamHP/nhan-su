@@ -49,7 +49,11 @@ export interface AgentFormPanel {
 
 export interface AgentForm {
 	title: string;
-	confirmLevel: 'L1_CREATE' | 'L2_DECIDE' | string;
+	/**
+	 * `L1_CREATE` tạo mới, `L2_DECIDE` duyệt đơn, `L2_CHANGE` sửa hay huỷ một bản ghi đang có (dời lượt họp,
+	 * chuyển trạng thái việc, đổi hạn, phản hồi phiếu KPI). Mức lạ vẫn render như thường: server có thể thêm mức.
+	 */
+	confirmLevel: 'L1_CREATE' | 'L2_DECIDE' | 'L2_CHANGE' | string;
 	fields: AgentFormField[];
 	/** Dữ liệu gốc do SERVER render — không lấy từ lời văn của model. */
 	context: AgentFormPanel[];
@@ -220,7 +224,45 @@ export const AGENT_TOOL_LABELS: Record<string, string> = {
 	// Tool ghi: nó KHÔNG gửi đơn, chỉ dựng form. Nhãn phải nói đúng thế, kẻo người
 	// dùng tưởng đơn đã đi rồi và bỏ qua bước xác nhận.
 	leave_createRequest: 'Đang chuẩn bị đơn nghỉ phép…',
+
+	// Hành chính văn phòng (module OFFICE).
+	office_findFreeRooms: 'Đang tìm phòng họp trống…',
+	office_myBookings: 'Đang tra lịch họp của bạn…',
+	office_mySupplyRequest: 'Đang tra phiếu văn phòng phẩm…',
+	office_periodProgress: 'Đang tra tiến độ kỳ văn phòng phẩm…',
+	office_supplyCosts: 'Đang tính chi phí văn phòng phẩm…',
+	office_bookRoom: 'Đang chuẩn bị đặt phòng họp…',
+	office_changeBooking: 'Đang chuẩn bị dời lượt họp…',
+	office_cancelBooking: 'Đang chuẩn bị huỷ lượt họp…',
+	office_setSupplyLine: 'Đang chuẩn bị phiếu văn phòng phẩm…',
+
+	// Công việc và KPI (module TASKS).
+	task_myAgenda: 'Đang tra việc của bạn…',
+	task_search: 'Đang tìm việc…',
+	task_getDetail: 'Đang xem chi tiết việc…',
+	task_departmentOverview: 'Đang tra việc của phòng…',
+	task_projectOverview: 'Đang tra dự án…',
+	task_progressReport: 'Đang lập báo cáo tiến độ…',
+	kpi_myReviews: 'Đang tra phiếu KPI của bạn…',
+	kpi_getReview: 'Đang xem phiếu KPI…',
+	kpi_toReview: 'Đang tra phiếu chờ bạn chấm…',
+	kpi_periodResults: 'Đang tra kết quả KPI…',
+	task_create: 'Đang chuẩn bị giao việc…',
+	task_transition: 'Đang chuẩn bị chuyển trạng thái việc…',
+	task_changeDue: 'Đang chuẩn bị đổi hạn việc…',
+	kpi_giveFeedback: 'Đang chuẩn bị phản hồi phiếu KPI…',
 };
+
+/**
+ * Chữ trên thẻ nhỏ dưới câu trả lời (lượt này đã tra gì): lấy từ nhãn đang chạy, bỏ "Đang " và dấu "…".
+ * Tool chưa có nhãn thì gộp thành "Tra cứu dữ liệu": người dùng KHÔNG bao giờ thấy tên tool thô (`task_myAgenda`).
+ */
+export function agentToolChipLabel(tool: string): string {
+	const label = AGENT_TOOL_LABELS[tool];
+	if (!label) return 'Tra cứu dữ liệu';
+	const text = label.replace(/^Đang\s+/, '').replace(/…$/, '');
+	return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export interface AgentConversation {
 	id: number;
@@ -263,3 +305,19 @@ export const AGENT_SUGGESTIONS: AgentSuggestion[] = [
 	{ icon: 'heroicons:clock', label: 'Tháng này tôi đi muộn mấy lần?' },
 	{ icon: 'heroicons:table-cells', label: 'Cho xem bảng công tháng trước' },
 ];
+
+/** Gợi ý của phân hệ Công việc và KPI: chỉ hiện khi công ty dùng phân hệ đó. */
+export const AGENT_TASKS_SUGGESTION: AgentSuggestion = {
+	icon: 'heroicons:check-circle',
+	label: 'Hôm nay tôi có việc gì?',
+};
+
+/**
+ * Gợi ý cho màn chat trống theo phân hệ công ty đang dùng.
+ *
+ * Gợi ý của phân hệ bán riêng KHÔNG đặt cố định vào `AGENT_SUGGESTIONS`: công ty chưa dùng thì
+ * bấm vào chỉ nhận câu "công ty chưa dùng", giống như một nút hỏng.
+ */
+export function agentSuggestions(modules: { tasks: boolean }): AgentSuggestion[] {
+	return modules.tasks ? [...AGENT_SUGGESTIONS, AGENT_TASKS_SUGGESTION] : AGENT_SUGGESTIONS;
+}

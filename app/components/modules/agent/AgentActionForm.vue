@@ -1,6 +1,7 @@
 <script setup lang="ts">
 	import AppButton from '~/components/common/AppButton.vue';
 	import type { AgentFormField, AgentPendingAction } from '~/types/agent.types';
+	import { splitInternalPaths } from '~/utils/agent-markdown';
 
 	const props = defineProps<{
 		pending: AgentPendingAction;
@@ -78,6 +79,32 @@
 
 	const missing = computed(() => editable.value.filter((f) => invalidReason(f) !== null));
 
+	/**
+	 * Dòng của panel dữ liệu gốc dài quá nửa khung (tiêu đề việc, nhận xét người chấm) thì chiếm cả
+	 * hàng và xuống dòng, không cắt: cắt là mất đúng phần người duyệt cần đọc, mà trên điện thoại
+	 * không có chuột để rê xem `title`.
+	 */
+	const PANEL_WIDE_AT = 28;
+	const isWide = (value: unknown): boolean => String(value ?? '').length > PANEL_WIDE_AT;
+
+	/**
+	 * Giá trị cho UiDatePicker: chỉ nhận `YYYY-MM-DD` (component tách theo dấu `-`). Server gửi kèm giờ
+	 * thì lấy phần ngày; chuỗi lạ thì để trống cho người dùng chọn lại, KHÔNG đoán.
+	 */
+	function dateValue(name: string): string | undefined {
+		const m = /^(\d{4}-\d{2}-\d{2})/.exec(draft.value[name] ?? '');
+		return m ? m[1] : undefined;
+	}
+
+	/** Xoá ngày thì bản nháp về chuỗi rỗng như mọi ô khác, để kiểm "bắt buộc" chạy đúng một kiểu. */
+	function setDate(name: string, value: string | undefined): void {
+		draft.value[name] = value ?? '';
+		touched.value[name] = true;
+	}
+
+	/** Câu báo kết quả do server dựng, có thể kèm đường dẫn ("Mở trên web: /cong-viec?task=CV-9"). */
+	const doneSegments = computed(() => splitInternalPaths(props.pending.message || 'Đã thực hiện.'));
+
 	/** Hiện lỗi sau khi người dùng đã chạm vào ô, hoặc sau lần bấm gửi đầu tiên. */
 	function errorFor(f: AgentFormField): string | null {
 		const reason = invalidReason(f);
@@ -135,16 +162,20 @@
 	<div
 		class="w-full overflow-hidden rounded-2xl border border-[var(--color-accent)]/30 bg-white shadow-sm dark:bg-gray-800"
 	>
+		<!--
+			Tiêu đề xuống dòng chứ không cắt: "Chuyển trạng thái việc HQ-5" ở màn 390 px bị cắt còn
+			"Chuyển trạn…", mất đúng số hiệu việc người dùng cần soát.
+		-->
 		<header
 			:class="[
-				'flex items-center gap-2 border-b border-gray-200 bg-[var(--color-accent)]/5 dark:border-gray-700',
+				'flex items-start gap-2 border-b border-gray-200 bg-[var(--color-accent)]/5 dark:border-gray-700',
 				compact ? 'px-3 py-2' : 'px-4 py-2.5',
 			]"
 		>
-			<Icon name="heroicons:clipboard-document-check" class="h-4 w-4 text-[var(--color-accent)]" />
+			<Icon name="heroicons:clipboard-document-check" class="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent)]" />
 			<h3
 				:class="[
-					'min-w-0 flex-1 truncate font-semibold text-gray-900 dark:text-gray-50',
+					'min-w-0 flex-1 font-semibold leading-snug break-words text-gray-900 dark:text-gray-50',
 					compact ? 'text-[13px]' : 'text-sm',
 				]"
 			>
@@ -161,8 +192,18 @@
 		<!-- Đã xong / đã huỷ / hỏng hẳn → thu gọn, không mời bấm lại -->
 		<div v-if="pending.state === 'done'" class="flex items-start gap-2 px-4 py-3 text-sm">
 			<Icon name="heroicons:check-circle" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-			<p class="text-emerald-700 dark:text-emerald-400">
-				{{ pending.message || 'Đã thực hiện.' }}
+			<!-- Đường dẫn trong câu báo thành link; AgentMessageBubble bắt cú bấm và đi bằng router. -->
+			<p class="min-w-0 break-words text-emerald-700 dark:text-emerald-400">
+				<template v-for="(seg, i) in doneSegments" :key="i">
+					<a
+						v-if="seg.type === 'link'"
+						:href="seg.value"
+						data-agent-link=""
+						class="font-medium underline underline-offset-2 hover:decoration-2"
+						>{{ seg.value }}</a
+					>
+					<template v-else>{{ seg.value }}</template>
+				</template>
 			</p>
 		</div>
 
@@ -195,22 +236,32 @@
 					compact ? 'mb-2.5 gap-x-3 gap-y-1 px-2.5 py-2' : 'mb-3 gap-x-4 gap-y-1.5 px-3 py-2.5',
 				]"
 			>
-				<div v-for="f in readonlyFields" :key="f.name" class="min-w-0">
+				<div
+					v-for="f in readonlyFields"
+					:key="f.name"
+					:class="['min-w-0', isWide(f.value) ? 'col-span-2' : '']"
+				>
 					<dt class="text-[11px] text-gray-400 dark:text-gray-500">{{ f.label }}</dt>
 					<dd
+						:title="String(f.value ?? '')"
 						:class="[
-							'truncate font-medium text-gray-800 dark:text-gray-100',
+							'font-medium break-words whitespace-pre-line text-gray-800 dark:text-gray-100',
 							compact ? 'text-[13px] leading-snug' : 'text-sm',
 						]"
 					>
 						{{ f.value }}
 					</dd>
 				</div>
-				<div v-for="c in pending.form.context" :key="c.label" class="min-w-0">
+				<div
+					v-for="c in pending.form.context"
+					:key="c.label"
+					:class="['min-w-0', isWide(c.value) ? 'col-span-2' : '']"
+				>
 					<dt class="text-[11px] text-gray-400 dark:text-gray-500">{{ c.label }}</dt>
 					<dd
+						:title="c.value"
 						:class="[
-							'truncate font-medium text-gray-800 dark:text-gray-100',
+							'font-medium break-words whitespace-pre-line text-gray-800 dark:text-gray-100',
 							compact ? 'text-[13px] leading-snug' : 'text-sm',
 						]"
 					>
@@ -281,16 +332,38 @@
 						v-model="draft[f.name]"
 						:disabled="locked"
 						rows="2"
-						:placeholder="f.helpText"
 						:class="inputClass"
 						@blur="touched[f.name] = true"
 					/>
+
+					<!--
+						Ô ngày dùng UiDatePicker như cả repo: `<input type="date">` hiện theo ngôn ngữ trình
+						duyệt (Chrome tiếng Anh ra 11/30/2026), còn đây luôn là dd/mm/yyyy. Giá trị trong bản
+						nháp vẫn là `YYYY-MM-DD`, nên payload gửi lên không đổi. Bọc ngoài để ô gõ giữ 16px
+						dưới `sm:` như các ô khác, không thì Safari iOS phóng to trang khi chạm vào.
+					-->
+					<div
+						v-else-if="f.type === 'date'"
+						:class="
+							compact
+								? '[&_input]:text-base sm:[&_input]:text-[13px]'
+								: '[&_input]:text-base sm:[&_input]:text-sm'
+						"
+					>
+						<UiDatePicker
+							:id="`af-${pending.pendingActionId}-${f.name}`"
+							:model-value="dateValue(f.name)"
+							:disabled="locked"
+							@update:model-value="(v?: string) => setDate(f.name, v)"
+							@blur="touched[f.name] = true"
+						/>
+					</div>
 
 					<input
 						v-else
 						:id="`af-${pending.pendingActionId}-${f.name}`"
 						v-model="draft[f.name]"
-						:type="f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'"
+						:type="f.type === 'number' ? 'number' : 'text'"
 						:disabled="locked"
 						:class="inputClass"
 						@blur="touched[f.name] = true"
@@ -299,8 +372,13 @@
 					<p v-if="errorFor(f)" :class="['text-[11px] text-red-500', compact ? 'mt-0.5' : 'mt-1']">
 						{{ errorFor(f) }}
 					</p>
+					<!--
+						Gợi ý nằm DƯỚI ô, kể cả ô nhiều dòng: để làm placeholder thì ở màn 390 px câu dài
+						("tối đa 425 ký tự… Người làm đọc được lý do") bị cắt sau hai dòng, và gõ chữ đầu
+						tiên là mất hẳn.
+					-->
 					<p
-						v-else-if="f.helpText && f.type !== 'textarea'"
+						v-else-if="f.helpText"
 						:class="[
 							'text-[11px] text-gray-400 dark:text-gray-500',
 							compact ? 'mt-0.5 leading-snug' : 'mt-1',

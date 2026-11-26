@@ -41,6 +41,26 @@ export function formatVnDate(at: string | Date): string {
 	return formatDate(vnCalendarDate(at));
 }
 
+/** "Thứ Tư, 25/11/2026" theo lịch Việt Nam, dù máy đặt múi giờ nào. */
+export function formatVnWeekdayDate(at: string | Date): string {
+	return formatDate(vnCalendarDate(at), 'EEEE, dd/MM/yyyy');
+}
+
+const VN_CLOCK = new Intl.DateTimeFormat('en-GB', {
+	timeZone: 'Asia/Ho_Chi_Minh',
+	hour: '2-digit',
+	minute: '2-digit',
+	hour12: false,
+});
+
+/**
+ * "24/11/2026 11:33" theo giờ Việt Nam, cho mốc ISO của máy chủ (có hậu tố `Z`), dù máy đặt múi giờ
+ * nào. `formatDateTime` thì hiện theo múi giờ của máy.
+ */
+export function formatVnDateTime(at: string | Date): string {
+	return `${formatVnDate(at)} ${VN_CLOCK.format(new Date(at))}`;
+}
+
 export function formatRelativeTime(date: string | null | undefined): string {
 	if (!date) return '—';
 	const parsed = parseISO(date);

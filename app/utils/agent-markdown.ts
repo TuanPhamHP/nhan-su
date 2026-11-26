@@ -7,7 +7,8 @@
  *
  * AN TOÀN: escape toàn bộ HTML TRƯỚC, rồi mới chèn thẻ của chính mình. Nội dung do LLM
  * sinh (và có thể bị nhiễm từ dữ liệu người dùng qua tool result) không bao giờ được
- * hiểu là HTML. Gọi thêm DOMPurify ở component để chắc thêm một lớp.
+ * hiểu là HTML. Gọi thêm DOMPurify ở component để chắc thêm một lớp. Link chỉ sinh cho
+ * đường dẫn nội bộ đã qua `isSafeInternalPath`, và chỉ khi nơi gọi bật `links`.
  */
 
 function escapeHtml(s: string): string {
@@ -19,10 +20,126 @@ function escapeHtml(s: string): string {
 		.replace(/'/g, '&#39;');
 }
 
-/** `**đậm**`, `*nghiêng*`, `` `code` `` — chạy SAU khi đã escape. */
-function inline(s: string): string {
+/** Ngược lại đúng `escapeHtml` (`&amp;` thay sau cùng, nên `&amp;lt;` về lại `&lt;` chứ không về `<`). */
+function unescapeHtml(s: string): string {
 	return s
-		.replace(/`([^`]+)`/g, '<code class="agent-code">$1</code>')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&amp;/g, '&');
+}
+
+// ─── Đường dẫn nội bộ trong câu trả lời ──────────────────────────────────────
+
+/**
+ * Đường dẫn trang trong app mà trợ lý được phép biến thành link.
+ *
+ * Đúng MỘT `/` ở đầu, rồi các đoạn chữ (hoa hay thường), số, `-` ngăn bởi `/` (đoạn đầu phải bắt
+ * đầu bằng chữ, để "4 /5" không thành link), có thể kèm query chỉ gồm chữ, số, `=`, `&`, `-`, `_`,
+ * `%`. Chữ hoa cần cho mã dự án trên đường dẫn (`/cong-viec/du-an/HQ`) và không mở thêm đường nào:
+ * vẫn không có `:`, `\`, `.`, nháy hay khoảng trắng. Không khớp thì giữ nguyên là chữ: `//host`,
+ * `http:`, `javascript:`, dấu nháy, khoảng trắng, `<`, `#`, `..` đều rơi vào nhánh này. Câu trả lời
+ * do model viết và có thể bị nhiễm từ dữ liệu người dùng qua tool, nên href KHÔNG BAO GIỜ được lấy
+ * từ đó mà chưa qua hàm này.
+ */
+const SAFE_INTERNAL_PATH = /^\/[A-Za-z][A-Za-z0-9-]*(?:\/[A-Za-z0-9-]+)*\/?(?:\?[A-Za-z0-9=&\-_%]*)?$/;
+
+export function isSafeInternalPath(s: string): boolean {
+	return SAFE_INTERNAL_PATH.test(s);
+}
+
+export type AgentTextSegment = { type: 'text'; value: string } | { type: 'link'; value: string };
+
+/**
+ * Ứng viên: một cụm không có khoảng trắng bắt đầu bằng `/`, đứng đầu chuỗi hoặc sau khoảng trắng
+ * hay dấu mở ngoặc, nháy. Lấy CẢ cụm chứ không dừng ở ký tự lạ đầu tiên: `/a'onclick=…` phải bị
+ * loại cả cụm, không được cắt lấy `/a` làm link.
+ */
+const PATH_CANDIDATE = /(^|[\s([{"'“‘`*])(\/\S*)/g;
+/**
+ * Dấu câu, dấu đóng ngoặc, dấu đậm dính sau đường dẫn ("(/cong-viec).", "…: /kpi?reviewId=4.",
+ * hai dấu sao của chữ đậm): không thuộc link.
+ */
+const TRAILING_PUNCT = /[.,;:!?)\]}"'”’`*]+$/;
+
+/**
+ * Tách một đoạn chữ THUẦN (chưa escape) thành chữ và đường dẫn nội bộ an toàn.
+ *
+ * Ghép `value` của mọi đoạn lại luôn ra đúng chuỗi ban đầu: hàm chỉ đánh dấu, không thêm bớt chữ.
+ */
+export function splitInternalPaths(text: string): AgentTextSegment[] {
+	const out: AgentTextSegment[] = [];
+	let last = 0;
+	const pushText = (value: string): void => {
+		if (!value) return;
+		const prev = out[out.length - 1];
+		if (prev?.type === 'text') prev.value += value;
+		else out.push({ type: 'text', value });
+	};
+
+	for (const m of text.matchAll(PATH_CANDIDATE)) {
+		const start = (m.index ?? 0) + m[1]!.length;
+		const token = m[2]!;
+		const path = token.replace(TRAILING_PUNCT, '');
+		if (!isSafeInternalPath(path)) continue;
+		pushText(text.slice(last, start));
+		out.push({ type: 'link', value: path });
+		last = start + path.length;
+	}
+	pushText(text.slice(last));
+	return out;
+}
+
+function linkHtml(path: string, inner: string): string {
+	// `path` đã qua isSafeInternalPath nên không có nháy, `<`, khoảng trắng; vẫn escape cho chắc (`&`).
+	return `<a href="${escapeHtml(path)}" class="agent-link" data-agent-link="">${inner}</a>`;
+}
+
+/** Đoạn chữ ĐÃ escape → đường dẫn an toàn thành link, phần còn lại giữ nguyên. */
+function linkifyEscaped(escaped: string): string {
+	return splitInternalPaths(unescapeHtml(escaped))
+		.map((seg) => (seg.type === 'link' ? linkHtml(seg.value, escapeHtml(seg.value)) : escapeHtml(seg.value)))
+		.join('');
+}
+
+/** `` `code` `` — nội dung đã escape. Cả cụm là đường dẫn an toàn thì bọc link quanh khối code. */
+function codeSpan(escapedInner: string, links: boolean): string {
+	const code = `<code class="agent-code">${escapedInner}</code>`;
+	if (!links) return code;
+	const raw = unescapeHtml(escapedInner).trim();
+	return isSafeInternalPath(raw) ? linkHtml(raw, code) : code;
+}
+
+/** Link markdown `[chữ](đích)`, nhận trên chuỗi ĐÃ escape (đích không có khoảng trắng, không có `)`). */
+const MD_LINK = /^\[([^\]\n]+)\]\(([^)\s]*)\)$/;
+
+/**
+ * `[Xem](/cong-viec?task=CV-8)`: đích là đường dẫn nội bộ an toàn thì thành link mang đúng chữ trong `[]`.
+ * Đích khác (`javascript:`, `data:`, `//host`, `http:`) giữ nguyên CẢ cụm là chữ, không có thẻ `<a>`.
+ */
+function markdownLink(escaped: string, links: boolean): string {
+	const m = MD_LINK.exec(escaped);
+	if (!links || !m) return escaped;
+	const target = unescapeHtml(m[2]!).trim();
+	return isSafeInternalPath(target) ? linkHtml(target, m[1]!) : escaped;
+}
+
+/** `**đậm**`, `*nghiêng*`, `` `code` ``, link markdown, đường dẫn nội bộ — chạy SAU khi đã escape. */
+function inlineMd(s: string, links: boolean): string {
+	const withCode = s
+		// `<br>` do chính bộ render chèn khi nối dòng của đoạn văn: phải đi nguyên, không escape lại.
+		.split(/(`[^`]+`|\[[^\]`\n]+\]\([^)\s]*\)|<br>)/g)
+		.map((part) => {
+			if (part === '<br>') return part;
+			if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) return codeSpan(part.slice(1, -1), links);
+			if (part.startsWith('[') && MD_LINK.test(part)) return markdownLink(part, links);
+			return links ? linkifyEscaped(part) : part;
+		})
+		.join('');
+	// Đậm, nghiêng chạy trên cả chuỗi đã ghép để `**`code`**` vẫn đậm như trước. Đường dẫn không
+	// chứa `*` nên không bao giờ bị tách đôi.
+	return withCode
 		.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 		.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
 }
@@ -39,17 +156,28 @@ function splitCells(line: string): string[] {
 		.map((c) => c.trim());
 }
 
-function renderTable(lines: string[]): string {
+function renderTable(lines: string[], links: boolean): string {
 	const head = splitCells(lines[0]!);
 	const bodyLines = lines.slice(isTableDivider(lines[1] ?? '') ? 2 : 1);
-	const th = head.map((c) => `<th>${inline(c)}</th>`).join('');
+	const th = head.map((c) => `<th>${inlineMd(c, links)}</th>`).join('');
 	const rows = bodyLines
-		.map((l) => `<tr>${splitCells(l).map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`)
+		.map((l) => `<tr>${splitCells(l).map((c) => `<td>${inlineMd(c, links)}</td>`).join('')}</tr>`)
 		.join('');
 	return `<div class="agent-table-wrap"><table class="agent-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-export function renderAgentMarkdown(raw: string): string {
+export interface AgentMarkdownOptions {
+	/**
+	 * Biến đường dẫn nội bộ an toàn (`/cong-viec?task=HQ-2`) thành `<a data-agent-link>`. Nơi render
+	 * phải tự bắt cú bấm và đi bằng router (xem AgentMessageBubble). Tắt ở màn ADMIN xem lại hội
+	 * thoại: đường dẫn ở đó là của người hỏi ("việc của tôi"), mở ra là thấy việc của chính ADMIN.
+	 */
+	links?: boolean;
+}
+
+export function renderAgentMarkdown(raw: string, opts: AgentMarkdownOptions = {}): string {
+	const links = !!opts.links;
+	const inline = (s: string): string => inlineMd(s, links);
 	const lines = escapeHtml(raw).split(/\r?\n/);
 	const out: string[] = [];
 	let i = 0;
@@ -62,7 +190,7 @@ export function renderAgentMarkdown(raw: string): string {
 			const block: string[] = [];
 			while (i < lines.length && isTableRow(lines[i]!)) block.push(lines[i++]!);
 			// Cần ít nhất header + 1 dòng nữa mới coi là bảng
-			out.push(block.length >= 2 ? renderTable(block) : `<p>${inline(block.join(' '))}</p>`);
+			out.push(block.length >= 2 ? renderTable(block, links) : `<p>${inline(block.join(' '))}</p>`);
 			continue;
 		}
 

@@ -9,6 +9,7 @@
 		type AnnouncementType,
 	} from '~/types/announcement.types';
 	import { fileIconName } from '~/utils/file-icon';
+	import { announcementCreateTour } from '~/tours/announcement-create';
 
 	interface RecipientOption {
 		id: number;
@@ -259,6 +260,9 @@
 			directoryStore.load().catch(() => {});
 		}
 	});
+
+	// Hướng dẫn "Tạo thông báo", mở từ nút Hướng dẫn nổi bên phải.
+	useGuideTour('announcement-create', () => announcementCreateTour({ canWrite: () => canWrite('ANNOUNCEMENT') }));
 </script>
 
 <template>
@@ -289,7 +293,7 @@
 				class="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-6"
 			>
 				<!-- Section 1: Basic info -->
-				<div class="space-y-4">
+				<div data-tour="ann-create-basics" class="space-y-4">
 					<div class="space-y-1.5">
 						<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
 							Tiêu đề <span class="text-red-500">*</span>
@@ -319,7 +323,7 @@
 				</div>
 
 				<!-- Section 2: Body -->
-				<div class="space-y-1.5">
+				<div data-tour="ann-create-body" class="space-y-1.5">
 					<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
 						Nội dung thông báo <span class="text-red-500">*</span>
 					</label>
@@ -331,8 +335,8 @@
 					<p class="text-xs text-gray-400 dark:text-gray-500">{{ bodyCharCount }} ký tự</p>
 				</div>
 
-				<!-- Section 3: Links -->
-				<div class="space-y-2">
+				<!-- Section 3: Links (cùng mốc với file đính kèm: hướng dẫn trỏ cả hai một lần) -->
+				<div data-tour="ann-create-extras" class="space-y-2">
 					<div class="flex items-center justify-between">
 						<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
 							Liên kết đính kèm
@@ -379,7 +383,7 @@
 				</div>
 
 				<!-- Section 4: Attachments -->
-				<div class="space-y-2">
+				<div data-tour="ann-create-extras" class="space-y-2">
 					<label class="text-sm font-medium text-gray-700 dark:text-gray-300">
 						File đính kèm
 						<span class="text-xs font-normal text-gray-400"> (tối đa {{ MAX_FILES }} file, 20MB/file) </span>
@@ -442,7 +446,7 @@
 					</div>
 				</div>
 				<!-- Bottom actions (inline, không sticky) -->
-				<div class="flex items-center justify-between flex-wrap gap-3 pt-4 border-t">
+				<div data-tour="ann-create-actions" class="flex items-center justify-between flex-wrap gap-3 pt-4 border-t">
 					<CommonAppButton type="button" @click="showPreview = true"> Xem trước </CommonAppButton>
 					<div class="flex items-center gap-3">
 						<CommonAppButton variant="secondary" type="button" @click="handleCancel"> Huỷ </CommonAppButton>
@@ -460,7 +464,10 @@
 
 			<!-- ─── Right: sticky recipients ─── -->
 			<aside class="lg:col-span-1 lg:sticky lg:top-4 self-start">
-				<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3">
+				<div
+					data-tour="ann-create-recipients"
+					class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3"
+				>
 					<div class="flex items-center justify-between gap-2">
 						<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Người nhận</h3>
 						<span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">

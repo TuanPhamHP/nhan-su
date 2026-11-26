@@ -1,8 +1,14 @@
 <script setup lang="ts">
 	import { useOfficeService } from '~/services/office.service';
-	import { officeErrorCode, officeErrorMessage, officeMoney } from '~/utils/office.utils';
+	import {
+		officeErrorCode,
+		officeErrorMessage,
+		officeMoney,
+		supplyStatusLabel,
+		supplyStatusMeta,
+	} from '~/utils/office.utils';
 	import { formatDateTime } from '~/utils/date';
-	import type { SupplyRequest, SupplyRequestStatus } from '~/types/office.types';
+	import type { SupplyRequest } from '~/types/office.types';
 
 	/**
 	 * Một phiếu của một phòng, nhìn từ phía HCNS: xem dòng, chốt số, cấp hàng và ghi đã giao thay.
@@ -53,14 +59,6 @@
 
 	const receiverName = ref('');
 	const showDeliverForm = ref(false);
-
-	const STATUS_CLASS: Record<SupplyRequestStatus, string> = {
-		OPEN: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-		LOCKED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-		FINALIZED: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-		ISSUED: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400',
-		RECEIVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-	};
 
 	function fillForm(data: SupplyRequest) {
 		request.value = data;
@@ -405,9 +403,9 @@
 					<div class="flex items-center gap-2">
 						<span
 							v-if="request"
-							:class="['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', STATUS_CLASS[request.status]]"
+							:class="['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', supplyStatusMeta(request.status).class]"
 						>
-							{{ request.statusLabel }}
+							{{ supplyStatusLabel(request.status, request.lines.length) }}
 						</span>
 						<button
 							type="button"

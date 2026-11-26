@@ -5,11 +5,12 @@
 	import AgentChartBlock from '~/components/modules/agent/AgentChartBlock.vue';
 	import AgentFeedbackBar from '~/components/modules/agent/AgentFeedbackBar.vue';
 	import AgentTableBlock from '~/components/modules/agent/AgentTableBlock.vue';
+	import { agentToolChipLabel } from '~/types/agent.types';
 	import type {
 		AgentChatMessage as ChatMsg,
 		AgentFeedbackRating,
 	} from '~/types/agent.types';
-	import { renderAgentMarkdown } from '~/utils/agent-markdown';
+	import { isSafeInternalPath, renderAgentMarkdown } from '~/utils/agent-markdown';
 
 	const props = defineProps<{
 		message: ChatMsg;
@@ -27,6 +28,8 @@
 		confirm: [pendingActionId: number, payload: Record<string, unknown>];
 		cancel: [pendingActionId: number];
 		rate: [messageId: number, rating: AgentFeedbackRating, comment?: string];
+		/** Người dùng vừa bấm một đường dẫn trong câu trả lời và app đang chuyển trang. */
+		navigate: [path: string];
 	}>();
 
 	const toast = useToast();
@@ -43,11 +46,32 @@
 	 * Chỉ render markdown KHI ĐÃ STREAM XONG. Lúc đang chảy từng mảnh, một bảng mới
 	 * được nửa dòng sẽ hiện ra méo mó rồi nhảy — hiện text thô mượt hơn nhiều.
 	 */
+	/** Thẻ "đã tra gì" dưới câu trả lời: chữ tiếng Việt, gộp trùng; không hiện tên tool thô. */
+	const toolChips = computed(() => [...new Set((props.message.toolsCalled ?? []).map(agentToolChipLabel))]);
+
 	const html = computed(() => {
 		if (isUser.value || props.message.streaming || props.message.error) return null;
 		if (!props.message.text) return null;
-		return DOMPurify.sanitize(renderAgentMarkdown(props.message.text));
+		return DOMPurify.sanitize(renderAgentMarkdown(props.message.text, { links: true }));
 	});
+
+	/**
+	 * Bấm đường dẫn nội bộ trong câu trả lời, bảng hay thẻ kết quả: đi bằng router, không tải lại trang.
+	 *
+	 * Bắt ở một chỗ cho mọi `a[data-agent-link]` bên trong, kể cả phần vào qua `v-html`. `href` được
+	 * kiểm LẠI ở đây chứ không tin thuộc tính trên DOM. Ctrl, Cmd, Shift, chuột giữa thì để trình duyệt
+	 * tự mở tab mới như mọi link khác.
+	 */
+	function onLinkClick(e: MouseEvent): void {
+		if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		const a = (e.target as Element | null)?.closest?.('a[data-agent-link]');
+		if (!a) return;
+		const href = a.getAttribute('href') ?? '';
+		if (!isSafeInternalPath(href)) return;
+		e.preventDefault();
+		emit('navigate', href);
+		void navigateTo(href);
+	}
 
 	/**
 	 * Hiện nút copy khi câu trả lời đã xong và có nội dung.
@@ -122,6 +146,7 @@
 				message.pending ? 'w-full max-w-xl' : compact ? 'max-w-[88%]' : 'max-w-[85%]',
 				isUser ? 'items-end' : 'items-start',
 			]"
+			@click="onLinkClick"
 		>
 			<!--
 				`max-w-full min-w-0` KHÔNG thừa dù cột ngoài đã có max-w-[85%].
@@ -183,6 +208,7 @@
 				v-for="(t, i) in message.tables ?? []"
 				:key="`table-${i}`"
 				:table="t"
+				links
 			/>
 
 			<AgentActionForm
@@ -193,14 +219,14 @@
 				@cancel="emit('cancel', message.pending!.pendingActionId)"
 			/>
 
-			<div v-if="canCopy || message.toolsCalled?.length" class="flex flex-wrap items-center gap-1.5 px-1">
+			<div v-if="canCopy || toolChips.length" class="flex flex-wrap items-center gap-1.5 px-1">
 				<span
-					v-for="tool in message.toolsCalled"
-					:key="tool"
+					v-for="chip in toolChips"
+					:key="chip"
 					class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500 dark:bg-gray-700/60 dark:text-gray-300"
 				>
 					<Icon name="heroicons:magnifying-glass" class="h-3 w-3" />
-					{{ tool }}
+					{{ chip }}
 				</span>
 
 				<button
@@ -260,6 +286,16 @@
 	}
 	.dark .agent-md :deep(.agent-code) {
 		background: rgb(255 255 255 / 0.12);
+	}
+	/* Đường dẫn nội bộ: gạch chân để nhận ra bấm được, kể cả khi bọc khối code. */
+	.agent-md :deep(a.agent-link) {
+		color: var(--color-accent);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		overflow-wrap: anywhere;
+	}
+	.agent-md :deep(a.agent-link:hover) {
+		text-decoration-thickness: 2px;
 	}
 	/* Bảng dài hơn khung chat thì cuộn ngang, KHÔNG đẩy giãn cả bong bóng */
 	.agent-md :deep(.agent-table-wrap) {

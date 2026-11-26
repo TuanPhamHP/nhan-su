@@ -59,6 +59,9 @@ export const useAuthStore = defineStore('auth', () => {
 		useDirectoryStore().reset();
 		useMetaDataStore().reset();
 		useApprovalStore().reset();
+		// Phạm vi Công việc (trưởng phòng những phòng nào) cũng theo người và công ty.
+		useTaskScope().reset();
+		useKpiScope().reset();
 		useUiStore().previewAs(null);
 	}
 

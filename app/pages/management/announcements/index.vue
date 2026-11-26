@@ -7,6 +7,11 @@
 		type CompanyAnnouncementSummary,
 	} from '~/types/announcement.types';
 	import type { PaginatedMeta } from '~/types/api.types';
+	import {
+		announcementCreateOpenTour,
+		announcementRecallTour,
+		announcementSearchTour,
+	} from '~/tours/announcement-list';
 
 	definePageMeta({ title: 'Quản lý thông báo công ty' });
 
@@ -165,7 +170,8 @@
 				label: 'Thu hồi',
 				icon: 'M9 12h6m2.25 6.75L4.5 5.25M12 21a9 9 0 100-18 9 9 0 000 18z',
 				variant: 'danger',
-				hidden: item.status === 'RECALLED' || !canWrite('ANNOUNCEMENT'),
+				// Máy chủ chỉ cho HR và ADMIN thu hồi, nên trưởng phòng không thấy mục này.
+				hidden: item.status === 'RECALLED' || !canSend.value,
 				action: () => handleRecall(item),
 			},
 		];
@@ -188,6 +194,40 @@
 
 	// ─── Lifecycle ───────────────────────────────────────────────────────────────
 	onMounted(load);
+
+	// ─── Hướng dẫn ───────────────────────────────────────────────────────────────
+	/** Thông báo chưa thu hồi đầu tiên đang hiện: hướng dẫn Thu hồi trỏ vào nút ba chấm của nó. */
+	const firstActiveId = computed(() => items.value.find(i => i.status !== 'RECALLED')?.id ?? null);
+
+	// Menu ba chấm tự giữ trạng thái mở, nên đóng nó bằng chính nút của nó, đúng như người dùng làm.
+	function recallTrigger() {
+		return document.querySelector<HTMLButtonElement>('[data-tour="ann-recall"] button[aria-haspopup]');
+	}
+
+	// Hướng dẫn "Tạo thông báo", "Thu hồi thông báo" và "Tìm kiếm thông báo", mở từ nút Hướng dẫn nổi bên phải.
+	useGuideTour('announcement-create', () => announcementCreateOpenTour({ canSend: () => canSend.value }));
+	useGuideTour('announcement-recall', () =>
+		announcementRecallTour({
+			canRecall: () => canSend.value,
+			hasActive: () => firstActiveId.value !== null,
+			isLoading: () => loading.value,
+			isMenuOpen: () => recallTrigger()?.getAttribute('aria-expanded') === 'true',
+			closeMenu: () => recallTrigger()?.click(),
+		}),
+	);
+	useGuideTour('announcement-search', () =>
+		announcementSearchTour({ hasItems: () => items.value.length > 0, isLoading: () => loading.value }),
+	);
+
+	const tour = useTour();
+
+	/**
+	 * Đổi trang là tour tắt, nên khi người dùng bấm Tạo thông báo trong lúc hướng dẫn đang chạy thì
+	 * xếp hướng dẫn vào hàng chờ: trang tạo đăng ký cùng `tourId` và chạy tiếp phần form.
+	 */
+	function onCreateClick() {
+		if (tour.state.value?.tour.id === 'announcement-create') tour.pending.value = 'announcement-create';
+	}
 </script>
 
 <template>
@@ -200,6 +240,8 @@
 			<NuxtLink
 				v-if="canSend"
 				to="/management/announcements/create"
+				data-tour="ann-create-open"
+				@click="onCreateClick"
 				class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
 			>
 				<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -213,7 +255,7 @@
 
 		<!-- Filter bar -->
 		<div class="flex flex-col sm:flex-row flex-wrap gap-3 items-end">
-			<div class="w-full sm:flex-1 sm:min-w-[240px] space-y-1.5">
+			<div data-tour="ann-search" class="w-full sm:flex-1 sm:min-w-[240px] space-y-1.5">
 				<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
 					Tìm kiếm
 				</label>
@@ -239,7 +281,7 @@
 					/>
 				</div>
 			</div>
-			<div class="w-full sm:w-72 space-y-1.5">
+			<div data-tour="ann-date" class="w-full sm:w-72 space-y-1.5">
 				<label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
 					Ngày tạo
 				</label>
@@ -252,7 +294,7 @@
 				/>
 				<p v-if="dateRangeError" class="text-xs text-red-500">{{ dateRangeError }}</p>
 			</div>
-			<div class="flex items-center gap-3">
+			<div data-tour="ann-reset" class="flex items-center gap-3">
 				<CommonAppResetFilterButton @click="resetFilter" />
 			</div>
 		</div>
@@ -303,6 +345,7 @@
 						<tr
 							v-for="(item, idx) in items"
 							:key="item.id"
+							:data-tour="idx === 0 ? 'ann-row' : undefined"
 							:class="[
 								'hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors',
 								item.status === 'RECALLED' ? 'opacity-60' : '',
@@ -335,7 +378,10 @@
 							<td class="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
 								{{ formatDateTime(item.sentAt) }}
 							</td>
-							<td class="px-4 py-3 whitespace-nowrap">
+							<td
+								class="px-4 py-3 whitespace-nowrap"
+								:data-tour="item.id === firstActiveId ? 'ann-status' : undefined"
+							>
 								<span
 									v-if="item.status === 'RECALLED'"
 									:title="item.recalledAt ? `Thu hồi lúc ${formatDateTime(item.recalledAt)}` : 'Đã thu hồi'"
@@ -352,8 +398,14 @@
 								</span>
 							</td>
 							<td class="px-4 py-3">
-								<div class="flex justify-end">
-									<UiDropdownMenu :items="buildActions(item)" />
+								<div
+									class="flex justify-end"
+									:data-tour="item.id === firstActiveId ? 'ann-recall' : undefined"
+								>
+									<UiDropdownMenu
+										:items="buildActions(item)"
+										:menu-tour="item.id === firstActiveId ? 'ann-recall-menu' : undefined"
+									/>
 								</div>
 							</td>
 						</tr>

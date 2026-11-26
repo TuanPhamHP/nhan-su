@@ -20,6 +20,16 @@ export interface ApprovalCountsResponseDto {
 	 * uỷ quyền. Không phụ thuộc quyền nào: mọi vai trò đều có thể được giao duyệt một bước.
 	 */
 	generalRequests: number;
+	/**
+	 * Công việc lô 1: việc Chờ nghiệm thu mà người xem là người nghiệm thu. KHÔNG cộng vào `total`
+	 * (nghiệm thu làm ở trang Công việc); 0 khi module `TASKS` không dùng đầy đủ. BE cũ không có.
+	 */
+	taskReviews?: number;
+	/**
+	 * KPI (lô 3): phiếu Chờ cấp trên đánh giá mà người xem chấm. KHÔNG cộng vào `total` (đánh giá làm ở trang
+	 * KPI); 0 khi module `TASKS` không dùng đầy đủ. BE cũ không có.
+	 */
+	kpiReviews?: number;
 	total: number;
 }
 

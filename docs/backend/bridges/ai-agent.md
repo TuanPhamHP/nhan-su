@@ -359,7 +359,7 @@ Cùng request body. Trả **201** + envelope:
 ```jsonc
 {
   "title": "Xác nhận đơn nghỉ phép",
-  "confirmLevel": "L1_CREATE",          // "L1_CREATE" | "L2_DECIDE"
+  "confirmLevel": "L1_CREATE",          // "L1_CREATE" | "L2_DECIDE" | "L2_CHANGE"
   "fields": [
     { "name": "_employee", "label": "Người xin nghỉ", "type": "readonly", "required": false,
       "value": "Nguyễn Văn A", "source": "system" },
@@ -395,10 +395,31 @@ không nói gì — người dùng đổi thoải mái. **Đừng disable field 
 `type` khả dụng: `text` · `textarea` · `number` · `date` · `select` · `readonly`.
 `options` chỉ xuất hiện khi `type: "select"`.
 
+### Ô bắt buộc, ô ẩn hiện theo ô khác
+
+| Thuộc tính | Nghĩa | Client làm gì |
+|---|---|---|
+| `required: true` | Bắt buộc **cố định** | Chặn gửi khi trống, bất kể ô khác chọn gì |
+| `requiredWhen: { field, equals: string[] }` | Bắt buộc **khi** ô `field` đang có giá trị nằm trong `equals` (so dạng chuỗi) | Đánh giá lại mỗi lần ô `field` đổi; không khớp thì ô này không bắt buộc |
+| `visibleWhen: { field, equals: string[] }` | Chỉ hiện khi ô `field` khớp `equals` | Ẩn thì **không gửi** ô này khi xác nhận |
+| `minLength` | Độ dài tối thiểu sau khi bỏ khoảng trắng hai đầu | Ô đã có chữ mà ngắn hơn thì chặn gửi (ô trống do `required`/`requiredWhen` quyết) |
+
+Server luôn gửi ô bắt buộc-theo-lựa-chọn là `required: false` **kèm** `requiredWhen`; không bao giờ `required: true`
+kèm `requiredWhen` (từng có ở `kpi_giveFeedback`, `task_transition` bản nháp 26/11/2026, đã sửa). Ví dụ: phản hồi KPI
+bắt buộc khi `agreed = "false"`; lý do bắt buộc và chỉ hiện khi `action` là `return`, `reopen`, `cancel`. Server vẫn
+kiểm lại mọi thứ lúc xác nhận nên không ghi sai dữ liệu, nhưng gửi rồi bị từ chối là **mất lượt xác nhận** (form
+khoá, phải hỏi lại): client phải chặn trước theo đúng bảng trên.
+
 ### Quy tắc render khác
 
 - **`context` là dữ liệu do SERVER đọc từ DB**, không phải lời văn của model → render như panel số
-  liệu tin cậy. Với `L2_DECIDE` đây là nội dung thật của đơn đang được duyệt.
+  liệu tin cậy, với **mọi** `confirmLevel`. Với `L2_DECIDE` đây là nội dung thật của đơn đang được duyệt; với
+  `L2_CHANGE` (từ 19/11/2026: dời, huỷ lượt họp; từ 26/11/2026: chuyển trạng thái, đổi hạn việc, phản hồi phiếu
+  KPI) là dữ liệu HIỆN TẠI của bản ghi sắp bị sửa hay huỷ (phòng, giờ, chủ trì, tiêu đề nếu người xem được thấy;
+  trạng thái, người làm, hạn, phiên bản của việc; điểm, xếp loại, nhận xét của phiếu). Đừng chỉ hiện panel khi `confirmLevel === 'L2_DECIDE'`.
+- **`confirmLevel` lạ thì vẫn render form như thường** (dùng `fields`, `context`, `warnings`, `submitLabel`):
+  server có thể thêm mức mới. Muốn đổi màu nút theo mức thì `L2_CHANGE` nên trông như thao tác sửa, huỷ (ví dụ
+  màu cảnh báo), khác nút "Gửi đơn".
 - **`warnings` phải hiện nổi bật** và **không được chặn submit**. Server cố tình cho phép gửi kèm
   cảnh báo (ví dụ vượt quỹ phép) — quyết định là của người dùng, không phải của client.
 - `successMessage` là câu hiện sau khi commit xong. Server **cũng tự lưu** nó thành message `SYSTEM`
@@ -476,6 +497,29 @@ Response **201**:
 
 `result` là **kiểu mở** (`unknown`). **Đừng bind chặt vào shape của nó** — hiện `message` cho người
 dùng, cần chi tiết đơn thì gọi [leave-requests.md](./leave-requests.md) như bình thường.
+
+`message` thường bằng `form.successMessage`. Từ 19/11/2026, tool nào cho người dùng đổi trong form chính thứ mà
+câu báo nêu (`office_bookRoom`, `office_changeBooking`, `office_cancelBooking`, `office_setSupplyLine`) thì server
+dựng `message` từ KẾT QUẢ thật, ví dụ "Đã đặt Phòng B (Văn phòng Hữu Nghị) 14:00–15:00 ngày 20/11/2026. …" dù form
+mở với Phòng A. Luôn hiện `message` của response.
+
+Key `payload` của bốn tool Hành chính văn phòng (đúng `name` của field trong form):
+
+| Tool | Key |
+|---|---|
+| `office_bookRoom` | `roomId`, `date`, `startTime` (`HH:mm`), `endTime` (`HH:mm`), `title`, `isPrivate` (`"true"`/`"false"`), `note` |
+| `office_changeBooking` | `bookingId`, `date`, `startTime`, `endTime`, `roomId` (server chỉ gửi phòng và giờ xuống service, key khác bị bỏ) |
+| `office_cancelBooking` | `bookingId`, `reason` (bắt buộc khi lượt không phải của mình; field có `requiredWhen` theo `bookingId`) |
+| `office_setSupplyLine` | `requestId`, `itemId`, `quantity` (số nguyên ≥ 1), `overQuotaReason`, `note` |
+
+Key `payload` của bốn tool Công việc và KPI (từ 26/11/2026; `message` của cả bốn cũng dựng từ kết quả thật):
+
+| Tool | Key |
+|---|---|
+| `task_create` | `title` (1–300 ký tự), `assigneeId`, `dueDate` (`YYYY-MM-DD`), `points` (1, 2, 3, 5 hoặc 8), `priority` (`LOW` \| `NORMAL` \| `HIGH` \| `URGENT`), `projectId` (`""` = việc lẻ), `description` (≤2000) |
+| `task_transition` | `taskRef` (giá trị option, dạng `"<id>:<phiên bản>"`, gửi nguyên), `action` (`start` \| `submit` \| `accept` \| `return` \| `self_close` \| `reopen` \| `cancel` \| `back_to_todo`), `reason` (bắt buộc với `return`, `reopen`, `cancel`: field có `requiredWhen`, `visibleWhen` theo `action`), `qualityScore` (`""` hoặc 1–5, chỉ khi `accept`: `visibleWhen`) |
+| `task_changeDue` | `taskRef` (như trên), `dueDate`, `reason` (bắt buộc) |
+| `kpi_giveFeedback` | `reviewId`, `agreed` (`"true"`/`"false"`), `feedback` (bắt buộc khi `agreed = "false"`: `requiredWhen`) |
 
 ### Các trạng thái lỗi của confirm
 
@@ -953,14 +997,23 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `asset-value` | Giá trị còn lại, khấu hao, chi phí dịch vụ — chỉ đọc, cần quyền xem giá | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
 | `recruit-my` | Lịch phỏng vấn, phiếu đánh giá của tôi — chỉ đọc, thêm 16/11/2026 | mọi role |
 | `recruit-overview` | Tin đang tuyển, hồ sơ theo vòng, định biên, ứng viên, offer chờ duyệt, nguồn — chỉ đọc | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` |
+| `office-room-booking` | Phòng họp: phòng trống, lịch họp của tôi, đặt (**có tool ghi** `L1_CREATE`), dời và huỷ (**có tool ghi** `L2_CHANGE`) — thêm 19/11/2026 | mọi role |
+| `office-supply-my` | Văn phòng phẩm của phòng tôi: phiếu kỳ đang mở, hạn chót, định mức; ghi thêm, sửa số một mặt hàng (**có tool ghi** `L1_CREATE`) | mọi role |
+| `office-overview` | Tiến độ kỳ văn phòng phẩm, chi phí văn phòng phẩm theo phòng — chỉ đọc | `ADMIN` `HR` `DIRECTOR` `MANAGER` `CHIEF` (cần `office:supply:report`) |
+| `task-my` | Việc của tôi: lịch việc theo hạn, việc chờ tôi nghiệm thu, chi tiết một việc, tìm việc; chuyển trạng thái, đổi hạn (**có tool ghi** `L2_CHANGE`) — thêm 26/11/2026 | mọi role |
+| `task-assign` | Giao việc mới (**có tool ghi** `L1_CREATE`) | mọi role |
+| `task-team` | Việc của phòng, tiến độ dự án, báo cáo tiến độ — chỉ đọc, server quyết phạm vi (trưởng phòng, quản lý dự án, giám đốc) | mọi role |
+| `kpi-my` | KPI của tôi: phiếu, điểm, xếp loại; phản hồi phiếu (**có tool ghi** `L2_CHANGE`) | mọi role |
+| `kpi-review` | Phiếu KPI chờ tôi chấm (chấm trên web), kết quả KPI theo kỳ, cả năm — chỉ đọc | mọi role (server quyết phạm vi) |
 | `capabilities` | "Trợ lý làm được gì?" — trả lời về chính năng lực hệ thống, không gọi tool | mọi role |
-| `unsupported` | Việc có trên web nhưng trợ lý không làm trong chat (lương, BHXH, đổi mật khẩu, CCCD, **báo cáo/chi phí công tác**) | mọi role |
+| `unsupported` | Việc có trên web nhưng trợ lý không làm trong chat (lương, BHXH, đổi mật khẩu, CCCD, **báo cáo/chi phí công tác**; từ 26/11/2026 cả tạo dự án, việc định kỳ, bình luận, đổi người làm của phân hệ Công việc) | mọi role |
 | `fallback` | Không khớp chủ đề nào | mọi role |
 
-> Năm playbook `asset-*`, `recruit-*` thuộc hai module bán riêng (`ASSET`, `RECRUIT`). Công ty chưa bật module
-> thì router vẫn có thể vào playbook đó, nhưng không có tool `asset_*`/`recruit_*` nào, và trợ lý trả lời rằng
-> công ty chưa dùng module. Client không cần xử lý gì riêng; chỉ cần nhãn chủ đề cho các `playbookId` mới ở
-> màn thống kê, đánh giá.
+> Năm playbook `asset-*`, `recruit-*` thuộc hai module bán riêng (`ASSET`, `RECRUIT`), ba playbook `office-*`
+> thuộc module `OFFICE`, năm playbook `task-*`, `kpi-*` thuộc module `TASKS`. Công ty chưa bật module thì router
+> vẫn có thể vào playbook đó, nhưng không có tool `asset_*`/`recruit_*`/`office_*`/`task_*`/`kpi_*` nào, và trợ
+> lý trả lời rằng công ty chưa dùng module. Module `OFFICE`, `TASKS` ở chế độ chỉ xem thì còn tool đọc, mất bốn
+> tool ghi. Client không cần xử lý gì riêng; chỉ cần nhãn chủ đề cho các `playbookId` mới ở màn thống kê, đánh giá.
 
 > ⚠️ `unsupported` **không còn** bao gồm việc ĐĂNG KÝ đi công tác — việc đó chuyển sang
 > `business-trip-request` ngày 29/09/2026. Client nào đang hiện chữ "vào /business-trips/create"
@@ -976,10 +1029,18 @@ có bảng đầy đủ; lưu ý bảng đó viết tên theo dấu chấm ở m
 Muốn hiện "Đang tra quỹ phép…" thì map tên tool → nhãn tiếng Việt ở phía client, hoặc bỏ qua và chỉ
 hiện "Đang tra dữ liệu…".
 
-### Tool ghi — 7 cái, tất cả đều qua form xác nhận
+### Tool ghi — 15 cái, tất cả đều qua form xác nhận
 
 | Tool | Mức | Việc |
 |---|---|---|
+| `task_create` | `L1_CREATE` | Giao một việc mới (người hỏi là người giao, người nghiệm thu). Ô người làm là `select` dựng từ tên người dùng nói: một người thì chọn sẵn, nhiều người trùng tên thì để trống cho người dùng chọn |
+| `task_transition` | `L2_CHANGE` | Bắt đầu làm, báo xong, nghiệm thu (kèm sao 1–5), trả lại, đóng việc, mở lại, huỷ, về Chưa làm. Ô thao tác chỉ có thao tác người hỏi làm được. Panel `context` là việc hiện tại (có `Phiên bản`) |
+| `task_changeDue` | `L2_CHANGE` | Đổi hạn có lý do (người giao, quản lý dự án, trưởng phòng của người giao). Panel: hạn hiện tại, hạn ban đầu, số lần đã đổi |
+| `kpi_giveFeedback` | `L2_CHANGE` | Đồng ý hay chưa đồng ý với phiếu KPI của chính mình, kèm phản hồi. Panel: kỳ, bước, điểm, xếp loại, người chấm, nhận xét |
+| `office_bookRoom` | `L1_CREATE` | Đặt phòng họp, người hỏi là người đặt và chủ trì, không mời người dự (mời tiếp trên web) |
+| `office_changeBooking` | `L2_CHANGE` | Dời lượt họp: đổi ngày, giờ, phòng. Panel `context` là lượt hiện tại |
+| `office_cancelBooking` | `L2_CHANGE` | Huỷ lượt họp; lượt của người khác bắt lý do (`requiredWhen` theo ô chọn lượt) |
+| `office_setSupplyLine` | `L1_CREATE` | Ghi thêm hoặc sửa số một mặt hàng trong phiếu văn phòng phẩm kỳ đang mở của phòng |
 | `leave_createRequest` | `L1_CREATE` | Đơn nghỉ phép (gồm cả đi muộn / về sớm tính theo phút) |
 | `overtime_createRequest` | `L1_CREATE` | Đơn tăng ca |
 | `makeup_createRequest` | `L1_CREATE` | Đơn bù công |
@@ -1040,6 +1101,59 @@ tại với trợ lý (không xuất hiện trong `toolsCalled`).
 Client **không phải sửa gì** ngoài nhãn chủ đề cho năm `playbookId` mới: bảng kết quả đi qua sự kiện `table`
 như các tool khác, không có endpoint hay sự kiện SSE mới.
 
+### Tool đọc, ghi Hành chính văn phòng — thêm 19/11/2026
+
+Chín tool tên bắt đầu bằng `office_` (module `OFFICE`): năm tool đọc, bốn tool ghi (bảng "Tool ghi" ở trên). Công
+ty chưa dùng module thì không tool nào tồn tại với trợ lý; module chỉ xem thì chỉ còn năm tool đọc.
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `office_findFreeRooms` | `office-room-booking` | Phòng trống theo ngày, giờ, số người, thiết bị; lượt đã đặt (giờ, người đặt). Lượt riêng tư người hỏi không liên quan chỉ hiện "Cuộc họp riêng tư" | mọi role |
+| `office_myBookings` | `office-room-booking` | Lịch họp của tôi (đặt, chủ trì, được mời), nhãn Đã đặt / Đang họp / Đã kết thúc / Đã huỷ, `bookingId` | mọi role |
+| `office_mySupplyRequest` | `office-supply-my` | Phiếu văn phòng phẩm kỳ đang mở của phòng tôi: hạn chót, còn sửa được không, dòng, định mức, ai sửa cuối. Đơn giá chỉ khi được xem chi phí | mọi role |
+| `office_periodProgress` | `office-overview` | Tiến độ kỳ: phòng chưa nhập, phiếu chờ chốt, chờ cấp, chờ nhận, nhận thiếu | vai trò quản lý + `office:supply:report`; trưởng phòng chỉ phòng mình |
+| `office_supplyCosts` | `office-overview` | Chi phí văn phòng phẩm theo tháng, phòng (số thực nhận × đơn giá kỳ, chưa gồm dự trù) | như trên |
+
+Phía client cần làm (bàn giao chi tiết: [`_fe-prompt-agent-office.md`](./_fe-prompt-agent-office.md)):
+
+1. Nhãn cho ba `playbookId` mới và chín tên tool mới (`status.tool`, `toolsCalled`).
+2. `confirmLevel` có thêm `L2_CHANGE`: render form như mọi mức, **hiện panel `context`** (lượt hiện tại).
+3. Câu báo sau khi xác nhận (`message` của `POST /agent/actions/:id/confirm`) với ba tool phòng họp, tool văn
+   phòng phẩm được dựng từ KẾT QUẢ thật (phòng, giờ người dùng đã chọn trong form), có thể khác `form.successMessage`.
+   Client hiện `message` của response, đừng hiện lại `form.successMessage`.
+
+### Tool đọc, ghi Công việc và KPI — thêm 26/11/2026
+
+Mười bốn tool tên bắt đầu bằng `task_` hoặc `kpi_` (module `TASKS`): mười tool đọc, bốn tool ghi (bảng "Tool ghi" ở
+trên). Công ty chưa dùng module thì không tool nào tồn tại với trợ lý; module chỉ xem thì chỉ còn mười tool đọc. Server
+(service của module) quyết mọi phạm vi: người không có quyền nhận câu từ chối dạng văn bản bình thường, không phải mã lỗi
+HTTP.
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `task_myAgenda` | `task-my` (lấy sẵn) | Việc tôi làm còn mở theo hạn (Quá hạn, Hôm nay, Tuần này, Sau đó), việc chờ tôi nghiệm thu, số việc tôi giao quá hạn | mọi role |
+| `task_search` | `task-my`, `task-team` | Tìm việc theo thẻ (tôi làm, tôi giao, tôi theo dõi, chờ tôi nghiệm thu), trạng thái, hạn, chữ, dự án | mọi role, trong phạm vi xem việc |
+| `task_getDetail` | `task-my`, `task-team` | Chi tiết một việc theo số hiệu; việc không xem được thì chỉ có câu từ chối kèm tên người giao | như trên |
+| `task_departmentOverview` | `task-team` | Việc của phòng theo người, việc quá hạn | trưởng phòng (phòng mình), giám đốc, ADMIN |
+| `task_projectOverview` | `task-assign`, `task-team` | Dự án của tôi; tiến độ một dự án | thành viên dự án, giám đốc, ADMIN |
+| `task_progressReport` | `task-team` | Báo cáo tiến độ theo người trong khoảng ngày | trưởng phòng, quản lý dự án (dự án mình), `task:report`, ADMIN |
+| `kpi_myReviews` | `kpi-my` (lấy sẵn) | Phiếu KPI của tôi: kỳ đang mở, các kỳ đã công bố | mọi role |
+| `kpi_getReview` | `kpi-my`, `kpi-review` | Một phiếu: từng chỉ tiêu, tổng, xếp loại, nhận xét, phản hồi | chính nhân viên, người chấm, `kpi:manage`, giám đốc, ADMIN |
+| `kpi_toReview` | `kpi-review` | Phiếu chờ tôi chấm kèm đường dẫn `/kpi/danh-gia?reviewId=` | mọi role (người chấm có thể là nhân viên) |
+| `kpi_periodResults` | `kpi-review` | Kết quả kỳ, cả năm: phân bố xếp loại, từng người | `kpi:manage`, giám đốc, ADMIN (mọi phòng), trưởng phòng (phòng mình) |
+
+Câu trả lời có thể kèm đường dẫn web dạng chữ trong dấu `…`: `/cong-viec?task=HQ-2` (khung chi tiết việc),
+`/kpi?reviewId=12` (phiếu của tôi), `/kpi/danh-gia?reviewId=12` (phiếu tôi chấm). Bộ dựng markdown của web chưa biến
+chúng thành link bấm được (tuỳ chọn, xem bàn giao web).
+
+Phía client cần làm (bàn giao chi tiết: [`_fe-prompt-agent-tasks.md`](./_fe-prompt-agent-tasks.md)):
+
+1. Nhãn cho năm `playbookId` mới (và ba `playbookId` văn phòng còn thiếu ở web) cùng mười bốn tên tool mới.
+2. `confirmLevel` có `L2_CHANGE` (đã có từ văn phòng): ba trong bốn tool ghi mới dùng mức này, panel `context` phải hiện.
+3. `message` của `POST /agent/actions/:id/confirm` dựng từ kết quả thật (số hiệu việc mới, trạng thái sau khi chuyển,
+   hạn mới): hiện `message`, đừng hiện lại `form.successMessage`.
+4. Ô `select` có thể mang giá trị chuỗi dạng `"12:3"` (`taskRef`): gửi nguyên giá trị option, đừng ép sang số.
+
 ⚠️ **Về số lượt giải trình — đừng hiển thị như hạn mức.** Ngưỡng 5 KHÔNG chặn nộp phiếu;
 nó chỉ quyết phiếu tiếp theo cần 1 hay 2 cấp duyệt. Response có `hasHardLimit: false` và
 `remainingBeforeMultiLevel` (cố ý KHÔNG tên là `remainingQuota`). Client đừng vẽ thanh
@@ -1068,7 +1182,7 @@ lần nữa. Client không cần làm gì thêm.
 // types/ai-agent.types.ts
 
 export type RouterTier = 'RULE' | 'EMBEDDING' | 'LLM' | 'FALLBACK';
-export type ConfirmLevel = 'L1_CREATE' | 'L2_DECIDE';
+export type ConfirmLevel = 'L1_CREATE' | 'L2_DECIDE' | 'L2_CHANGE';
 export type AgentFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'readonly';
 /** NGUỒN của giá trị, KHÔNG phải quyền sửa. Xem mục "source và type là HAI chuyện khác nhau". */
 export type AgentFieldSource = 'llm' | 'system';
@@ -1191,6 +1305,12 @@ export interface AgentFormField {
   source: AgentFieldSource;
   options?: AgentFormOption[];   // chỉ có khi type === 'select'
   helpText?: string;
+  /** Bắt buộc khi ô `field` có giá trị trong `equals` (so chuỗi). Đi cùng `required: false`. */
+  requiredWhen?: { field: string; equals: string[] };
+  /** Chỉ hiện (và chỉ gửi) khi ô `field` có giá trị trong `equals`. */
+  visibleWhen?: { field: string; equals: string[] };
+  /** Độ dài tối thiểu sau trim. */
+  minLength?: number;
 }
 
 export interface AgentFormPanel {

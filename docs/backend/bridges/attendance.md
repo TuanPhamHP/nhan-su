@@ -19,6 +19,15 @@
 | GET | `/v1/attendance/me` | `EMPLOYEE` | Lịch sử chấm công cá nhân (có phân trang) |
 | GET | `/v1/attendance` | `ADMIN`, `HR`, `MANAGER`, `CHIEF` | Toàn bộ chấm công (có phân trang + filter) |
 | PATCH | `/v1/attendance/:id` | `ADMIN`, `HR` | Chỉnh sửa thủ công bản ghi |
+| GET | `/v1/attendance/face/settings` | Mọi user đã đăng nhập | Công ty có bật chấm công bằng khuôn mặt không |
+| PUT | `/v1/attendance/face/settings` | Quyền `attendance:face:setting` (mặc định chỉ ADMIN) | Bật hoặc tắt cho cả công ty |
+| GET | `/v1/attendance/face/me` | Mọi user đã đăng nhập | Khuôn mặt của tôi: đã đăng ký chưa, ảnh, số lượt thử còn lại |
+| POST | `/v1/attendance/face/me` | Mọi user đã đăng nhập | Tự đăng ký khuôn mặt lần đầu (multipart `photo` + `consent`) |
+| GET | `/v1/attendance/face/employees` | Quyền `attendance:face:manage` (HR) | Nhân viên đang làm và ngày đăng ký khuôn mặt |
+| GET | `/v1/attendance/face/employees/:employeeId` | Quyền `attendance:face:manage` | Khuôn mặt của một nhân viên (ảnh đã ký) |
+| DELETE | `/v1/attendance/face/employees/:employeeId` | Quyền `attendance:face:manage` | Xoá hẳn để nhân viên đăng ký lại |
+
+> Mục [Chấm công bằng khuôn mặt](#chấm-công-bằng-khuôn-mặt-23112026) ở cuối file mô tả luồng màn hình và mã lỗi.
 
 > **Lưu ý thứ tự route:** `/attendance/check-attendance`, `/attendance/me/stats`, `/attendance/photo-url`, `/attendance/today-info`, `/attendance/me` đều được khai báo **trước** `/attendance/:id` trong controller.
 
@@ -66,6 +75,12 @@ export interface AttendanceRecordDetail {
   checkOutAt: string | null;         // ISO 8601 full datetime
   checkInPhotoUrl: string | null;    // S3 URL ảnh selfie check-in (dùng /photo-url để lấy presigned)
   checkOutPhotoUrl: string | null;   // S3 URL ảnh selfie check-out
+  checkInFaceResult: AttendanceFaceResult | null;  // null = lúc chấm công ty đang tắt nhận diện khuôn mặt
+  checkInFaceResultLabel: string | null;           // "Khớp" | "Không khớp, nhân viên vẫn xác nhận"
+  checkInFaceScore: number | null;                 // độ giống 0..1, từ 0,363 là khớp; null khi không thấy mặt
+  checkOutFaceResult: AttendanceFaceResult | null;
+  checkOutFaceResultLabel: string | null;
+  checkOutFaceScore: number | null;
   isLocked: boolean;                 // true = bị lock, không tự sửa được
   lockReason: string | null;         // "AUTO_MIDNIGHT" | "HR_LOCKED"
   missingType: string | null;        // "MISSING_CHECKOUT" | "MISSING_CHECKIN"
@@ -105,7 +120,13 @@ export interface CheckAttendanceResponseDto {
   requiresLocationCheck: boolean; // false → FE bỏ qua isInRange/distance để gate UI, không xin GPS permission
   checkInWindow: TimeWindowDto | null;
   checkOutWindow: TimeWindowDto | null;
+  faceRequired: boolean;         // công ty đang bật chấm công bằng khuôn mặt
+  faceRegistered: boolean;       // faceRequired=true mà false → đưa sang bước đăng ký trước khi mở camera chấm công
+  faceAttemptsLeft: number;      // số lần còn được thử lại khi không khớp trong hôm nay (0..5)
 }
+
+// MATCHED = khớp; CONFIRMED_MISMATCH = máy báo không khớp nhưng nhân viên bấm "Vẫn xác nhận"
+export type AttendanceFaceResult = 'MATCHED' | 'CONFIRMED_MISMATCH';
 
 // GET /attendance/me/stats
 export interface AttendanceStatsResponseDto {
@@ -190,6 +211,7 @@ export interface QueryAttendanceParams {
   employeeId?: number;
   departmentId?: number;
   status?: AttendanceStatus;
+  faceResult?: AttendanceFaceResult; // chỉ GET /attendance: bản ghi có check-in HOẶC check-out mang kết quả này
 }
 ```
 
@@ -244,6 +266,9 @@ POST /v1/attendance/check-in  (multipart/form-data)
     ├─ 400 "Bản ghi chấm công đã bị khóa. Vui lòng tạo đơn bù công."
     ├─ 400 "Đã check-out, không thể check-in lại trong ngày."
     │       (check-in lần 2 sau khi đã check-out)
+    ├─ 400 FACE_NOT_REGISTERED | FACE_NOT_MATCHED | FACE_NOT_DETECTED | FACE_ATTEMPTS_EXCEEDED
+    │       (chỉ khi công ty bật nhận diện khuôn mặt, xem mục cuối file)
+    ├─ 503 FACE_ENGINE_UNAVAILABLE (máy chủ thiếu mô hình khuôn mặt)
     │
     └─ 201 Created → AttendanceRecordDetail
     │       (check-in mới hoặc overwrite check-in cũ nếu vẫn trong window)
@@ -262,6 +287,7 @@ POST /v1/attendance/check-in  (multipart/form-data)
 | `photo` | File | ✓ | Ảnh selfie, JPG hoặc PNG, tối đa 5MB |
 | `latitude` | number | ✓ | Vĩ độ GPS |
 | `longitude` | number | ✓ | Kinh độ GPS |
+| `confirmFaceMismatch` | boolean | — | `true` khi nhân viên bấm "Vẫn xác nhận" sau lỗi khuôn mặt (xem mục khuôn mặt) |
 
 **Response 201 — check-in thành công:**
 ```json
@@ -318,6 +344,9 @@ POST /v1/attendance/check-in  (multipart/form-data)
 | Field | Type | Bắt buộc | Mô tả |
 |-------|------|----------|-------|
 | `photo` | File | ✓ | Ảnh selfie, JPG hoặc PNG, tối đa 5MB |
+| `latitude` | number | ✓ | Vĩ độ GPS hiện tại |
+| `longitude` | number | ✓ | Kinh độ GPS hiện tại |
+| `confirmFaceMismatch` | boolean | — | `true` khi nhân viên bấm "Vẫn xác nhận" sau lỗi khuôn mặt (xem mục khuôn mặt) |
 
 Server lấy `checkOutAt = thời điểm nhận request`.
 
@@ -775,3 +804,143 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 | Check-out khi ca có `requireCheckOut=false` | 400 `"Ca làm việc hôm nay không yêu cầu check-out"` |
 | Check-out sau `shiftEnd + 60p` (default) | 400 `"Đã quá giờ check-out (sau HH:MM). Vui lòng tạo phiếu giải trình."` — window sau default là **60p**, không phải 120p như trước |
 | Ca có `checkOutWindowEnd=30` → check-out sau `shiftEnd + 30p` | 400 window closed — dùng cửa sổ HR cài trên ca |
+
+---
+
+## Chấm công bằng khuôn mặt (23/11/2026)
+
+Nghiệp vụ đầy đủ ở `docs/modules/03-attendance.md` mục 8. Phần này là hợp đồng cho web và mobile.
+
+**Tóm tắt.** Công ty bật tắt bằng một công tắc (mặc định tắt). Khi bật, **server** so ảnh selfie đang gửi lên ở
+check-in và check-out với khuôn mặt nhân viên đã đăng ký. Client không chạy mô hình nào, chỉ chụp ảnh như hiện tại và
+gửi đúng các API sẵn có. Khi tắt, mọi thứ chạy như trước. Bản ghi cũ không bị tính lại khi đổi công tắc.
+
+### Luồng màn hình chấm công (web và mobile giống nhau)
+
+```
+Mở màn chấm công
+  │
+  ▼
+GET /v1/attendance/check-attendance?latitude&longitude   (đã gọi sẵn để kiểm GPS)
+  │
+  ├─ faceRequired=false ─────────────► luồng cũ, không đổi gì
+  │
+  ├─ faceRequired=true, faceRegistered=false
+  │       ► màn "Đăng ký khuôn mặt" (bước bắt buộc trước khi chụp chấm công)
+  │           ô đồng ý: "Tôi đồng ý cho công ty dùng ảnh khuôn mặt của tôi để chấm công"
+  │           camera trước, khung oval hướng dẫn: nhìn thẳng, đủ sáng, chỉ một người
+  │           POST /v1/attendance/face/me  (photo, consent=true)
+  │             ├─ 201 → quay lại màn chấm công, mở camera chấm công luôn
+  │             ├─ 400 FACE_NOT_DETECTED | FACE_MULTIPLE | FACE_TOO_SMALL | FACE_IMAGE_INVALID → hiện message, chụp lại
+  │             ├─ 400 FACE_CONSENT_REQUIRED → chưa tick ô đồng ý
+  │             └─ 409 FACE_ALREADY_REGISTERED → gọi lại check-attendance (đã đăng ký ở máy khác)
+  │
+  └─ faceRequired=true, faceRegistered=true ─► chụp và gửi như cũ
+          POST /v1/attendance/check-in (hoặc check-out)  photo, latitude, longitude
+            ├─ 201/200 → thành công như cũ; bản ghi có checkInFaceResult='MATCHED'
+            ├─ 400 FACE_NOT_MATCHED | FACE_NOT_DETECTED  (error.errors[0].attemptsLeft = số lượt còn lại)
+            │     hộp thoại: message của server + hai nút
+            │       [Chụp lại]       (ẩn khi attemptsLeft = 0)
+            │       [Vẫn xác nhận]   → gửi lại đúng ảnh vừa chụp + confirmFaceMismatch=true
+            │                          → 201/200, bản ghi mang CONFIRMED_MISMATCH để HR xem lại
+            ├─ 400 FACE_ATTEMPTS_EXCEEDED → chỉ còn nút [Vẫn xác nhận]
+            ├─ 400 FACE_NOT_REGISTERED → công ty vừa bật hoặc HR vừa xoá khuôn mặt: sang màn đăng ký
+            └─ 503 FACE_ENGINE_UNAVAILABLE → toast lỗi máy chủ, cho thử lại sau
+```
+
+- `confirmFaceMismatch` là ô multipart, gửi chuỗi `"true"`. Không gửi trường này ở lần chụp đầu.
+- "Vẫn xác nhận" phải gửi **lại chính ảnh vừa chụp**, không mở camera mới.
+- Lần bị từ chối vì khuôn mặt không tính vào giới hạn 5 lần gọi check-in/check-out mỗi ngày (lỗi 429). Giới hạn riêng
+  là **5 lần sai mỗi ngày, gộp check-in và check-out**; `faceAttemptsLeft` ở check-attendance và `attemptsLeft` ở
+  `GET /face/me` cho biết số lượt còn lại.
+- Ảnh có nhiều người thì server lấy mặt to nhất, nên đồng nghiệp đứng phía sau không làm hỏng lượt chấm.
+- Web: khi bật khuôn mặt, nên bỏ đường chọn ảnh từ thư viện (input file) ở bước chấm công nếu camera dùng được. Server
+  không phân biệt được ảnh chụp lúc đó hay ảnh cũ, nên đây chỉ là chặn ở giao diện.
+
+### GET /v1/attendance/face/settings · PUT (quyền `attendance:face:setting`)
+
+```typescript
+export interface FaceSettingsResponseDto {
+  enabled: boolean;
+  updatedAt: string | null; // ISO, null = chưa từng bật
+}
+// PUT body
+export interface UpdateFaceSettingsDto {
+  enabled: boolean;
+}
+```
+
+PUT đổi từ tắt sang bật thì server gửi thông báo N-F1 cho người chưa đăng ký. PUT cùng giá trị cũ thì không làm gì.
+403 khi thiếu quyền. Nên hỏi xác nhận trước khi bật: "Từ lúc bật, mọi nhân viên phải đăng ký khuôn mặt trước lần chấm
+công tới."
+
+### GET /v1/attendance/face/me · POST (multipart)
+
+```typescript
+export interface MyFaceStatusResponseDto {
+  enabled: boolean;          // công ty đang bật
+  registered: boolean;
+  registeredAt: string | null;
+  photoUrl: string | null;   // ảnh đăng ký, link đã ký 1 giờ, hiển thị thẳng
+  attemptsLeft: number;      // 0..5, số lần còn được sai hôm nay
+}
+```
+
+POST nhận `photo` (JPG/PNG ≤ 5MB) và `consent` (`"true"`). Trả `201 MyFaceStatusResponseDto`. Lỗi ở bảng dưới. Không có
+API tự xoá: muốn đăng ký lại thì nhờ HR.
+
+### GET /v1/attendance/face/employees · GET/DELETE `/employees/:employeeId` (quyền `attendance:face:manage`)
+
+```typescript
+export interface FaceStatusItemDto {
+  employeeId: number;
+  fullName: string;
+  employeeCode: string;
+  department: { id: number; name: string } | null;
+  registeredAt: string | null; // null = chưa đăng ký
+}
+export interface EmployeeFaceResponseDto {
+  employeeId: number;
+  registered: boolean;
+  registeredAt: string | null;
+  consentAt: string | null;    // lúc nhân viên đồng ý
+  photoUrl: string | null;     // link đã ký 1 giờ
+}
+```
+
+DELETE trả 204, xoá hẳn vector và ảnh, gửi N-F2 cho nhân viên. 404 `FACE_NOT_REGISTERED` khi người đó chưa có khuôn mặt,
+404 khi không có nhân viên. Nên hỏi xác nhận: "Xoá khuôn mặt của {tên}? Người này phải đăng ký lại trước lần chấm công tới."
+
+### HR xem lại lượt "Vẫn xác nhận"
+
+`GET /v1/attendance?faceResult=CONFIRMED_MISMATCH` (kèm các bộ lọc cũ). Mỗi bản ghi có `checkInFaceResultLabel`,
+`checkOutFaceResultLabel` để hiện nhãn, và ảnh selfie ký như cũ qua `/v1/attendance/photo-url`. So với ảnh đăng ký lấy ở
+`GET /v1/attendance/face/employees/:employeeId`.
+
+### Mã lỗi
+
+Mọi lỗi theo envelope `{ success: false, error: { code, message, errors? } }`. `message` đã là câu tiếng Việt cho
+người dùng, hiện thẳng.
+
+| `error.code` | HTTP | Ở đâu | `error.errors` |
+|---|---|---|---|
+| `FACE_NOT_REGISTERED` | 400 | check-in, check-out | – |
+| `FACE_NOT_MATCHED` | 400 | check-in, check-out | `[{ attemptsLeft }]` |
+| `FACE_NOT_DETECTED` | 400 | check-in, check-out (kèm `attemptsLeft`), đăng ký | `[{ attemptsLeft }]` khi chấm công |
+| `FACE_ATTEMPTS_EXCEEDED` | 400 | check-in, check-out | `[{ attemptsLeft: 0 }]` |
+| `FACE_MULTIPLE` | 400 | đăng ký | – |
+| `FACE_TOO_SMALL` | 400 | đăng ký | – |
+| `FACE_IMAGE_INVALID` | 400 | đăng ký, chấm công | – |
+| `FACE_CONSENT_REQUIRED` | 400 | đăng ký | – |
+| `FACE_ALREADY_REGISTERED` | 409 | đăng ký | – |
+| `FACE_NOT_REGISTERED` | 404 | HR xoá người chưa đăng ký | – |
+| `FACE_TOO_MANY_REQUESTS` | 429 | đăng ký, chấm công: quá 20 lần so mặt trong 60 giây của cùng một người | – |
+| `FACE_ENGINE_UNAVAILABLE` | 503 | mọi chỗ cần so mặt | – |
+
+`FACE_TOO_MANY_REQUESTS` khác 429 cũ "Đã vượt quá số lần check-in cho phép trong ngày" (không có mã `FACE_`): chỉ cần
+hiện message, chờ một phút là gửi lại được.
+
+### Thông báo
+
+`ATTENDANCE_FACE_ENABLED` (N-F1) và `ATTENDANCE_FACE_RESET` (N-F2), category `ATTENDANCE`, `refType: 'attendance_face'`,
+`targetUrl: '/attendance/check-in'`. Mobile mở màn chấm công. Nội dung ở `docs/notifications/notification-content-map.md`.

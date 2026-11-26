@@ -8,6 +8,7 @@ import { useCheckInLocationService } from '~/services/check-in-location.service'
 import type { PositionSummary } from '~/types/position.types';
 import type { WorkShiftResponse } from '~/types/shift.types';
 import type { CheckInLocation } from '~/types/check-in-location.types';
+import { employeeCreateTour } from '~/tours/employee-new';
 
 definePageMeta({ title: 'Thêm nhân viên mới' });
 
@@ -200,6 +201,9 @@ const locationOptions = computed(() => [
 const inputCls =
 	'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50';
 const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1';
+
+// Hướng dẫn "Thêm một nhân viên", nửa sau; nửa đầu là bước bấm Thêm nhân viên ở trang danh sách.
+useGuideTour('employee-create', () => employeeCreateTour({ canCreate: () => canCreate.value }));
 </script>
 
 <template>
@@ -227,7 +231,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 
 			<div class="p-6 space-y-6">
 				<!-- Section: Thông tin tài khoản -->
-				<div>
+				<div data-tour="emp-new-account">
 					<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Tài khoản</p>
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
 						<div class="sm:col-span-2">
@@ -281,7 +285,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 				</div>
 
 				<!-- Section: Thông tin công việc -->
-				<div>
+				<div data-tour="emp-new-work">
 					<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Thông tin công việc</p>
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
 						<div>
@@ -324,7 +328,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 				</div>
 
 				<!-- Section: Thông tin cá nhân -->
-				<div>
+				<div data-tour="emp-new-personal">
 					<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Thông tin cá nhân</p>
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
 						<div>
@@ -351,6 +355,7 @@ const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-
 				</NuxtLink>
 				<CommonAppButton
 					type="submit"
+					data-tour="emp-new-submit"
 					:loading="isSubmitting"
 					:disabled="!canCreate"
 					:title="!canCreate ? 'Bạn không có quyền tạo nhân viên' : ''"

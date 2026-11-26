@@ -3,13 +3,19 @@
 	import AttendancePhotoModal from '~/components/modules/attendance/AttendancePhotoModal.vue';
 	import ManualEditModal from '~/components/modules/attendance/ManualEditModal.vue';
 	import MakeupRequestModal from '~/components/modules/attendance/MakeupRequestModal.vue';
-	import type { AttendanceRecordDetail, AttendanceStatus, QueryAttendanceParams } from '~/types/attendance.types';
+	import type {
+		AttendanceFaceResult,
+		AttendanceRecordDetail,
+		AttendanceStatus,
+		QueryAttendanceParams,
+	} from '~/types/attendance.types';
 	import type { DepartmentSummary } from '~/types/department.types';
 	import type { EmployeeSummary } from '~/types/employee.types';
 	import { useDepartmentService } from '~/services/department.service';
 	import { useAttendanceService } from '~/services/attendance.service';
 	import { useEmployeeService } from '~/services/employee.service';
 	import { calcAttendanceSummary } from '~/utils/attendance.utils';
+	import { FACE_RESULT_FILTER_OPTIONS } from '~/utils/attendance-face.utils';
 	import type { PaginatedMeta } from '~/types/api.types';
 	import type { SelectOption } from '~/components/ui/Select.vue';
 
@@ -82,6 +88,8 @@
 	const todayDepartmentId = ref<number | undefined>(isManager.value ? managerDepartmentId.value : undefined);
 	const todaySearch = ref('');
 	const todayStatusFilter = ref<AttendanceStatus | null>(null);
+	/** Bộ lọc "Khuôn mặt": "Cần xem lại" là lượt không khớp mà nhân viên vẫn xác nhận. Máy chủ lọc. */
+	const todayFaceResult = ref<AttendanceFaceResult | undefined>(undefined);
 	let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 	function toggleStatusFilter(status: AttendanceStatus) {
@@ -97,6 +105,7 @@
 				date: today,
 				limit: 100,
 				...(todayDepartmentId.value ? { departmentId: todayDepartmentId.value } : {}),
+				...(todayFaceResult.value ? { faceResult: todayFaceResult.value } : {}),
 			};
 			const res = await attendanceService.findAll(params);
 			todayRecords.value = res.data;
@@ -122,7 +131,7 @@
 
 	const todaySummary = computed(() => calcAttendanceSummary(todaySearchRecords.value));
 
-	watch(todayDepartmentId, () => fetchToday());
+	watch([todayDepartmentId, todayFaceResult], () => fetchToday());
 
 	// ─── Tab 2: History ──────────────────────────────────────────────────────
 	const historyRecords = ref<AttendanceRecordDetail[]>([]);
@@ -137,6 +146,7 @@
 		departmentId: (isManager.value ? managerDepartmentId.value : undefined) as number | undefined,
 		status: undefined as AttendanceStatus | undefined,
 		employeeId: undefined as number | undefined,
+		faceResult: undefined as AttendanceFaceResult | undefined,
 		page: 1,
 	});
 
@@ -149,6 +159,7 @@
 				departmentId: historyFilter.departmentId,
 				status: historyFilter.status,
 				employeeId: historyFilter.employeeId,
+				faceResult: historyFilter.faceResult,
 				page: historyFilter.page,
 				limit: 20,
 			};
@@ -277,6 +288,16 @@
 						type="text"
 						placeholder="Tìm tên hoặc mã nhân viên..."
 						class="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+					/>
+				</div>
+
+				<!-- Khuôn mặt -->
+				<div class="w-full sm:w-44" data-testid="face-filter-today">
+					<UiSelect
+						:model-value="todayFaceResult"
+						:options="FACE_RESULT_FILTER_OPTIONS"
+						placeholder="Khuôn mặt: tất cả"
+						@update:model-value="todayFaceResult = $event as AttendanceFaceResult | undefined"
 					/>
 				</div>
 
@@ -445,6 +466,16 @@
 						placeholder="Tất cả nhân viên"
 						search-placeholder="Tìm nhân viên..."
 						@update:model-value="historyFilter.employeeId = $event === 0 ? undefined : ($event as number)"
+					/>
+				</div>
+
+				<!-- Khuôn mặt -->
+				<div class="w-full sm:w-44" data-testid="face-filter-history">
+					<UiSelect
+						:model-value="historyFilter.faceResult"
+						:options="FACE_RESULT_FILTER_OPTIONS"
+						placeholder="Khuôn mặt: tất cả"
+						@update:model-value="historyFilter.faceResult = $event as AttendanceFaceResult | undefined"
 					/>
 				</div>
 

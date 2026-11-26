@@ -44,10 +44,15 @@
 	const CATEGORY_ICONS: Record<string, { icon: string; cls: string }> = {
 		ATTENDANCE: { icon: 'heroicons:clock', cls: 'text-amber-600 dark:text-amber-400' },
 		LEAVE: { icon: 'heroicons:calendar-days', cls: 'text-sky-600 dark:text-sky-400' },
+		TASK: { icon: 'heroicons:clipboard-document-check', cls: 'text-brand-600 dark:text-brand-400' },
 	};
 	const DEFAULT_ICON = { icon: 'heroicons:bell', cls: 'text-gray-500 dark:text-gray-400' };
 
-	const categoryIcon = computed(() => CATEGORY_ICONS[props.notification.category] ?? DEFAULT_ICON);
+	/** KPI dùng chung category `TASK` với công việc; tách icon theo loại để người đọc phân biệt. */
+	const KPI_ICON = { icon: 'heroicons:chart-bar', cls: 'text-violet-600 dark:text-violet-400' };
+	const categoryIcon = computed(() =>
+		props.notification.type?.startsWith('KPI_') ? KPI_ICON : CATEGORY_ICONS[props.notification.category] ?? DEFAULT_ICON,
+	);
 
 	const showRejectInput = ref(false);
 	const rejectNote = ref('');

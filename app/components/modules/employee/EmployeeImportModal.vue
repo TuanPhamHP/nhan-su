@@ -146,7 +146,10 @@
 					<!-- Body -->
 					<div class="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 						<!-- Step 1: Tải template -->
-						<div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4">
+						<div
+							data-tour="emp-import-template"
+							class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4"
+						>
 							<div class="flex items-start gap-3">
 								<div
 									class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 flex items-center justify-center font-semibold text-sm flex-shrink-0"
@@ -206,7 +209,10 @@
 						</div>
 
 						<!-- Step 2: Upload file -->
-						<div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4">
+						<div
+							data-tour="emp-import-upload"
+							class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4"
+						>
 							<div class="flex items-start gap-3">
 								<div
 									class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 flex items-center justify-center font-semibold text-sm flex-shrink-0"
@@ -308,7 +314,13 @@
 						<CommonAppButton type="button" variant="outline" :disabled="importing" @click="emit('close')">
 							Đóng
 						</CommonAppButton>
-						<CommonAppButton type="button" :loading="importing" :disabled="!selectedFile" @click="onImport">
+						<CommonAppButton
+							type="button"
+							data-tour="emp-import-submit"
+							:loading="importing"
+							:disabled="!selectedFile"
+							@click="onImport"
+						>
 							Import
 						</CommonAppButton>
 					</div>
