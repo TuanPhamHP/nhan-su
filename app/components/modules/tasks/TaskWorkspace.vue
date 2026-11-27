@@ -7,6 +7,8 @@
 	import TaskFilterBar from '~/components/modules/tasks/TaskFilterBar.vue';
 	import TaskList from '~/components/modules/tasks/TaskList.vue';
 	import { useTasksService } from '~/services/tasks.service';
+	import { TASK_PROJECT_CONTEXT } from '~/composables/useTaskDetailCache';
+	import type { TaskFilterState } from '~/composables/useTaskFilters';
 	import type {
 		TaskBoard as TaskBoardData,
 		TaskDetail,
@@ -60,6 +62,16 @@
 
 	const service = useTasksService();
 	const panel = useTaskPanel();
+
+	// Khung chi tiết dùng lại nhóm việc, đợt trang dự án đã tải, khỏi gọi lại dự án mỗi lần mở một việc.
+	provide(
+		TASK_PROJECT_CONTEXT,
+		computed(() =>
+			props.base.projectId
+				? { projectId: props.base.projectId, groups: props.taskGroups, sprints: props.sprints, canContribute: props.canContribute }
+				: null,
+		),
+	);
 	const filters = useTaskFilters(() => props.storageKey);
 	const { state } = filters;
 
@@ -148,13 +160,20 @@
 	);
 
 	// ─── Thời gian thực ─────────────────────────────────────────────────────
+	/** Dòng đang hiện của một việc, ở Danh sách hay trên Bảng việc. */
+	function shownRow(id: number): TaskListItem | undefined {
+		return tasks.value.find(x => x.id === id) ?? board.value?.columns.flatMap(c => c.tasks).find(x => x.id === id);
+	}
 	const { subscribe } = useTaskRealtime();
 	let unsubscribe: (() => void) | null = null;
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	onMounted(() => {
 		unsubscribe = subscribe(
 			{
-				onTaskChanged: () => {
+				onTaskChanged: e => {
+					// Dòng đã mang phiên bản này (thường là tiếng vọng của thao tác vừa làm trong khung): không tải lại.
+					const row = shownRow(e.id);
+					if (row && e.version <= row.version) return;
 					if (timer) clearTimeout(timer);
 					timer = setTimeout(() => load(false, true), 600);
 				},
@@ -167,14 +186,26 @@
 		if (timer) clearTimeout(timer);
 	});
 
+	/** Trường làm đổi số đếm, tóm tắt của trang chứa (số việc theo trạng thái, theo người, quá hạn). */
+	function affectsSummary(old: TaskListItem | undefined, t: TaskDetail) {
+		return !old || old.status !== t.status || old.assignee.id !== t.assignee.id || old.dueDate !== t.dueDate || old.points !== t.points;
+	}
 	function onChanged(t: TaskDetail) {
+		const old = shownRow(t.id);
 		const i = tasks.value.findIndex(x => x.id === t.id);
 		if (i >= 0) tasks.value.splice(i, 1, t);
-		emit('changed');
+		for (const c of board.value?.columns ?? []) {
+			const j = c.tasks.findIndex(x => x.id === t.id);
+			if (j >= 0) c.tasks.splice(j, 1, t);
+		}
+		if (affectsSummary(old, t)) emit('changed');
+		return old;
 	}
 	function onPanelChanged(t: TaskDetail) {
-		onChanged(t);
-		if (state.mode !== 'list') load(false, true);
+		const old = onChanged(t);
+		// Bảng việc xếp thẻ theo trạng thái: chỉ tải lại khi trường đó đổi, còn lại đã thay thẻ tại chỗ.
+		// Tiến độ, Lịch tự giữ dữ liệu riêng nên vẫn nhắc tải lại.
+		if (state.mode === 'board' ? affectsSummary(old, t) : state.mode !== 'list') load(false, true);
 	}
 	function onCreated() {
 		total.value += 1;
@@ -186,7 +217,24 @@
 		state.status = 'DONE';
 	}
 
-	defineExpose({ reload: () => load() });
+	/** Hoàn tác báo xong trong toast: thay dòng ngay. */
+	const actions = useTaskActions();
+	watch(
+		() => actions.externalChange.value,
+		t => {
+			if (t) onChanged(t);
+		},
+	);
+
+	/**
+	 * Trang chứa đặt bộ lọc từ ngoài (bấm một người ở dải tóm tắt Việc của phòng): ghi vào trạng thái lọc,
+	 * đường dẫn và danh sách tự theo.
+	 */
+	function setFilters(patch: Partial<TaskFilterState>) {
+		Object.assign(state, { mode: state.mode === 'board' ? 'board' : 'list', ...patch });
+	}
+
+	defineExpose({ reload: () => load(), setFilters, state });
 </script>
 
 <template>

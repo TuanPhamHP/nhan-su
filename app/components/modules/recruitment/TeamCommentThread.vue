@@ -46,7 +46,7 @@
 		{ value: 'COMMENT', label: 'Bình luận' },
 		{ value: 'SUGGEST_MOVE', label: 'Đề xuất chuyển vòng' },
 		{ value: 'SUGGEST_REJECT', label: 'Đề xuất loại' },
-		{ value: 'SUGGEST_OFFER', label: 'Đề xuất offer' },
+		{ value: 'SUGGEST_OFFER', label: 'Đề xuất gửi thư mời nhận việc' },
 	];
 
 	const mentionable = computed(() => props.team.map(p => ({ ...p, avatarUrl: null })));

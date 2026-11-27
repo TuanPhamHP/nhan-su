@@ -199,6 +199,16 @@ export interface KpiRecomputeResult {
 	failed: number;
 }
 
+/**
+ * `POST /kpi/periods/:id/remind` (bridge kpi mục 13.3): `reminded` số người chấm vừa nhắc, `skipped` số người đã được
+ * nhắc hôm nay nên bỏ qua, `reviews` số phiếu đang chờ chấm.
+ */
+export interface KpiRemindResult {
+	reminded: number;
+	skipped: number;
+	reviews: number;
+}
+
 export interface KpiPublishAllResult {
 	published: number;
 	skippedOwn: number;
@@ -251,6 +261,11 @@ export interface KpiReviewLine {
 	adjustReason: string | null;
 	adjustedBy: KpiName | null;
 	applicable: boolean;
+	/**
+	 * Câu lý do khi dòng tự động không áp dụng (sau UAT 27/11/2026, bridge kpi mục 13.1); `null` khi áp dụng hoặc
+	 * dòng nhập tay. BE cũ không có.
+	 */
+	notApplicableReason?: string | null;
 	completionPct: number | null;
 	score: number | null;
 	reviewerNote: string | null;
@@ -289,6 +304,19 @@ export interface KpiReviewDetail extends KpiReviewListItem {
 	lines: KpiReviewLine[];
 	events: KpiReviewEvent[];
 	permissions: KpiReviewPermissions;
+	/** Số việc của nhân viên (bridge kpi mục 13.2), chỉ là con số. BE cũ không có. */
+	taskStats?: KpiTaskStats;
+}
+
+/**
+ * Việc của nhân viên trên phiếu: đang mở, đang chờ nghiệm thu, quá hạn chưa báo xong (tính tại hôm nay), đã nghiệm
+ * thu trong kỳ của phiếu.
+ */
+export interface KpiTaskStats {
+	open: number;
+	inReview: number;
+	overdue: number;
+	acceptedInPeriod: number;
 }
 
 export interface KpiReviewQuery {

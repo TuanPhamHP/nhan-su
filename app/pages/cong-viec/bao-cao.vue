@@ -152,7 +152,8 @@
 	const drill = ref<{ col: ProgressColumn; person: TaskReportPerson | null; expected: number | string } | null>(null);
 	function cellText(c: TaskProgressCounts, col: ProgressColumn): string {
 		if (col.metric === 'quality') return c.quality == null ? '—' : String(Math.round(c.quality * 10) / 10).replace('.', ',');
-		return String(c[col.metric]);
+		// `noDue` không có ở BE cũ: hiện 0 thay vì chữ "undefined".
+		return String(c[col.metric] ?? 0);
 	}
 	function cellCount(c: TaskProgressCounts, col: ProgressColumn): number {
 		return col.metric === 'quality' ? c.qualityCount : c[col.metric] ?? 0;
@@ -163,6 +164,15 @@
 	function openFromDrill(code: string) {
 		drill.value = null;
 		panel.open(code);
+	}
+
+	/**
+	 * Giải thích cột mở bằng nút ⓘ trên đầu cột (UI-18a): `title` không hiện trên điện thoại, còn hộp nổi trong
+	 * khung cuộn ngang thì bị cắt, nên câu giải thích hiện trong một khung ngay trên bảng. Bấm lại thì đóng.
+	 */
+	const hintCol = ref<ProgressColumn | null>(null);
+	function toggleHint(col: ProgressColumn) {
+		hintCol.value = hintCol.value?.metric === col.metric ? null : col;
 	}
 
 	// ─── Xuất Excel ─────────────────────────────────────────────────────────
@@ -199,7 +209,7 @@
 	<div class="space-y-4 pb-24">
 		<UiPageHeader
 			title="Báo cáo công việc"
-			description="Tiến độ theo từng người trong khoảng ngày: được giao, hoàn thành, đúng hạn, quá hạn, khối lượng và chất lượng. Việc tự giao, việc con và dự án mẫu không tính."
+			description="Tiến độ theo từng người trong khoảng ngày: được giao, hoàn thành, đúng hạn, quá hạn, khối lượng và chất lượng. Việc tự giao, việc phụ và dự án mẫu không tính."
 		>
 			<CommonAppButton
 				v-if="allowed && !checking"
@@ -297,12 +307,42 @@
 					title="Không có việc nào được giao trong khoảng này"
 					description="Bạn chọn khoảng ngày khác hoặc phòng, dự án khác."
 				/>
-				<div v-else class="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" data-tour="task-report-table">
-					<table class="w-full min-w-[64rem] text-sm" data-testid="report-table">
+				<div
+					v-if="report.rows.length && hintCol"
+					class="flex items-start gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-900 dark:border-brand-800 dark:bg-brand-900/20 dark:text-brand-100"
+					role="note"
+					data-testid="report-col-hint"
+				>
+					<Icon name="heroicons:information-circle" class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+					<p class="min-w-0 flex-1"><b>{{ hintCol.label }}:</b> {{ hintCol.hint }}</p>
+					<button
+						type="button"
+						class="-m-1 rounded p-1 text-brand-700 hover:bg-brand-100 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-brand-300 dark:hover:bg-brand-900/40"
+						aria-label="Đóng giải thích"
+						@click="hintCol = null"
+					>
+						<Icon name="heroicons:x-mark" class="h-4 w-4" />
+					</button>
+				</div>
+				<div v-if="report.rows.length" class="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" data-tour="task-report-table">
+					<table class="w-full min-w-[72rem] text-sm" data-testid="report-table">
 						<thead class="bg-gray-50 text-left text-xs font-medium text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
 							<tr>
 								<th class="sticky left-0 z-10 bg-gray-50 px-3 py-2 dark:bg-gray-800">Người thực hiện</th>
-								<th v-for="col in PROGRESS_COLUMNS" :key="col.metric" class="px-3 py-2 text-right" :title="col.hint">{{ col.label }}</th>
+								<th v-for="col in PROGRESS_COLUMNS" :key="col.metric" class="whitespace-nowrap px-3 py-2 text-right" :title="col.hint">
+									{{ col.label }}
+									<button
+										type="button"
+										class="-my-1 ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full align-middle text-gray-400 hover:bg-gray-200 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+										:class="hintCol?.metric === col.metric ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300' : ''"
+										:aria-label="`Giải thích cột ${col.label}`"
+										:aria-expanded="hintCol?.metric === col.metric"
+										:data-testid="`report-col-info-${col.metric}`"
+										@click="toggleHint(col)"
+									>
+										<Icon name="heroicons:information-circle" class="h-4 w-4" />
+									</button>
+								</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -349,8 +389,9 @@
 						</tfoot>
 					</table>
 				</div>
-				<p class="text-xs text-gray-500 dark:text-gray-400">
-					Tỷ lệ tính trên số việc được giao trừ việc đã huỷ. Đúng hạn tính theo lần báo xong đầu tiên.
+				<p class="text-xs text-gray-500 dark:text-gray-400" data-testid="report-rate-note">
+					Tỷ lệ hoàn thành tính trên số việc được giao trừ việc đã huỷ. Tỷ lệ báo xong đúng hạn chỉ tính việc có hạn,
+					việc chưa có hạn đếm riêng ở cột Chưa có hạn. Đúng hạn tính theo lần báo xong đầu tiên.
 				</p>
 			</template>
 

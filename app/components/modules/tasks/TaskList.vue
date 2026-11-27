@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import TaskCardMenu from '~/components/modules/tasks/TaskCardMenu.vue';
+	import TaskPriorityBadge from '~/components/modules/tasks/TaskPriorityBadge.vue';
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
@@ -9,11 +10,14 @@
 		DUE_TONE_CLASS,
 		MY_GROUP_LABELS,
 		PRIORITY_LABELS,
+		PRIORITY_TONE,
 		STATUS_LABELS,
+		STATUS_TONE,
 		dueTone,
 		groupMyTasks,
 		taskDueText,
 		vnToday,
+		waitingText,
 	} from '~/utils/tasks.utils';
 
 	/**
@@ -51,6 +55,7 @@
 
 	const actions = useTaskActions();
 	const today = vnToday();
+	const narrow = useNarrowScreen();
 	const rows = ref<TaskListItem[]>([]);
 	watch(
 		() => props.tasks,
@@ -205,7 +210,81 @@
 </script>
 
 <template>
-	<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" data-testid="task-list">
+	<!--
+		Màn hẹp: mỗi việc là một thẻ (tiêu đề, người làm, hạn tô đỏ khi trễ, trạng thái). Bảng 58–70rem trên
+		điện thoại chỉ còn thấy số hiệu và tiêu đề, phải vuốt ngang mới thấy người làm và hạn.
+	-->
+	<div v-if="narrow !== false" class="space-y-3 sm:hidden" data-testid="task-list-cards">
+		<section
+			v-for="g in groups"
+			:key="g.key"
+			class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+		>
+			<button
+				v-if="groupBy !== 'none'"
+				type="button"
+				class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 dark:text-gray-100"
+				:aria-expanded="!collapsed[g.key]"
+				@click="toggleGroup(g.key)"
+			>
+				<Icon name="heroicons:chevron-down" class="h-4 w-4 transition-transform" :class="collapsed[g.key] ? '-rotate-90' : ''" aria-hidden="true" />
+				<span class="min-w-0 truncate">{{ g.label }}</span>
+				<span class="shrink-0 font-normal text-gray-500 dark:text-gray-400">{{ g.tasks.length }} việc · {{ groupPoints(g) }} điểm</span>
+			</button>
+			<ul v-if="!collapsed[g.key]" class="divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+				<li
+					v-for="t in g.tasks"
+					:key="t.id"
+					class="flex items-start gap-2 px-3 py-2.5"
+					:class="activeCode === t.code ? 'bg-brand-50/60 dark:bg-brand-900/20' : ''"
+					:data-task-code="t.code"
+					data-testid="task-card-row"
+				>
+					<div class="min-w-0 flex-1">
+						<button
+							type="button"
+							class="block max-w-full text-left text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-gray-100"
+							@click="emit('open', t)"
+						>
+							<span class="mr-1 text-xs font-normal text-gray-500 dark:text-gray-400">{{ t.code }}</span>{{ t.title }}
+						</button>
+						<p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+							<TaskStatusBadge :status="t.status" :label="t.statusLabel" />
+							<span :class="DUE_TONE_CLASS[dueTone(t, today)]">{{ taskDueText(t, today) }}</span>
+							<span class="inline-flex min-w-0 items-center gap-1">
+								<CommonAppAvatar :src="t.assignee.avatarUrl" :name="t.assignee.fullName" size="xs" />
+								<span class="truncate">{{ t.assignee.fullName }}</span>
+							</span>
+							<span v-if="t.points != null">{{ t.points }} điểm</span>
+							<span v-if="t.dependencies?.late" class="text-rose-600 dark:text-rose-400">phải chờ việc khác đang trễ hạn</span>
+							<span v-if="waitingText(t.dependencies?.openBlockers)" class="rounded bg-amber-50 px-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
+								{{ waitingText(t.dependencies?.openBlockers) }}
+							</span>
+							<span v-if="showProject && t.project" class="truncate">{{ t.project.name }}</span>
+						</p>
+					</div>
+					<TaskCardMenu
+						v-if="!disabled"
+						:task="t"
+						@open="emit('open', t)"
+						@status="s => onMenuStatus(t, s)"
+						@change-due="doDue(t)"
+						@reassign="doReassign(t)"
+					/>
+				</li>
+				<li v-if="quickCreate && !disabled" class="px-3 py-2">
+					<TaskQuickCreate
+						:project-id="quickCreate.projectId"
+						:group-id="g.groupId ?? null"
+						:default-assignee-id="g.defaultAssigneeId ?? quickCreate.defaultAssigneeId"
+						@created="t => { rows.push(t); emit('created', t); }"
+					/>
+				</li>
+			</ul>
+		</section>
+	</div>
+	<!-- `relative`: chữ `sr-only` (định vị tuyệt đối) trong đầu bảng không thoát khỏi khung cuộn và làm trang rộng ra. -->
+	<div v-if="narrow !== true" class="relative hidden overflow-x-auto rounded-xl border border-gray-200 bg-white sm:block dark:border-gray-700 dark:bg-gray-900" data-testid="task-list">
 		<table class="w-full text-sm" :class="showProject || showGroupCol ? 'min-w-[70rem]' : 'min-w-[58rem]'">
 			<thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
 				<tr>
@@ -270,8 +349,11 @@
 							>
 								{{ t.title }}
 							</button>
-							<span v-if="t.parent" class="ml-1 text-xs text-gray-400">· việc con của {{ t.parent.title ?? t.parent.code }}</span>
+							<span v-if="t.parent" class="ml-1 text-xs text-gray-400">· việc phụ của {{ t.parent.title ?? t.parent.code }}</span>
 							<span v-if="t.recurrenceId" class="ml-1 rounded bg-teal-50 px-1 text-[11px] text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Định kỳ</span>
+							<span v-if="waitingText(t.dependencies?.openBlockers)" class="ml-1 rounded bg-amber-50 px-1 text-[11px] text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
+								{{ waitingText(t.dependencies?.openBlockers) }}
+							</span>
 						</td>
 						<td class="px-3 py-2">
 							<button
@@ -307,7 +389,8 @@
 							<select
 								v-if="statusOptions(t).length && !disabled"
 								:value="t.status"
-								class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+								class="cursor-pointer rounded-full border-0 py-0.5 pl-2.5 pr-7 text-xs font-medium ring-1 ring-inset focus:outline-none focus:ring-2 focus:ring-brand-500 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100"
+								:class="STATUS_TONE[t.status].badge"
 								:aria-label="`Trạng thái ${t.code}`"
 								@change="e => { onStatus(t, (e.target as HTMLSelectElement).value); (e.target as HTMLSelectElement).value = t.status; }"
 							>
@@ -320,13 +403,14 @@
 							<select
 								v-if="t.permissions.edit && !disabled"
 								:value="t.priority"
-								class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+								class="cursor-pointer rounded-md border-0 py-0.5 pl-2 pr-7 text-xs font-medium ring-1 ring-inset focus:outline-none focus:ring-2 focus:ring-brand-500 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100"
+								:class="PRIORITY_TONE[t.priority].badge"
 								:aria-label="`Ưu tiên ${t.code}`"
 								@change="e => onPriority(t, (e.target as HTMLSelectElement).value)"
 							>
 								<option v-for="(label, key) in PRIORITY_LABELS" :key="key" :value="key">{{ label }}</option>
 							</select>
-							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="NO_EDIT">{{ t.priorityLabel }}</span>
+							<span v-else :title="NO_EDIT"><TaskPriorityBadge :priority="t.priority" /></span>
 						</td>
 						<td class="px-3 py-2 text-right text-gray-700 dark:text-gray-200">
 							{{ t.points }}<span v-if="t.subtasks.total" class="text-xs text-gray-400"> +{{ t.subtasks.points }}</span>
@@ -344,7 +428,7 @@
 								<option v-if="t.group && !activeGroups.some(g => g.id === t.group!.id)" :value="t.group.id" disabled>{{ t.group.name }} (đã cất)</option>
 								<option v-for="g in activeGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
 							</select>
-							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="t.parent ? 'Việc con theo nhóm của việc cha.' : NO_GROUP" :data-testid="`task-group-text-${t.code}`">
+							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="t.parent ? 'Việc phụ theo nhóm của việc cha.' : NO_GROUP" :data-testid="`task-group-text-${t.code}`">
 								{{ t.group?.name ?? '—' }}
 							</span>
 						</td>

@@ -6,6 +6,8 @@
 	import type { TaskSprint } from '~/types/tasks.types';
 	import { timelineAddDays } from '~/utils/task-timeline';
 	import { taskErrorInfo, vnToday } from '~/utils/tasks.utils';
+	import TaskDiscardConfirm from '~/components/modules/tasks/TaskDiscardConfirm.vue';
+	import { useDiscardGuard } from '~/composables/useDiscardGuard';
 
 	/** Tạo, sửa một đợt: tên, mục tiêu, ngày bắt đầu và kết thúc. Đợt đã đóng không sửa được. */
 	const props = withDefaults(defineProps<{ projectId: number; sprint?: TaskSprint | null; suggestedName?: string; suggestedStart?: string }>(), {
@@ -29,7 +31,7 @@
 			})
 			.refine(v => v.startDate <= v.endDate, { message: 'Ngày kết thúc không được trước ngày bắt đầu', path: ['endDate'] }),
 	);
-	const { defineField, errors, handleSubmit, isSubmitting } = useForm({
+	const { defineField, errors, handleSubmit, isSubmitting, meta } = useForm({
 		validationSchema: schema,
 		initialValues: {
 			name: props.sprint?.name ?? props.suggestedName,
@@ -55,12 +57,12 @@
 			toast.error(taskErrorInfo(err).message);
 		}
 	});
-	useEscapeKey(() => emit('close'), () => !isSubmitting.value);
+	const guard = useDiscardGuard(() => meta.value.dirty, () => emit('close'), () => !isSubmitting.value);
 </script>
 
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center sm:p-4" @click.self="emit('close')">
+		<div class="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center sm:p-4" @click.self="guard.requestClose()">
 			<form
 				class="w-full max-w-md rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-gray-900"
 				role="dialog"
@@ -71,7 +73,7 @@
 			>
 				<div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ sprint ? `Sửa ${sprint.name}` : 'Tạo đợt' }}</h2>
-					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="emit('close')">
+					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="guard.requestClose()">
 						<Icon name="heroicons:x-mark" class="h-5 w-5" />
 					</button>
 				</div>
@@ -101,15 +103,16 @@
 						/>
 					</div>
 					<div class="grid gap-4 sm:grid-cols-2">
-						<UiDatePicker v-model="startDate" label="Bắt đầu *" :error="errors.startDate" />
-						<UiDatePicker v-model="endDate" label="Kết thúc *" :error="errors.endDate" />
+						<UiDatePicker v-model="startDate" label="Bắt đầu *" :error="errors.startDate" warn-far-year />
+						<UiDatePicker v-model="endDate" label="Kết thúc *" :error="errors.endDate" warn-far-year />
 					</div>
 				</div>
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
-					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="emit('close')">Huỷ</CommonAppButton>
+					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="guard.requestClose()">Huỷ</CommonAppButton>
 					<CommonAppButton type="submit" :loading="isSubmitting" data-testid="sprint-form-submit">{{ sprint ? 'Lưu' : 'Tạo đợt' }}</CommonAppButton>
 				</div>
 			</form>
 		</div>
+		<TaskDiscardConfirm :open="guard.asking.value" @keep="guard.keepEditing()" @discard="guard.discard()" />
 	</Teleport>
 </template>

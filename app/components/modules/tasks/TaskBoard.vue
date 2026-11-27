@@ -213,8 +213,14 @@
 </script>
 
 <template>
+	<!--
+		Điện thoại: cột bắt dính khi vuốt, nhưng tắt bắt dính lúc đang kéo thẻ, không thì bảng tự cuộn tới
+		mép (để thấy cột bên cạnh) lại bị kéo ngược về cột cũ và không thả sang cột khác được. Bảng tràn sát
+		hai mép màn (`-mx-4 px-4`): ngón tay kéo tới mép màn vẫn nằm trong bảng nên bảng mới tự cuộn ngang.
+	-->
 	<div
-		class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 sm:snap-none"
+		class="-mx-4 flex scroll-px-4 gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:snap-none sm:px-0"
+		:class="dragging ? 'snap-none' : 'snap-x snap-mandatory'"
 		data-testid="task-board"
 		data-tour="task-board"
 	>

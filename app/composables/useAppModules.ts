@@ -6,6 +6,7 @@ import { appsWithoutCatalog, mergeAppCatalog, splitLauncherApps, type LockedApp 
 
 const RECENT_KEY = 'app.recent-modules';
 const RECENT_MAX = 4;
+const KPI_PERIODS_ROUTE = '/management/kpi/ky';
 
 /**
  * Lọc app + mục theo vai trò, quyền và gói module của công ty; cho biết đang đứng ở app nào.
@@ -33,7 +34,7 @@ export function useAppModules() {
 	);
 
 	const { scope: taskScope, hasDepartmentView, hasReportScope } = useTaskScope();
-	const { reviewsAny: kpiReviewsAny } = useKpiScope();
+	const { reviewsAny: kpiReviewsAny, managerWithoutTasks } = useKpiScope();
 	const { counts: approvalCounts } = storeToRefs(useApprovalStore());
 
 	/** Đánh giá nhân viên: có phiếu chờ chấm, đã từng chấm, hoặc là quản lý, trưởng phòng, giám đốc. */
@@ -48,9 +49,12 @@ export function useAppModules() {
 			(taskScope.value?.managedDepartments.length ?? 0) > 0
 		);
 	});
-	/** Kết quả KPI: giám đốc, ADMIN, trưởng phòng; người có `kpi:manage` đã xem trong Kỳ đánh giá. */
+	/**
+	 * Kết quả KPI: giám đốc, ADMIN, trưởng phòng, và người có `kpi:manage` (UI-16a: nhân sự gõ tay đường dẫn mới tới
+	 * được trang này, mà khi tới thì menu lại sáng KPI của tôi).
+	 */
 	const seesKpiResults = computed(() => {
-		if (hasPermission('kpi:manage')) return false;
+		if (hasPermission('kpi:manage')) return true;
 		const role = user.value?.role;
 		return role === 'DIRECTOR' || (taskScope.value?.managedDepartments.length ?? 0) > 0;
 	});
@@ -98,7 +102,23 @@ export function useAppModules() {
 		});
 	});
 
-	const visibleApps = computed<AppModuleDef[]>(() => split.value.visible);
+	/**
+	 * UI-16a: người có `kpi:manage` không có việc nào phải làm và không có việc chờ nghiệm thu thì ô Công việc và KPI
+	 * dẫn thẳng vào Kỳ đánh giá, thay cho ngăn Tôi làm trống. Có việc rồi thì về lại Việc của tôi như mọi người.
+	 */
+	const kpiLanding = computed(
+		() =>
+			managerWithoutTasks.value &&
+			(approvalCounts.value.taskReviews ?? 0) === 0 &&
+			(approvalCounts.value.taskDueRequests ?? 0) === 0,
+	);
+	const visibleApps = computed<AppModuleDef[]>(() =>
+		split.value.visible.map(app =>
+			app.code === 'tsk' && kpiLanding.value && app.items.some(i => i.route === KPI_PERIODS_ROUTE)
+				? { ...app, home: KPI_PERIODS_ROUTE }
+				: app,
+		),
+	);
 
 	/**
 	 * Phân hệ công ty chưa dùng được, để lưới và sidebar hiện ô khoá.

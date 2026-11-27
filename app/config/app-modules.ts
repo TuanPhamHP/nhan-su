@@ -492,7 +492,7 @@ export const APP_MODULES: AppScreensDef[] = [
 		 * hoặc xem mọi việc (`showWhen`).
 		 * Lô 2 thêm Việc định kỳ và Báo cáo công việc (`showWhen: 'taskReports'`).
 		 * Lô 3 thêm KPI: KPI của tôi (mọi người), Đánh giá nhân viên (`showWhen: 'kpiReviewer'`, huy hiệu
-		 * `kpiReviews`), Kết quả KPI cho giám đốc và trưởng phòng (`showWhen: 'kpiResults'`); Kỳ đánh giá và Cài
+		 * `kpiReviews`), Kết quả KPI cho giám đốc, trưởng phòng, `kpi:manage` (`showWhen: 'kpiResults'`); Kỳ đánh giá và Cài
 		 * đặt KPI chỉ cho `kpi:manage` (ADMIN luôn có).
 		 */
 		code: 'tsk',
@@ -559,7 +559,7 @@ export const APP_MODULES: AppScreensDef[] = [
 				scope: 'personal',
 			},
 			{
-				// Giám đốc, ADMIN, trưởng phòng xem kết quả kỳ và năm; người có `kpi:manage` xem trong Kỳ đánh giá.
+				// Giám đốc, ADMIN, trưởng phòng và người có `kpi:manage` xem kết quả kỳ và năm (UI-16a).
 				label: 'Kết quả KPI',
 				route: '/kpi/ket-qua',
 				showWhen: 'kpiResults',
@@ -569,8 +569,10 @@ export const APP_MODULES: AppScreensDef[] = [
 			},
 			{
 				// Lô 3 (UI-13): mở kỳ, chốt, công bố, kết quả. Chỉ người có `kpi:manage` (ADMIN luôn có).
+				// Số đỏ là phiếu Chờ chốt (`kpiPendingFinal`, UI-16b), không cộng vào Duyệt đơn.
 				label: 'Kỳ đánh giá',
 				route: '/management/kpi/ky',
+				badgeKey: 'kpiPendingFinal',
 				icon: 'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z',
 				module: 'TASKS',
 				permission: 'kpi:manage',

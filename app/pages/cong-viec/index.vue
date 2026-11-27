@@ -7,13 +7,14 @@
 	import TaskMyRow from '~/components/modules/tasks/TaskMyRow.vue';
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
 	import TaskPointsFilter from '~/components/modules/tasks/TaskPointsFilter.vue';
+	import TaskFilterSheet from '~/components/modules/tasks/TaskFilterSheet.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useApprovalStore } from '~/stores/approval';
 	import { useTasksService } from '~/services/tasks.service';
 	import { tasksBoardTour, tasksMyTour } from '~/tours/tasks';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
 	import type { TaskAction, TaskBoard as TaskBoardData, TaskDetail, TaskListItem, TaskStatus, TaskView } from '~/types/tasks.types';
-	import { MY_GROUP_LABELS, groupMyTasks, pointsQuery, taskErrorInfo, vnToday, type MyGroupKey } from '~/utils/tasks.utils';
+	import { MY_GROUP_LABELS, groupMyTasks, pointsQuery, taskErrorInfo, taskRelation, vnToday, type MyGroupKey } from '~/utils/tasks.utils';
 
 	/**
 	 * UI-01 Việc của tôi. Nhóm Quá hạn, Hôm nay, Sắp tới 7 ngày, Sau đó; khối Chờ tôi nghiệm thu nổi
@@ -33,6 +34,7 @@
 	const service = useTasksService();
 	const actions = useTaskActions();
 	const panel = useTaskPanel();
+	const toast = useToast();
 	const { canUse, canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
 	const today = vnToday();
@@ -57,7 +59,7 @@
 	function setQuery(patch: Record<string, string | undefined>) {
 		const query = { ...route.query, ...patch };
 		for (const [k, v] of Object.entries(query)) if (v === undefined) delete query[k];
-		router.replace({ query });
+		return router.replace({ query });
 	}
 
 	/** Lọc điểm kiểu JQL trên đường dẫn (`?points=>=3`); sai cú pháp thì bỏ qua. */
@@ -89,9 +91,17 @@
 
 	const openStatuses = 'TODO,IN_PROGRESS,IN_REVIEW';
 
+	/**
+	 * Có chữ tìm thì tìm mọi việc người xem thấy được (không theo ngăn, kể cả đã xong, đã huỷ): người dùng
+	 * gõ tên việc cũ ở ngăn Tôi làm mà ra "không có việc" thì tưởng mất dữ liệu. Mỗi dòng ghi việc nằm ở
+	 * ngăn nào.
+	 */
+	const searching = computed(() => !!route.query.q && !offboardId.value);
+	const watchingIds = ref<Set<number>>(new Set());
+
 	async function loadReview() {
 		try {
-			const res = await service.list({ view: 'review', sort: 'dueDate', limit: 20 });
+			const res = await service.list({ view: 'review', sort: 'dueDate', q: String(route.query.q ?? '') || undefined, limit: 20 });
 			review.value = res.data;
 			reviewTotal.value = res.meta.total;
 		} catch {
@@ -106,16 +116,22 @@
 		loadError.value = '';
 		try {
 			const next = more ? page.value + 1 : 1;
-			const res = await service.list({
-				view: offboardId.value ? undefined : (tab.value as TaskView),
-				assigneeIds: offboardId.value ? String(offboardId.value) : undefined,
-				status: openStatuses,
-				sort: 'dueDate',
-				q: String(route.query.q ?? '') || undefined,
-				points: pointsFilter.value,
-				page: next,
-				limit: LIMIT,
-			});
+			const q = String(route.query.q ?? '') || undefined;
+			const [res, watching] = await Promise.all([
+				service.list({
+					view: offboardId.value || searching.value ? undefined : (tab.value as TaskView),
+					assigneeIds: offboardId.value ? String(offboardId.value) : undefined,
+					status: searching.value ? undefined : openStatuses,
+					sort: 'dueDate',
+					q,
+					points: pointsFilter.value,
+					page: next,
+					limit: LIMIT,
+				}),
+				// Danh sách không cho biết người xem có theo dõi việc hay không, nên hỏi riêng ngăn Tôi theo dõi.
+				searching.value && !more ? service.list({ view: 'watching', q, limit: 100 }).catch(() => null) : Promise.resolve(null),
+			]);
+			if (watching) watchingIds.value = new Set(watching.data.map(t => t.id));
 			tasks.value = more ? [...tasks.value, ...res.data] : res.data;
 			total.value = res.meta.total;
 			page.value = next;
@@ -223,7 +239,10 @@
 		// Việc đã xong hay huỷ (hoặc đã giao lại cho người khác, ở danh sách việc của người nghỉ) rời
 		// khỏi danh sách việc đang mở.
 		const leftOffboard = !!offboardId.value && updated.assignee.id !== offboardId.value;
-		if (updated.status === 'DONE' || updated.status === 'CANCELLED' || leftOffboard) {
+		// Ở ngăn Tôi làm mà vừa đổi người làm sang người khác thì việc rời ngăn ngay, không đợi tải lại.
+		const leftMine = !offboardId.value && tab.value === 'my' && updated.assignee.id !== authStore.user?.id;
+		// Kết quả tìm có cả việc đã xong, đã huỷ: việc vừa xong vẫn ở lại, chỉ đổi trạng thái.
+		if (!searching.value && (updated.status === 'DONE' || updated.status === 'CANCELLED' || leftOffboard || leftMine)) {
 			const before = tasks.value.length;
 			tasks.value = tasks.value.filter(t => t.id !== updated.id);
 			if (tasks.value.length < before) total.value = Math.max(0, total.value - 1);
@@ -266,15 +285,32 @@
 	}
 
 	const showCreate = ref(false);
-	function onCreated(t: TaskDetail) {
+	/**
+	 * Giao cho người khác xong thì sang ngăn Tôi giao, nơi việc đó nằm; tự giao cho mình thì ở lại Tôi làm.
+	 * Trước đây danh sách vẫn ở Tôi làm, người giao không thấy việc vừa giao đâu.
+	 */
+	async function onCreated(t: TaskDetail) {
 		showCreate.value = false;
-		if (t.assignee.id === authStore.user?.id || tab.value === 'assigned') reload();
+		const mine = t.assignee.id === authStore.user?.id;
+		if (!mine && tab.value !== 'assigned' && !searching.value) {
+			// Hộp tạo việc đã báo "Đã giao … cho …"; ở đây chỉ chuyển ngăn để thấy ngay việc vừa giao. Đợi
+			// đổi đường dẫn xong mới mở khung chi tiết, không thì khung ghi đè và mất `tab=assigned`.
+			await setQuery({ tab: 'assigned', mode: mode.value === 'board' ? 'board' : undefined });
+		} else reload();
 		panel.open(t.code);
 	}
+	/** Việc tạo nhanh chỉ thêm vào danh sách (và vào tổng) khi nó thuộc đúng ngăn đang xem. */
 	function onQuickCreated(t: TaskDetail) {
-		if (tab.value === 'my' && t.assignee.id === authStore.user?.id) tasks.value = [...tasks.value, t];
-		else if (tab.value === 'assigned' && t.assignee.id !== authStore.user?.id) tasks.value = [...tasks.value, t];
-		total.value += 1;
+		const mine = t.assignee.id === authStore.user?.id;
+		const belongs = (tab.value === 'my' && mine) || (tab.value === 'assigned' && !mine);
+		if (belongs) {
+			tasks.value = [...tasks.value, t];
+			total.value += 1;
+		} else if (!mine && !searching.value) {
+			toast.info(`Đã giao ${t.code} cho ${t.assignee.fullName}. Việc nằm ở ngăn Tôi giao.`, {
+				action: { label: 'Xem ở Tôi giao', to: '/cong-viec?tab=assigned' },
+			});
+		}
 	}
 
 	// ─── Rỗng ───────────────────────────────────────────────────────────────
@@ -284,6 +320,13 @@
 	});
 	const emptyText = computed(() => {
 		if (offboardId.value) return { title: 'Không còn việc đang mở nào', desc: 'Mọi việc của người này đã được giao lại hoặc đã xong.', action: '' };
+		if (searching.value) {
+			return {
+				title: `Không có việc nào khớp "${String(route.query.q)}"`,
+				desc: 'Đã tìm trong mọi việc bạn làm, bạn giao, bạn theo dõi và việc bạn được xem, kể cả việc đã xong và đã huỷ. Bạn thử gõ ít chữ hơn hoặc gõ số hiệu việc.',
+				action: 'Xoá bộ lọc',
+			};
+		}
 		if (emptyKind.value === 'filtered') return { title: 'Không có việc khớp bộ lọc', desc: 'Bạn thử từ khoá hoặc điều kiện điểm khác.', action: 'Xoá bộ lọc' };
 		if (emptyKind.value === 'done') {
 			if (tab.value === 'my') return { title: 'Bạn đã xong hết việc', desc: 'Không còn việc nào đang mở. Nghỉ tay một chút nhé.', action: '' };
@@ -426,17 +469,22 @@
 					class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
 				/>
 			</div>
-			<TaskPointsFilter v-model="pointsModel" class="w-full sm:w-48" />
-			<label v-if="mode === 'board'" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-				<input
-					type="checkbox"
-					:checked="route.query.cancelled === '1'"
-					class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-					@change="e => setQuery({ cancelled: (e.target as HTMLInputElement).checked ? '1' : undefined })"
-				/>
-				Hiện cột Đã huỷ
-			</label>
+			<TaskFilterSheet :count="(pointsFilter ? 1 : 0) + (mode === 'board' && route.query.cancelled === '1' ? 1 : 0)">
+				<TaskPointsFilter v-model="pointsModel" class="col-span-2 sm:w-48" />
+				<label v-if="mode === 'board'" class="col-span-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+					<input
+						type="checkbox"
+						:checked="route.query.cancelled === '1'"
+						class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+						@change="e => setQuery({ cancelled: (e.target as HTMLInputElement).checked ? '1' : undefined })"
+					/>
+					Hiện cột Đã huỷ
+				</label>
+			</TaskFilterSheet>
 		</div>
+		<p v-if="searching" class="text-xs text-gray-500 dark:text-gray-400" data-testid="task-search-scope">
+			Đang tìm trong mọi việc bạn xem được, kể cả việc đã xong và đã huỷ. Mỗi dòng ghi việc nằm ở ngăn nào.
+		</p>
 
 		<!-- Đang tải: khung xám đúng hình dòng hoặc cột -->
 		<div v-if="loading" aria-busy="true" data-testid="task-skeleton">
@@ -477,7 +525,35 @@
 			/>
 			<div v-else class="space-y-3" data-tour="task-groups" data-testid="task-my-groups">
 				<section
-					v-for="key in GROUP_ORDER.filter(k => groups[k].length)"
+					v-if="searching"
+					class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+					aria-label="Kết quả tìm"
+					data-testid="task-search-results"
+				>
+					<h2 class="px-4 py-2.5 text-sm font-semibold text-gray-800 dark:text-gray-100">
+						Kết quả tìm <span class="font-normal text-gray-500 dark:text-gray-400">{{ total }} việc</span>
+					</h2>
+					<ul class="border-t border-gray-100 dark:border-gray-800">
+						<TaskMyRow
+							v-for="t in tasks"
+							:key="t.id"
+							:task="t"
+							:today="today"
+							:active="panel.code.value === t.code"
+							:show-assignee="t.assignee.id !== authStore.user?.id"
+							:relation="taskRelation(t, authStore.user?.id, watchingIds)"
+							:read-only="readOnly"
+							:busy="false"
+							@open="panel.open(t.code)"
+							@action="a => onAction(t, a)"
+							@status="s => onStatus(t, s)"
+							@change-due="changeDue(t)"
+							@reassign="reassign(t)"
+						/>
+					</ul>
+				</section>
+				<section
+					v-for="key in GROUP_ORDER.filter(k => !searching && groups[k].length)"
 					:key="key"
 					class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
 					:aria-label="MY_GROUP_LABELS[key]"

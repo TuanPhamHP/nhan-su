@@ -516,9 +516,10 @@ Key `payload` của bốn tool Công việc và KPI (từ 26/11/2026; `message` 
 
 | Tool | Key |
 |---|---|
-| `task_create` | `title` (1–300 ký tự), `assigneeId`, `dueDate` (`YYYY-MM-DD`), `points` (1, 2, 3, 5 hoặc 8), `priority` (`LOW` \| `NORMAL` \| `HIGH` \| `URGENT`), `projectId` (`""` = việc lẻ), `description` (≤2000) |
+| `task_create` | `title` (1–300 ký tự), `assigneeId`, `dueDate` (`YYYY-MM-DD`), `points` (1, 2, 3, 5 hoặc 8), `priority` (`LOW` \| `NORMAL` \| `HIGH` \| `URGENT`), `projectId` (`""` = việc lẻ), `description` (≤2000); từ 27/11/2026 thêm `watcher1`..`watcher3`, `reviewerId`, `groupId`, `sprintId` (ô `select`, `""` = bỏ trống), `check1`..`check10` (mục kiểm tra, chữ) |
 | `task_transition` | `taskRef` (giá trị option, dạng `"<id>:<phiên bản>"`, gửi nguyên), `action` (`start` \| `submit` \| `accept` \| `return` \| `self_close` \| `reopen` \| `cancel` \| `back_to_todo`), `reason` (bắt buộc với `return`, `reopen`, `cancel`: field có `requiredWhen`, `visibleWhen` theo `action`), `qualityScore` (`""` hoặc 1–5, chỉ khi `accept`: `visibleWhen`) |
-| `task_changeDue` | `taskRef` (như trên), `dueDate`, `reason` (bắt buộc) |
+| `task_changeDue` | `taskRef` (như trên), `dueDate`, `reason` (bắt buộc, trừ đặt hạn lần đầu cho việc chưa có hạn) |
+| `task_requestDue` | `taskRef` (như trên), `dueDate`, `reason` (bắt buộc) |
 | `kpi_giveFeedback` | `reviewId`, `agreed` (`"true"`/`"false"`), `feedback` (bắt buộc khi `agreed = "false"`: `requiredWhen`) |
 
 ### Các trạng thái lỗi của confirm
@@ -986,7 +987,7 @@ chưa chấm. Chủ đề (`playbookId`) chỉ có ở lượt đã được ch�
 | `business-trip-request` | Đăng ký đi công tác (**có tool ghi**) | mọi role |
 | `business-trip-overview` | XEM đơn/chuyến công tác — chỉ đọc, thêm 12/10/2026 | mọi role (phần "ai đang đi công tác" chỉ `MANAGER` trở lên) |
 | `approval-queue` | Hàng chờ duyệt đơn (**có tool ghi**, `L2_DECIDE`) | `MANAGER` `HR` `ADMIN` `DIRECTOR` `CHIEF` |
-| `hr-directory` | Danh bạ, phòng ban | mọi role |
+| `hr-directory` | Danh bạ, phòng ban; "liên hệ ai ở phòng X" (trưởng phòng), thêm 20/11/2026 | mọi role |
 | `hr-org-overview` | Dashboard tổ chức | `MANAGER` `HR` `ADMIN` `DIRECTOR` |
 | `company-info` | Nghỉ lễ, thông báo, hợp đồng, ca làm; giới thiệu chung về công ty (lĩnh vực, giờ làm việc, quy định chung) từ mô tả người vận hành viết, thêm 17/11/2026 | mọi role |
 | `request-history` | Tra đơn từ đã tạo (của mình; ADMIN, HR xem được của người khác) — chỉ đọc | mọi role |
@@ -1029,13 +1030,14 @@ có bảng đầy đủ; lưu ý bảng đó viết tên theo dấu chấm ở m
 Muốn hiện "Đang tra quỹ phép…" thì map tên tool → nhãn tiếng Việt ở phía client, hoặc bỏ qua và chỉ
 hiện "Đang tra dữ liệu…".
 
-### Tool ghi — 15 cái, tất cả đều qua form xác nhận
+### Tool ghi — 16 cái, tất cả đều qua form xác nhận
 
 | Tool | Mức | Việc |
 |---|---|---|
 | `task_create` | `L1_CREATE` | Giao một việc mới (người hỏi là người giao, người nghiệm thu). Ô người làm là `select` dựng từ tên người dùng nói: một người thì chọn sẵn, nhiều người trùng tên thì để trống cho người dùng chọn |
 | `task_transition` | `L2_CHANGE` | Bắt đầu làm, báo xong, nghiệm thu (kèm sao 1–5), trả lại, đóng việc, mở lại, huỷ, về Chưa làm. Ô thao tác chỉ có thao tác người hỏi làm được. Panel `context` là việc hiện tại (có `Phiên bản`) |
 | `task_changeDue` | `L2_CHANGE` | Đổi hạn có lý do (người giao, quản lý dự án, trưởng phòng của người giao). Panel: hạn hiện tại, hạn ban đầu, số lần đã đổi |
+| `task_requestDue` | `L2_CHANGE` | Thêm 27/11/2026. Người làm xin dời hạn, người giao duyệt trên chuông hoặc trang việc. Panel: việc, hạn hiện tại, người duyệt |
 | `kpi_giveFeedback` | `L2_CHANGE` | Đồng ý hay chưa đồng ý với phiếu KPI của chính mình, kèm phản hồi. Panel: kỳ, bước, điểm, xếp loại, người chấm, nhận xét |
 | `office_bookRoom` | `L1_CREATE` | Đặt phòng họp, người hỏi là người đặt và chủ trì, không mời người dự (mời tiếp trên web) |
 | `office_changeBooking` | `L2_CHANGE` | Dời lượt họp: đổi ngày, giờ, phòng. Panel `context` là lượt hiện tại |
@@ -1075,6 +1077,16 @@ Client **không phải sửa gì**: không có endpoint hay loại sự kiện S
 `table` như các tool khác. Từ ngày này `leave_listTeam` chỉ nhận `employeeId` của người khác từ `ADMIN`
 và `HR`. Vai trò khác hỏi về đơn của một người cụ thể sẽ nhận câu trả lời từ chối dạng văn bản bình
 thường, không phải mã lỗi HTTP.
+
+### Tool đọc thêm ngày 20/11/2026 — gợi ý người liên hệ ở phòng ban khác
+
+| Tool | Playbook | Việc | Quyền |
+|---|---|---|---|
+| `department_findHead` | `hr-directory`, `office-room-booking`, `office-supply-my` | Trưởng phòng của phòng ban người dùng nhắc tới ("tôi cần liên hệ ai ở bộ phận hành chính"): họ tên, mã nhân viên, chức vụ | mọi role |
+
+Trợ lý trả lời kiểu "Bạn có thể liên hệ Nguyễn Mai B (mã NV-0012), Trưởng phòng Hành chính nhân sự, để được hướng
+dẫn và giải quyết", không kèm email hay số điện thoại. Client **không phải sửa gì**: không có endpoint, sự kiện SSE
+hay `playbookId` mới. Client nào có bảng nhãn tên tool thì thêm `department_findHead` → "Đang tìm người liên hệ…".
 
 ### Tool đọc thêm ngày 16/11/2026 — module Quản lý tài sản và Tuyển dụng
 
@@ -1145,6 +1157,19 @@ HTTP.
 Câu trả lời có thể kèm đường dẫn web dạng chữ trong dấu `…`: `/cong-viec?task=HQ-2` (khung chi tiết việc),
 `/kpi?reviewId=12` (phiếu của tôi), `/kpi/danh-gia?reviewId=12` (phiếu tôi chấm). Bộ dựng markdown của web chưa biến
 chúng thành link bấm được (tuỳ chọn, xem bàn giao web).
+
+**Thay đổi 27/11/2026 (sửa sau thử nghiệm người dùng):**
+
+- Thêm tool ghi `task_requestDue` (xin dời hạn) và tham số mới cho `task_create`, `task_search`, `kpi_getReview` (xem
+  `docs/ai-agent/tools.md`). Mười lăm tool `task_`, `kpi_`: mười đọc, năm ghi.
+- `message` của confirm và câu trả lời dùng link markdown có chữ, ví dụ `[Mở việc HQ-2](/cong-viec?task=HQ-2)`, không còn
+  "Mở trên web: /cong-viec?task=HQ-2". Client dựng markdown cho cả `message` của confirm, link nội bộ mở bằng router.
+- Câu trả lời không còn emoji. Panel `context` có thể ít dòng hơn: dòng `Phiên bản` vẫn vào `contextHash` nhưng không gửi
+  xuống client (`hidden` ở server), client không phải làm gì.
+- Lượt không có tool ghi: server giữ khoảng 240 ký tự đầu rồi mới phát `delta` (để bỏ câu dẫn trước khi tra), nên `delta`
+  đầu tiên đến chậm hơn chưa tới một giây. Lượt có tool ghi vẫn phát một lần sau khi kiểm câu "đã làm" như trước.
+- Nội dung trợ lý soạn trong việc, bình luận, lý do có đuôi `⟦Trợ lý AI⟧ …`: web hiện nhãn thay cho ký hiệu
+  (`docs/bridges/tasks.md` mục 32).
 
 Phía client cần làm (bàn giao chi tiết: [`_fe-prompt-agent-tasks.md`](./_fe-prompt-agent-tasks.md)):
 

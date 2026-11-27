@@ -16,6 +16,7 @@
 		kpiDaysLeft,
 		kpiEventText,
 		kpiGradeLegend,
+		kpiAllZero,
 		kpiMissingLines,
 		kpiNum,
 		kpiRangeText,
@@ -103,6 +104,17 @@
 	});
 	const volumeLine = computed(() => r.value?.lines.find(l => l.autoKey === 'TASK_POINTS_ACCEPTED' && l.applicable && l.completionPct != null) ?? null);
 	const gradeLegend = computed(() => kpiGradeLegend(r.value?.grades ?? []));
+	/** Bốn số việc của nhân viên trên phiếu (UI-16b); quá hạn tô đỏ khi khác 0. */
+	const taskStatItems = computed(() => {
+		const s = r.value?.taskStats;
+		if (!s) return [];
+		return [
+			{ key: 'open', label: 'Đang mở', value: s.open, alert: false },
+			{ key: 'inReview', label: 'Chờ nghiệm thu', value: s.inReview, alert: false },
+			{ key: 'overdue', label: 'Quá hạn', value: s.overdue, alert: s.overdue > 0 },
+			{ key: 'accepted', label: 'Đã nghiệm thu trong kỳ', value: s.acceptedInPeriod, alert: false },
+		];
+	});
 
 	// ─── Chấm dòng ──────────────────────────────────────────────────────────
 	const busyLineId = ref<number | null>(null);
@@ -134,6 +146,18 @@
 	// ─── Gửi đánh giá ───────────────────────────────────────────────────────
 	const comment = ref('');
 	const submitting = ref(false);
+	/** Cả phiếu đang 0 điểm thì hỏi lại trước khi gửi (UI-17a). */
+	const confirmZero = ref(false);
+	function askSubmit() {
+		if (r.value && kpiAllZero(r.value.lines)) confirmZero.value = true;
+		else submit();
+	}
+	/** Lỗi gửi đã báo bằng toast và viền đỏ trên dòng thiếu, nên hộp hỏi lại luôn đóng. */
+	async function submitAnyway(): Promise<string | null> {
+		confirmZero.value = false;
+		await submit();
+		return null;
+	}
 	async function submit() {
 		if (!r.value) return;
 		submitting.value = true;
@@ -277,6 +301,25 @@
 					<p class="text-xs text-gray-500">{{ gradeLegend }}</p>
 				</div>
 			</div>
+			<!--
+				UI-16b: số việc của nhân viên (bridge kpi mục 13.2). Chỉ là con số, không mở danh sách việc: người quản lý KPI
+				đối chiếu được mà không xem nội dung việc.
+			-->
+			<section
+				v-if="r.taskStats"
+				class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+				aria-label="Số việc của nhân viên"
+				data-testid="kpi-task-stats"
+			>
+				<p class="text-sm font-semibold text-gray-900 dark:text-white">Việc của {{ who }}</p>
+				<dl class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+					<div v-for="s in taskStatItems" :key="s.key" :data-testid="`kpi-task-stat-${s.key}`">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">{{ s.label }}</dt>
+						<dd class="text-xl font-semibold" :class="s.alert ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-white'">{{ s.value }}</dd>
+					</div>
+				</dl>
+				<p class="mt-2 text-xs text-gray-500">Đang mở, chờ nghiệm thu và quá hạn tính tới hôm nay; đã nghiệm thu tính trong kỳ của phiếu.</p>
+			</section>
 			<p v-if="r.status === 'OPEN' && volumeLine" class="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900 dark:bg-brand-900/20 dark:text-brand-200" data-testid="kpi-midterm">
 				Tính tới hôm nay, {{ who }} đang đạt {{ kpiNum(volumeLine.completionPct, 1) }}% khối lượng của kỳ.
 			</p>
@@ -315,7 +358,7 @@
 					<p class="text-xs" :class="unscoredCount ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500'">
 						<template v-if="unscoredCount">Còn {{ unscoredCount }} chỉ tiêu nhập tay chưa chấm. </template>Gửi xong số liệu được khoá và {{ r.employee.fullName }} nhận thông báo để phản hồi.
 					</p>
-					<CommonAppButton :loading="submitting" data-testid="kpi-submit" @click="submit">Gửi đánh giá</CommonAppButton>
+					<CommonAppButton :loading="submitting" data-testid="kpi-submit" @click="askSubmit">Gửi đánh giá</CommonAppButton>
 				</div>
 			</div>
 			<div v-else-if="r.reviewerComment" class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
@@ -415,6 +458,14 @@
 			reason-placeholder="Ví dụ: nhân viên phản hồi đúng, cần sửa số khối lượng"
 			:confirm="reason => doHr(confirming!, reason)"
 			@close="confirming = null"
+		/>
+		<KpiConfirmModal
+			v-if="confirmZero && r"
+			title="Gửi phiếu toàn số 0?"
+			:message="`Mọi chỉ tiêu đang là 0, nên tổng điểm của ${r.employee.fullName} là 0 và xếp loại thấp nhất. Bạn xem lại số liệu và các chỉ tiêu nhập tay trước khi gửi, vì gửi xong số liệu bị khoá.`"
+			confirm-label="Vẫn gửi đánh giá"
+			:confirm="submitAnyway"
+			@close="confirmZero = false"
 		/>
 		<KpiChangeReviewerModal
 			v-if="changingReviewer && r"

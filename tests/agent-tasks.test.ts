@@ -187,7 +187,7 @@ describe('renderAgentMarkdown — đường dẫn nội bộ', () => {
 		const html = renderAgentMarkdown(md, { links: true });
 		expect(html).toContain('<a href="/cong-viec?task=CV-10" class="agent-link" data-agent-link="">/cong-viec?task=CV-10</a>.');
 		expect(html).toContain('<li>Phiếu của tôi: <a href="/kpi?reviewId=4"');
-		expect(html).toContain('<td><a href="/cong-viec?task=HQ-2"');
+		expect(html).toContain('<td data-label="Mở"><a href="/cong-viec?task=HQ-2"');
 	});
 
 	it('TC14: query có & đi qua đúng một lần escape', () => {

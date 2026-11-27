@@ -73,7 +73,7 @@
 				</span>
 			</button>
 			<TaskStatusBadge class="hidden sm:inline-flex" :status="t.status" :label="t.statusLabel" />
-			<span class="w-8 shrink-0 text-right text-xs font-medium text-gray-600 dark:text-gray-300" :title="t.points == null ? 'Chưa có điểm, tính 0 điểm' : `${t.points} điểm`">{{ taskPointsText(t.points) }}</span>
+			<span class="w-14 shrink-0 whitespace-nowrap text-right text-xs font-medium text-gray-600 dark:text-gray-300" :title="t.points == null ? 'Chưa có điểm, tính 0 điểm' : `${t.points} điểm`">{{ taskPointsText(t.points) }}</span>
 			<CommonAppAvatar :src="t.assignee.avatarUrl" :name="t.assignee.fullName" size="xs" :title="t.assignee.fullName" />
 			<div v-if="!disabled && menuTargets.length" class="relative" data-no-drag data-sprint-menu>
 				<button

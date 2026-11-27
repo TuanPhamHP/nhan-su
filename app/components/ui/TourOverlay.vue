@@ -70,7 +70,7 @@
 			<div v-else class="pointer-events-auto absolute inset-0" />
 
 			<p class="sr-only" aria-live="polite">
-				<template v-if="shown">Bước {{ counter.number }} trên {{ counter.total }}. {{ step.title }}</template>
+				<template v-if="shown">Bước {{ counter.number }}<template v-if="counter.total"> trên {{ counter.total }}</template>. {{ step.title }}</template>
 			</p>
 
 			<div
@@ -85,7 +85,7 @@
 			>
 				<div class="space-y-2 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
 					<p class="text-xs font-medium text-brand-600 dark:text-brand-400">
-						<template v-if="shown">Bước {{ counter.number }}/{{ counter.total }}</template>
+						<template v-if="shown">Bước {{ counter.number }}<template v-if="counter.total">/{{ counter.total }}</template></template>
 						<template v-else>&nbsp;</template>
 					</p>
 					<h2 id="tour-box-title" class="text-base font-semibold text-gray-900 dark:text-white">{{ step.title }}</h2>
@@ -142,7 +142,7 @@
 							type="button"
 							:class="btnBase"
 							class="bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
-							:disabled="!shown"
+							:disabled="!shown && !waitingLong"
 							@click="onPrimary"
 						>
 							{{ primaryLabel }}

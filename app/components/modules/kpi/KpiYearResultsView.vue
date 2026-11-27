@@ -3,7 +3,7 @@
 	import KpiGradeBadge from '~/components/modules/kpi/KpiGradeBadge.vue';
 	import { useKpiService } from '~/services/kpi.service';
 	import type { KpiYearResults } from '~/types/kpi.types';
-	import { kpiNum } from '~/utils/kpi.utils';
+	import { kpiNum, kpiScaleName } from '~/utils/kpi.utils';
 	import { taskErrorInfo, vnToday } from '~/utils/tasks.utils';
 
 	/**
@@ -65,6 +65,9 @@
 			/>
 		</div>
 		<p class="text-xs text-gray-500">Điểm năm là trung bình các kỳ đã công bố trong năm. Xếp loại theo thang áp dụng ngày cuối năm.</p>
+		<p v-if="data?.gradeScale" class="text-sm text-gray-700 dark:text-gray-200" data-testid="kpi-year-scale">
+			Năm này xếp loại theo <b>{{ kpiScaleName(data.gradeScale) }}</b>
+		</p>
 		<div v-if="loading" class="h-40 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" aria-busy="true" />
 		<TaskEmptyState v-else-if="error" kind="error" title="Chưa xem được kết quả năm" :description="error" action-label="Thử lại" @action="load" />
 		<TaskEmptyState v-else-if="!data?.rows.length" kind="filtered" title="Chưa có kỳ nào được công bố trong năm này" />

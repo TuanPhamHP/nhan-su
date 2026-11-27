@@ -4,11 +4,15 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
+	import TaskChecklistInput from '~/components/modules/tasks/TaskChecklistInput.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskDetail, TaskGroup, TaskPriority, TaskProject, TaskSprint } from '~/types/tasks.types';
-	import { POINT_SCALE, PRIORITY_LABELS, quickDueOptions, taskErrorInfo, vnToday } from '~/utils/tasks.utils';
+	import { POINT_SCALE, PRIORITY_LABELS, TASK_FILE_ACCEPT, TASK_FILE_MAX_MB, quickDueOptions, taskErrorInfo, vnToday } from '~/utils/tasks.utils';
+	import TaskDiscardConfirm from '~/components/modules/tasks/TaskDiscardConfirm.vue';
+	import { useDiscardGuard } from '~/composables/useDiscardGuard';
 
 	/**
 	 * Cửa sổ giao việc đầy đủ (F-01): bắt buộc tiêu đề, người thực hiện, hạn, điểm; còn lại tuỳ chọn.
@@ -24,7 +28,7 @@
 
 	const authStore = useAuthStore();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 	const service = useTasksService();
 	const toast = useToast();
 	const today = vnToday();
@@ -55,7 +59,7 @@
 				projectId: z.string(),
 				description: z.string(),
 				watcherIds: z.array(z.number()),
-				checklistText: z.string(),
+				checklist: z.array(z.string()),
 				groupId: z.string(),
 				sprintId: z.string(),
 			})
@@ -69,7 +73,7 @@
 			}),
 	);
 
-	const { defineField, errors, handleSubmit, isSubmitting } = useForm({
+	const { defineField, errors, handleSubmit, isSubmitting, meta } = useForm({
 		validationSchema: schema,
 		initialValues: {
 			title: '',
@@ -82,7 +86,7 @@
 			projectId: props.projectId ? String(props.projectId) : '',
 			description: '',
 			watcherIds: [],
-			checklistText: '',
+			checklist: [] as string[],
 			groupId: props.groupId ? String(props.groupId) : '',
 			sprintId: props.sprintId ? String(props.sprintId) : '',
 		},
@@ -97,7 +101,7 @@
 	const [projectId] = defineField('projectId');
 	const [description] = defineField('description');
 	const [watcherIds] = defineField('watcherIds');
-	const [checklistText] = defineField('checklistText');
+	const [checklist] = defineField('checklist');
 	const [groupId] = defineField('groupId');
 	const [sprintId] = defineField('sprintId');
 
@@ -140,7 +144,7 @@
 	]);
 
 	const people = computed<PickablePerson[]>(() =>
-		employees.value.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(employees.value, departments.value),
 	);
 
 	const projectOptions = computed(() => [
@@ -148,12 +152,33 @@
 		...projects.value.map(p => ({ value: String(p.id), label: `${p.code} · ${p.name}` })),
 	]);
 
+	/**
+	 * File đính kèm chọn ngay trong form. API tạo việc không nhận file, nên tạo việc trước rồi tải từng file
+	 * lên, xong hết mới đóng hộp. File nào lỗi thì báo tên file, việc vẫn giữ (người dùng tải lại ở khung
+	 * chi tiết).
+	 */
+	const fileModel = ref<File | File[] | null>(null);
+	const pendingFiles = computed<File[]>(() => (Array.isArray(fileModel.value) ? fileModel.value : fileModel.value ? [fileModel.value] : []));
+	const uploadingFiles = ref(false);
+
+	async function uploadPending(task: TaskDetail): Promise<void> {
+		if (!pendingFiles.value.length) return;
+		uploadingFiles.value = true;
+		try {
+			for (const f of pendingFiles.value) {
+				try {
+					await service.uploadAttachment(task.id, f);
+				} catch (err) {
+					toast.error(`Đã tạo ${task.code} nhưng chưa tải lên được ${f.name}: ${taskErrorInfo(err).message}`);
+				}
+			}
+		} finally {
+			uploadingFiles.value = false;
+		}
+	}
+
 	const onSubmit = handleSubmit(async v => {
 		try {
-			const checklist = v.checklistText
-				.split('\n')
-				.map(s => s.trim())
-				.filter(Boolean);
 			const created = await service.create({
 				title: v.title.trim(),
 				assigneeId: v.assigneeIds[0]!,
@@ -165,34 +190,51 @@
 				projectId: v.projectId ? Number(v.projectId) : undefined,
 				description: v.description && v.description !== '<p></p>' ? v.description : undefined,
 				watcherIds: v.watcherIds.length ? v.watcherIds : undefined,
-				checklist: checklist.length ? checklist : undefined,
+				checklist: v.checklist.length ? v.checklist : undefined,
 				groupId: v.projectId && v.groupId ? Number(v.groupId) : undefined,
 				sprintId: v.projectId && v.sprintId ? Number(v.sprintId) : undefined,
 			});
-			toast.success(`Đã giao việc ${created.code}`);
+			await uploadPending(created);
+			if (created.assignee.id === authStore.user?.id) toast.success(`Đã tạo việc ${created.code}`);
+			else toast.success(`Đã giao ${created.code} cho ${created.assignee.fullName}`);
 			emit('created', created);
 		} catch (err) {
 			toast.error(taskErrorInfo(err).message);
 		}
 	});
 
-	useEscapeKey(() => emit('close'), () => !isSubmitting.value);
+	/** Chữ gõ dở trong ô danh sách kiểm tra thành mục trước khi gửi; quá dài thì không gửi. */
+	const checklistInput = ref<InstanceType<typeof TaskChecklistInput> | null>(null);
+	async function submit() {
+		if (checklistInput.value && !checklistInput.value.commitDraft()) return;
+		await nextTick();
+		await onSubmit();
+	}
+
+	/** Tự giao cho mình thì nút ghi "Tạo việc", giao cho người khác mới là "Giao việc". */
+	const forSelf = computed(() => !assigneeIds.value[0] || assigneeIds.value[0] === authStore.user?.id);
+
+	const guard = useDiscardGuard(
+		() => meta.value.dirty || !!checklistInput.value?.hasDraft() || !!pendingFiles.value.length,
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
 </script>
 
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" @click.self="emit('close')">
+		<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" @click.self="guard.requestClose()">
 			<form
 				class="my-0 w-full max-w-2xl rounded-none bg-white shadow-xl sm:my-8 sm:rounded-2xl dark:bg-gray-900"
 				role="dialog"
 				aria-modal="true"
 				aria-label="Tạo việc"
 				data-testid="task-create-modal"
-				@submit.prevent="onSubmit"
+				@submit.prevent="submit"
 			>
 				<div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">Tạo việc</h2>
-					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="emit('close')">
+					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="guard.requestClose()">
 						<Icon name="heroicons:x-mark" class="h-5 w-5" />
 					</button>
 				</div>
@@ -229,7 +271,7 @@
 
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div>
-							<UiDatePicker v-model="dueDate" label="Hạn" :error="errors.dueDate" />
+							<UiDatePicker v-model="dueDate" label="Hạn" :error="errors.dueDate" warn-far-year />
 							<div class="mt-1.5 flex flex-wrap gap-1.5">
 								<button
 									v-for="o in dueOptions"
@@ -244,7 +286,7 @@
 							</div>
 							<p class="mt-1 text-xs text-gray-500">Bỏ trống thì việc không có hạn và không bị tính quá hạn.</p>
 						</div>
-						<UiDatePicker v-model="startDate" label="Ngày bắt đầu" :error="errors.startDate" />
+						<UiDatePicker v-model="startDate" label="Ngày bắt đầu" :error="errors.startDate" warn-far-year />
 					</div>
 
 					<div class="grid gap-4 sm:grid-cols-2">
@@ -310,29 +352,34 @@
 					<div>
 						<span class="block text-sm font-medium text-gray-700 dark:text-gray-300">Mô tả</span>
 						<div class="mt-1">
-							<CommonTiptapEditor v-model="description" placeholder="Việc cần làm, kết quả mong đợi" />
+							<CommonTiptapEditor v-model="description" placeholder="Việc cần làm, kết quả mong đợi" no-headings />
 						</div>
 					</div>
 
 					<EmployeePicker v-model="watcherIds" :people="people" label="Người theo dõi" />
 
+					<TaskChecklistInput id="task-checklist" ref="checklistInput" v-model="checklist" />
+
 					<div>
-						<label for="task-checklist" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Danh sách kiểm tra</label>
-						<textarea
-							id="task-checklist"
-							v-model="checklistText"
-							rows="3"
-							placeholder="Mỗi dòng một mục"
-							class="mt-1 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-						/>
+						<span class="block text-sm font-medium text-gray-700 dark:text-gray-300">File</span>
+						<div class="mt-1" data-testid="task-create-files">
+							<UiFileDropzone
+								v-model="fileModel"
+								:accept="TASK_FILE_ACCEPT"
+								:max-size-mb="TASK_FILE_MAX_MB"
+								multiple
+								:disabled="isSubmitting"
+							/>
+						</div>
 					</div>
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">
-					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="emit('close')">Huỷ</CommonAppButton>
-					<CommonAppButton type="submit" :loading="isSubmitting" data-testid="task-create-submit">Giao việc</CommonAppButton>
+					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="guard.requestClose()">Huỷ</CommonAppButton>
+					<CommonAppButton type="submit" :loading="isSubmitting || uploadingFiles" data-testid="task-create-submit">{{ forSelf ? 'Tạo việc' : 'Giao việc' }}</CommonAppButton>
 				</div>
 			</form>
 		</div>
+		<TaskDiscardConfirm :open="guard.asking.value" @keep="guard.keepEditing()" @discard="guard.discard()" />
 	</Teleport>
 </template>

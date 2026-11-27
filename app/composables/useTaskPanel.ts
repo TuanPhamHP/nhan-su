@@ -24,18 +24,15 @@ export function useTaskPanel() {
 
 	function open(taskCode: string) {
 		const query = { ...route.query, task: taskCode };
-		// Đang mở việc khác: thay tại chỗ, không chồng thêm một bước Quay lại. Thẻ Hoạt động về mặc định.
-		if (code.value) {
-			delete query.activity;
-			router.replace({ query });
-		} else router.push({ query });
+		// Đang mở việc khác: thay tại chỗ, không chồng thêm một bước Quay lại.
+		if (code.value) router.replace({ query });
+		else router.push({ query });
 	}
 
-	/** Query của trang khi không có khung: bỏ việc đang mở và thẻ Hoạt động của nó. */
+	/** Query của trang khi không có khung: bỏ việc đang mở. */
 	function queryWithoutPanel() {
 		const query = { ...route.query };
 		delete query.task;
-		delete query.activity;
 		return query;
 	}
 

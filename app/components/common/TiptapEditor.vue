@@ -19,12 +19,22 @@
 			// Callback upload ảnh — parent tự xử lý API call, trả về URL của ảnh sau upload.
 			// Khi prop này có mặt, toolbar sẽ hiện nút chèn ảnh + hỗ trợ paste ảnh.
 			onImageUpload?: (file: File) => Promise<string>;
+			/**
+			 * Bỏ nhóm nút tiêu đề (H1, H2, H3, ¶) cho ô mô tả ngắn như mô tả việc: người văn phòng không hiểu
+			 * các ký hiệu đó và cũng không cần chia mục.
+			 */
+			noHeadings?: boolean;
+			/** Đặt con trỏ vào cuối nội dung ngay khi ô hiện ra (ô sửa tại chỗ). */
+			autofocus?: boolean;
+			/** Ctrl+Enter (Cmd+Enter) phát `submit` thay vì xuống dòng cứng. */
+			submitOnModEnter?: boolean;
 		}>(),
-		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined },
+		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined, noHeadings: false, autofocus: false, submitOnModEnter: false },
 	);
 
 	const emit = defineEmits<{
 		'update:modelValue': [value: string];
+		submit: [];
 	}>();
 
 	const toast = useToast();
@@ -124,6 +134,12 @@
 			attributes: {
 				class: 'tt-prose',
 			},
+			handleKeyDown: (_view, event) => {
+				if (!props.submitOnModEnter || event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return false;
+				event.preventDefault();
+				emit('submit');
+				return true;
+			},
 			handlePaste: (_view, event) => {
 				if (!props.onImageUpload) return false;
 				const items = event.clipboardData?.items;
@@ -160,6 +176,8 @@
 	);
 
 	onMounted(() => {
+		// `autofocus` của Tiptap chạy lúc tạo editor, trước khi ô được gắn vào trang: đặt con trỏ sau khi gắn.
+		if (props.autofocus) setTimeout(() => editor.value?.commands.focus('end'), 50);
 		if (!editor.value || !imageBubbleMenuRef.value) return;
 		editor.value.registerPlugin(
 			BubbleMenuPlugin({
@@ -262,6 +280,7 @@
 			<div class="tt-divider" />
 
 			<!-- Headings -->
+			<template v-if="!noHeadings">
 			<button
 				type="button"
 				class="tt-btn tt-btn-text"
@@ -300,6 +319,7 @@
 			</button>
 
 			<div class="tt-divider" />
+			</template>
 
 			<!-- Alignment -->
 			<button
@@ -700,8 +720,14 @@
 		background-color: rgba(153, 27, 27, 0.3);
 	}
 
-	/* Bubble menu — plugin tự toggle visibility, ta chỉ style container */
+	/*
+	 * Bubble menu: plugin chỉ ẩn phần tử sau khi đã hiện một lần (`hide()` bỏ qua khi chưa hiện), nên
+	 * phải ẩn sẵn ở đây, kẻo thanh 25%/50%… nằm dưới ô soạn khi chưa có ảnh. Hiện ảnh thì plugin đặt
+	 * `visibility: visible` và vị trí nổi lên ảnh.
+	 */
 	.tt-image-bubble {
+		position: absolute;
+		visibility: hidden;
 		display: flex;
 		align-items: center;
 		gap: 0;

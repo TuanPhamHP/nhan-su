@@ -101,6 +101,7 @@ chuyên cần 96, trọng số 30/30/20/10/10 → 25,0 + 34,5 + 21,0 + 8,0 + 9,6
 | `lines[]` | Mục 4.3 |
 | `events[]` | `{ id, type, actor { id, fullName } \| null, payload, createdAt }`; `type`: `CREATED`, `REVIEW_STARTED`, `LINE_UPDATED`, `SUBMITTED`, `FEEDBACK`, `FEEDBACK_EXPIRED`, `FINALIZED`, `PUBLISHED`, `REOPENED`, `REVIEWER_CHANGED`, `EMPLOYEE_TERMINATED`; `actor` null là hệ thống. `REVIEWER_CHANGED` có `payload { from, to }` là **id** người chấm cũ, mới (tên tra trong danh bạ) |
 | `permissions` | `canScore`, `canSubmit`, `canFeedback`, `canFinalize`, `canPublish`, `canReopen`, `canChangeReviewer` |
+| `taskStats` | Số việc của nhân viên (mục 13.2): `{ open, inReview, overdue, acceptedInPeriod }` |
 
 ### 4.3 Dòng chỉ tiêu (`KpiReviewLineDto`)
 
@@ -108,7 +109,8 @@ Cấu hình chụp lúc mở kỳ (BR-28, sửa danh mục hay mẫu về sau kh
 (+ `directionLabel`), `source` (`AUTO` | `MANUAL`), `autoKey`, `manualScale` (chấm 1–5 bằng năm nút), `capPercent`,
 `floorPercent`, `bands`, `target`, `weight`. Kết quả: `effectiveTarget`, `effectiveWeight`, `autoValue` (số hệ thống tính),
 `value` (số dùng để chấm), `adjusted` + `adjustReason` + `adjustedBy` (số tự động đã chỉnh: hiện `autoValue` gạch ngang, `value`
-và lý do), `applicable`, `completionPct`, `score`, `reviewerNote`, `hasEvidence` (số gạch chân, bấm mở bằng chứng).
+và lý do), `applicable`, `notApplicableReason` (mục 13.1), `completionPct`, `score`, `reviewerNote`, `hasEvidence` (số gạch
+chân, bấm mở bằng chứng).
 
 ### 4.4 Bằng chứng (`GET /kpi/reviews/:id/lines/:lineId/evidence`, F-24)
 
@@ -161,9 +163,10 @@ Mọi route dưới `/v1`, gắn `@RequireModule('TASKS')`.
 | GET | `/kpi/periods/:id` | `kpi:manage` | Chi tiết kỳ (mục 4.5) |
 | POST | `/kpi/periods/:id/add-missing` | `kpi:manage` | Tạo phiếu cho người còn thiếu (sau khi thêm mẫu, người mới vào); kỳ đã công bố hết 409 `KPI_PERIOD_STATE_INVALID` |
 | POST | `/kpi/periods/:id/recompute` | `kpi:manage` | Tính lại ngay phiếu Đang mở, Chờ cấp trên đánh giá; trả `{ computed, failed }` |
+| POST | `/kpi/periods/:id/remind` | `kpi:manage` | Nhắc người chấm còn phiếu Chờ cấp trên đánh giá (mục 13.3); trả `{ reminded, skipped, reviews }` |
 | POST | `/kpi/periods/:id/publish` | `kpi:manage` | Công bố mọi phiếu Chờ chốt (chốt luôn); trả `{ published, skippedOwn }` |
 | GET | `/kpi/periods/:id/results?departmentId=` | `kpi:manage`, ADMIN, DIRECTOR; trưởng phòng (phòng mình) | `{ period, rows[KpiReviewListItemDto], distribution[{ department, total, graded, byGrade }], overall }` (F-29, RP-10) |
-| GET | `/kpi/periods/:id/results/export?departmentId=` | như trên | File `.xlsx`: sheet "Kết quả" (STT, mã NV, họ tên, phòng, người đánh giá, bước, tổng điểm, xếp loại; tiêu đề cột ở dòng 4) và "Phân bố theo phòng" |
+| GET | `/kpi/periods/:id/results/export?departmentId=` | như trên | File `.xlsx`: sheet "Kết quả" (STT, mã NV, họ tên, phòng, người đánh giá, bước, tổng điểm, xếp loại; tiêu đề cột ở dòng 4), "Phân bố theo phòng" và "Chi tiết chỉ tiêu" (từ 27/11/2026: mỗi người mỗi chỉ tiêu một dòng, mục 13.4) |
 | GET | `/kpi/year-results?year=&departmentId=` | như trên | Trung bình điểm các kỳ con **đã công bố** của từng người, xếp loại theo thang áp dụng ngày cuối năm |
 | GET | `/kpi/reviews?mine=&toReview=&periodId=&status=&departmentId=&q=&page=&limit=` | Theo quyền xem | `mine=true` KPI của tôi (UI-10), `toReview=true` phiếu tôi chấm (UI-11) |
 | GET | `/kpi/reviews/:id` | Người xem được | Mục 4.2 |
@@ -224,6 +227,11 @@ Category `TASK`, `actionType: 'NAVIGATE_ONLY'`. Nội dung ở `docs/notificatio
 | `KPI_FEEDBACK_NEEDED` | Người chấm gửi đánh giá | Nhân viên (email) | `kpi_review`, `/kpi?reviewId={id}` |
 | `KPI_PUBLISHED` | HR công bố | Nhân viên (email) | `kpi_review`, `/kpi?reviewId={id}` |
 | `KPI_REVIEW_OVERDUE` | J-05: phiếu chờ người chấm quá 3 ngày, một lần mỗi kỳ | Người có `kpi:manage` (email) | `kpi_period`, `/management/kpi/ky?periodId={id}` |
+| `KPI_REVIEW_NEEDED` (nhắc tay) | Người quản lý KPI bấm Nhắc người chấm (mục 13.3) | Người chấm còn phiếu chờ (email gom) | `kpi_review`, `/kpi/danh-gia?reviewId={id}` |
+| `KPI_REVIEW_PENDING_FINAL` | Nhân viên phản hồi, phiếu sang Chờ chốt; gom một tin mỗi kỳ mỗi ngày (phiếu sang Chờ chốt vì hết hạn phản hồi thì không gửi) | Người có `kpi:manage` | `kpi_period`, `/management/kpi/ky?periodId={id}` |
+
+Từ 27/11/2026 thông báo "cần đánh giá" của người chấm chuyển đã đọc khi họ gửi phiếu, thông báo "cần phản hồi" của nhân viên
+chuyển đã đọc khi họ phản hồi.
 
 ## 9. Màn hình web (thiết kế mục 9.1, 9.2)
 
@@ -284,3 +292,54 @@ người khác vẫn là "Không tìm thấy phiếu").
 Kịch bản phải thử: tìm tên ở Đánh giá nhân viên và Kỳ đánh giá rồi F5 vẫn còn chữ; chọn phòng ở thẻ Kết quả, chọn năm và phòng
 ở Kết quả năm rồi F5 giữ; bật hiện chỉ tiêu ngừng dùng rồi F5 giữ; gửi đường dẫn có `reviewId` cho người không xem được phiếu
 thì thấy "Không tìm thấy phiếu".
+
+---
+
+## 13. Sửa sau thử nghiệm người dùng (27/11/2026)
+
+### 13.1 Vì sao chỉ tiêu không áp dụng
+
+`KpiReviewLineDto.notApplicableReason`: câu lý do khi dòng tự động không áp dụng (`applicable: false`), `null` khi áp dụng hoặc
+dòng nhập tay. Ví dụ "Trong kỳ không có việc người khác giao có hạn ban đầu (việc tự giao, việc con, việc chưa có hạn không
+tính).". Web hiện câu này dưới dòng chỉ tiêu, kèm câu "Trọng số chia sang các chỉ tiêu còn lại" (đã có `effectiveWeight`).
+Tỷ lệ đúng hạn giờ chỉ tính việc **có hạn** (việc chưa có hạn không còn được tính là đúng hạn), nên phiếu của người chỉ có
+việc chưa hạn sẽ không áp dụng hai chỉ tiêu đúng hạn.
+
+### 13.2 Số việc của nhân viên trên phiếu
+
+`KpiReviewDetailDto.taskStats: { open, inReview, overdue, acceptedInPeriod }`: việc đang mở, đang chờ nghiệm thu, quá hạn mà
+chưa báo xong (tính tại hôm nay), đã nghiệm thu trong kỳ của phiếu. Ai mở được phiếu thì thấy (người chấm, người quản lý
+KPI, giám đốc, trưởng phòng, chính nhân viên). Đây là cách người quản lý KPI (HR) xem số việc của một người mà không xem nội
+dung việc (Q-U2). Web hiện một dải bốn số ở đầu phiếu, chỉ là con số, không mở danh sách việc.
+
+### 13.3 Nhắc người chấm
+
+`POST /kpi/periods/:id/remind` (`kpi:manage`): mỗi người chấm còn phiếu Chờ cấp trên đánh giá nhận một thông báo cho mỗi phiếu
+và một thư gom, câu "HR nhắc bạn đánh giá phiếu KPI {kỳ} của {nhân viên}". Mỗi người chấm tối đa một lần mỗi ngày mỗi kỳ:
+bấm lần hai trong ngày thì `reminded: 0`, `skipped` là số người đã nhắc hôm nay. Trả `{ reminded, skipped, reviews }`
+(`reviews` là số phiếu đang chờ chấm). Web: nút **Nhắc người chấm** ở màn Kỳ đánh giá, hiện kết quả "Đã nhắc {n} người chấm
+({m} người đã được nhắc hôm nay)".
+
+### 13.4 Excel chi tiết chỉ tiêu
+
+Sheet thứ ba "Chi tiết chỉ tiêu", tiêu đề: Mã nhân viên, Họ tên, Chỉ tiêu, Đơn vị, Mức giao, Trọng số (%), Số tự động, Kết
+quả dùng, Lý do chỉnh, Hoàn thành (%), Điểm. Dòng không áp dụng ghi rõ. API không đổi.
+
+Sheet này **chỉ có phiếu người tải mở được** (như `GET /kpi/reviews/:id`): người quản lý KPI, giám đốc, ADMIN có mọi phiếu;
+trưởng phòng chỉ có phiếu mình chấm và phiếu của chính mình, các phiếu khác trong phòng vẫn có điểm, xếp loại ở sheet "Kết
+quả" nhưng không có dòng chi tiết.
+
+### 13.5 Huy hiệu và thông báo
+
+- `GET /approval/counts.kpiPendingFinal`: số phiếu Chờ chốt, chỉ đếm cho người quản lý KPI; không cộng vào `total`. Web hiện
+  số đỏ cạnh mục **Kỳ đánh giá**.
+- `KPI_REVIEW_PENDING_FINAL` (mục 8): người quản lý KPI biết có phiếu chờ chốt, nêu số phiếu nhân viên không đồng ý trước.
+
+### 13.6 Kịch bản phải thử trên web
+
+1. Phiếu có chỉ tiêu không áp dụng hiện câu lý do; phiếu có `taskStats` hiện dải bốn số.
+2. Kỳ đánh giá: bấm Nhắc người chấm hai lần trong ngày, lần hai báo đã nhắc rồi; người chấm nhận tin "HR nhắc bạn…".
+3. Nhân viên phản hồi không đồng ý: người quản lý KPI có tin chờ chốt, số đỏ cạnh Kỳ đánh giá tăng; tin "cần phản hồi" của
+   nhân viên đã đọc.
+4. Người chấm gửi phiếu: tin "cần đánh giá" của họ đã đọc.
+5. Xuất Excel có sheet Chi tiết chỉ tiêu.

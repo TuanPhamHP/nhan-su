@@ -1,14 +1,20 @@
 <script setup lang="ts">
 	import { sanitizeTaskDescription } from '~/utils/task-html';
+	import { splitAgentMark } from '~/utils/agent-source';
+	import { vnCalendarDate } from '~/utils/date';
 	import { storeToRefs } from 'pinia';
+	import AgentSourceLabel from '~/components/modules/agent/AgentSourceLabel.vue';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
 	import TaskActivity from '~/components/modules/tasks/TaskActivity.vue';
 	import TaskCardMenu from '~/components/modules/tasks/TaskCardMenu.vue';
 	import TaskPriorityBadge from '~/components/modules/tasks/TaskPriorityBadge.vue';
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
+	import { TASK_PROJECT_CONTEXT, useTaskDetailCache } from '~/composables/useTaskDetailCache';
+	import type { TaskProjectBits } from '~/composables/useTaskDetailCache';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
 	import type {
@@ -19,19 +25,22 @@
 		TaskGroup,
 		TaskListItem,
 		TaskPriority,
-		TaskProjectRole,
 		TaskSprint,
 		TaskStatus,
 	} from '~/types/tasks.types';
 	import {
 		ACTION_LABELS,
+		CHECKLIST_ITEM_MAX,
 		DUE_TONE_CLASS,
 		POINT_SCALE,
 		PRIORITY_LABELS,
+		PRIORITY_TONE,
 		TASK_FILE_ACCEPT,
 		TASK_FILE_MAX_MB,
 		dueTone,
+		isBlankHtml,
 		primaryActions,
+		lateBlockerText,
 		shortDate,
 		TASK_HINTS,
 		taskDueText,
@@ -44,7 +53,7 @@
 	 * Nội dung chi tiết một việc, dùng chung cho khung trượt và trang đầy đủ (UI-02, mục 9.2).
 	 *
 	 * Đầu khung có số hiệu, tiêu đề sửa tại chỗ, trạng thái và một đến hai nút chính theo
-	 * `allowedActions`. Bên trái mô tả, việc con, danh sách kiểm tra, file, hoạt động; bên phải cột
+	 * `allowedActions`. Bên trái mô tả, việc phụ, danh sách kiểm tra, file, hoạt động; bên phải cột
 	 * thông tin, hạn kèm "hạn ban đầu …, đã đổi n lần". Màn hẹp thì cột thông tin lên trên.
 	 * Người không xem được việc thấy "Bạn không xem được việc này" kèm tên người giao.
 	 */
@@ -56,7 +65,7 @@
 	const toast = useToast();
 	const authStore = useAuthStore();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 	const { canWrite } = useModuleAccess();
 	const readOnly = computed(() => !canWrite('TASKS'));
 	const today = vnToday();
@@ -65,13 +74,19 @@
 	const loading = ref(true);
 	const error = ref<{ code?: string; message: string; assignerName: string | null } | null>(null);
 	const activityRef = ref<InstanceType<typeof TaskActivity> | null>(null);
+	const cache = useTaskDetailCache();
 
+	/**
+	 * Chi tiết tải một lần khi mở rồi giữ trong khung; thao tác sau đó thay bản trả về tại chỗ. Việc vừa xem
+	 * thì hiện ngay bản đang giữ và tải bản mới ngầm, không hiện khung xám.
+	 */
 	async function load(silent = false) {
 		if (!silent) loading.value = true;
 		error.value = null;
 		try {
 			const t = await service.get(props.code);
 			task.value = t;
+			cache.setDetail(t, props.code);
 			emit('loaded', t);
 		} catch (err) {
 			const info = taskErrorInfo(err, 'Chưa tải được việc này.');
@@ -81,17 +96,27 @@
 		}
 	}
 
-	watch(() => props.code, () => load(), { immediate: true });
+	watch(
+		() => props.code,
+		code => {
+			const cached = cache.getDetail(code);
+			task.value = cached;
+			loading.value = !cached;
+			load(!!cached);
+		},
+		{ immediate: true },
+	);
 
 	function setTask(t: TaskDetail) {
 		task.value = t;
+		cache.setDetail(t, props.code);
 		emit('changed', t);
 	}
 
 	function handle(result: TaskActionResult) {
 		if (result.ok) {
 			setTask(result.task);
-			activityRef.value?.reload();
+			activityRef.value?.historyChanged();
 		} else if (result.conflict) {
 			load(true);
 		}
@@ -113,15 +138,22 @@
 	// ─── Realtime ────────────────────────────────────────────────────────────
 	const { subscribe } = useTaskRealtime();
 	let unsubscribe: (() => void) | null = null;
+	/**
+	 * Danh sách kiểm tra, người theo dõi, file không tăng phiên bản việc nên sự kiện của chúng luôn kéo tải
+	 * lại. Thao tác của chính mình thì khung đã cập nhật tại chỗ: bỏ tiếng vọng trong vài giây sau đó.
+	 */
+	let selfChangeAt = 0;
+	const markSelfChange = () => (selfChangeAt = Date.now());
 	onMounted(() => {
 		unsubscribe = subscribe({
 			onTaskChanged: e => {
 				const t = task.value;
 				if (!t || e.id !== t.id) return;
-				if (e.version > t.version || ['checklist', 'watchers', 'attachment'].includes(e.kind)) load(true);
+				if (e.version > t.version) load(true);
+				else if (['checklist', 'watchers', 'attachment'].includes(e.kind) && Date.now() - selfChangeAt > 3000) load(true);
 			},
 			onComment: e => {
-				if (task.value && e.taskId === task.value.id) activityRef.value?.reload();
+				if (task.value && e.taskId === task.value.id) activityRef.value?.onRemoteComment();
 			},
 		});
 	});
@@ -142,20 +174,57 @@
 		handle(await actions.updateFields(t, { title: titleDraft.value.trim() }));
 	}
 
+	/**
+	 * Mô tả sửa tại chỗ: bấm thẳng vào ô là sửa. Lưu bằng nút Lưu, Ctrl+Enter, hoặc bấm ra ngoài ô (rời ô
+	 * bằng Tab cũng vậy); Esc hay Huỷ bỏ thay đổi. Enter để xuống dòng vì mô tả có nhiều dòng, danh sách.
+	 */
+	const canEditDesc = computed(() => !!task.value?.permissions.edit && !readOnly.value);
 	const editingDesc = ref(false);
+	const savingDesc = ref(false);
 	const descDraft = ref('');
-	function startDesc() {
+	const descBox = ref<HTMLElement | null>(null);
+	function startDesc(e?: Event) {
+		if (!canEditDesc.value || editingDesc.value) return;
+		// Bấm vào liên kết, nút trong mô tả thì làm việc của nó, không vào chế độ sửa.
+		if ((e?.target as HTMLElement | null)?.closest('a, button')) return;
 		descDraft.value = task.value?.description ?? '';
 		editingDesc.value = true;
+		document.addEventListener('pointerdown', onPointerOutsideDesc, true);
+	}
+	function stopDesc() {
+		editingDesc.value = false;
+		document.removeEventListener('pointerdown', onPointerOutsideDesc, true);
+	}
+	function onPointerOutsideDesc(e: PointerEvent) {
+		if (descBox.value && !descBox.value.contains(e.target as Node)) saveDesc();
+	}
+	function onDescFocusOut(e: FocusEvent) {
+		const next = e.relatedTarget as Node | null;
+		// Chỉ tính khi con trỏ sang một ô khác ngoài khung sửa (Tab); bấm chuột đã có `pointerdown` lo.
+		if (next && descBox.value && !descBox.value.contains(next)) saveDesc();
 	}
 	async function saveDesc() {
 		const t = task.value;
-		if (!t) return;
-		const result = await actions.updateFields(t, { description: descDraft.value });
-		if (result.ok) editingDesc.value = false;
-		handle(result);
+		if (!t || savingDesc.value || !editingDesc.value) return;
+		const next = isBlankHtml(descDraft.value) ? '' : descDraft.value;
+		const prev = isBlankHtml(t.description ?? '') ? '' : (t.description ?? '');
+		if (next === prev) {
+			stopDesc();
+			return;
+		}
+		savingDesc.value = true;
+		try {
+			const result = await actions.updateFields(t, { description: next });
+			if (result.ok) stopDesc();
+			handle(result);
+		} finally {
+			savingDesc.value = false;
+		}
 	}
-	const descHtml = computed(() => sanitizeTaskDescription(task.value?.description));
+	onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerOutsideDesc, true));
+	/** Mô tả do trợ lý soạn có đuôi `⟦Trợ lý AI⟧ …`: cắt khi hiện, thay bằng nhãn (dữ liệu giữ nguyên, sửa mô tả vẫn thấy đủ). */
+	const descMark = computed(() => splitAgentMark(task.value?.description));
+	const descHtml = computed(() => sanitizeTaskDescription(descMark.value.text));
 
 	async function onPriority(value: string) {
 		const t = task.value;
@@ -172,6 +241,29 @@
 	async function changeDue() {
 		if (task.value) handle(await actions.changeDue(task.value));
 	}
+	// Phiếu xin dời hạn (bridge mục 25).
+	async function requestDue() {
+		if (task.value) handle(await actions.requestDue(task.value));
+	}
+	async function approveDue() {
+		if (task.value) handle(await actions.approveDueRequest(task.value));
+	}
+	async function rejectDue() {
+		if (task.value) handle(await actions.rejectDueRequest(task.value));
+	}
+	async function cancelDue() {
+		if (task.value) handle(await actions.cancelDueRequest(task.value));
+	}
+	// Bấm Hoàn tác trong toast sau Báo xong: thay bản mới nếu là việc đang mở ở đây.
+	watch(
+		() => actions.externalChange.value,
+		t => {
+			if (t && task.value && t.id === task.value.id) {
+				setTask(t);
+				activityRef.value?.historyChanged();
+			}
+		},
+	);
 	async function reassign() {
 		if (task.value) handle(await actions.reassign(task.value));
 	}
@@ -183,6 +275,7 @@
 		const t = task.value;
 		const content = newItem.value.trim();
 		if (!t || !content) return;
+		markSelfChange();
 		try {
 			const item = await service.addChecklistItem(t.id, content);
 			t.checklistItems.push(item);
@@ -199,6 +292,7 @@
 		if (!t || !item) return;
 		item.isDone = isDone;
 		t.checklist = { ...t.checklist, done: t.checklistItems.filter(i => i.isDone).length };
+		markSelfChange();
 		try {
 			Object.assign(item, await service.updateChecklistItem(t.id, id, { isDone }));
 			emit('changed', t);
@@ -211,6 +305,7 @@
 	async function removeItem(id: number) {
 		const t = task.value;
 		if (!t) return;
+		markSelfChange();
 		try {
 			await service.removeChecklistItem(t.id, id);
 			t.checklistItems = t.checklistItems.filter(i => i.id !== id);
@@ -221,7 +316,7 @@
 		}
 	}
 
-	// ─── Việc con ───────────────────────────────────────────────────────────
+	// ─── Việc phụ ───────────────────────────────────────────────────────────
 	const showSubtaskForm = ref(false);
 	function onSubtaskCreated() {
 		load(true);
@@ -232,12 +327,20 @@
 	const fileModel = ref<File | File[] | null>(null);
 	const uploading = ref(false);
 	const showUpload = ref(false);
+	const dropzone = ref<{ openPicker: () => void } | null>(null);
+	/** Một lần bấm "Tải file lên" là mở ngay hộp chọn file; vùng thả vẫn hiện để kéo thả trên máy tính. */
+	async function startUpload() {
+		showUpload.value = true;
+		await nextTick();
+		dropzone.value?.openPicker();
+	}
 	watch(fileModel, async v => {
 		const t = task.value;
 		const files = Array.isArray(v) ? v : v ? [v] : [];
 		if (!t || !files.length) return;
 		fileModel.value = null;
 		uploading.value = true;
+		markSelfChange();
 		for (const f of files) {
 			try {
 				const a = await service.uploadAttachment(t.id, f);
@@ -271,13 +374,15 @@
 	const addingWatchers = ref(false);
 	const watcherPick = ref<number[]>([]);
 	const people = computed<PickablePerson[]>(() =>
-		employees.value
-			.filter(e => !task.value?.watchers.some(w => w.id === e.id))
-			.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(
+			employees.value.filter(e => !task.value?.watchers.some(w => w.id === e.id)),
+			departments.value,
+		),
 	);
 	async function addWatchers() {
 		const t = task.value;
 		if (!t || !watcherPick.value.length) return;
+		markSelfChange();
 		try {
 			setTask(await service.addWatchers(t.id, watcherPick.value));
 			watcherPick.value = [];
@@ -289,6 +394,7 @@
 	async function toggleWatch() {
 		const t = task.value;
 		if (!t) return;
+		markSelfChange();
 		try {
 			if (iWatch.value) {
 				await service.removeWatcher(t.id, me.value);
@@ -305,6 +411,7 @@
 	async function removeWatcher(id: number) {
 		const t = task.value;
 		if (!t) return;
+		markSelfChange();
 		try {
 			await service.removeWatcher(t.id, id);
 			t.watchers = t.watchers.filter(w => w.id !== id);
@@ -325,40 +432,38 @@
 	// Ai đổi được nhóm, đợt: thành viên dự án vai Quản lý, Thành viên và ADMIN (bridge mục 12.3). Máy chủ
 	// không trả cờ riêng cho việc này nên khung hỏi vai của người xem trong dự án; người không là thành
 	// viên (trưởng phòng xem qua Việc của phòng) nhận 404 và chỉ thấy chữ.
-	const projectInfo = ref<{ id: number; myRole: TaskProjectRole | null; useSprints: boolean } | null>(null);
-	const projectGroups = ref<TaskGroup[]>([]);
-	const projectSprints = ref<TaskSprint[]>([]);
-	let loadedProjectId: number | null = null;
-	async function loadProjectBits(t: TaskDetail) {
-		const pid = t.project && !t.parent ? t.project.id : null;
-		if (pid === loadedProjectId) return;
-		loadedProjectId = pid;
-		projectInfo.value = null;
-		projectGroups.value = [];
-		projectSprints.value = [];
-		if (!pid) return;
-		try {
-			const p = await service.getProject(pid);
-			if (loadedProjectId !== pid) return;
-			projectInfo.value = { id: p.id, myRole: p.myRole, useSprints: p.useSprints };
-			const [groups, sprints] = await Promise.all([
-				service.listGroups(pid),
-				p.useSprints ? service.listSprints(pid) : Promise.resolve([] as TaskSprint[]),
-			]);
-			if (loadedProjectId !== pid) return;
-			projectGroups.value = groups;
-			projectSprints.value = sprints;
-		} catch {
-			// Không là thành viên dự án: giữ chữ, không cho chọn.
-		}
-	}
-	watch(task, t => {
-		if (t) loadProjectBits(t);
+	// Mở từ trang dự án thì dùng nhóm, đợt trang đã tải (`TaskWorkspace` chia qua `provide`), không gọi lại;
+	// mở từ nơi khác thì hỏi qua bộ nhớ đệm, các việc cùng dự án mở liền nhau chỉ hỏi một lần.
+	const projectCtx = inject(TASK_PROJECT_CONTEXT, null);
+	const projectId = computed(() => (task.value?.project && !task.value.parent ? task.value.project.id : null));
+	const sharedProject = computed(() => {
+		const ctx = projectCtx?.value;
+		return ctx && ctx.projectId === projectId.value ? ctx : null;
 	});
-	const isAdmin = computed(() => authStore.user?.role === 'ADMIN');
-	const canContribute = computed(
-		() => !readOnly.value && (isAdmin.value || projectInfo.value?.myRole === 'MANAGER' || projectInfo.value?.myRole === 'MEMBER'),
+	const fetchedProject = ref<TaskProjectBits | null>(null);
+	watch(
+		projectId,
+		async pid => {
+			fetchedProject.value = null;
+			if (!pid || sharedProject.value) return;
+			try {
+				const bits = await cache.projectBits(pid);
+				if (projectId.value === pid) fetchedProject.value = bits;
+			} catch {
+				// Không là thành viên dự án: giữ chữ, không cho chọn.
+			}
+		},
+		{ immediate: true },
 	);
+	const projectGroups = computed<TaskGroup[]>(() => sharedProject.value?.groups ?? fetchedProject.value?.groups ?? []);
+	const projectSprints = computed<TaskSprint[]>(() => (sharedProject.value ? (sharedProject.value.sprints ?? []) : (fetchedProject.value?.sprints ?? [])));
+	const useSprints = computed(() => (sharedProject.value ? sharedProject.value.sprints !== null : !!fetchedProject.value?.useSprints));
+	const isAdmin = computed(() => authStore.user?.role === 'ADMIN');
+	const canContribute = computed(() => {
+		if (sharedProject.value) return sharedProject.value.canContribute;
+		const role = fetchedProject.value?.myRole;
+		return !readOnly.value && (isAdmin.value || role === 'MANAGER' || role === 'MEMBER');
+	});
 	const editableGroups = computed(() => projectGroups.value.filter(g => !g.archived));
 	const openSprints = computed(() => projectSprints.value.filter(s => s.status !== 'CLOSED'));
 	const canEditPlacement = computed(() => canContribute.value && !!task.value && task.value.status !== 'CANCELLED');
@@ -425,7 +530,7 @@
 			setTask(await service.addDependency(t.id, b.id));
 			toast.success(`Việc này chờ ${b.code}`);
 			addingDep.value = false;
-			activityRef.value?.reload();
+			activityRef.value?.historyChanged();
 		} catch (err) {
 			toast.error(taskErrorInfo(err).message);
 		}
@@ -439,7 +544,7 @@
 			toast.success('Đã gỡ nối');
 			await load(true);
 			if (task.value) emit('changed', task.value);
-			activityRef.value?.reload();
+			activityRef.value?.historyChanged();
 		} catch (err) {
 			toast.error(taskErrorInfo(err).message);
 		}
@@ -498,7 +603,7 @@
 					<template v-if="task.parent">
 						<span aria-hidden="true">·</span>
 						<button type="button" class="truncate hover:underline" @click="emit('openTask', task.parent.code)">
-							Việc con của {{ task.parent.title ?? task.parent.code }}
+							Việc phụ của {{ task.parent.title ?? task.parent.code }}
 						</button>
 					</template>
 					<div class="ml-auto flex items-center gap-1">
@@ -535,7 +640,7 @@
 					<span v-if="task.recurrenceId" class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Việc định kỳ</span>
 					<span v-if="task.group" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">{{ task.group.name }}</span>
 					<span v-if="task.sprint" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{{ task.sprint.name }}</span>
-					<span v-if="task.dependencies?.late" class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Việc phải chờ đang trễ</span>
+					<span v-if="task.dependencies?.late" class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" data-testid="task-late-blocker">{{ lateBlockerText(task, task.blockers, today) ?? 'Phải chờ việc khác đang trễ hạn.' }}</span>
 					<div class="ml-auto flex flex-wrap items-center gap-2" data-tour="task-primary">
 						<CommonAppButton
 							v-for="(a, i) in primary"
@@ -551,12 +656,56 @@
 						<TaskCardMenu
 							v-if="!readOnly"
 							:task="task"
+							in-detail
+							:primary-shown="primary.length"
 							@open="() => {}"
 							@status="onMenuStatus"
 							@change-due="changeDue"
+							@due-requested="t => handle({ ok: true, task: t })"
 							@reassign="reassign"
 						/>
 					</div>
+				</div>
+
+				<!-- Phiếu xin dời hạn đang chờ (bridge mục 25): người xin huỷ được, người có quyền đổi hạn duyệt ngay ở đây. -->
+				<div
+					v-if="task.pendingDueRequest"
+					class="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100"
+					data-testid="task-due-request"
+				>
+					<p>
+						<span class="font-medium">{{ task.pendingDueRequest.requestedBy.fullName }}</span>
+						đang xin dời hạn sang <span class="font-medium">{{ shortDate(task.pendingDueRequest.proposedDueDate, today) }}</span>,
+						lý do: {{ splitAgentMark(task.pendingDueRequest.reason).text }}
+					</p>
+					<div v-if="!readOnly" class="mt-2 flex flex-wrap gap-2">
+						<template v-if="task.permissions.changeDue">
+							<CommonAppButton size="sm" :loading="actions.busy.value" data-testid="task-due-request-approve" @click="approveDue">Duyệt</CommonAppButton>
+							<CommonAppButton size="sm" variant="danger_outline" data-testid="task-due-request-reject" @click="rejectDue">Không duyệt</CommonAppButton>
+						</template>
+						<CommonAppButton
+							v-if="task.pendingDueRequest.requestedBy.id === authStore.user?.id"
+							size="sm"
+							variant="secondary"
+							data-testid="task-due-request-cancel"
+							@click="cancelDue"
+						>
+							Huỷ phiếu
+						</CommonAppButton>
+					</div>
+				</div>
+
+				<!-- Lý do trả lại hay mở lại gần nhất, khi việc đang làm lại (bridge mục 28). -->
+				<div
+					v-if="task.lastReturn && task.status === 'IN_PROGRESS'"
+					class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+					data-testid="task-last-return"
+				>
+					<span class="font-medium">{{ task.lastReturn.reopened ? 'Được mở lại' : 'Bị trả lại' }}:</span>
+					{{ splitAgentMark(task.lastReturn.reason).text }}
+					<span class="text-xs text-amber-700 dark:text-amber-300">
+						({{ task.lastReturn.by?.fullName ?? 'không rõ người' }}, {{ shortDate(vnCalendarDate(task.lastReturn.at), today) }})
+					</span>
 				</div>
 			</header>
 
@@ -606,6 +755,15 @@
 									>
 										{{ task.dueDate ? 'Đổi hạn' : 'Đặt hạn' }}
 									</button>
+									<button
+										v-else-if="task.permissions.requestDue && !readOnly && !task.pendingDueRequest"
+										type="button"
+										class="ml-2 text-xs text-brand-600 hover:underline dark:text-brand-400"
+										data-testid="task-request-due"
+										@click="requestDue"
+									>
+										Xin dời hạn
+									</button>
 									<p v-if="task.dueChangeCount" class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
 										hạn ban đầu {{ shortDate(task.originalDueDate, today) }}, đã đổi {{ task.dueChangeCount }} lần
 									</p>
@@ -628,7 +786,8 @@
 											v-if="task.permissions.edit && !readOnly"
 											:value="task.priority"
 											aria-label="Ưu tiên"
-											class="w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+											class="w-full cursor-pointer rounded-md border-0 py-1 pl-2 pr-7 text-xs font-medium ring-1 ring-inset focus:outline-none focus:ring-2 focus:ring-brand-500 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100"
+											:class="PRIORITY_TONE[task.priority].badge"
 											@change="e => onPriority((e.target as HTMLSelectElement).value)"
 										>
 											<option v-for="(label, key) in PRIORITY_LABELS" :key="key" :value="key">{{ label }}</option>
@@ -650,7 +809,7 @@
 											<option v-for="p in POINT_SCALE" :key="p" :value="p">{{ p }}</option>
 										</select>
 										<span v-else class="text-gray-900 dark:text-gray-100">{{ task.points ?? 'Chưa có' }}</span>
-										<span v-if="subtaskDone.total" class="mt-0.5 block text-[11px] text-gray-500">việc con {{ subtaskDone.points }} điểm</span>
+										<span v-if="subtaskDone.total" class="mt-0.5 block text-[11px] text-gray-500">việc phụ {{ subtaskDone.points }} điểm</span>
 									</dd>
 								</div>
 							</div>
@@ -718,11 +877,11 @@
 									<span v-else class="text-gray-900 dark:text-gray-100" data-testid="task-detail-group-text">{{ task.group?.name ?? 'Chưa có nhóm' }}</span>
 								</dd>
 							</div>
-							<div v-if="task.project && !task.parent && (task.sprint || projectInfo?.useSprints)">
+							<div v-if="task.project && !task.parent && (task.sprint || useSprints)">
 								<dt class="text-xs text-gray-500 dark:text-gray-400" :title="TASK_HINTS.sprint">Đợt</dt>
 								<dd class="mt-1">
 									<select
-										v-if="canEditPlacement && projectInfo?.useSprints"
+										v-if="canEditPlacement && useSprints"
 										:value="task.sprint?.id ?? ''"
 										aria-label="Đợt"
 										data-testid="task-detail-sprint"
@@ -758,34 +917,55 @@
 					<div class="min-w-0 space-y-6 sm:order-1">
 						<!-- Mô tả -->
 						<section aria-label="Mô tả">
-							<div class="flex items-center justify-between">
-								<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Mô tả</h3>
-								<button
-									v-if="task.permissions.edit && !readOnly && !editingDesc"
-									type="button"
-									class="text-xs text-brand-600 hover:underline dark:text-brand-400"
-									@click="startDesc"
-								>
-									Sửa
-								</button>
-							</div>
-							<div v-if="editingDesc" class="mt-2 space-y-2">
-								<CommonTiptapEditor v-model="descDraft" placeholder="Mô tả việc cần làm, kết quả mong đợi" />
-								<div class="flex justify-end gap-2">
-									<CommonAppButton size="sm" variant="secondary" @click="editingDesc = false">Huỷ</CommonAppButton>
-									<CommonAppButton size="sm" @click="saveDesc">Lưu mô tả</CommonAppButton>
+							<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Mô tả</h3>
+							<div
+								v-if="editingDesc"
+								ref="descBox"
+								class="mt-2 space-y-2"
+								data-testid="task-description-editor"
+								@focusout="onDescFocusOut"
+								@keydown.esc.stop.prevent="stopDesc"
+							>
+								<CommonTiptapEditor
+									v-model="descDraft"
+									placeholder="Mô tả việc cần làm, kết quả mong đợi"
+									no-headings
+									autofocus
+									submit-on-mod-enter
+									@submit="saveDesc"
+								/>
+								<div class="flex items-center justify-end gap-2">
+									<span class="mr-auto hidden text-xs text-gray-400 sm:inline">Ctrl+Enter hoặc bấm ra ngoài để lưu, Esc để huỷ</span>
+									<CommonAppButton size="sm" variant="secondary" @click="stopDesc">Huỷ</CommonAppButton>
+									<CommonAppButton size="sm" :loading="savingDesc" @click="saveDesc">Lưu</CommonAppButton>
 								</div>
 							</div>
-							<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskDescription -->
-							<div v-else-if="task.description" class="tt-prose mt-2 break-words text-sm text-gray-800 dark:text-gray-200" v-html="descHtml" />
-							<p v-else class="mt-2 text-sm text-gray-400">Chưa có mô tả.</p>
+							<div
+								v-else
+								class="-mx-2 mt-1 rounded-md px-2 py-1.5"
+								:class="canEditDesc ? 'cursor-text hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:hover:bg-gray-800/60' : ''"
+								:role="canEditDesc ? 'button' : undefined"
+								:tabindex="canEditDesc ? 0 : undefined"
+								:title="canEditDesc ? 'Bấm để sửa mô tả' : undefined"
+								:aria-label="canEditDesc ? 'Sửa mô tả' : undefined"
+								data-testid="task-description"
+								@click="startDesc"
+								@keydown.enter.self.prevent="startDesc()"
+							>
+								<template v-if="task.description">
+									<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskDescription -->
+									<div v-if="descHtml" class="tt-prose break-words text-sm text-gray-800 dark:text-gray-200" v-html="descHtml" />
+									<AgentSourceLabel v-if="descMark.viaAgent" class="mt-1.5" :trace="descMark.trace" />
+								</template>
+								<p v-else class="text-sm text-gray-400">{{ canEditDesc ? 'Bấm để thêm mô tả' : 'Chưa có mô tả.' }}</p>
+							</div>
 						</section>
 
-						<!-- Việc con -->
-						<section v-if="!task.parent" aria-label="Việc con">
+						<!-- Việc phụ -->
+						<section v-if="!task.parent" aria-label="Việc phụ">
 							<div class="flex items-center justify-between">
 								<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-									Việc con
+									Việc phụ
 									<span v-if="subtaskDone.total" class="font-normal text-gray-500">{{ subtaskDone.done }}/{{ subtaskDone.total }}</span>
 								</h3>
 								<button
@@ -794,7 +974,7 @@
 									class="text-xs text-brand-600 hover:underline dark:text-brand-400"
 									@click="showSubtaskForm = !showSubtaskForm"
 								>
-									Thêm việc con
+									Thêm việc phụ
 								</button>
 							</div>
 							<ul v-if="task.children.length" class="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-700">
@@ -808,14 +988,14 @@
 								</li>
 							</ul>
 							<p v-if="subtaskDone.total > task.children.length" class="mt-1 text-xs text-gray-500">
-								Có {{ subtaskDone.total - task.children.length }} việc con bạn không xem được.
+								Có {{ subtaskDone.total - task.children.length }} việc phụ bạn không xem được.
 							</p>
 							<div v-if="showSubtaskForm" class="mt-2">
 								<TaskQuickCreate
 									:parent-id="task.id"
 									:default-assignee-id="task.assignee.id"
 									:default-due-date="task.dueDate"
-									placeholder="Tiêu đề việc con"
+									placeholder="Tiêu đề việc phụ"
 									@created="onSubtaskCreated"
 								/>
 							</div>
@@ -941,7 +1121,7 @@
 								<input
 									v-model="newItem"
 									type="text"
-									maxlength="500"
+									:maxlength="CHECKLIST_ITEM_MAX"
 									placeholder="Thêm mục kiểm tra"
 									aria-label="Thêm mục kiểm tra"
 									class="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -958,13 +1138,14 @@
 									v-if="task.permissions.comment && !readOnly"
 									type="button"
 									class="text-xs text-brand-600 hover:underline dark:text-brand-400"
-									@click="showUpload = !showUpload"
+									data-testid="task-file-upload"
+									@click="startUpload"
 								>
 									Tải file lên
 								</button>
 							</div>
 							<div v-if="showUpload" class="mt-2">
-								<UiFileDropzone v-model="fileModel" :accept="TASK_FILE_ACCEPT" :max-size-mb="TASK_FILE_MAX_MB" multiple :disabled="uploading" />
+								<UiFileDropzone ref="dropzone" v-model="fileModel" :accept="TASK_FILE_ACCEPT" :max-size-mb="TASK_FILE_MAX_MB" multiple :disabled="uploading" />
 							</div>
 							<ul v-if="taskFiles.length" class="mt-2 space-y-1">
 								<li v-for="a in taskFiles" :key="a.id">

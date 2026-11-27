@@ -1,5 +1,7 @@
 <script setup lang="ts">
 	import { sanitizeTaskComment } from '~/utils/task-html';
+	import { splitAgentMark } from '~/utils/agent-source';
+	import AgentSourceLabel from '~/components/modules/agent/AgentSourceLabel.vue';
 	import { useAuthStore } from '~/stores/auth';
 	import { storeToRefs } from 'pinia';
 	import RecruitConfirmModal from '~/components/modules/recruitment/RecruitConfirmModal.vue';
@@ -28,8 +30,8 @@
 	} from '~/utils/tasks.utils';
 
 	/**
-	 * Hoạt động của việc: Tất cả, Bình luận, Lịch sử, mặc định Bình luận (mục 9.2). Ô bình luận dính
-	 * đáy khung. Bản nháp giữ trong trình duyệt theo từng việc, lỡ đóng khung vẫn còn.
+	 * Hoạt động của việc: Bình luận và Lịch sử, mặc định Bình luận (mục 9.2). Ô bình luận dính đáy khung.
+	 * Bản nháp giữ trong trình duyệt theo từng việc, lỡ đóng khung vẫn còn.
 	 *
 	 * Nhắc người không xem được việc: máy chủ vẫn nhận bình luận nhưng người đó không nhận thông báo
 	 * (T-06), nên ngay dưới ô soạn hiện câu cảnh báo kèm nút "Thêm làm người theo dõi".
@@ -43,50 +45,78 @@
 	const { employees } = storeToRefs(directoryStore);
 	const today = vnToday();
 
-	/** Thẻ đang xem nằm trên đường dẫn (`?activity=all|history`, bỏ khi là Bình luận), ở khung lẫn trang đầy đủ. */
-	const route = useRoute();
-	const router = useRouter();
-	const kind = computed<TaskActivityKind>({
-		get: () => {
-			const v = String(route.query.activity ?? '');
-			return v === 'all' || v === 'history' ? v : 'comments';
-		},
-		set: v => router.replace({ query: { ...route.query, activity: v === 'comments' ? undefined : v } }),
-	});
-	const items = ref<TaskActivityItem[]>([]);
-	const page = ref(1);
-	const totalPages = ref(1);
-	const loading = ref(false);
+	/**
+	 * Thẻ đang xem là trạng thái riêng của khung, không nằm trên đường dẫn: đổi thẻ không làm đổi đường dẫn
+	 * nên trang phía sau không phản ứng gì. Mỗi thẻ giữ phần đã tải; quay lại thẻ cũ thì hiện ngay, chỉ tải
+	 * lại khi thẻ đó đã bị đánh dấu cũ (có bình luận mới, việc vừa đổi).
+	 */
+	type Kind = Exclude<TaskActivityKind, 'all'>;
+	interface Loaded {
+		items: TaskActivityItem[];
+		page: number;
+		totalPages: number;
+		stale: boolean;
+	}
+	const kind = ref<Kind>('comments');
+	const loaded = reactive<Partial<Record<Kind, Loaded>>>({});
+	const items = computed(() => loaded[kind.value]?.items ?? []);
+	const page = computed(() => loaded[kind.value]?.page ?? 1);
+	const totalPages = computed(() => loaded[kind.value]?.totalPages ?? 1);
+	const loadingKind = ref<Kind | null>(null);
+	const loading = computed(() => loadingKind.value === kind.value);
 	const loadError = ref('');
 
-	const TABS: Array<{ key: TaskActivityKind; label: string }> = [
-		{ key: 'all', label: 'Tất cả' },
+	const TABS: Array<{ key: Kind; label: string }> = [
 		{ key: 'comments', label: 'Bình luận' },
 		{ key: 'history', label: 'Lịch sử' },
 	];
 
 	async function load(reset = true) {
-		loading.value = true;
+		const k = kind.value;
+		const taskId = props.task.id;
+		loadingKind.value = k;
 		loadError.value = '';
 		try {
-			const next = reset ? 1 : page.value + 1;
-			const res = await service.activity(props.task.id, { kind: kind.value, page: next, limit: 30 });
+			const prev = loaded[k];
+			const next = reset || !prev ? 1 : prev.page + 1;
+			const res = await service.activity(taskId, { kind: k, page: next, limit: 30 });
+			if (taskId !== props.task.id) return;
 			// Máy chủ trả mới trước; ô soạn ở đáy nên hiện theo thứ tự thời gian, cũ ở trên.
 			const chunk = [...res.data].reverse();
-			items.value = reset ? chunk : [...chunk, ...items.value];
-			page.value = next;
-			totalPages.value = res.meta.totalPages;
+			loaded[k] = { items: next === 1 || !prev ? chunk : [...chunk, ...prev.items], page: next, totalPages: res.meta.totalPages, stale: false };
 		} catch (err) {
-			loadError.value = taskErrorInfo(err, 'Chưa tải được hoạt động.').message;
+			if (k === kind.value) loadError.value = taskErrorInfo(err, 'Chưa tải được hoạt động.').message;
 		} finally {
-			loading.value = false;
+			if (loadingKind.value === k) loadingKind.value = null;
 		}
 	}
 
-	watch(kind, () => load(true));
+	function selectKind(k: Kind) {
+		kind.value = k;
+		loadError.value = '';
+		const cur = loaded[k];
+		if (!cur || cur.stale) load(true);
+	}
+
+	/** Đánh dấu các thẻ đã cũ; thẻ đang xem thì tải lại ngay, thẻ kia đợi lúc được mở. */
+	function refresh(kinds: Kind[]) {
+		for (const k of kinds) {
+			const cur = loaded[k];
+			if (cur) cur.stale = true;
+		}
+		if (kinds.includes(kind.value)) load(true);
+	}
+
+	// Bình luận mình vừa gửi cũng về qua kênh thời gian thực: bỏ tiếng vọng đó, khỏi tải lại lần hai.
+	let sentAt = 0;
+	function onRemoteComment() {
+		if (Date.now() - sentAt > 3000) refresh(['comments']);
+	}
+
 	watch(
 		() => props.task.id,
 		() => {
+			for (const k of Object.keys(loaded) as Kind[]) delete loaded[k];
 			restoreDraft();
 			load(true);
 		},
@@ -96,7 +126,12 @@
 		load(true);
 	});
 
-	defineExpose({ reload: () => load(true) });
+	defineExpose({
+		reload: () => refresh(['comments', 'history']),
+		/** Việc vừa đổi (trạng thái, hạn, trường…): chỉ Lịch sử có thêm dòng. */
+		historyChanged: () => refresh(['history']),
+		onRemoteComment,
+	});
 
 	// ─── Bản nháp ───────────────────────────────────────────────────────────
 	const draft = ref('');
@@ -200,13 +235,14 @@
 			});
 			draft.value = '';
 			pending.value = [];
+			sentAt = Date.now();
 			try {
 				localStorage.removeItem(draftKey.value);
 			} catch {
 				// bỏ qua
 			}
-			if (kind.value === 'history') kind.value = 'comments';
-			else await load(true);
+			kind.value = 'comments';
+			await load(true);
 		} catch (err) {
 			toast.error(taskErrorInfo(err).message);
 		} finally {
@@ -266,6 +302,12 @@
 		return sanitizeTaskComment(value);
 	}
 
+	/** Bình luận do trợ lý soạn: bỏ đuôi `⟦Trợ lý AI⟧ …`, hiện nhãn thay. */
+	function commentView(body: string | null) {
+		const m = splitAgentMark(body);
+		return { html: safeHtml(m.text), viaAgent: m.viaAgent, trace: m.trace };
+	}
+
 	function personName(id: unknown): string {
 		const n = Number(id);
 		return employees.value.find(e => e.id === n)?.fullName ?? 'người khác';
@@ -281,8 +323,18 @@
 
 	function eventDetail(e: TaskEvent): string {
 		const p = (e.payload ?? {}) as Record<string, unknown>;
-		const reason = typeof p.reason === 'string' ? p.reason : '';
+		const rawReason = splitAgentMark(typeof p.reason === 'string' ? p.reason : '');
+		const reason = rawReason.viaAgent ? `${rawReason.text} (soạn qua Trợ lý AI)` : rawReason.text;
 		switch (e.type) {
+			case 'WITHDRAWN':
+				return 'việc về Đang làm';
+			case 'DUE_REQUESTED':
+				return `xin dời hạn sang ${shortDate(String(p.to ?? ''), today)}${reason ? `. Lý do: ${reason}` : ''}`;
+			case 'DUE_REQUEST_DECIDED': {
+				const note = typeof p.note === 'string' && p.note ? `. Ghi chú: ${splitAgentMark(p.note).text}` : '';
+				if (p.cancelled) return 'phiếu xin dời hạn đã huỷ';
+				return `${p.approved ? 'duyệt' : 'không duyệt'} phiếu xin dời hạn${note}`;
+			}
 			case 'RETURNED':
 			case 'REOPENED':
 			case 'CANCELLED':
@@ -296,6 +348,7 @@
 			case 'DUE_CHANGED':
 				return `hạn từ ${shortDate(String(p.from ?? ''), today)} sang ${shortDate(String(p.to ?? ''), today)}${reason ? `. Lý do: ${reason}` : ''}`;
 			case 'ASSIGNEE_CHANGED':
+				return `từ ${personName(p.from)} sang ${personName(p.to)}${reason ? `. Lý do: ${reason}` : ''}`;
 			case 'REVIEWER_CHANGED':
 				return `từ ${personName(p.from)} sang ${personName(p.to)}`;
 			case 'FIELD_CHANGED': {
@@ -330,7 +383,7 @@
 					:aria-selected="kind === t.key"
 					class="rounded-md px-2.5 py-1 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
 					:class="kind === t.key ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'"
-					@click="kind = t.key"
+					@click="selectKind(t.key)"
 				>
 					{{ t.label }}
 				</button>
@@ -396,12 +449,14 @@
 								<CommonAppButton size="sm" @click="saveEdit(it.comment)">Lưu</CommonAppButton>
 							</div>
 						</div>
-						<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskComment -->
-						<div
-							v-else
-							class="tt-prose mt-0.5 break-words text-sm text-gray-800 dark:text-gray-200 [&_.task-mention]:font-medium [&_.task-mention]:text-brand-700 dark:[&_.task-mention]:text-brand-300 [&_a]:text-brand-600 [&_a]:underline"
-							v-html="safeHtml(it.comment.body)"
-						/>
+						<template v-else>
+							<!-- eslint-disable-next-line vue/no-v-html -- đã lọc bằng sanitizeTaskComment -->
+							<div
+								class="tt-prose mt-0.5 break-words text-sm text-gray-800 dark:text-gray-200 [&_.task-mention]:font-medium [&_.task-mention]:text-brand-700 dark:[&_.task-mention]:text-brand-300 [&_a]:text-brand-600 [&_a]:underline"
+								v-html="commentView(it.comment.body).html"
+							/>
+							<AgentSourceLabel v-if="commentView(it.comment.body).viaAgent" class="mt-1" :trace="commentView(it.comment.body).trace" />
+						</template>
 						<ul v-if="it.comment.attachments.length" class="mt-1 flex flex-wrap gap-1.5">
 							<li v-for="a in it.comment.attachments" :key="a.id">
 								<button

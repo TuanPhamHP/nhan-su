@@ -49,14 +49,17 @@ export function isSafeInternalPath(s: string): boolean {
 	return SAFE_INTERNAL_PATH.test(s);
 }
 
-export type AgentTextSegment = { type: 'text'; value: string } | { type: 'link'; value: string };
+/** `label`: chữ hiện của link markdown `[Mở việc HQ-2](/cong-viec?task=HQ-2)`; không có thì hiện chính đường dẫn. */
+export type AgentTextSegment = { type: 'text'; value: string } | { type: 'link'; value: string; label?: string };
 
 /**
- * Ứng viên: một cụm không có khoảng trắng bắt đầu bằng `/`, đứng đầu chuỗi hoặc sau khoảng trắng
- * hay dấu mở ngoặc, nháy. Lấy CẢ cụm chứ không dừng ở ký tự lạ đầu tiên: `/a'onclick=…` phải bị
- * loại cả cụm, không được cắt lấy `/a` làm link.
+ * Ứng viên: một cụm không có khoảng trắng bắt đầu bằng `/`, đứng đầu chuỗi hoặc sau khoảng trắng,
+ * dấu mở ngoặc, nháy, hay dấu hai chấm dính liền ("Mở trên web:/cong-viec?task=CV-9"). Lấy CẢ cụm
+ * chứ không dừng ở ký tự lạ đầu tiên: `/a'onclick=…` phải bị loại cả cụm, không được cắt lấy `/a`
+ * làm link. Sau dấu hai chấm của `http://host/x` là cụm `//host/x`, cụm đó không qua được luật
+ * đường dẫn nên vẫn là chữ.
  */
-const PATH_CANDIDATE = /(^|[\s([{"'“‘`*])(\/\S*)/g;
+const PATH_CANDIDATE = /(^|[\s([{"'“‘`*:：])(\/\S*)/g;
 /**
  * Dấu câu, dấu đóng ngoặc, dấu đậm dính sau đường dẫn ("(/cong-viec).", "…: /kpi?reviewId=4.",
  * hai dấu sao của chữ đậm): không thuộc link.
@@ -88,6 +91,36 @@ export function splitInternalPaths(text: string): AgentTextSegment[] {
 		last = start + path.length;
 	}
 	pushText(text.slice(last));
+	return out;
+}
+
+/** Link markdown trong chữ THUẦN (chưa escape): `[chữ](đích)`, đích không có khoảng trắng, không có `)`. */
+const MD_LINK_RAW = /\[([^\]\n]+)\]\(([^)\s]*)\)/g;
+
+/**
+ * Như `splitInternalPaths`, thêm link markdown có chữ: từ 27/11/2026 câu báo của confirm (và câu trả lời) ghi
+ * `[Mở việc HQ-2](/cong-viec?task=HQ-2)` thay cho đường dẫn trần. Đích phải qua `isSafeInternalPath`; đích khác
+ * (`javascript:`, `//host`, `http:`) thì cả cụm giữ nguyên là chữ.
+ */
+export function splitAgentLinks(text: string): AgentTextSegment[] {
+	const out: AgentTextSegment[] = [];
+	const push = (segs: AgentTextSegment[]): void => {
+		for (const seg of segs) {
+			const prev = out[out.length - 1];
+			if (seg.type === 'text' && prev?.type === 'text') prev.value += seg.value;
+			else out.push(seg);
+		}
+	};
+	let last = 0;
+	for (const m of text.matchAll(MD_LINK_RAW)) {
+		const target = m[2]!.trim();
+		if (!isSafeInternalPath(target)) continue;
+		const start = m.index ?? 0;
+		push(splitInternalPaths(text.slice(last, start)));
+		out.push({ type: 'link', value: target, label: m[1]!.trim() });
+		last = start + m[0].length;
+	}
+	push(splitInternalPaths(text.slice(last)));
 	return out;
 }
 
@@ -156,14 +189,31 @@ function splitCells(line: string): string[] {
 		.map((c) => c.trim());
 }
 
+/**
+ * Bảng từ ngần này cột trở lên thì trên khung hẹp (điện thoại, cửa sổ chat nhanh) hiện thành thẻ,
+ * mỗi dòng một thẻ. Hai cột vẫn vừa màn 390 px nên giữ dạng bảng. AgentTableBlock dùng chung số này.
+ */
+export const AGENT_TABLE_CARD_MIN_COLUMNS = 3;
+
+/** Nhãn cột cho thẻ (`data-label`): chữ trong ô tiêu đề, bỏ dấu đậm, nghiêng, code. Chuỗi đã escape. */
+function cellLabel(escaped: string): string {
+	return escaped.replace(/[*`]/g, '');
+}
+
 function renderTable(lines: string[], links: boolean): string {
 	const head = splitCells(lines[0]!);
 	const bodyLines = lines.slice(isTableDivider(lines[1] ?? '') ? 2 : 1);
 	const th = head.map((c) => `<th>${inlineMd(c, links)}</th>`).join('');
 	const rows = bodyLines
-		.map((l) => `<tr>${splitCells(l).map((c) => `<td>${inlineMd(c, links)}</td>`).join('')}</tr>`)
+		.map(
+			(l) =>
+				`<tr>${splitCells(l)
+					.map((c, i) => `<td data-label="${cellLabel(head[i] ?? '')}">${inlineMd(c, links)}</td>`)
+					.join('')}</tr>`,
+		)
 		.join('');
-	return `<div class="agent-table-wrap"><table class="agent-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+	const cls = head.length >= AGENT_TABLE_CARD_MIN_COLUMNS ? 'agent-table agent-table--cards' : 'agent-table';
+	return `<div class="agent-table-wrap"><table class="${cls}"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 export interface AgentMarkdownOptions {

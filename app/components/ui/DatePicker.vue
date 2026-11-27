@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useEscapeLayer } from '~/composables/useEscapeKey';
+
 const props = withDefaults(
 	defineProps<{
 		modelValue?: string;
@@ -10,6 +12,8 @@ const props = withDefaults(
 		id?: string;
 		min?: string;
 		max?: string;
+		/** Nhắc khi năm gõ vào lệch năm nay hơn 5 năm. Bật cho ngày làm việc, không bật cho ngày sinh, ngày cấp. */
+		warnFarYear?: boolean;
 	}>(),
 	{ placeholder: 'dd/mm/yyyy' },
 );
@@ -36,6 +40,13 @@ const textValue = ref('');
  * đâu thì họ sửa đúng chỗ.
  */
 const typedError = ref('');
+
+/**
+ * Câu nhắc khi ngày có thật nhưng năm lệch xa năm nay (gõ nhầm 2035 hay 2022). Ngày vẫn được nhận,
+ * chỉ nhắc để người gõ nhìn lại.
+ */
+const yearWarning = ref('');
+const FAR_YEARS = 5;
 
 /** Lỗi của nơi dùng (biểu mẫu) ưu tiên hơn, vì nó nói về cả trường chứ không chỉ cách gõ. */
 const shownError = computed(() => props.error || typedError.value);
@@ -76,12 +87,55 @@ function onTextInput(e: Event) {
 	el.value = formatted;
 	el.setSelectionRange(newCursor, newCursor);
 	textValue.value = formatted;
-	// Gõ tiếp là đang sửa, nên câu lỗi cũ hết việc; gõ đủ tám chữ số thì kiểm lại ngay tại chỗ.
+	// Gõ tiếp là đang sửa, nên câu lỗi cũ hết việc. Ngày chỉ được nhận khi rời ô hoặc bấm Enter:
+	// nhận ngay lúc đủ tám chữ số thì gõ đè lên ngày cũ sẽ phát ra những ngày ghép dở (26/11/2022).
 	typedError.value = '';
-	if (digits.length === 8) parseAndEmit();
+	yearWarning.value = '';
+}
+
+/**
+ * Gõ "/" sau một chữ số của ngày hoặc tháng thì thêm số 0 phía trước (2/ thành 02/), còn lại bỏ qua
+ * vì ô tự chèn dấu "/". Nhờ vậy gõ 2/1/2026 hay 02/01/2026 đều ra cùng một ngày, không bị lệch.
+ */
+function onSlashKey(e: KeyboardEvent) {
+	e.preventDefault();
+	const el = inputRef.value;
+	if (!el) return;
+	const pos = el.selectionStart ?? 0;
+	if (pos !== (el.selectionEnd ?? 0) || pos !== el.value.length) return;
+	const digits = el.value.replace(/\D/g, '');
+	if (digits.length !== 1 && digits.length !== 3) return;
+	const padded = digits.slice(0, -1) + '0' + digits.slice(-1);
+	const formatted = padded.length > 2 ? `${padded.slice(0, 2)}/${padded.slice(2)}/` : `${padded}/`;
+	el.value = formatted;
+	el.setSelectionRange(formatted.length, formatted.length);
+	textValue.value = formatted;
+	typedError.value = '';
+	yearWarning.value = '';
+}
+
+/** Bấm vào ô thì chọn sẵn hết chữ, gõ là đè lên ngày cũ chứ không chèn vào giữa. */
+let selectOnMouseUp = false;
+function onTextFocus() {
+	openCalendar();
+	inputRef.value?.select();
+	selectOnMouseUp = true;
+}
+function onTextMouseUp(e: MouseEvent) {
+	// Trình duyệt đặt con trỏ vào chỗ bấm sau sự kiện focus, làm mất phần đã chọn.
+	if (!selectOnMouseUp) return;
+	selectOnMouseUp = false;
+	if (inputRef.value && inputRef.value.selectionStart === inputRef.value.selectionEnd) {
+		e.preventDefault();
+		inputRef.value.select();
+	}
 }
 
 function onTextKeydown(e: KeyboardEvent) {
+	if (e.key === '/' || e.key === '.' || e.key === '-') {
+		onSlashKey(e);
+		return;
+	}
 	if (e.key === 'Backspace') {
 		const el = inputRef.value;
 		if (!el) return;
@@ -99,7 +153,6 @@ function onTextKeydown(e: KeyboardEvent) {
 		parseAndEmit();
 		close();
 	}
-	if (e.key === 'Escape') close();
 }
 
 function onTextBlur() {
@@ -109,6 +162,7 @@ function onTextBlur() {
 
 function parseAndEmit() {
 	const val = textValue.value;
+	yearWarning.value = '';
 	if (!val) {
 		typedError.value = '';
 		emit('update:modelValue', undefined);
@@ -122,6 +176,9 @@ function parseAndEmit() {
 		const date = new Date(y, m - 1, d);
 		if (date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d) {
 			typedError.value = '';
+			if (props.warnFarYear && Math.abs(y - today.getFullYear()) > FAR_YEARS) {
+				yearWarning.value = `Năm ${y} cách năm nay hơn ${FAR_YEARS} năm. Bạn xem lại có gõ nhầm năm không.`;
+			}
 			const ymd = toYMD(date);
 			emit('update:modelValue', ymd);
 			currentMonth.value = y * 12 + (m - 1);
@@ -136,6 +193,8 @@ function parseAndEmit() {
 
 function clearValue() {
 	textValue.value = '';
+	typedError.value = '';
+	yearWarning.value = '';
 	emit('update:modelValue', undefined);
 }
 
@@ -253,6 +312,8 @@ function isSelectedMonth(monthIdx: number) {
 }
 
 function onSelect(ds: string) {
+	typedError.value = '';
+	yearWarning.value = '';
 	emit('update:modelValue', ds);
 	const [y, m, d] = ds.split('-');
 	textValue.value = `${d}/${m}/${y}`;
@@ -277,6 +338,9 @@ function openCalendar() {
 function close() {
 	isOpen.value = false;
 }
+
+// Esc đóng lịch trước; lịch đã đóng thì Esc mới tới hộp thoại chứa ô.
+useEscapeLayer(() => isOpen.value, close);
 
 const DROPDOWN_W = 294;
 const DROPDOWN_H = 330;
@@ -369,7 +433,8 @@ function toYMD(d: Date): string {
 				@input="onTextInput"
 				@keydown="onTextKeydown"
 				@blur="onTextBlur"
-				@focus="openCalendar"
+				@focus="onTextFocus"
+				@mouseup="onTextMouseUp"
 			/>
 
 			<button
@@ -549,6 +614,7 @@ function toYMD(d: Date): string {
 		</Teleport>
 
 		<p v-if="shownError" class="text-xs text-red-500 dark:text-red-400">{{ shownError }}</p>
+		<p v-else-if="yearWarning" class="text-xs text-amber-600 dark:text-amber-400" data-testid="datepicker-year-warning">{{ yearWarning }}</p>
 		<p v-else-if="hint" class="text-xs text-gray-500 dark:text-gray-400">{{ hint }}</p>
 	</div>
 </template>

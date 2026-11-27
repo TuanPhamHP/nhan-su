@@ -27,7 +27,10 @@ export interface TourStep {
 	mode?: TourStepMode;
 	/** Câu chỉ dẫn của bước `click`, VD "Bạn bấm vào nút Thêm tài sản." */
 	action?: string;
-	/** Trả `false` thì bỏ hẳn bước này và đánh lại số bước. Đọc lại mỗi lần đi qua. */
+	/**
+	 * Trả `false` thì bỏ hẳn bước này. Đọc lúc bắt đầu để đếm tổng số bước, và đọc lại mỗi lần đi qua;
+	 * kết quả đổi giữa chừng thì hộp thôi ghi tổng, chỉ ghi "Bước n".
+	 */
 	when?: () => boolean;
 	onEnter?: () => void;
 	onExit?: () => void;
@@ -52,6 +55,12 @@ export interface TourState {
 	index: number;
 	/** Bước đã thử mà phần tử không xuất hiện, bị bỏ qua và không tính vào số bước. */
 	skipped: number[];
+	/** Các bước đã đi qua theo thứ tự, bước đang đứng ở cuối. Số "Bước n" là độ dài danh sách này. */
+	history: number[];
+	/** Số bước đếm lúc bắt đầu tour. */
+	total: number;
+	/** `false` khi số bước đã khác lúc bắt đầu; từ đó hộp chỉ ghi "Bước n", không ghi tổng. */
+	exact: boolean;
 	/** `waiting`: đang chờ phần tử của bước hiện ra. `shown`: đã trỏ được. */
 	phase: 'waiting' | 'shown';
 	/** Chiều vừa đi, để bước không tìm thấy phần tử biết nên bỏ qua về phía nào. */

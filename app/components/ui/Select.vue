@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { matchesSearch } from '~/utils/text-search';
+import { useEscapeLayer } from '~/composables/useEscapeKey';
 
 export interface SelectOption {
 	value: string | number | undefined;
@@ -105,6 +106,9 @@ function close() {
 	searchQuery.value = '';
 	emit('blur');
 }
+
+// Esc đóng danh sách trước, không đóng luôn hộp thoại chứa ô chọn.
+useEscapeLayer(() => isOpen.value, close);
 
 function updatePosition() {
 	if (!triggerRef.value) return;

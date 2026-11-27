@@ -6,12 +6,13 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { markRaw, ref, type Ref } from 'vue';
 import type { TourStep } from '~/types/tour.types';
 import {
+	countSteps,
 	hasSeenTour,
 	markTourSeen,
 	nextStepIndex,
 	placeTourBox,
 	sheetSide,
-	stepCounter,
+	tourCounter,
 	tourStorageKey,
 	tourTextParts,
 	unionRects,
@@ -27,7 +28,7 @@ const { useTour } = await import('~/composables/useTour');
 
 const step = (id: string, extra: Partial<TourStep> = {}): TourStep => ({ id, title: id, body: id, ...extra });
 
-describe('nextStepIndex và stepCounter', () => {
+describe('nextStepIndex, countSteps, tourCounter', () => {
 	const steps = [step('a'), step('b', { when: () => false }), step('c'), step('d'), step('e', { when: () => true })];
 
 	it('bỏ qua bước có when trả false', () => {
@@ -47,10 +48,11 @@ describe('nextStepIndex và stepCounter', () => {
 		expect(nextStepIndex(list, 0, 1)).toBe(2);
 	});
 
-	it('đánh số theo các bước thật sự hiện', () => {
-		expect(stepCounter(steps, 0)).toEqual({ number: 1, total: 4 });
-		expect(stepCounter(steps, 2)).toEqual({ number: 2, total: 4 });
-		expect(stepCounter(steps, 4, [3])).toEqual({ number: 3, total: 3 });
+	it('đếm các bước sẽ hiện; tổng sai thì chỉ ghi số bước', () => {
+		expect(countSteps(steps)).toBe(4);
+		expect(countSteps(steps, [3])).toBe(3);
+		expect(tourCounter(2, 4, true)).toEqual({ number: 2, total: 4 });
+		expect(tourCounter(3, 4, false)).toEqual({ number: 3, total: null });
 	});
 });
 
@@ -179,7 +181,39 @@ describe('useTour', () => {
 		tour.move(1);
 		tour.skipCurrent();
 		expect(id(tour)).toBe('close');
-		expect(tour.counter.value.total).toBe(4);
+		// Bước bị bỏ không được tính, tổng không đổi giữa chừng mà thôi ghi tổng.
+		expect(tour.counter.value).toEqual({ number: 3, total: null });
+		tour.move(1);
+		expect(tour.counter.value).toEqual({ number: 4, total: null });
+	});
+
+	it('số bước không nhảy khi lùi rồi đi tới', () => {
+		const tour = setup();
+		tour.start('t');
+		tour.move(1);
+		tour.move(1);
+		expect(tour.counter.value).toEqual({ number: 3, total: 5 });
+		tour.move(-1);
+		expect(tour.counter.value).toEqual({ number: 2, total: 5 });
+		tour.move(1);
+		expect(tour.counter.value).toEqual({ number: 3, total: 5 });
+	});
+
+	it('dữ liệu về làm đổi số bước thì thôi ghi tổng, số vẫn đi đều', () => {
+		let manage = true;
+		const tour = useTour();
+		tour.register('d', () => ({
+			id: 'd',
+			version: 1,
+			steps: [step('a'), step('b', { when: () => manage }), step('c', { when: () => manage }), step('d')],
+		}));
+		tour.start('d');
+		expect(tour.counter.value).toEqual({ number: 1, total: 4 });
+		manage = false;
+		tour.move(1);
+		expect(id(tour)).toBe('d');
+		expect(tour.counter.value).toEqual({ number: 2, total: null });
+		expect(tour.isLast.value).toBe(true);
 	});
 
 	it('lùi qua bước vắng phần tử không làm mất bước đó ở lượt đi tới sau', () => {
@@ -219,6 +253,46 @@ describe('useTour', () => {
 		tour.start('t');
 		expect(log.filter(l => l === 'end')).toHaveLength(2);
 		expect(id(tour)).toBe('welcome');
+	});
+
+	it('chỉ Xong và Bỏ qua mới ghi đã xem; đổi trang, mở tour khác thì không', () => {
+		const map = new Map<string, string>();
+		const storage = { getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v) };
+		const g = globalThis as { window?: unknown };
+		const prevWindow = g.window;
+		g.window = { localStorage: storage };
+		try {
+			const tour = setup();
+			const key = () => 'tour:k';
+			tour.setSeenKey('t', key);
+
+			tour.start('t');
+			tour.finish('route');
+			expect(map.has('tour:k')).toBe(false);
+			tour.start('t');
+			tour.start('t'); // mở lại giữa chừng: tour cũ kết thúc 'replace'
+			expect(map.has('tour:k')).toBe(false);
+
+			tour.finish('skip');
+			expect(map.get('tour:k')).toBe('1');
+
+			map.clear();
+			tour.start('t');
+			for (let i = 0; i < 5; i++) tour.move(1);
+			expect(tour.state.value).toBeNull();
+			expect(map.get('tour:k')).toBe('1');
+
+			// Trang cũ gỡ muộn không xoá khoá của trang mới cùng tour.
+			const other = () => 'tour:other';
+			tour.setSeenKey('t', other);
+			tour.setSeenKey('t', null, key);
+			map.clear();
+			tour.start('t');
+			tour.finish('skip');
+			expect(map.get('tour:other')).toBe('1');
+		} finally {
+			g.window = prevWindow;
+		}
 	});
 
 	it('trang rời đi thì tour của trang tắt và không chạy lại được', () => {

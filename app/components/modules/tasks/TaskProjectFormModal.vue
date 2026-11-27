@@ -7,6 +7,8 @@
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskProject, TaskProjectDetail } from '~/types/tasks.types';
 	import { projectCodeError, taskErrorInfo } from '~/utils/tasks.utils';
+	import TaskDiscardConfirm from '~/components/modules/tasks/TaskDiscardConfirm.vue';
+	import { useDiscardGuard } from '~/composables/useDiscardGuard';
 
 	/**
 	 * Tạo hoặc sửa dự án. Ai cũng tạo được dự án (Q-20), người tạo thành Quản lý dự án. Mã dự án là
@@ -38,7 +40,7 @@
 			}),
 	);
 
-	const { defineField, errors, handleSubmit, isSubmitting } = useForm({
+	const { defineField, errors, handleSubmit, isSubmitting, meta } = useForm({
 		validationSchema: schema,
 		initialValues: {
 			code: props.project?.code ?? '',
@@ -78,12 +80,12 @@
 		}
 	});
 
-	useEscapeKey(() => emit('close'), () => !isSubmitting.value);
+	const guard = useDiscardGuard(() => meta.value.dirty, () => emit('close'), () => !isSubmitting.value);
 </script>
 
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" @click.self="emit('close')">
+		<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" @click.self="guard.requestClose()">
 			<form
 				class="w-full max-w-lg bg-white shadow-xl sm:my-8 sm:rounded-2xl dark:bg-gray-900"
 				role="dialog"
@@ -94,7 +96,7 @@
 			>
 				<div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isEdit ? 'Sửa dự án' : 'Tạo dự án' }}</h2>
-					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="emit('close')">
+					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="guard.requestClose()">
 						<Icon name="heroicons:x-mark" class="h-5 w-5" />
 					</button>
 				</div>
@@ -106,7 +108,7 @@
 							v-model="code"
 							:disabled="isEdit"
 							maxlength="6"
-							placeholder="VD: HQ"
+							placeholder="VD: HQ hoặc L25"
 							class="mt-1 w-32 rounded-lg border bg-white px-3 py-2 text-sm uppercase text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-700"
 							:class="errors.code ? 'border-rose-500' : 'border-gray-300 dark:border-gray-600'"
 						/>
@@ -136,10 +138,11 @@
 					</div>
 				</div>
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">
-					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="emit('close')">Huỷ</CommonAppButton>
+					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="guard.requestClose()">Huỷ</CommonAppButton>
 					<CommonAppButton type="submit" :loading="isSubmitting" data-testid="project-form-submit">{{ isEdit ? 'Lưu' : 'Tạo dự án' }}</CommonAppButton>
 				</div>
 			</form>
 		</div>
+		<TaskDiscardConfirm :open="guard.asking.value" @keep="guard.keepEditing()" @discard="guard.discard()" />
 	</Teleport>
 </template>

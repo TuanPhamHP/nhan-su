@@ -63,8 +63,8 @@ describe('Công việc lô 1: chia nhóm Việc của tôi', () => {
 });
 
 describe('Công việc: điểm và bộ lọc điểm', () => {
-	it('chữ điểm: có điểm thì "3 đ", chưa chấm thì gạch', () => {
-		expect(taskPointsText(3)).toBe('3 đ');
+	it('chữ điểm: có điểm thì "3 điểm" (không viết "3 đ" dễ đọc thành tiền), chưa chấm thì gạch', () => {
+		expect(taskPointsText(3)).toBe('3 điểm');
 		expect(taskPointsText(null)).toBe('—');
 	});
 
@@ -125,10 +125,14 @@ describe('Công việc lô 1: bình luận và lỗi', () => {
 		expect(taskErrorInfo(hidden).assignerName).toBe('Lê Thị Lan');
 	});
 
-	it('mã dự án 2–6 chữ cái, không dùng CV', () => {
+	it('mã dự án 2–6 ký tự, chữ cái đầu rồi chữ hoặc số (bridge mục 29), không dùng CV', () => {
 		expect(projectCodeError('hq')).toBeNull();
+		expect(projectCodeError('L25')).toBeNull();
+		expect(projectCodeError('H1')).toBeNull();
 		expect(projectCodeError('CV')).toMatch(/việc lẻ/);
-		expect(projectCodeError('H1')).toMatch(/2 đến 6 chữ cái/);
+		expect(projectCodeError('1AB')).toMatch(/bắt đầu bằng chữ cái/);
+		expect(projectCodeError('H')).toMatch(/2 đến 6/);
+		expect(projectCodeError('ABCDEFG')).toMatch(/2 đến 6/);
 	});
 });
 

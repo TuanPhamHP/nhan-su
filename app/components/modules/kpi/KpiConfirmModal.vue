@@ -1,8 +1,8 @@
 <script setup lang="ts">
 	/**
 	 * Hộp xác nhận của KPI: chốt, công bố, công bố cả kỳ, mở lại. Có ô lý do khi `reasonLabel`; lý do bắt
-	 * buộc thì nút xác nhận vẫn bấm được và câu lỗi máy chủ (`KPI_REASON_REQUIRED`) hiện dưới ô, để người
-	 * dùng thấy đúng câu máy chủ trả. Nơi gọi tự gọi API trong `confirm` và trả câu lỗi (nếu có).
+	 * buộc thì nhãn có dấu * và nút xác nhận tắt tới khi ô có chữ (UI-17a). Câu lỗi máy chủ (VD
+	 * `KPI_REASON_REQUIRED`) vẫn hiện dưới ô. Nơi gọi tự gọi API trong `confirm` và trả câu lỗi (nếu có).
 	 */
 	const props = defineProps<{
 		title: string;
@@ -19,8 +19,10 @@
 	const reason = ref('');
 	const error = ref('');
 	const busy = ref(false);
+	const missingReason = computed(() => !!props.reasonRequired && !reason.value.trim());
 
 	async function ok() {
+		if (missingReason.value) return;
 		busy.value = true;
 		error.value = '';
 		try {
@@ -66,10 +68,11 @@
 						/>
 					</div>
 					<p v-if="error" class="text-sm text-rose-600" role="alert" data-testid="kpi-confirm-error">{{ error }}</p>
+					<p v-else-if="missingReason" class="text-xs text-gray-500" data-testid="kpi-confirm-reason-hint">Ghi lý do thì mới bấm được {{ confirmLabel }}.</p>
 				</div>
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
 					<CommonAppButton variant="secondary" :disabled="busy" @click="emit('close')">Huỷ</CommonAppButton>
-					<CommonAppButton type="submit" :variant="danger ? 'danger' : 'primary'" :loading="busy" data-testid="kpi-confirm-ok">{{ confirmLabel }}</CommonAppButton>
+					<CommonAppButton type="submit" :variant="danger ? 'danger' : 'primary'" :loading="busy" :disabled="missingReason" data-testid="kpi-confirm-ok">{{ confirmLabel }}</CommonAppButton>
 				</div>
 			</form>
 		</div>

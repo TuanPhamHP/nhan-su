@@ -3,6 +3,7 @@ import { vnCalendarDate } from '~/utils/date';
 import type {
 	TaskAction,
 	TaskConflictSnapshot,
+	TaskDependency,
 	TaskListItem,
 	TaskPriority,
 	TaskStatus,
@@ -32,6 +33,53 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
 	URGENT: 'Gấp',
 };
 
+/**
+ * Bảng màu trạng thái dùng chung cho nhãn, đầu cột bảng việc và ô chọn trạng thái: nền nhạt, viền cùng
+ * tông, chấm đậm phía trước. Mỗi trạng thái một tông để nhìn lướt là phân biệt được.
+ */
+export const STATUS_TONE: Record<TaskStatus, { badge: string; dot: string }> = {
+	TODO: {
+		badge: 'bg-slate-100 text-slate-700 ring-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600',
+		dot: 'bg-slate-400',
+	},
+	IN_PROGRESS: {
+		badge: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-800',
+		dot: 'bg-blue-500',
+	},
+	IN_REVIEW: {
+		badge: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-800',
+		dot: 'bg-violet-500',
+	},
+	DONE: {
+		badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800',
+		dot: 'bg-emerald-500',
+	},
+	CANCELLED: {
+		badge: 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700',
+		dot: 'bg-gray-400',
+	},
+};
+
+/** Bảng màu ưu tiên: thấp xám, bình thường xanh, cao cam, gấp đỏ, kèm mũi tên chỉ mức. */
+export const PRIORITY_TONE: Record<TaskPriority, { badge: string; icon: string }> = {
+	LOW: {
+		badge: 'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
+		icon: 'heroicons:chevron-down',
+	},
+	NORMAL: {
+		badge: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800',
+		icon: 'heroicons:bars-2',
+	},
+	HIGH: {
+		badge: 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-800',
+		icon: 'heroicons:chevron-up',
+	},
+	URGENT: {
+		badge: 'bg-rose-50 text-rose-700 ring-rose-300 dark:bg-rose-900/40 dark:text-rose-300 dark:ring-rose-700',
+		icon: 'heroicons:chevron-double-up',
+	},
+};
+
 export const POINT_SCALE = [1, 2, 3, 5, 8] as const;
 
 export const ACTION_LABELS: Record<TaskAction, string> = {
@@ -43,6 +91,7 @@ export const ACTION_LABELS: Record<TaskAction, string> = {
 	self_close: 'Đóng việc',
 	reopen: 'Mở lại',
 	cancel: 'Huỷ việc',
+	withdraw: 'Rút lại báo xong',
 };
 
 /** Trạng thái đích của từng thao tác, để menu "Chuyển sang" và câu đọc cho trình đọc màn hình. */
@@ -55,7 +104,28 @@ export const ACTION_TARGET: Record<TaskAction, TaskStatus> = {
 	self_close: 'DONE',
 	reopen: 'IN_PROGRESS',
 	cancel: 'CANCELLED',
+	withdraw: 'IN_PROGRESS',
 };
+
+/**
+ * Thao tác hỏi lại khi việc còn phải chờ việc khác chưa xong (bridge mục 28): bắt đầu, báo xong, tự đóng,
+ * nghiệm thu. Chỉ cảnh báo, không chặn.
+ */
+export function needsBlockerWarning(action: TaskAction, openBlockers: string[] | undefined): boolean {
+	return (
+		(action === 'start' || action === 'submit' || action === 'self_close' || action === 'accept') &&
+		!!openBlockers?.length
+	);
+}
+
+/** Chữ ngắn trên dòng và thẻ: "Chờ HQ-1", nhiều việc thì "Chờ HQ-1, HQ-3"; không phải chờ gì thì `null`. */
+export function waitingText(openBlockers: string[] | undefined): string | null {
+	return openBlockers?.length ? `Chờ ${openBlockers.join(', ')}` : null;
+}
+
+export function blockerWarningText(openBlockers: string[]): string {
+	return `Việc này đang phải chờ ${openBlockers.join(', ')} chưa xong. Vẫn tiếp tục?`;
+}
 
 /** Thao tác cần mở hộp trước khi gửi: ba thao tác bắt buộc lý do, nghiệm thu có điểm chất lượng tuỳ chọn. */
 export function actionNeedsDialog(action: TaskAction): boolean {
@@ -66,11 +136,28 @@ export function actionNeedsReason(action: TaskAction): boolean {
 	return action === 'return' || action === 'reopen' || action === 'cancel';
 }
 
+/** Giới hạn danh sách kiểm tra khi tạo việc hay đặt việc định kỳ, theo API. */
+export const CHECKLIST_MAX_ITEMS = 100;
+export const CHECKLIST_ITEM_MAX = 300;
+
+/** Số mục kiểm tra chưa tick của một việc. */
+export function checklistLeft(checklist: { total: number; done: number }): number {
+	return Math.max(0, checklist.total - checklist.done);
+}
+
+/**
+ * Báo xong hay tự đóng việc mà còn mục kiểm tra chưa tick thì hỏi lại trước khi gửi. API không chặn,
+ * đây là cảnh báo của giao diện (bridge tasks mục 3).
+ */
+export function needsChecklistWarning(action: TaskAction, checklist: { total: number; done: number }): boolean {
+	return (action === 'submit' || action === 'self_close') && checklistLeft(checklist) > 0;
+}
+
 /**
  * Một đến hai nút chính cho đầu khung chi tiết và dòng Việc của tôi, xếp theo việc người xem
  * hay làm nhất. Huỷ và Về Chưa làm là thao tác hiếm, nằm trong menu ba chấm.
  */
-const PRIMARY_ORDER: TaskAction[] = ['accept', 'return', 'submit', 'self_close', 'start', 'reopen'];
+const PRIMARY_ORDER: TaskAction[] = ['accept', 'return', 'submit', 'self_close', 'start', 'reopen', 'withdraw'];
 
 export function primaryActions(allowed: TaskAction[], max = 2): TaskAction[] {
 	return PRIMARY_ORDER.filter(a => allowed.includes(a)).slice(0, max);
@@ -173,6 +260,41 @@ export function groupMyTasks<T extends Pick<TaskListItem, 'dueDate' | 'overdue' 
 	return groups;
 }
 
+/**
+ * Khi tìm ở mọi ngăn, việc này thuộc ngăn nào của người xem: "Tôi làm", "Tôi giao", "Tôi theo dõi",
+ * "Tôi nghiệm thu", còn lại (việc của phòng mình, của dự án mình) là "Việc bạn xem được". Việc tự giao
+ * cho mình tính là Tôi làm.
+ */
+export function taskRelation(
+	task: Pick<TaskListItem, 'id' | 'assignee' | 'assigner' | 'reviewer'>,
+	meId: number | null | undefined,
+	watchingIds: ReadonlySet<number> = new Set(),
+): string {
+	if (meId != null && task.assignee.id === meId) return 'Tôi làm';
+	if (meId != null && task.assigner.id === meId) return 'Tôi giao';
+	if (watchingIds.has(task.id)) return 'Tôi theo dõi';
+	if (meId != null && task.reviewer.id === meId) return 'Tôi nghiệm thu';
+	return 'Việc bạn xem được';
+}
+
+/**
+ * Câu nói rõ việc phải chờ nào đang làm trễ việc này, thay cho "Đang chờ việc bị trễ" khó hiểu: nêu số
+ * hiệu và hai cái hạn để người đọc thấy ngay vì sao. Không có việc phải chờ nào trễ thì trả `null`.
+ */
+export function lateBlockerText(
+	task: Pick<TaskListItem, 'dueDate'>,
+	blockers: Array<Pick<TaskDependency, 'code' | 'dueDate' | 'late' | 'visible'>>,
+	today: string = vnToday(),
+): string | null {
+	const b = blockers.find(x => x.late);
+	if (!b) return null;
+	if (!b.visible) return 'Phải chờ một việc bạn không xem được, việc đó đang trễ hạn.';
+	if (b.dueDate && task.dueDate && b.dueDate > task.dueDate) {
+		return `Phải chờ ${b.code}, hạn ${b.code} (${shortDate(b.dueDate, today)}) muộn hơn hạn việc này (${shortDate(task.dueDate, today)}).`;
+	}
+	return `Phải chờ ${b.code}, việc đó đang trễ hạn.`;
+}
+
 export interface QuickDueOption {
 	label: string;
 	value: string;
@@ -196,9 +318,9 @@ export function quickDueOptions(today: string): QuickDueOption[] {
 
 // ─── Điểm ──────────────────────────────────────────────────────────────────────
 
-/** Chữ điểm trên thẻ và dòng việc: "3 đ", hoặc "—" khi chưa chấm điểm. */
+/** Chữ điểm trên thẻ và dòng việc: "3 điểm" ("3 đ" dễ đọc thành 3 đồng), hoặc "—" khi chưa chấm điểm. */
 export function taskPointsText(points: number | null | undefined): string {
-	return points == null ? '—' : `${points} đ`;
+	return points == null ? '—' : `${points} điểm`;
 }
 
 export type PointsOperator = '=' | '!=' | '>' | '>=' | '<' | '<=';
@@ -257,6 +379,37 @@ const POINTS_OP_TEXT: Record<PointsOperator, string> = {
 	'<': 'nhỏ hơn',
 	'<=': 'tối đa',
 };
+
+export interface PointsRange {
+	from: number | null;
+	to: number | null;
+}
+
+/**
+ * Bộ lọc điểm cho người mới: hai ô "Từ … đến … điểm" ghép thành cú pháp `>=2,<=5`. Hai ô trống là không
+ * lọc. Người quen vẫn gõ cú pháp ở ô Nâng cao, hai cách cùng ra một tham số.
+ */
+export function pointsRangeParam(range: PointsRange): string {
+	const parts: string[] = [];
+	if (range.from != null) parts.push(`>=${range.from}`);
+	if (range.to != null) parts.push(`<=${range.to}`);
+	return parts.join(',');
+}
+
+/**
+ * Đọc ngược bộ lọc thành hai ô Từ, Đến. Bộ lọc không viết được bằng hai ô (`!=3`, `>2`, hai điều kiện
+ * "từ") thì trả `null`, để ô Từ, Đến để trống và ô Nâng cao giữ nguyên chữ.
+ */
+export function pointsRangeOf(conditions: PointsCondition[]): PointsRange | null {
+	const range: PointsRange = { from: null, to: null };
+	for (const c of conditions) {
+		if (c.op === '>=' && range.from == null) range.from = c.value;
+		else if (c.op === '<=' && range.to == null) range.to = c.value;
+		else if (c.op === '=' && range.from == null && range.to == null && conditions.length === 1) return { from: c.value, to: c.value };
+		else return null;
+	}
+	return range;
+}
 
 /** Câu đọc của bộ lọc cho nhãn và trình đọc màn hình: "Điểm từ 2 và tối đa 5", "Chưa có điểm". */
 export function pointsFilterLabel(conditions: PointsCondition[]): string {
@@ -336,18 +489,21 @@ export const TASK_FILE_ACCEPT =
 	'.pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip';
 export const TASK_FILE_MAX_MB = 20;
 
-/** Mã dự án: 2–6 chữ cái không dấu, `CV` dành cho việc lẻ. Máy chủ viết hoa giúp. */
+/**
+ * Mã dự án: 2–6 ký tự, chữ cái đầu rồi chữ cái hoặc chữ số (`HQ`, `L25`, `KT2`; bridge mục 29), `CV` dành
+ * cho việc lẻ. Máy chủ viết hoa giúp.
+ */
 export function projectCodeError(code: string): string | null {
 	const c = code.trim().toUpperCase();
 	if (!c) return 'Nhập mã dự án';
-	if (!/^[A-Z]{2,6}$/.test(c)) return 'Mã dự án gồm 2 đến 6 chữ cái không dấu, ví dụ HQ';
+	if (!/^[A-Z][A-Z0-9]{1,5}$/.test(c)) return 'Mã dự án gồm 2 đến 6 chữ cái không dấu hoặc chữ số, bắt đầu bằng chữ cái, ví dụ HQ hay L25';
 	if (c === 'CV') return 'Mã CV dành cho việc lẻ, bạn chọn mã khác';
 	return null;
 }
 
-/** Số hiệu việc (`HQ-12`, `cv-3`) hay id số, để trang chi tiết nhận cả hai. */
+/** Số hiệu việc (`HQ-12`, `cv-3`, `L25-1`) hay id số, để trang chi tiết nhận cả hai. */
 export function isTaskRef(value: string): boolean {
-	return /^[A-Za-z]{2,6}-\d+$/.test(value) || /^\d+$/.test(value);
+	return /^[A-Za-z][A-Za-z0-9]{1,5}-\d+$/.test(value) || /^\d+$/.test(value);
 }
 
 // ─── Lô 2 ─────────────────────────────────────────────────────────────────────
@@ -357,7 +513,7 @@ export const TASK_HINTS = {
 	sprint: 'Đợt là một khoảng ngắn, thường một hai tuần. Cả nhóm chọn việc làm trong khoảng đó rồi đóng đợt.',
 	backlog: 'Việc chờ xếp là việc của dự án chưa đưa vào đợt nào.',
 	points: 'Điểm khối lượng: việc càng nặng điểm càng cao, từ 1 rất nhẹ tới 8 rất nặng.',
-	group: 'Nhóm việc gom các việc cùng một phần của dự án, ví dụ một giai đoạn.',
+	group: 'Nhóm việc gom các việc cùng một phần của dự án, ví dụ Chứng từ hay Tờ khai. Khoảng thời gian thì dùng đợt.',
 	dependency: 'Việc này chỉ nên bắt đầu khi việc nó chờ đã xong. Hệ thống chỉ cảnh báo, không chặn.',
 	wip: 'Số thẻ tối đa nên có trong cột. Vượt thì cột báo đỏ, vẫn kéo thẻ vào được.',
 } as const;
@@ -407,7 +563,7 @@ export function recurrenceText(r: {
 }
 
 export interface ProgressColumn {
-	metric: 'assigned' | 'cancelled' | 'done' | 'onTimeOriginal' | 'onTimeCurrent' | 'overdueOpen' | 'returned' | 'points' | 'quality';
+	metric: 'assigned' | 'cancelled' | 'done' | 'onTimeOriginal' | 'onTimeCurrent' | 'noDue' | 'overdueOpen' | 'returned' | 'points' | 'quality';
 	label: string;
 	hint: string;
 	/** Tỷ lệ đi kèm (trường `…Pct`). */
@@ -419,8 +575,20 @@ export const PROGRESS_COLUMNS: ProgressColumn[] = [
 	{ metric: 'assigned', label: 'Được giao', hint: 'Việc người khác giao, hạn ban đầu trong khoảng, kể cả việc đã huỷ.' },
 	{ metric: 'cancelled', label: 'Đã huỷ', hint: 'Việc được giao rồi bị huỷ, tính riêng.' },
 	{ metric: 'done', label: 'Hoàn thành', hint: 'Đã nghiệm thu.', pct: 'donePct' },
-	{ metric: 'onTimeOriginal', label: 'Đúng hạn ban đầu', hint: 'Báo xong lần đầu không muộn hơn hạn lúc giao.', pct: 'onTimeOriginalPct' },
-	{ metric: 'onTimeCurrent', label: 'Đúng hạn hiện tại', hint: 'Báo xong lần đầu không muộn hơn hạn sau khi đổi.', pct: 'onTimeCurrentPct' },
+	// Sau UAT 27/11/2026 (bridge mục 31): việc chưa có hạn không còn tính là đúng hạn, tỷ lệ chỉ chia cho việc có hạn.
+	{
+		metric: 'onTimeOriginal',
+		label: 'Báo xong đúng hạn ban đầu',
+		hint: 'Báo xong lần đầu không muộn hơn hạn lúc giao. Tỷ lệ chỉ tính việc có hạn ban đầu.',
+		pct: 'onTimeOriginalPct',
+	},
+	{
+		metric: 'onTimeCurrent',
+		label: 'Báo xong đúng hạn hiện tại',
+		hint: 'Báo xong lần đầu không muộn hơn hạn sau khi đổi. Tỷ lệ chỉ tính việc có hạn.',
+		pct: 'onTimeCurrentPct',
+	},
+	{ metric: 'noDue', label: 'Chưa có hạn', hint: 'Việc chưa có hạn: không tính đúng hạn, không vào tỷ lệ đúng hạn.' },
 	{ metric: 'overdueOpen', label: 'Quá hạn còn mở', hint: 'Chưa báo xong mà hạn đã qua tại cuối khoảng.' },
 	{ metric: 'returned', label: 'Bị trả lại', hint: 'Đã bị trả lại hoặc mở lại ít nhất một lần.' },
 	{ metric: 'points', label: 'Khối lượng', hint: 'Tổng điểm việc nghiệm thu trong khoảng.' },

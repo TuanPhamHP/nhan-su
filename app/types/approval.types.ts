@@ -30,6 +30,16 @@ export interface ApprovalCountsResponseDto {
 	 * KPI); 0 khi module `TASKS` không dùng đầy đủ. BE cũ không có.
 	 */
 	kpiReviews?: number;
+	/**
+	 * Sau UAT 27/11/2026: phiếu xin dời hạn đang chờ ở các việc người xem giao. KHÔNG cộng vào `total`
+	 * (duyệt ở trang Công việc và trong chuông); cộng vào huy hiệu menu Công việc cùng `taskReviews`.
+	 */
+	taskDueRequests?: number;
+	/**
+	 * Sau UAT 27/11/2026: phiếu KPI Chờ chốt, chỉ đếm cho người có `kpi:manage`. KHÔNG cộng vào `total`;
+	 * hiện số đỏ cạnh mục Kỳ đánh giá.
+	 */
+	kpiPendingFinal?: number;
 	total: number;
 }
 

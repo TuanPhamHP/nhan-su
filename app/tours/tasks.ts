@@ -2,7 +2,7 @@ import type { TourDefinition } from '~/types/tour.types';
 
 /**
  * Hướng dẫn của Công việc (mục 9.2): tối đa năm bước, câu ngắn như đồng nghiệp chỉ nhau, chỉ trỏ,
- * không bấm nút ghi nào. Bước nào trang chưa có phần tử thì tự bỏ.
+ * không bấm nút ghi nào. Bước nào trang chưa có phần tử sau 2 giây thì tự bỏ.
  *
  * Mở từ tab Hướng dẫn bên phải, nên người dùng có thể đang đứng ở chế độ xem hay thẻ khác của cùng
  * trang: bước đầu mỗi tour gọi hàm `show…` của trang để chuyển về đúng chỗ.
@@ -74,8 +74,9 @@ export function tasksBoardTour(ctx: { showBoard: () => void }): TourDefinition {
 			{
 				id: 'columns',
 				target: '[data-tour="task-board"]',
-				title: 'Năm cột, năm trạng thái',
-				body: 'Mỗi cột là một trạng thái của việc, từ **Chưa làm** tới **Hoàn thành**.',
+				// Không ghi số cột: mặc định bốn cột, tick Hiện cột Đã huỷ thì thành năm.
+				title: 'Mỗi cột là một trạng thái',
+				body: 'Việc đi từ **Chưa làm** sang **Đang làm**, **Chờ nghiệm thu** rồi **Hoàn thành**. Muốn thấy việc đã huỷ thì tick **Hiện cột Đã huỷ**.',
 				onEnter: () => ctx.showBoard(),
 			},
 			{

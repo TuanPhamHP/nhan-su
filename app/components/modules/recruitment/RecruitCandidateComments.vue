@@ -86,7 +86,7 @@
 			? [
 					{ value: 'SUGGEST_MOVE', label: 'Đề xuất chuyển vòng' },
 					{ value: 'SUGGEST_REJECT', label: 'Đề xuất loại' },
-					{ value: 'SUGGEST_OFFER', label: 'Đề xuất tạo offer' },
+					{ value: 'SUGGEST_OFFER', label: 'Đề xuất tạo thư mời nhận việc' },
 				]
 			: []),
 	]);

@@ -2,6 +2,7 @@ import type {
 	KpiAutoKey,
 	KpiDirection,
 	KpiGrade,
+	KpiGradeScale,
 	KpiReviewEvent,
 	KpiReviewLine,
 	KpiReviewStatus,
@@ -169,6 +170,36 @@ export function kpiGradeBarClass(label: string, grades: KpiGrade[]): string {
 	if (i === n - 1) return 'bg-rose-500';
 	if (i === 1) return 'bg-sky-500';
 	return 'bg-amber-500';
+}
+
+/**
+ * Chú thích dưới trọng số của một dòng khi trọng số hiệu lực lớn hơn trọng số gốc (UI-17a): "trọng số tăng vì 1 chỉ
+ * tiêu không áp dụng". Dòng không áp dụng hay trọng số không đổi thì `null`.
+ */
+export function kpiWeightShiftText(lines: Pick<KpiReviewLine, 'applicable'>[], line: Pick<KpiReviewLine, 'applicable' | 'weight' | 'effectiveWeight'>): string | null {
+	if (!line.applicable || line.effectiveWeight <= line.weight) return null;
+	const n = lines.filter(l => !l.applicable).length;
+	if (n === 0) return null;
+	return `trọng số tăng vì ${n} chỉ tiêu không áp dụng`;
+}
+
+/**
+ * Mọi chỉ tiêu áp dụng đều đang 0 điểm (UI-17a): người chấm gửi phiếu như vậy thì hỏi lại trước, vì thường là quên
+ * chấm hay số liệu chưa về chứ ít khi thật sự cả phiếu 0 điểm. Dòng chưa có điểm tính là 0.
+ */
+export function kpiAllZero(lines: Pick<KpiReviewLine, 'applicable' | 'score'>[]): boolean {
+	const applicable = lines.filter(l => l.applicable);
+	return applicable.length > 0 && applicable.every(l => !l.score);
+}
+
+/**
+ * Tên thang xếp loại để đặt giữa câu (máy chủ không có tên thang, thang phân biệt bằng ngày áp dụng):
+ * "thang áp dụng từ 01/01/2026 (A từ 90 · B từ 75 · …)".
+ */
+export function kpiScaleName(scale: Pick<KpiGradeScale, 'effectiveFrom' | 'grades'>): string {
+	const [y, m, d] = scale.effectiveFrom.split('-');
+	const from = scale.effectiveFrom <= '2000-12-31' ? 'thang áp dụng từ đầu' : `thang áp dụng từ ${d}/${m}/${y}`;
+	return `${from} (${kpiGradeLegend(scale.grades)})`;
 }
 
 /** Câu tổng trọng số của mẫu: "Đủ 100%", "Còn thiếu 5%", "Thừa 10%". */

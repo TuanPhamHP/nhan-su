@@ -424,7 +424,7 @@
 				<ul class="divide-y divide-gray-100 dark:divide-gray-800">
 					<li v-for="t in list" :key="t.id">
 						<button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left" @click="emit('open', t)">
-							<span v-if="t.dependencies.late" class="h-2 w-2 shrink-0 rounded-full bg-rose-500" title="Đang chờ việc bị trễ" />
+							<span v-if="t.dependencies.late" class="h-2 w-2 shrink-0 rounded-full bg-rose-500" title="Phải chờ việc khác đang trễ hạn" />
 							<span class="min-w-0 flex-1">
 								<span class="block truncate text-sm text-gray-900 dark:text-gray-100">{{ t.title }}</span>
 								<span class="text-xs text-gray-500">{{ t.code }} · {{ t.assignee.fullName }}<template v-if="t.startDate"> · từ {{ shortDate(t.startDate, today) }}</template></span>

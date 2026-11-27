@@ -5,7 +5,7 @@
 	import KpiStatusBadge from '~/components/modules/kpi/KpiStatusBadge.vue';
 	import { useKpiService } from '~/services/kpi.service';
 	import type { KpiResults } from '~/types/kpi.types';
-	import { kpiNum } from '~/utils/kpi.utils';
+	import { kpiNum, kpiScaleName } from '~/utils/kpi.utils';
 	import { downloadTaskBlob, taskErrorInfo } from '~/utils/tasks.utils';
 
 	/**
@@ -90,7 +90,10 @@
 		<TaskEmptyState v-else-if="error" kind="error" title="Chưa xem được kết quả" :description="error" action-label="Thử lại" data-testid="kpi-results-error" @action="load" />
 		<template v-else-if="data">
 			<div class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900" data-testid="kpi-distribution">
-				<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Phân bố xếp loại</h3>
+				<div>
+					<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Phân bố xếp loại</h3>
+					<p class="text-xs text-gray-500" data-testid="kpi-results-scale">Kỳ này xếp loại theo {{ kpiScaleName(data.period.gradeScale) }}</p>
+				</div>
 				<KpiDistributionBar :dist="data.overall" :grades="grades" :label="dept ? 'Phòng đang xem' : 'Tất cả'" strong />
 				<div v-if="data.distribution.length > 1" class="space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
 					<KpiDistributionBar v-for="d in data.distribution" :key="d.department?.id ?? 0" :dist="d" :grades="grades" :label="d.department?.name ?? 'Không thuộc phòng nào'" />

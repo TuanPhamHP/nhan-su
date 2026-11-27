@@ -4,8 +4,12 @@
 	import { toTypedSchema } from '@vee-validate/zod';
 	import * as z from 'zod';
 	import EmployeePicker, { type PickablePerson } from '~/components/modules/general-request/EmployeePicker.vue';
+	import TaskChecklistInput from '~/components/modules/tasks/TaskChecklistInput.vue';
+	import TaskDiscardConfirm from '~/components/modules/tasks/TaskDiscardConfirm.vue';
+	import { useDiscardGuard } from '~/composables/useDiscardGuard';
 	import { useAuthStore } from '~/stores/auth';
 	import { useDirectoryStore } from '~/stores/directory';
+	import { taskPickablePeople } from '~/utils/people-picker';
 	import { useTasksService } from '~/services/tasks.service';
 	import type { TaskPriority, TaskProject, TaskRecurrence, TaskRecurrenceFrequency } from '~/types/tasks.types';
 	import {
@@ -31,7 +35,7 @@
 
 	const authStore = useAuthStore();
 	const directoryStore = useDirectoryStore();
-	const { employees } = storeToRefs(directoryStore);
+	const { employees, departments } = storeToRefs(directoryStore);
 	const service = useTasksService();
 	const toast = useToast();
 	const today = vnToday();
@@ -67,7 +71,7 @@
 				leadDays: z.number({ invalid_type_error: 'Nhập số từ 0 đến 60' }).int('Nhập số nguyên').min(0, 'Ít nhất 0').max(60, 'Nhiều nhất 60 ngày'),
 				startDate: z.string({ required_error: 'Chọn ngày bắt đầu' }).min(1, 'Chọn ngày bắt đầu'),
 				endDate: z.string().optional(),
-				checklistText: z.string(),
+				checklist: z.array(z.string()),
 			})
 			.refine(v => v.frequency !== 'WEEKLY' || v.weekdays.length > 0, { message: 'Chọn ít nhất một thứ trong tuần', path: ['weekdays'] })
 			.refine(v => v.frequency !== 'QUARTERLY' || v.monthOfPeriod <= 3, { message: 'Tháng thứ mấy trong quý chỉ từ 1 đến 3', path: ['monthOfPeriod'] })
@@ -78,7 +82,7 @@
 			}),
 	);
 
-	const { defineField, errors, handleSubmit, isSubmitting } = useForm({
+	const { defineField, errors, handleSubmit, isSubmitting, meta } = useForm({
 		validationSchema: schema,
 		initialValues: {
 			title: r?.title ?? '',
@@ -95,7 +99,7 @@
 			leadDays: r?.leadDays ?? 3,
 			startDate: r?.startDate ?? today,
 			endDate: r?.endDate ?? undefined,
-			checklistText: (r?.checklist ?? []).join('\n'),
+			checklist: [...(r?.checklist ?? [])],
 		},
 	});
 	const [title] = defineField('title');
@@ -112,10 +116,10 @@
 	const [leadDays] = defineField('leadDays');
 	const [startDate] = defineField('startDate');
 	const [endDate] = defineField('endDate');
-	const [checklistText] = defineField('checklistText');
+	const [checklistItems] = defineField('checklist');
 
 	const people = computed<PickablePerson[]>(() =>
-		employees.value.map(e => ({ id: e.id, fullName: e.fullName, hint: e.department?.name ?? e.employeeCode })),
+		taskPickablePeople(employees.value, departments.value),
 	);
 	const projectOptions = computed(() => [
 		{ value: '', label: 'Việc lẻ (không thuộc dự án)' },
@@ -149,10 +153,7 @@
 	);
 
 	const onSubmit = handleSubmit(async v => {
-		const checklist = v.checklistText
-			.split('\n')
-			.map(s => s.trim())
-			.filter(Boolean);
+		const checklist = v.checklist;
 		const rule = {
 			frequency: v.frequency,
 			interval: v.interval,
@@ -197,7 +198,19 @@
 			toast.error(taskErrorInfo(err).message);
 		}
 	});
-	useEscapeKey(() => emit('close'), () => !isSubmitting.value);
+	/** Chữ gõ dở trong ô danh sách kiểm tra thành mục trước khi gửi; quá dài thì không gửi. */
+	const checklistInput = ref<InstanceType<typeof TaskChecklistInput> | null>(null);
+	async function submit() {
+		if (checklistInput.value && !checklistInput.value.commitDraft()) return;
+		await nextTick();
+		await onSubmit();
+	}
+
+	const guard = useDiscardGuard(
+		() => meta.value.dirty || !!checklistInput.value?.hasDraft(),
+		() => emit('close'),
+		() => !isSubmitting.value,
+	);
 
 	const LABEL = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
 	const NUM =
@@ -206,18 +219,18 @@
 
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" @click.self="emit('close')">
+		<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" @click.self="guard.requestClose()">
 			<form
 				class="my-0 w-full max-w-2xl rounded-none bg-white shadow-xl sm:my-8 sm:rounded-2xl dark:bg-gray-900"
 				role="dialog"
 				aria-modal="true"
 				:aria-label="editing ? 'Sửa việc định kỳ' : 'Đặt việc định kỳ'"
 				data-testid="recurrence-form"
-				@submit.prevent="onSubmit"
+				@submit.prevent="submit"
 			>
 				<div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
 					<h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ editing ? 'Sửa việc định kỳ' : 'Đặt việc định kỳ' }}</h2>
-					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="emit('close')">
+					<button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Đóng" @click="guard.requestClose()">
 						<Icon name="heroicons:x-mark" class="h-5 w-5" />
 					</button>
 				</div>
@@ -342,8 +355,8 @@
 							</div>
 						</div>
 						<div class="grid gap-4 sm:grid-cols-2">
-							<UiDatePicker v-model="startDate" label="Bắt đầu từ *" :error="errors.startDate" />
-							<UiDatePicker v-model="endDate" label="Kết thúc" :error="errors.endDate" />
+							<UiDatePicker v-model="startDate" label="Bắt đầu từ *" :error="errors.startDate" warn-far-year />
+							<UiDatePicker v-model="endDate" label="Kết thúc" :error="errors.endDate" warn-far-year />
 						</div>
 						<p class="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-800 dark:bg-teal-900/20 dark:text-teal-200" data-testid="rec-summary">
 							{{ summary }}<template v-if="leadDays">, hiện trước {{ leadDays }} ngày</template>.
@@ -388,23 +401,15 @@
 					/>
 					<p v-else-if="recurrence?.project" class="text-sm text-gray-600 dark:text-gray-300">Dự án {{ recurrence.project.name }} (không đổi được)</p>
 
-					<div>
-						<label for="rec-checklist" :class="LABEL">Danh sách kiểm tra mỗi lần</label>
-						<textarea
-							id="rec-checklist"
-							v-model="checklistText"
-							rows="3"
-							placeholder="Mỗi dòng một mục"
-							class="mt-1 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-						/>
-					</div>
+					<TaskChecklistInput id="rec-checklist" ref="checklistInput" v-model="checklistItems" label="Danh sách kiểm tra mỗi lần" />
 				</div>
 
 				<div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-700">
-					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="emit('close')">Huỷ</CommonAppButton>
+					<CommonAppButton variant="secondary" :disabled="isSubmitting" @click="guard.requestClose()">Huỷ</CommonAppButton>
 					<CommonAppButton type="submit" :loading="isSubmitting" data-testid="recurrence-submit">{{ editing ? 'Lưu' : 'Đặt việc định kỳ' }}</CommonAppButton>
 				</div>
 			</form>
 		</div>
+		<TaskDiscardConfirm :open="guard.asking.value" @keep="guard.keepEditing()" @discard="guard.discard()" />
 	</Teleport>
 </template>

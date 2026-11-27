@@ -2,6 +2,7 @@
 	import { format, parseISO } from 'date-fns';
 	import { useNotificationService } from '~/services';
 	import { resolveNotificationRoute } from '~/utils/notification-route';
+	import { notificationBodyText, notificationIcon } from '~/utils/notification-display';
 	import type { NotificationCategory, NotificationResponse, NotificationListMeta, QueryNotificationsParams } from '~/types/notification.types';
 
 	definePageMeta({ title: 'Thông báo' });
@@ -10,15 +11,17 @@
 	const toast = useToast();
 	const { user } = useAuth();
 	const uiStore = useUiStore();
-	const { unreadCount, markRead, markAllRead, deleteAll } = useNotifications();
+	const { unreadCount, markRead, markAllRead, deleteAll, fetchUnreadCount } = useNotifications();
 	const notifService = useNotificationService();
 
 	// ─── Tabs ─────────────────────────────────────────────────────────────────────
 	type Tab = 'ALL' | NotificationCategory;
 	const activeTab = ref<Tab>('ALL');
 
+	// Ngăn Công việc (category `TASK`, gồm cả KPI) thêm 27/11/2026, số chưa đọc lấy từ `unread-count.task`.
 	const tabs: { key: Tab; label: string }[] = [
 		{ key: 'ALL', label: 'Tất cả' },
+		{ key: 'TASK', label: 'Công việc' },
 		{ key: 'EVENT', label: 'Sự kiện' },
 		{ key: 'ATTENDANCE', label: 'Chấm công' },
 		{ key: 'LEAVE', label: 'Xin nghỉ' },
@@ -26,6 +29,7 @@
 
 	function tabUnreadCount(tab: Tab): number {
 		if (tab === 'ALL') return unreadCount.value.total;
+		if (tab === 'TASK') return unreadCount.value.task ?? 0;
 		if (tab === 'EVENT') return unreadCount.value.event;
 		if (tab === 'ATTENDANCE') return unreadCount.value.attendance;
 		if (tab === 'LEAVE') return unreadCount.value.leave;
@@ -52,6 +56,7 @@
 			meta.value = res.meta;
 			// sync global bell badge
 			unreadCount.value.total = res.meta.unreadCount;
+			fetchUnreadCount().catch(() => undefined);
 		} catch {
 			toast.error('Không thể tải thông báo');
 		} finally {
@@ -149,11 +154,18 @@
 				// non-critical
 			}
 		}
-		if (!notif.refType || !user.value) return;
+		if (!user.value) return;
 		// Respect "view as" preview — điều hướng theo giao diện đang hiển thị.
 		const effectiveRole = uiStore.previewRole ?? user.value.role;
 		const route = resolveNotificationRoute(notif.refType, notif.refId, effectiveRole, notif.type);
-		if (route) router.push(route);
+		if (route) {
+			router.push(route);
+			return;
+		}
+		// Loại chưa có nhánh định tuyến vẫn mở được bằng `targetUrl` máy chủ dựng, như chuông thông báo. Chỉ nhận
+		// đường dẫn trong app.
+		const target = notif.targetUrl;
+		if (target && target.startsWith('/') && !target.startsWith('//')) router.push(target);
 	}
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,17 +177,6 @@
 		}
 	}
 
-	function categoryIcon(category: NotificationCategory): string {
-		if (category === 'ATTENDANCE') return 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z';
-		if (category === 'LEAVE') return 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z';
-		return 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9';
-	}
-
-	function categoryIconColor(category: NotificationCategory): string {
-		if (category === 'ATTENDANCE') return 'text-green-500 bg-green-50 dark:bg-green-900/20';
-		if (category === 'LEAVE') return 'text-blue-500 bg-blue-50 dark:bg-blue-900/20';
-		return 'text-orange-500 bg-orange-50 dark:bg-orange-900/20';
-	}
 </script>
 
 <template>
@@ -219,11 +220,15 @@
 		<!-- Card -->
 		<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
 			<!-- Tabs -->
-			<div class="flex border-b border-gray-200 dark:border-gray-700 px-1">
+			<!-- Năm ngăn không vừa màn điện thoại: cuộn ngang trong hàng ngăn, trang không cuộn ngang. -->
+			<div class="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 px-1 [scrollbar-width:none]" role="tablist" aria-label="Nhóm thông báo">
 				<button
 					v-for="tab in tabs"
 					:key="tab.key"
-					class="flex items-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px"
+					role="tab"
+					:aria-selected="activeTab === tab.key"
+					:data-testid="`notif-page-tab-${tab.key}`"
+					class="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 sm:px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px"
 					:class="
 						activeTab === tab.key
 							? 'border-brand-600 text-brand-600 dark:text-brand-400'
@@ -294,16 +299,16 @@
 					<!-- Clickable row -->
 					<button class="flex items-start gap-3 flex-1 min-w-0 text-left" @click="handleItemClick(notif)">
 						<!-- Icon -->
-						<div class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5" :class="categoryIconColor(notif.category)">
-							<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" :d="categoryIcon(notif.category)" />
-							</svg>
+						<!-- Biểu tượng theo loại rồi theo category, cùng bộ với chuông (`notificationIcon`). -->
+						<div class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5 bg-gray-50 dark:bg-gray-700/50">
+							<Icon :name="notificationIcon(notif).icon" :class="['w-4 h-4', notificationIcon(notif).cls]" aria-hidden="true" />
+							<span class="sr-only">{{ notificationIcon(notif).label }}</span>
 						</div>
 
 						<!-- Content -->
 						<div class="flex-1 min-w-0">
 							<p class="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug">{{ notif.title }}</p>
-							<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{{ notif.body }}</p>
+							<p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{{ notificationBodyText(notif.body) }}</p>
 						</div>
 
 						<!-- Meta -->
