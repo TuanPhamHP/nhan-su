@@ -69,6 +69,13 @@ Bucket lưu trữ là **private**. Backend đã tự sign toàn bộ URL trướ
 - URL presigned có TTL 3600s (1 giờ). Nếu user mở lại tab sau > 1 giờ, gọi lại API để lấy URL mới.
 - Nếu sign lỗi (file bị xoá, key sai), field sẽ về `null` (transport) hoặc bị filter khỏi mảng (report). FE handle như file không tồn tại.
 - Khi FE **upload** ảnh vé / file đính kèm, gọi module upload trước để nhận URL gốc, rồi truyền URL đó vào body của `updateRouteTransport` / `createReport`.
+- **Từ 27/11/2026** (khi máy chủ đã bật lưu file riêng tư, `docs/backend/private-file-storage.md`), file mới nằm trên máy
+  chủ thay vì R2:
+  - URL gốc mà route upload trả có dạng `vps:///tenants/<mã>/trip-report/<id>/attachments/<uuid>.<đuôi>`. URL này không
+    mở được trong trình duyệt, chỉ để gửi lại khi lưu.
+  - Link đã ký trong response có dạng `<API>/v1/files/…?exp=…&sig=…` thay vì link R2, dùng y như cũ trong `<img>`,
+    `<a href>`.
+  - File cũ vẫn trả link R2. FE không phải phân biệt hai loại link.
 
 ### Quy tắc cho hai trường URL gửi lên (từ 26/11/2026)
 
@@ -869,14 +876,14 @@ Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id
 - **Field:** `file` (single)
 - **Allowed mime:** `image/jpeg`, `image/png`, `application/pdf`
 - **Size max:** 10 MB
-- **Path R2:** `trip-transport/{tripId}/tickets/{uuid}.{ext}` (tripId lấy từ route)
+- **Path:** `tenants/{mã}/trip-transport/{tripId}/tickets/{uuid}.{ext}` (tripId lấy từ route), trên máy chủ hoặc R2 tuỳ máy chủ đã bật lưu file riêng tư chưa
 
 **Response 201:**
 ```json
 { "success": true, "data": { "url": "https://hr-documents.s3.example.com/trip-transport/42/tickets/abc.jpg" } }
 ```
 
-`url` là **URL gốc chưa sign** — FE gán vào field `ticketImageUrl` của một phần tử trong `UpdateRouteTransportDto.transports[]` khi gọi `PATCH /routes/:routeId/transport`.
+`url` là **URL gốc chưa sign** — FE gán vào field `ticketImageUrl` của một phần tử trong `UpdateRouteTransportDto.transports[]` khi gọi `PATCH /routes/:routeId/transport`. Khi máy chủ đã bật lưu file riêng tư, `url` có dạng `vps:///tenants/<mã>/trip-transport/42/tickets/<uuid>.jpg`; xem trước ảnh bằng file đang có trong trình duyệt (blob), không dùng `url` này.
 
 **Errors:**
 - 400: File thiếu hoặc sai mime/size
@@ -892,7 +899,7 @@ Trước khi gọi `PATCH /routes/:routeId/transport` (ticket) hoặc `POST /:id
 - **Field:** `files` (array, tối đa 10 file)
 - **Allowed mime:** `image/jpeg`, `image/png`, `application/pdf`, DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`)
 - **Size max:** 10 MB / file
-- **Path R2:** `trip-report/{tripId}/attachments/{uuid}.{ext}`
+- **Path:** `tenants/{mã}/trip-report/{tripId}/attachments/{uuid}.{ext}`, trên máy chủ hoặc R2 như ảnh vé ở trên
 
 **Response 201:**
 ```json
