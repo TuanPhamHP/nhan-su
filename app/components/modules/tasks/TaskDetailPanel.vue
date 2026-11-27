@@ -45,12 +45,9 @@
 	onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 	/** Sang trang đầy đủ là một bước mới: Quay lại từ đó về đúng danh sách kèm khung. */
-	const route = useRoute();
 	function openFull() {
 		const code = panel.code.value;
-		if (!code) return;
-		const activity = route.query.activity;
-		navigateTo({ path: `/cong-viec/${encodeURIComponent(code)}`, query: activity ? { activity } : {} });
+		if (code) navigateTo(`/cong-viec/${encodeURIComponent(code)}`);
 	}
 </script>
 

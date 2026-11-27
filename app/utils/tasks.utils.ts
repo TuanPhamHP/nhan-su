@@ -33,6 +33,53 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
 	URGENT: 'Gấp',
 };
 
+/**
+ * Bảng màu trạng thái dùng chung cho nhãn, đầu cột bảng việc và ô chọn trạng thái: nền nhạt, viền cùng
+ * tông, chấm đậm phía trước. Mỗi trạng thái một tông để nhìn lướt là phân biệt được.
+ */
+export const STATUS_TONE: Record<TaskStatus, { badge: string; dot: string }> = {
+	TODO: {
+		badge: 'bg-slate-100 text-slate-700 ring-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600',
+		dot: 'bg-slate-400',
+	},
+	IN_PROGRESS: {
+		badge: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-800',
+		dot: 'bg-blue-500',
+	},
+	IN_REVIEW: {
+		badge: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-800',
+		dot: 'bg-violet-500',
+	},
+	DONE: {
+		badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800',
+		dot: 'bg-emerald-500',
+	},
+	CANCELLED: {
+		badge: 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700',
+		dot: 'bg-gray-400',
+	},
+};
+
+/** Bảng màu ưu tiên: thấp xám, bình thường xanh, cao cam, gấp đỏ, kèm mũi tên chỉ mức. */
+export const PRIORITY_TONE: Record<TaskPriority, { badge: string; icon: string }> = {
+	LOW: {
+		badge: 'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
+		icon: 'heroicons:chevron-down',
+	},
+	NORMAL: {
+		badge: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800',
+		icon: 'heroicons:bars-2',
+	},
+	HIGH: {
+		badge: 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-800',
+		icon: 'heroicons:chevron-up',
+	},
+	URGENT: {
+		badge: 'bg-rose-50 text-rose-700 ring-rose-300 dark:bg-rose-900/40 dark:text-rose-300 dark:ring-rose-700',
+		icon: 'heroicons:chevron-double-up',
+	},
+};
+
 export const POINT_SCALE = [1, 2, 3, 5, 8] as const;
 
 export const ACTION_LABELS: Record<TaskAction, string> = {

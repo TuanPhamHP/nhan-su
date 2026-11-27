@@ -1,5 +1,6 @@
 <script setup lang="ts">
 	import TaskCardMenu from '~/components/modules/tasks/TaskCardMenu.vue';
+	import TaskPriorityBadge from '~/components/modules/tasks/TaskPriorityBadge.vue';
 	import TaskQuickCreate from '~/components/modules/tasks/TaskQuickCreate.vue';
 	import TaskStatusBadge from '~/components/modules/tasks/TaskStatusBadge.vue';
 	import type { TaskActionResult } from '~/composables/useTaskActions';
@@ -9,7 +10,9 @@
 		DUE_TONE_CLASS,
 		MY_GROUP_LABELS,
 		PRIORITY_LABELS,
+		PRIORITY_TONE,
 		STATUS_LABELS,
+		STATUS_TONE,
 		dueTone,
 		groupMyTasks,
 		taskDueText,
@@ -346,7 +349,7 @@
 							>
 								{{ t.title }}
 							</button>
-							<span v-if="t.parent" class="ml-1 text-xs text-gray-400">· việc con của {{ t.parent.title ?? t.parent.code }}</span>
+							<span v-if="t.parent" class="ml-1 text-xs text-gray-400">· việc phụ của {{ t.parent.title ?? t.parent.code }}</span>
 							<span v-if="t.recurrenceId" class="ml-1 rounded bg-teal-50 px-1 text-[11px] text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Định kỳ</span>
 							<span v-if="waitingText(t.dependencies?.openBlockers)" class="ml-1 rounded bg-amber-50 px-1 text-[11px] text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
 								{{ waitingText(t.dependencies?.openBlockers) }}
@@ -386,7 +389,8 @@
 							<select
 								v-if="statusOptions(t).length && !disabled"
 								:value="t.status"
-								class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+								class="cursor-pointer rounded-full border-0 py-0.5 pl-2.5 pr-7 text-xs font-medium ring-1 ring-inset focus:outline-none focus:ring-2 focus:ring-brand-500 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100"
+								:class="STATUS_TONE[t.status].badge"
 								:aria-label="`Trạng thái ${t.code}`"
 								@change="e => { onStatus(t, (e.target as HTMLSelectElement).value); (e.target as HTMLSelectElement).value = t.status; }"
 							>
@@ -399,13 +403,14 @@
 							<select
 								v-if="t.permissions.edit && !disabled"
 								:value="t.priority"
-								class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+								class="cursor-pointer rounded-md border-0 py-0.5 pl-2 pr-7 text-xs font-medium ring-1 ring-inset focus:outline-none focus:ring-2 focus:ring-brand-500 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100"
+								:class="PRIORITY_TONE[t.priority].badge"
 								:aria-label="`Ưu tiên ${t.code}`"
 								@change="e => onPriority(t, (e.target as HTMLSelectElement).value)"
 							>
 								<option v-for="(label, key) in PRIORITY_LABELS" :key="key" :value="key">{{ label }}</option>
 							</select>
-							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="NO_EDIT">{{ t.priorityLabel }}</span>
+							<span v-else :title="NO_EDIT"><TaskPriorityBadge :priority="t.priority" /></span>
 						</td>
 						<td class="px-3 py-2 text-right text-gray-700 dark:text-gray-200">
 							{{ t.points }}<span v-if="t.subtasks.total" class="text-xs text-gray-400"> +{{ t.subtasks.points }}</span>
@@ -423,7 +428,7 @@
 								<option v-if="t.group && !activeGroups.some(g => g.id === t.group!.id)" :value="t.group.id" disabled>{{ t.group.name }} (đã cất)</option>
 								<option v-for="g in activeGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
 							</select>
-							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="t.parent ? 'Việc con theo nhóm của việc cha.' : NO_GROUP" :data-testid="`task-group-text-${t.code}`">
+							<span v-else class="text-xs text-gray-600 dark:text-gray-300" :title="t.parent ? 'Việc phụ theo nhóm của việc cha.' : NO_GROUP" :data-testid="`task-group-text-${t.code}`">
 								{{ t.group?.name ?? '—' }}
 							</span>
 						</td>

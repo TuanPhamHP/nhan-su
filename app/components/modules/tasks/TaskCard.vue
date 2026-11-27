@@ -6,7 +6,7 @@
 
 	/**
 	 * Thẻ trên bảng việc (mục 9.2): số hiệu, tiêu đề tối đa ba dòng, ảnh người thực hiện, hạn có màu,
-	 * ưu tiên khi Cao hoặc Gấp, điểm, việc con và mục kiểm tra xong trên tổng, số bình luận, dấu "đã
+	 * ưu tiên khi Cao hoặc Gấp, điểm, việc phụ và mục kiểm tra xong trên tổng, số bình luận, dấu "đã
 	 * đổi hạn n lần". Không hiện mô tả. Tab tới được, Enter mở, chuột phải hay nút ba chấm mở menu.
 	 */
 	const props = defineProps<{
@@ -73,7 +73,7 @@
 		</div>
 		<p class="mt-1 line-clamp-3 text-sm font-medium text-gray-900 dark:text-gray-100">{{ task.title }}</p>
 		<p v-if="task.parent" class="mt-0.5 truncate text-xs text-gray-400 dark:text-gray-500">
-			Việc con của {{ task.parent.title ?? task.parent.code }}
+			Việc phụ của {{ task.parent.title ?? task.parent.code }}
 		</p>
 
 		<div class="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs">
@@ -92,7 +92,7 @@
 			<span v-if="waitingText(task.dependencies?.openBlockers)" class="rounded bg-amber-50 px-1.5 py-0.5 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="task-waiting">
 				{{ waitingText(task.dependencies?.openBlockers) }}
 			</span>
-			<span v-if="task.subtasks.total" class="inline-flex items-center gap-0.5 text-gray-500 dark:text-gray-400" title="Việc con xong trên tổng">
+			<span v-if="task.subtasks.total" class="inline-flex items-center gap-0.5 text-gray-500 dark:text-gray-400" title="Việc phụ xong trên tổng">
 				<Icon name="heroicons:rectangle-stack" class="h-3.5 w-3.5" aria-hidden="true" />
 				{{ task.subtasks.done }}/{{ task.subtasks.total }}
 			</span>

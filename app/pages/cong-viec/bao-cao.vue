@@ -209,7 +209,7 @@
 	<div class="space-y-4 pb-24">
 		<UiPageHeader
 			title="Báo cáo công việc"
-			description="Tiến độ theo từng người trong khoảng ngày: được giao, hoàn thành, đúng hạn, quá hạn, khối lượng và chất lượng. Việc tự giao, việc con và dự án mẫu không tính."
+			description="Tiến độ theo từng người trong khoảng ngày: được giao, hoàn thành, đúng hạn, quá hạn, khối lượng và chất lượng. Việc tự giao, việc phụ và dự án mẫu không tính."
 		>
 			<CommonAppButton
 				v-if="allowed && !checking"

@@ -2,6 +2,7 @@
 	import TaskCard from '~/components/modules/tasks/TaskCard.vue';
 	import type { SortableDropEvent } from '~/composables/useSortableList';
 	import type { TaskListItem, TaskStatus } from '~/types/tasks.types';
+	import { STATUS_TONE } from '~/utils/tasks.utils';
 
 	/**
 	 * Một cột của bảng việc. Mỗi cột giữ một thể hiện SortableJS riêng (qua `useSortableList`), cùng
@@ -50,25 +51,6 @@
 		onEnd: () => emit('dragEnd'),
 		onDrop: e => emit('drop', e),
 	});
-
-	/**
-	 * Đầu cột là nhãn có nền màu, cùng bảng màu với `TaskStatusBadge` để nhìn ra làn ngay. Chưa làm đậm
-	 * hơn một bậc vì nền cột cũng xám nhạt.
-	 */
-	const HEADER_BADGE: Record<TaskStatus, string> = {
-		TODO: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100',
-		IN_PROGRESS: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-		IN_REVIEW: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
-		DONE: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-		CANCELLED: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
-	};
-	const HEADER_DOT: Record<TaskStatus, string> = {
-		TODO: 'bg-gray-500',
-		IN_PROGRESS: 'bg-sky-500',
-		IN_REVIEW: 'bg-violet-500',
-		DONE: 'bg-emerald-500',
-		CANCELLED: 'bg-rose-500',
-	};
 </script>
 
 <template>
@@ -80,11 +62,11 @@
 	>
 		<header class="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
 			<h3
-				class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-semibold"
-				:class="HEADER_BADGE[status]"
+				class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-semibold ring-1 ring-inset"
+				:class="STATUS_TONE[status].badge"
 				:data-testid="`column-title-${status}`"
 			>
-				<span class="h-2 w-2 rounded-full" :class="HEADER_DOT[status]" aria-hidden="true" />
+				<span class="h-2 w-2 rounded-full" :class="STATUS_TONE[status].dot" aria-hidden="true" />
 				{{ label }}
 			</h3>
 			<span

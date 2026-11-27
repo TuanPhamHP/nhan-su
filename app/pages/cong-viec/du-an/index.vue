@@ -181,7 +181,7 @@
 			@secondary="!creatingSample && createSample()"
 		/>
 		<p v-if="!loading && !loadError && !projects.length && !filtered && !readOnly" class="-mt-2 text-center text-xs text-gray-500 dark:text-gray-400">
-			Dự án mẫu có sẵn nhóm việc, việc con và việc phải chờ để bạn thử đủ bốn cách xem. Thử xong thì xoá.
+			Dự án mẫu có sẵn nhóm việc, việc phụ và việc phải chờ để bạn thử đủ bốn cách xem. Thử xong thì xoá.
 		</p>
 		<ul v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="project-list">
 			<li v-for="(p, idx) in projects" :key="p.id">
