@@ -875,6 +875,10 @@ GET /v1/attendance/check-attendance?latitude&longitude   (đã gọi sẵn để
   là **5 lần sai mỗi ngày, gộp check-in và check-out**; `faceAttemptsLeft` ở check-attendance và `attemptsLeft` ở
   `GET /face/me` cho biết số lượt còn lại.
 - Ảnh có nhiều người thì server lấy mặt to nhất, nên đồng nghiệp đứng phía sau không làm hỏng lượt chấm.
+- Từ 27/11/2026, ảnh chỉ thấy một phần khuôn mặt (mũi, miệng hay một bên mắt nằm ngoài mép ảnh) được coi như không
+  thấy mặt. Server trả `FACE_NOT_DETECTED` với message "Chưa thấy trọn khuôn mặt. Bạn đưa cả khuôn mặt vào khung rồi
+  chụp lại." Khi chấm công, lần đó vẫn trừ một lượt như ảnh không có mặt, và "Vẫn xác nhận" cho `CONFIRMED_MISMATCH`
+  với điểm null. Ảnh mất phần trán vẫn được so bình thường. Client không phải sửa gì vì chỉ cần hiện `message`.
 - Web: khi bật khuôn mặt, nên bỏ đường chọn ảnh từ thư viện (input file) ở bước chấm công nếu camera dùng được. Server
   không phân biệt được ảnh chụp lúc đó hay ảnh cũ, nên đây chỉ là chặn ở giao diện.
 
@@ -947,7 +951,7 @@ người dùng, hiện thẳng.
 |---|---|---|---|
 | `FACE_NOT_REGISTERED` | 400 | check-in, check-out | – |
 | `FACE_NOT_MATCHED` | 400 | check-in, check-out | `[{ attemptsLeft }]` |
-| `FACE_NOT_DETECTED` | 400 | check-in, check-out (kèm `attemptsLeft`), đăng ký | `[{ attemptsLeft }]` khi chấm công |
+| `FACE_NOT_DETECTED` | 400 | check-in, check-out (kèm `attemptsLeft`), đăng ký; cả khi mặt không lọt trọn trong ảnh | `[{ attemptsLeft }]` khi chấm công |
 | `FACE_ATTEMPTS_EXCEEDED` | 400 | check-in, check-out | `[{ attemptsLeft: 0 }]` |
 | `FACE_MULTIPLE` | 400 | đăng ký | – |
 | `FACE_TOO_SMALL` | 400 | đăng ký | – |
