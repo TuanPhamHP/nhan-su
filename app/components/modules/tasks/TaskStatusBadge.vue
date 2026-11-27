@@ -1,24 +1,18 @@
 <script setup lang="ts">
 	import type { TaskStatus } from '~/types/tasks.types';
-	import { STATUS_LABELS } from '~/utils/tasks.utils';
+	import { STATUS_LABELS, STATUS_TONE } from '~/utils/tasks.utils';
 
 	/** Nhãn trạng thái việc; chữ lấy từ máy chủ (`statusLabel`) khi có. */
 	const props = defineProps<{ status: TaskStatus; label?: string }>();
-
-	const CLASS: Record<TaskStatus, string> = {
-		TODO: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-		IN_PROGRESS: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-		IN_REVIEW: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
-		DONE: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-		CANCELLED: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
-	};
 </script>
 
 <template>
 	<span
-		class="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
-		:class="CLASS[props.status]"
+		class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+		:class="STATUS_TONE[props.status].badge"
 	>
+		<Icon v-if="props.status === 'DONE'" name="heroicons:check" class="h-3 w-3" aria-hidden="true" />
+		<span v-else class="h-1.5 w-1.5 shrink-0 rounded-full" :class="STATUS_TONE[props.status].dot" aria-hidden="true" />
 		{{ props.label ?? STATUS_LABELS[props.status] }}
 	</span>
 </template>

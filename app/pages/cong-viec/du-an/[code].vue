@@ -75,6 +75,17 @@
 		else loading.value = false;
 	});
 
+	/** Việc trong thẻ Việc vừa đổi trạng thái, người làm, hạn: chỉ cần số đếm mới, nhóm và đợt giữ nguyên. */
+	async function refreshCounts() {
+		const p = project.value;
+		if (!p) return;
+		try {
+			project.value = await service.getProject(p.id);
+		} catch {
+			// Giữ số cũ; lần tải sau sẽ đúng.
+		}
+	}
+
 	type Tab = 'tasks' | 'sprints' | 'overview' | 'members' | 'settings';
 	const tab = computed<Tab>(() => {
 		const t = String(route.query.tab ?? 'tasks');
@@ -84,7 +95,7 @@
 	});
 	function setTab(t: Tab) {
 		// Đổi thẻ thì đóng khung việc đang mở (thẻ khác không có khung).
-		router.replace({ query: { ...route.query, tab: t === 'tasks' ? undefined : t, task: undefined, activity: undefined } });
+		router.replace({ query: { ...route.query, tab: t === 'tasks' ? undefined : t, task: undefined } });
 	}
 	const tabs = computed(() => {
 		const p = project.value;
@@ -311,7 +322,7 @@
 				empty-description="Tạo việc đầu tiên và giao cho thành viên, kèm hạn và điểm."
 				:empty-action="canCreateTask ? 'Tạo việc đầu tiên' : undefined"
 				@empty-action="showCreate = true"
-				@changed="load(true)"
+				@changed="refreshCounts"
 			/>
 			<TaskSprintPlanner
 				v-else-if="tab === 'sprints'"

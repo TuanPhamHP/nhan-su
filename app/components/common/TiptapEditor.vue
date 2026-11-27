@@ -24,12 +24,17 @@
 			 * các ký hiệu đó và cũng không cần chia mục.
 			 */
 			noHeadings?: boolean;
+			/** Đặt con trỏ vào cuối nội dung ngay khi ô hiện ra (ô sửa tại chỗ). */
+			autofocus?: boolean;
+			/** Ctrl+Enter (Cmd+Enter) phát `submit` thay vì xuống dòng cứng. */
+			submitOnModEnter?: boolean;
 		}>(),
-		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined, noHeadings: false },
+		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined, noHeadings: false, autofocus: false, submitOnModEnter: false },
 	);
 
 	const emit = defineEmits<{
 		'update:modelValue': [value: string];
+		submit: [];
 	}>();
 
 	const toast = useToast();
@@ -129,6 +134,12 @@
 			attributes: {
 				class: 'tt-prose',
 			},
+			handleKeyDown: (_view, event) => {
+				if (!props.submitOnModEnter || event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return false;
+				event.preventDefault();
+				emit('submit');
+				return true;
+			},
 			handlePaste: (_view, event) => {
 				if (!props.onImageUpload) return false;
 				const items = event.clipboardData?.items;
@@ -165,6 +176,8 @@
 	);
 
 	onMounted(() => {
+		// `autofocus` của Tiptap chạy lúc tạo editor, trước khi ô được gắn vào trang: đặt con trỏ sau khi gắn.
+		if (props.autofocus) setTimeout(() => editor.value?.commands.focus('end'), 50);
 		if (!editor.value || !imageBubbleMenuRef.value) return;
 		editor.value.registerPlugin(
 			BubbleMenuPlugin({

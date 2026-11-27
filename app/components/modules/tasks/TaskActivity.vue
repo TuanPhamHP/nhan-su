@@ -30,8 +30,8 @@
 	} from '~/utils/tasks.utils';
 
 	/**
-	 * Hoạt động của việc: Tất cả, Bình luận, Lịch sử, mặc định Bình luận (mục 9.2). Ô bình luận dính
-	 * đáy khung. Bản nháp giữ trong trình duyệt theo từng việc, lỡ đóng khung vẫn còn.
+	 * Hoạt động của việc: Bình luận và Lịch sử, mặc định Bình luận (mục 9.2). Ô bình luận dính đáy khung.
+	 * Bản nháp giữ trong trình duyệt theo từng việc, lỡ đóng khung vẫn còn.
 	 *
 	 * Nhắc người không xem được việc: máy chủ vẫn nhận bình luận nhưng người đó không nhận thông báo
 	 * (T-06), nên ngay dưới ô soạn hiện câu cảnh báo kèm nút "Thêm làm người theo dõi".
@@ -46,52 +46,77 @@
 	const today = vnToday();
 
 	/**
-	 * Thẻ đang xem nằm trên đường dẫn (`?activity=comments|history`, bỏ khi là Tất cả), ở khung lẫn trang đầy
-	 * đủ. Mặc định Tất cả: lý do trả lại, đổi hạn nằm ở lịch sử, mặc định Bình luận thì người làm không thấy.
+	 * Thẻ đang xem là trạng thái riêng của khung, không nằm trên đường dẫn: đổi thẻ không làm đổi đường dẫn
+	 * nên trang phía sau không phản ứng gì. Mỗi thẻ giữ phần đã tải; quay lại thẻ cũ thì hiện ngay, chỉ tải
+	 * lại khi thẻ đó đã bị đánh dấu cũ (có bình luận mới, việc vừa đổi).
 	 */
-	const route = useRoute();
-	const router = useRouter();
-	const kind = computed<TaskActivityKind>({
-		get: () => {
-			const v = String(route.query.activity ?? '');
-			return v === 'comments' || v === 'history' ? v : 'all';
-		},
-		set: v => router.replace({ query: { ...route.query, activity: v === 'all' ? undefined : v } }),
-	});
-	const items = ref<TaskActivityItem[]>([]);
-	const page = ref(1);
-	const totalPages = ref(1);
-	const loading = ref(false);
+	type Kind = Exclude<TaskActivityKind, 'all'>;
+	interface Loaded {
+		items: TaskActivityItem[];
+		page: number;
+		totalPages: number;
+		stale: boolean;
+	}
+	const kind = ref<Kind>('comments');
+	const loaded = reactive<Partial<Record<Kind, Loaded>>>({});
+	const items = computed(() => loaded[kind.value]?.items ?? []);
+	const page = computed(() => loaded[kind.value]?.page ?? 1);
+	const totalPages = computed(() => loaded[kind.value]?.totalPages ?? 1);
+	const loadingKind = ref<Kind | null>(null);
+	const loading = computed(() => loadingKind.value === kind.value);
 	const loadError = ref('');
 
-	const TABS: Array<{ key: TaskActivityKind; label: string }> = [
-		{ key: 'all', label: 'Tất cả' },
+	const TABS: Array<{ key: Kind; label: string }> = [
 		{ key: 'comments', label: 'Bình luận' },
 		{ key: 'history', label: 'Lịch sử' },
 	];
 
 	async function load(reset = true) {
-		loading.value = true;
+		const k = kind.value;
+		const taskId = props.task.id;
+		loadingKind.value = k;
 		loadError.value = '';
 		try {
-			const next = reset ? 1 : page.value + 1;
-			const res = await service.activity(props.task.id, { kind: kind.value, page: next, limit: 30 });
+			const prev = loaded[k];
+			const next = reset || !prev ? 1 : prev.page + 1;
+			const res = await service.activity(taskId, { kind: k, page: next, limit: 30 });
+			if (taskId !== props.task.id) return;
 			// Máy chủ trả mới trước; ô soạn ở đáy nên hiện theo thứ tự thời gian, cũ ở trên.
 			const chunk = [...res.data].reverse();
-			items.value = reset ? chunk : [...chunk, ...items.value];
-			page.value = next;
-			totalPages.value = res.meta.totalPages;
+			loaded[k] = { items: next === 1 || !prev ? chunk : [...chunk, ...prev.items], page: next, totalPages: res.meta.totalPages, stale: false };
 		} catch (err) {
-			loadError.value = taskErrorInfo(err, 'Chưa tải được hoạt động.').message;
+			if (k === kind.value) loadError.value = taskErrorInfo(err, 'Chưa tải được hoạt động.').message;
 		} finally {
-			loading.value = false;
+			if (loadingKind.value === k) loadingKind.value = null;
 		}
 	}
 
-	watch(kind, () => load(true));
+	function selectKind(k: Kind) {
+		kind.value = k;
+		loadError.value = '';
+		const cur = loaded[k];
+		if (!cur || cur.stale) load(true);
+	}
+
+	/** Đánh dấu các thẻ đã cũ; thẻ đang xem thì tải lại ngay, thẻ kia đợi lúc được mở. */
+	function refresh(kinds: Kind[]) {
+		for (const k of kinds) {
+			const cur = loaded[k];
+			if (cur) cur.stale = true;
+		}
+		if (kinds.includes(kind.value)) load(true);
+	}
+
+	// Bình luận mình vừa gửi cũng về qua kênh thời gian thực: bỏ tiếng vọng đó, khỏi tải lại lần hai.
+	let sentAt = 0;
+	function onRemoteComment() {
+		if (Date.now() - sentAt > 3000) refresh(['comments']);
+	}
+
 	watch(
 		() => props.task.id,
 		() => {
+			for (const k of Object.keys(loaded) as Kind[]) delete loaded[k];
 			restoreDraft();
 			load(true);
 		},
@@ -101,7 +126,12 @@
 		load(true);
 	});
 
-	defineExpose({ reload: () => load(true) });
+	defineExpose({
+		reload: () => refresh(['comments', 'history']),
+		/** Việc vừa đổi (trạng thái, hạn, trường…): chỉ Lịch sử có thêm dòng. */
+		historyChanged: () => refresh(['history']),
+		onRemoteComment,
+	});
 
 	// ─── Bản nháp ───────────────────────────────────────────────────────────
 	const draft = ref('');
@@ -205,13 +235,14 @@
 			});
 			draft.value = '';
 			pending.value = [];
+			sentAt = Date.now();
 			try {
 				localStorage.removeItem(draftKey.value);
 			} catch {
 				// bỏ qua
 			}
-			if (kind.value === 'history') kind.value = 'comments';
-			else await load(true);
+			kind.value = 'comments';
+			await load(true);
 		} catch (err) {
 			toast.error(taskErrorInfo(err).message);
 		} finally {
@@ -352,7 +383,7 @@
 					:aria-selected="kind === t.key"
 					class="rounded-md px-2.5 py-1 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
 					:class="kind === t.key ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'"
-					@click="kind = t.key"
+					@click="selectKind(t.key)"
 				>
 					{{ t.label }}
 				</button>

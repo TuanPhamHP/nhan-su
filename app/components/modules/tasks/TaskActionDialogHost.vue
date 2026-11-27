@@ -96,7 +96,7 @@
 	const reasonHint = computed(() => {
 		const req = dialog.value;
 		if (req?.kind === 'transition' && req.action === 'return') return 'Người thực hiện đọc câu này để sửa, nên ghi rõ cần sửa chỗ nào.';
-		if (req?.kind === 'transition' && req.action === 'cancel') return 'Việc con chưa xong cũng bị huỷ theo cùng lý do.';
+		if (req?.kind === 'transition' && req.action === 'cancel') return 'Việc phụ chưa xong cũng bị huỷ theo cùng lý do.';
 		if (req?.kind === 'due') return firstDue.value ? 'Đặt hạn lần đầu không tính là đổi hạn.' : 'Hạn ban đầu vẫn được giữ để xem lại sau.';
 		if (req?.kind === 'requestDue') return `${req.task.assigner.fullName} sẽ nhận phiếu và duyệt hoặc không duyệt.`;
 		if (req?.kind === 'reassign') return 'Người đang làm sẽ nhận thông báo kèm lý do này.';
