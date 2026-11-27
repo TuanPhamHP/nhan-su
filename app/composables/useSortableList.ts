@@ -33,6 +33,8 @@ export interface SortableListOptions {
 	/** Kéo xong dù thả hay không, để trang bỏ trạng thái mờ. */
 	onEnd?: () => void;
 	disabled?: () => boolean;
+	/** Chỉ kéo được khi nắm vào phần tử khớp selector này, để thẻ có ô nhập vẫn bôi chọn chữ được. */
+	handle?: string;
 }
 
 const ITEM_SELECTOR = '[data-sortable-id]';
@@ -104,6 +106,7 @@ export function useSortableList(el: Ref<HTMLElement | null | undefined>, options
 			filter: '[data-no-drag]',
 			preventOnFilter: false,
 			disabled: options.disabled?.() ?? false,
+			...(options.handle ? { handle: options.handle } : {}),
 			onStart(evt) {
 				startNext = evt.item.nextSibling;
 				const id = idOf(evt.item);

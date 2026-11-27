@@ -4,9 +4,11 @@ import { toTypedSchema } from '@vee-validate/zod';
 import * as z from 'zod';
 import { storeToRefs } from 'pinia';
 import EmployeePicker from '~/components/modules/general-request/EmployeePicker.vue';
+import TemplateFieldsBuilder from '~/components/modules/general-request/TemplateFieldsBuilder.vue';
 import { useGeneralRequestService } from '~/services/general-request.service';
+import { cleanFields, fieldsError } from '~/utils/form-field-key';
 import { buildPreviewHtml, PRINT_EXTRA_CSS, sanitizePrintTemplate } from '~/utils/print-template';
-import type { DocumentTemplateDetail, FieldDataSource, FieldDefinition, FieldType } from '~/types/general-request.types';
+import type { DocumentTemplateDetail, FieldDefinition } from '~/types/general-request.types';
 
 /**
  * Tạo và sửa một loại phiếu (UI-05, lô 4a).
@@ -33,27 +35,6 @@ const categoryOptions = [
 	{ value: 'PURCHASE', label: 'Mua sắm' },
 	{ value: 'REWARD', label: 'Khen thưởng' },
 	{ value: 'OTHER', label: 'Khác' },
-];
-
-const dataSourceOptions: { value: FieldDataSource; label: string }[] = [
-	{ value: 'custom', label: 'Tùy chỉnh' },
-	{ value: 'departments', label: 'Phòng ban' },
-	{ value: 'employees', label: 'Nhân viên' },
-	{ value: 'positions', label: 'Vị trí' },
-];
-
-function onDataSourceChange(field: FieldDefinition, source: FieldDataSource) {
-	field.dataSource = source;
-	if (source !== 'custom') field.options = [];
-}
-
-const fieldTypeOptions: { value: FieldType; label: string }[] = [
-	{ value: 'text', label: 'Văn bản ngắn' },
-	{ value: 'textarea', label: 'Văn bản dài' },
-	{ value: 'date', label: 'Ngày tháng' },
-	{ value: 'number', label: 'Số' },
-	{ value: 'select', label: 'Chọn từ danh sách' },
-	{ value: 'checkbox', label: 'Checkbox' },
 ];
 
 const schema = toTypedSchema(z.object({
@@ -125,41 +106,17 @@ onMounted(() => {
 	});
 });
 
-function addField() {
-	fields.value.push({
-		key: `field_${Date.now()}`,
-		label: 'Trường mới',
-		type: 'text',
-		required: false,
-		placeholder: '',
-		options: [],
-	});
-}
-
-function removeField(idx: number) {
-	fields.value.splice(idx, 1);
-}
-
-function moveUp(idx: number) {
-	if (idx === 0) return;
-	const tmp = fields.value[idx - 1]!;
-	fields.value[idx - 1] = fields.value[idx]!;
-	fields.value[idx] = tmp;
-}
-
-function moveDown(idx: number) {
-	if (idx === fields.value.length - 1) return;
-	const tmp = fields.value[idx]!;
-	fields.value[idx] = fields.value[idx + 1]!;
-	fields.value[idx + 1] = tmp;
-}
-
 const onSubmit = handleSubmit(async values => {
+	const problem = fieldsError(fields.value);
+	if (problem) {
+		toast.error(problem);
+		return;
+	}
 	try {
 		const dto = {
 			...values,
 			description: values.description ?? '',
-			fields: fields.value,
+			fields: cleanFields(fields.value),
 			isActive: isActive.value,
 			defaultWatcherIds: defaultWatcherIds.value,
 		};
@@ -255,90 +212,7 @@ const onSubmit = handleSubmit(async values => {
 						/>
 					</div>
 
-					<!-- Fields builder -->
-					<div class="space-y-3">
-						<div class="flex items-center justify-between">
-							<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Các trường nhập liệu</h3>
-							<CommonAppButton size="sm" variant="secondary" type="button" @click="addField">
-								<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-								</svg>
-								Thêm trường
-							</CommonAppButton>
-						</div>
-
-						<div v-if="fields.length === 0" class="py-6 text-center text-sm text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-							Chưa có trường nào. Nhấn "Thêm trường" để bắt đầu.
-						</div>
-
-						<div v-for="(field, idx) in fields" :key="idx" class="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-							<div class="col-span-3 space-y-1">
-								<label class="block text-xs text-gray-500">Key</label>
-								<input v-model="field.key" type="text" placeholder="field_key" class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-							</div>
-							<div class="col-span-3 space-y-1">
-								<label class="block text-xs text-gray-500">Nhãn</label>
-								<input v-model="field.label" type="text" placeholder="Tên trường" class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-							</div>
-							<div class="col-span-2 space-y-1">
-								<label class="block text-xs text-gray-500">Loại</label>
-								<select v-model="field.type" class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500">
-									<option v-for="opt in fieldTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-								</select>
-							</div>
-							<div class="col-span-2 space-y-1">
-								<label class="block text-xs text-gray-500">Placeholder</label>
-								<input v-model="field.placeholder" type="text" class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-							</div>
-							<div class="col-span-1 space-y-1 flex flex-col items-center">
-								<label class="block text-xs text-gray-500">Bắt buộc</label>
-								<input v-model="field.required" type="checkbox" class="mt-2 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-							</div>
-							<div class="col-span-1 flex flex-col gap-1 pt-5">
-								<button type="button" class="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Lên" @click="moveUp(idx)">
-									<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>
-								</button>
-								<button type="button" class="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Xuống" @click="moveDown(idx)">
-									<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-								</button>
-								<button type="button" class="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Xóa" @click="removeField(idx)">
-									<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-								</button>
-							</div>
-							<div v-if="field.type === 'select'" class="col-span-12 space-y-2">
-								<label class="block text-xs font-medium text-gray-500">Nguồn dữ liệu</label>
-								<div class="flex flex-wrap gap-4">
-									<label
-										v-for="src in dataSourceOptions"
-										:key="src.value"
-										class="flex items-center gap-1.5 cursor-pointer"
-									>
-										<input
-											type="radio"
-											:value="src.value"
-											:checked="(field.dataSource ?? 'custom') === src.value"
-											class="text-brand-600 focus:ring-brand-500"
-											@change="onDataSourceChange(field, src.value)"
-										/>
-										<span class="text-xs text-gray-600 dark:text-gray-400">{{ src.label }}</span>
-									</label>
-								</div>
-								<template v-if="!field.dataSource || field.dataSource === 'custom'">
-									<label class="block text-xs text-gray-500">Options (mỗi dòng 1 giá trị)</label>
-									<textarea
-										:value="(field.options ?? []).join('\n')"
-										rows="2"
-										placeholder="Option 1&#10;Option 2&#10;Option 3"
-										class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
-										@input="(e) => field.options = (e.target as HTMLTextAreaElement).value.split('\n').filter(Boolean)"
-									/>
-								</template>
-								<p v-else class="text-xs text-gray-400 italic py-0.5">
-									Danh sách sẽ được tải động từ hệ thống khi người dùng điền form.
-								</p>
-							</div>
-						</div>
-					</div>
+					<TemplateFieldsBuilder v-model="fields" />
 
 					<!-- Print template editor -->
 					<div class="space-y-3">
@@ -349,7 +223,10 @@ const onSubmit = handleSubmit(async values => {
 								<button type="button" :class="['px-3 py-1 text-xs font-medium rounded-md transition-all', activeTab === 'preview' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400']" @click="activeTab = 'preview'">Preview</button>
 							</div>
 						</div>
-						<p class="text-xs text-gray-400">Dùng <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{'{{key}}'}</code> để chèn giá trị từ form. VD: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{'{{fullName}}'}</code></p>
+						<p class="text-xs text-gray-400">
+							Chèn câu trả lời bằng mã của câu hỏi, VD
+							<code class="rounded bg-gray-100 px-1 dark:bg-gray-800" v-text="'{{fullName}}'" />. Chép mã ở chân thẻ câu hỏi đang sửa.
+						</p>
 
 						<template v-if="activeTab === 'fields'">
 							<textarea
