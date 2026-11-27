@@ -13,7 +13,7 @@
 | POST | `/v1/attendance/check-out` | `EMPLOYEE` | Multipart — ảnh selfie |
 | GET | `/v1/attendance/check-attendance` | `EMPLOYEE` | Kiểm tra GPS + ca trước khi check-in |
 | GET | `/v1/attendance/me/stats` | `EMPLOYEE` | Thống kê chấm công theo tháng |
-| GET | `/v1/attendance/photo-url` | `EMPLOYEE` | Presigned URL ảnh check-in/check-out từ S3 |
+| GET | `/v1/attendance/photo-url` | Mọi user đã đăng nhập, chỉ với ảnh của bản ghi mình được xem | Presigned URL ảnh check-in/check-out từ S3 |
 | GET | `/v1/attendance/today-info` | `EMPLOYEE` | Thông tin hôm nay: ca, địa điểm, bản ghi |
 | GET | `/v1/attendance/statuses` | Mọi user đã đăng nhập | Danh sách trạng thái chấm công kèm nhãn tiếng Việt |
 | GET | `/v1/attendance/me` | `EMPLOYEE` | Lịch sử chấm công cá nhân (có phân trang) |
@@ -620,7 +620,26 @@ if (!status) {
 
 **Query params:** `?fileUrl=https://bucket.s3.amazonaws.com/attendance/.../uuid.jpg`
 
-`fileUrl` là giá trị lấy từ `checkInPhotoUrl` hoặc `checkOutPhotoUrl` của `AttendanceRecordDetail`.
+`fileUrl` là giá trị lấy từ `checkInPhotoUrl` hoặc `checkOutPhotoUrl` của `AttendanceRecordDetail`. Các danh sách chấm
+công đã trả hai trường này ở dạng link đã ký, nên gửi lại chính link đã ký đó cũng được: server chỉ đọc đường dẫn của
+URL, tra ra bản ghi chấm công chứa ảnh rồi ký lại ảnh của bản ghi đó.
+
+**Ai được ký ảnh nào (từ 26/11/2026).** Route này không còn ký một URL bất kỳ. Server chỉ ký khi URL là ảnh check-in hoặc
+check-out của một bản ghi chấm công, và người gọi được xem bản ghi đó theo cùng luật với danh sách chấm công:
+
+| Người gọi | Ký được ảnh của |
+|---|---|
+| Mọi vai trò | Bản ghi của chính mình |
+| `HR`, `ADMIN`, `DIRECTOR` | Mọi bản ghi trong công ty |
+| `MANAGER`, `CHIEF` | Bản ghi của nhân viên cùng phòng ban |
+
+| HTTP | `error.code` | Khi nào |
+|---|---|---|
+| 400 | – | Thiếu `fileUrl`, chuỗi không phải URL, hoặc host không phải bucket của hệ thống |
+| 403 | `ATTENDANCE_PHOTO_FORBIDDEN` | URL đúng là ảnh chấm công nhưng người gọi không được xem bản ghi đó |
+| 404 | `ATTENDANCE_PHOTO_NOT_FOUND` | URL không phải ảnh của bản ghi chấm công nào (file loại khác, ảnh minh chứng bù công, ảnh của công ty khác) |
+
+Ảnh minh chứng bù công và giải trình không đi qua route này. Chúng đã được ký sẵn trong response của chính đơn đó.
 
 **Response 200:** `ApiSuccess<{ presignedUrl: string }>`
 
@@ -797,7 +816,9 @@ Xem chi tiết tại [makeup-attendance.md](./makeup-attendance.md).
 | `GET /check-attendance` — hiển thị window khi chưa đến giờ | `canCheckIn: false` nhưng `checkInWindow` vẫn có → dùng để hiện "Check-in từ HH:MM" |
 | `GET /me?pagination=false` | Response chỉ có `data`, không có `meta` |
 | `GET /me/stats` tháng chưa kết thúc | `workedDays` tính đến hôm nay; `totalWorkingDays` vẫn tính cả tháng |
-| `GET /photo-url` với URL hết hạn | Lấy presigned URL mới — không cache |
+| `GET /photo-url` với URL hết hạn | Lấy presigned URL mới — không cache. Gửi lại link đã hết hạn vẫn được, server chỉ đọc đường dẫn |
+| `GET /photo-url` với ảnh của người mình không được xem | 403 `ATTENDANCE_PHOTO_FORBIDDEN` — ẩn ô ảnh, không thử lại |
+| `GET /photo-url` với URL không phải ảnh chấm công | 404 `ATTENDANCE_PHOTO_NOT_FOUND` — route này chỉ dành cho `checkInPhotoUrl`, `checkOutPhotoUrl` |
 | `GET /today-info` ngày lễ | `isHoliday: true`, `hasShift: false`, `shift: null` |
 | `MANAGER`/`CHIEF` gọi `GET /attendance` | 200 OK — xem tất cả (MANAGER scope theo phòng ban) |
 | Check-in khi ca có `requireCheckIn=false` | 400 `"Ca làm việc hôm nay không yêu cầu check-in"` |

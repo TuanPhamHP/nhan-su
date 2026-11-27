@@ -8,7 +8,7 @@ HR cần tạo hàng loạt nhân viên mà không phải nhập từng người
 
 Đặc điểm quan trọng:
 
-- File Excel gốc được lưu lại trên server sau khi import thành công (URL trả về, vĩnh viễn, không TTL).
+- File Excel gốc được lưu ở kho file private sau khi import thành công. `fileUrl` trong response là link tải đã ký, hết hạn sau 1 giờ (từ 26/11/2026; trước đó là link công khai vĩnh viễn dưới `/uploads/`, các link cũ đó nay trả 404).
 - **Chức vụ (Position)** trong file: nếu chưa tồn tại trong phòng ban tương ứng → BE **auto-create** trong cùng transaction (không cần HR tạo trước).
 - **Phòng ban (Department)** trong file: **KHÔNG** auto-create — nếu không tồn tại → lỗi và rollback toàn bộ.
 - Sau import thành công, BE tự động:
@@ -94,7 +94,7 @@ export interface ImportAutoCreatedPosition {
 
 export interface ImportEmployeesResponse {
   importedCount: number;
-  fileUrl: string;                                // URL vĩnh viễn (local storage), không cần refresh
+  fileUrl: string;                                // link tải đã ký, hết hạn sau 1 giờ; không lưu lại để dùng sau
   autoCreatedPositions: ImportAutoCreatedPosition[]; // các chức vụ mới được BE tự tạo
   employees: EmployeeDetail[];                    // list nhân viên vừa tạo, cùng shape với GET /employees/:id
 }
@@ -135,7 +135,7 @@ export interface ImportEmployeesValidationError {
   "success": true,
   "data": {
     "importedCount": 3,
-    "fileUrl": "http://api.example.com/uploads/employees/imports/2026/08/12/6c9c...3f.xlsx",
+    "fileUrl": "https://s3-read.example.com/tenants/cty-a/employees/imports/2026/08/12/6c9c...3f.xlsx?X-Amz-Expires=3600&X-Amz-Signature=...",
     "autoCreatedPositions": [
       { "id": 15, "name": "Nhân viên Mobile", "departmentId": 3, "departmentName": "Kỹ thuật" }
     ],
@@ -344,7 +344,7 @@ const FIELD_LABEL: Record<ImportEmployeesRowField, string> = {
 ## Ghi chú thêm
 
 - Response `employees[]` cùng shape với `GET /v1/employees/:id` — có thể reuse `<EmployeeCard>` component nếu muốn hiển thị preview sau import.
-- `fileUrl` trong response là **URL vĩnh viễn** (local storage), **KHÔNG cần refresh** như presigned S3.
+- `fileUrl` trong response là **link đã ký, hết hạn sau 1 giờ**. Chỉ dùng để hiện link "Xem file đã import" ngay sau khi nhập; không lưu lại để mở về sau. File gốc có số CCCD, số tài khoản nên không còn nằm ở link công khai.
 - File Excel đã import không có endpoint list — nếu cần lịch sử import, tìm trong [system-log](./system_logs.md) với action `employee.import` (payload chứa `importedCount`, `employeeIds`, `autoCreatedPositionIds`).
 - Auto-created positions cũng ghi log riêng, action `position.create`, payload có `source: 'employee-import'` + `description: 'Auto-created by employee import'` — HR có thể trace lại position nào do import tạo ra.
 - **Password plaintext** đi qua welcome email — đảm bảo hệ thống email production dùng TLS. HR nên yêu cầu nhân viên đổi mật khẩu sau lần đăng nhập đầu (FE có thể cân nhắc thêm màn "Force change password" nếu cần, hiện BE chưa có flag `mustChangePassword`).
