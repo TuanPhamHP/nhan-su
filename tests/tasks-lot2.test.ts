@@ -7,6 +7,7 @@ import {
 	tasksByDue,
 	timelineAddDays,
 	timelineBar,
+	timelineProgress,
 	timelineSections,
 	timelineTicks,
 	timelineWindow,
@@ -26,26 +27,92 @@ describe('Công việc lô 2: biểu đồ tiến độ', () => {
 		}
 	});
 
-	it('thanh từ ngày bắt đầu tới hạn; không có ngày bắt đầu là chấm; vạch hạn ban đầu khi đã đổi hạn', () => {
+	it('thanh từ ngày bắt đầu tới hạn; thiếu ngày bắt đầu thì từ ngày tạo; thiếu hạn thì tới hôm nay', () => {
 		const dw = DAY_WIDTH.day;
+		const created = '2026-11-20T03:00:00.000Z';
 		const bar = timelineBar(
-			{ startDate: '2026-11-25', dueDate: '2026-11-28', originalDueDate: '2026-11-26', dueChangeCount: 1 },
+			{ startDate: '2026-11-25', dueDate: '2026-11-28', originalDueDate: '2026-11-26', dueChangeCount: 1, createdAt: created },
 			'2026-11-23',
 			'2026-12-31',
 			dw,
+			'2026-11-26',
 		);
 		expect(bar.left).toBe(2 * dw);
 		expect(bar.width).toBe(4 * dw);
-		expect(bar.dot).toBe(false);
+		expect(bar.impliedStart).toBe(false);
+		expect(bar.openEnd).toBe(false);
 		expect(bar.originalLeft).toBe(4 * dw);
-		const dot = timelineBar({ startDate: null, dueDate: '2026-11-26', originalDueDate: '2026-11-26', dueChangeCount: 0 }, '2026-11-23', '2026-12-31', dw);
-		expect(dot.dot).toBe(true);
-		expect(dot.originalLeft).toBeNull();
+		// Không có ngày bắt đầu: tính từ ngày tạo (20/11, trước khoảng xem nên bị cắt ở mép trái).
+		const noStart = timelineBar(
+			{ startDate: null, dueDate: '2026-11-26', originalDueDate: '2026-11-26', dueChangeCount: 0, createdAt: created },
+			'2026-11-23',
+			'2026-12-31',
+			dw,
+			'2026-11-26',
+		);
+		expect(noStart.impliedStart).toBe(true);
+		expect(noStart.start).toBe('2026-11-20');
+		expect(noStart.clippedStart).toBe(true);
+		expect(noStart.width).toBe(4 * dw);
+		expect(noStart.originalLeft).toBeNull();
+		// Không có hạn: tới hôm nay, đánh dấu đuôi mở.
+		const noDue = timelineBar(
+			{ startDate: '2026-11-24', dueDate: null, originalDueDate: null, dueChangeCount: 0, createdAt: created },
+			'2026-11-23',
+			'2026-12-31',
+			dw,
+			'2026-11-27',
+		);
+		expect(noDue.openEnd).toBe(true);
+		expect(noDue.end).toBe('2026-11-27');
+		expect(noDue.width).toBe(4 * dw);
+		// Không có hạn mà đã xong: tới ngày nghiệm thu.
+		const doneNoDue = timelineBar(
+			{
+				startDate: '2026-11-24',
+				dueDate: null,
+				originalDueDate: null,
+				dueChangeCount: 0,
+				createdAt: created,
+				status: 'DONE',
+				acceptedAt: '2026-11-25T04:00:00.000Z',
+			},
+			'2026-11-23',
+			'2026-12-31',
+			dw,
+			'2026-11-27',
+		);
+		expect(doneNoDue.end).toBe('2026-11-25');
 		// Bắt đầu trước khoảng xem: thanh bị cắt ở mép trái.
-		const clipped = timelineBar({ startDate: '2026-11-01', dueDate: '2026-11-24', originalDueDate: '2026-11-24', dueChangeCount: 0 }, '2026-11-23', '2026-12-31', dw);
+		const clipped = timelineBar(
+			{ startDate: '2026-11-01', dueDate: '2026-11-24', originalDueDate: '2026-11-24', dueChangeCount: 0, createdAt: created },
+			'2026-11-23',
+			'2026-12-31',
+			dw,
+			'2026-11-26',
+		);
 		expect(clipped.clippedStart).toBe(true);
 		expect(clipped.left).toBe(0);
 		expect(clipped.width).toBe(2 * dw);
+		// Hết hạn trước khoảng xem: ẩn.
+		const before = timelineBar(
+			{ startDate: '2026-10-01', dueDate: '2026-10-05', originalDueDate: '2026-10-05', dueChangeCount: 0, createdAt: created },
+			'2026-11-23',
+			'2026-12-31',
+			dw,
+			'2026-11-26',
+		);
+		expect(before.hidden).toBe(true);
+	});
+
+	it('phần đã xong theo trạng thái, mục kiểm tra và việc phụ', () => {
+		const base = { checklist: { total: 0, done: 0 }, subtasks: { total: 0, done: 0, points: 0 } };
+		expect(timelineProgress({ ...base, status: 'DONE' })).toBe(1);
+		expect(timelineProgress({ ...base, status: 'IN_REVIEW' })).toBe(1);
+		expect(timelineProgress({ ...base, status: 'IN_PROGRESS' })).toBe(0);
+		expect(
+			timelineProgress({ checklist: { total: 3, done: 1 }, subtasks: { total: 1, done: 1, points: 0 }, status: 'IN_PROGRESS' }),
+		).toBe(0.5);
 	});
 
 	it('kéo tính theo ô ngày gần nhất, nhãn tháng phủ đúng số ngày', () => {

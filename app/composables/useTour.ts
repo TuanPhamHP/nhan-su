@@ -218,7 +218,14 @@ export function useGuideTour(id: string, factory: TourFactory) {
 }
 
 /**
- * Đăng ký tour cho trang đang mở và tự hiện tour một lần cho người mới.
+ * Tour tự hiện cho người mới đang TẮT (chốt 27/11/2026): đã có tab Hướng dẫn dính mép phải liệt kê hướng dẫn
+ * của từng phân hệ, nên để người dùng tự mở. `usePageTour` vẫn đăng ký tour như `useGuideTour`; đổi cờ này
+ * thành `true` là tự hiện lại như cũ.
+ */
+const AUTO_START_TOURS = false;
+
+/**
+ * Đăng ký tour cho trang đang mở và (khi `AUTO_START_TOURS` bật) tự hiện tour một lần cho người mới.
  *
  * Tự hiện chỉ sau khi `ready()` trả true (trang đã tải xong dữ liệu, không lỗi, module dùng được).
  * Chỉ ghi "đã xem" khi người dùng bấm Xong hoặc Bỏ qua (xem `finish`); bỏ dở giữa chừng (đổi
@@ -232,7 +239,7 @@ export function usePageTour(id: string, factory: TourFactory, ready: () => boole
 	const seenKey = () => tourStorageKey(authStore.company?.code, authStore.user?.id, id, factory().version);
 
 	function tryAutoStart() {
-		if (autoTried || !ready()) return;
+		if (!AUTO_START_TOURS || autoTried || !ready()) return;
 		autoTried = true;
 		if (hasSeenTour(seenKey())) return;
 		// Chờ trang dựng xong một nhịp (thẻ, bảng vừa có dữ liệu) để ô sáng không nhảy.

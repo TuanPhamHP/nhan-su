@@ -342,8 +342,8 @@ Mỗi hướng dẫn mới phải có đủ 5 phần, thiếu một phần là c
    một việc, 3–6 bước.
 2. Mốc `data-tour="<tiền-tố-trang>-<phần>"` trên từng phần tử được trỏ; danh sách dài chỉ gắn mốc
    cho phần tử đầu tiên.
-3. Trang đích đăng ký bằng `useGuideTour('<tourId>', () => xxxTour(ctx))`. Tour cũng tự bật cho
-   người mới thì dùng `usePageTour` thay vào, không gọi cả hai.
+3. Trang đích đăng ký bằng `useGuideTour('<tourId>', () => xxxTour(ctx))`. Tour không tự bật cho
+   người mới (tắt bằng cờ `AUTO_START_TOURS` trong `useTour.ts`): người dùng tự mở từ tab Hướng dẫn.
 4. Một dòng trong `FEATURE_GUIDES` (`app/config/feature-guides.ts`), có `access` chép từ mục menu
    dẫn tới trang đó trong `app-modules.ts` rồi siết thêm nếu việc cần quyền cao hơn quyền xem trang.
    Phân hệ nhiều mục menu (Hồ sơ & Hợp đồng) thì đặt `group` bằng tên mục menu để danh sách thành

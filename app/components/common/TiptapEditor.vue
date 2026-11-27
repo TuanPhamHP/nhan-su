@@ -28,8 +28,18 @@
 			autofocus?: boolean;
 			/** Ctrl+Enter (Cmd+Enter) phát `submit` thay vì xuống dòng cứng. */
 			submitOnModEnter?: boolean;
+			/** Chữ cỡ nhỏ và ô thấp hơn, khớp với chữ khi đọc (ô sửa tại chỗ trong khung chi tiết). */
+			compact?: boolean;
 		}>(),
-		{ placeholder: 'Nhập nội dung...', readonly: false, onImageUpload: undefined, noHeadings: false, autofocus: false, submitOnModEnter: false },
+		{
+			placeholder: 'Nhập nội dung...',
+			readonly: false,
+			onImageUpload: undefined,
+			noHeadings: false,
+			autofocus: false,
+			submitOnModEnter: false,
+			compact: false,
+		},
 	);
 
 	const emit = defineEmits<{
@@ -474,7 +484,7 @@
 		<EditorContent
 			:editor="editor"
 			class="tiptap-content"
-			:class="readonly ? 'tiptap-content-readonly' : ''"
+			:class="{ 'tiptap-content-readonly': readonly, 'text-sm [&_.ProseMirror]:!min-h-[8rem]': compact }"
 		/>
 
 		<!-- Bubble menu — chỉ hiện khi image node được chọn (BubbleMenuPlugin toggle visibility) -->

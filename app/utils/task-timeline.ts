@@ -1,5 +1,6 @@
 import { addDays, differenceInCalendarDays, format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths } from 'date-fns';
-import type { TaskListItem } from '~/types/tasks.types';
+import type { TaskListItem, TaskStatus } from '~/types/tasks.types';
+import { vnCalendarDate } from '~/utils/date';
 
 /**
  * Hàm thuần cho Biểu đồ tiến độ và Lịch (lô 2, mục 9.2). Mọi ngày là chuỗi `YYYY-MM-DD` theo lịch
@@ -10,14 +11,14 @@ export type TimelineScale = 'day' | 'week' | 'month';
 
 export const SCALE_LABELS: Record<TimelineScale, string> = { day: 'Ngày', week: 'Tuần', month: 'Tháng' };
 
-/** Bề rộng một ngày theo thang: Ngày đọc được từng ngày, Tuần xem khoảng ba tháng, Tháng xem cả năm. */
-export const DAY_WIDTH: Record<TimelineScale, number> = { day: 36, week: 14, month: 4 };
+/** Bề rộng một ngày theo thang: Ngày đọc được từng ngày, Tuần xem khoảng năm tháng, Tháng xem nửa năm. */
+export const DAY_WIDTH: Record<TimelineScale, number> = { day: 36, week: 14, month: 6 };
 
 /** Khoảng tải mỗi thang: lùi bao nhiêu ngày trước mốc, xem bao nhiêu ngày (máy chủ cho tối đa 370). */
 const WINDOW: Record<TimelineScale, { before: number; span: number }> = {
 	day: { before: 7, span: 42 },
 	week: { before: 21, span: 140 },
-	month: { before: 31, span: 365 },
+	month: { before: 31, span: 189 },
 };
 
 export function ymd(d: Date): string {
@@ -49,8 +50,15 @@ export interface TimelineBar {
 	/** Tính bằng điểm ảnh từ mép trái khoảng xem. */
 	left: number;
 	width: number;
-	/** Việc không có ngày bắt đầu: vẽ một chấm ở hạn. */
-	dot: boolean;
+	/** Ngày đầu, ngày cuối của thanh (có thể nằm ngoài khoảng xem). */
+	start: string;
+	end: string;
+	/** Không có ngày bắt đầu: thanh tính từ ngày tạo việc. */
+	impliedStart: boolean;
+	/** Không có hạn: thanh kéo tới hôm nay và mờ dần ở đuôi. */
+	openEnd: boolean;
+	/** Thanh nằm hẳn ngoài khoảng xem. */
+	hidden: boolean;
 	/** Vạch hạn ban đầu khi đã đổi hạn; null khi chưa đổi hoặc nằm ngoài khoảng. */
 	originalLeft: number | null;
 	/** Thanh bị cắt ở mép trái hoặc phải khoảng xem. */
@@ -58,27 +66,56 @@ export interface TimelineBar {
 	clippedEnd: boolean;
 }
 
+/**
+ * Thanh Gantt của một việc. Mọi việc đều có thanh: đầu thanh là ngày bắt đầu, không có thì ngày tạo việc;
+ * cuối thanh là hạn, không có hạn thì tới hôm nay, việc đã đóng thì tới ngày đóng (hoặc ngày bắt đầu nếu
+ * muộn hơn). Đầu sau hạn thì thu về một ô ở hạn. Máy chủ lọc việc theo cùng luật này.
+ */
 export function timelineBar(
-	task: Pick<TaskListItem, 'startDate' | 'originalDueDate' | 'dueChangeCount'> & { dueDate: string },
+	task: Pick<TaskListItem, 'startDate' | 'dueDate' | 'originalDueDate' | 'dueChangeCount' | 'createdAt'> &
+		Partial<Pick<TaskListItem, 'status' | 'acceptedAt' | 'cancelledAt' | 'updatedAt'>>,
 	from: string,
 	to: string,
 	dayWidth: number,
+	today: string,
 ): TimelineBar {
 	const total = diffDays(to, from) + 1;
-	const dueIdx = diffDays(task.dueDate, from);
-	const dot = !task.startDate || task.startDate > task.dueDate;
-	const startIdx = dot ? dueIdx : diffDays(task.startDate!, from);
+	const impliedStart = !task.startDate;
+	const openEnd = !task.dueDate;
+	let start = task.startDate ?? vnCalendarDate(task.createdAt);
+	const closedAt = task.status === 'DONE' ? (task.acceptedAt ?? task.updatedAt) : task.status === 'CANCELLED' ? (task.cancelledAt ?? task.updatedAt) : null;
+	const openUntil = closedAt ? vnCalendarDate(closedAt) : today;
+	let end = task.dueDate ?? (start > openUntil ? start : openUntil);
+	if (start > end) start = end;
+	const startIdx = diffDays(start, from);
+	const endIdx = diffDays(end, from);
 	const s = Math.max(0, startIdx);
-	const e = Math.min(total - 1, dueIdx);
+	const e = Math.min(total - 1, endIdx);
 	const originalIdx = task.dueChangeCount > 0 && task.originalDueDate ? diffDays(task.originalDueDate, from) : null;
 	return {
 		left: s * dayWidth,
 		width: Math.max(1, e - s + 1) * dayWidth,
-		dot,
+		start,
+		end,
+		impliedStart,
+		openEnd,
+		hidden: endIdx < 0 || startIdx > total - 1,
 		originalLeft: originalIdx != null && originalIdx >= 0 && originalIdx < total ? (originalIdx + 1) * dayWidth : null,
 		clippedStart: startIdx < 0,
-		clippedEnd: dueIdx > total - 1,
+		clippedEnd: endIdx > total - 1,
 	};
+}
+
+/**
+ * Phần đã xong để tô đậm trong thanh, từ 0 tới 1: Hoàn thành và Chờ nghiệm thu là đủ, còn lại theo mục kiểm
+ * tra và việc phụ đã xong. Không có mục nào thì 0.
+ */
+export function timelineProgress(
+	task: Pick<TaskListItem, 'checklist' | 'subtasks'> & { status: TaskStatus },
+): number {
+	if (task.status === 'DONE' || task.status === 'IN_REVIEW') return 1;
+	const total = task.checklist.total + task.subtasks.total;
+	return total ? (task.checklist.done + task.subtasks.done) / total : 0;
 }
 
 export interface TimelineTick {

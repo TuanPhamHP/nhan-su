@@ -930,6 +930,7 @@
 									v-model="descDraft"
 									placeholder="Mô tả việc cần làm, kết quả mong đợi"
 									no-headings
+									compact
 									autofocus
 									submit-on-mod-enter
 									@submit="saveDesc"

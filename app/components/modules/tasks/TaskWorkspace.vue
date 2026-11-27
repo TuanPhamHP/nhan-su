@@ -194,9 +194,10 @@
 		const old = shownRow(t.id);
 		const i = tasks.value.findIndex(x => x.id === t.id);
 		if (i >= 0) tasks.value.splice(i, 1, t);
-		for (const c of board.value?.columns ?? []) {
-			const j = c.tasks.findIndex(x => x.id === t.id);
-			if (j >= 0) c.tasks.splice(j, 1, t);
+		// `TaskBoard` chép cột ra bản riêng khi `board` đổi tham chiếu: thay thẻ rồi đổi tham chiếu để nó dựng lại.
+		const b = board.value;
+		if (b?.columns.some(c => c.tasks.some(x => x.id === t.id))) {
+			board.value = { columns: b.columns.map(c => ({ ...c, tasks: c.tasks.map(x => (x.id === t.id ? t : x)) })) };
 		}
 		if (affectsSummary(old, t)) emit('changed');
 		return old;
