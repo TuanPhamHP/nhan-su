@@ -65,6 +65,13 @@ export default defineNuxtConfig({
 		},
 	},
 	compatibilityDate: '2025-07-15',
+	experimental: {
+		// Mặc định Nuxt hỏi `builds/latest.json` mỗi giờ; thấy có bản mới (mỗi lần đẩy develop là Netlify
+		// dựng lại) thì gắn `router.beforeResolve` tải lại TOÀN TRANG ở lần điều hướng kế tiếp, kể cả khi
+		// chỉ đổi query như mở, đóng khung chi tiết việc (`?task=`). Tắt đi: lỗi tải chunk sau khi dựng mới
+		// vẫn do plugin chunk-reload của Nuxt tự tải lại.
+		checkOutdatedBuildInterval: false,
+	},
 	devtools: { enabled: true },
 	modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@vee-validate/nuxt', '@nuxt/icon'],
 	css: ['~/assets/styles/globals.scss', '~/assets/styles/announcement.css', 'leaflet/dist/leaflet.css'],

@@ -28,8 +28,9 @@ bước trên chính giao diện thật.
   việc đó thì không thấy hướng dẫn của việc đó.
 - Phân hệ không có hướng dẫn nào cho người đang xem thì tab không hiện. Tab cũng ẩn trong lúc tour
   đang chạy.
-- Hướng dẫn theo tính năng **không tự bật** cho người mới. Tự bật một lần là việc của tour trang
-  (`usePageTour`, đang dùng ở ba trang Tài sản); một tour có thể vừa tự bật vừa nằm trong danh sách.
+- **Không tour nào tự bật** cho người mới (chốt 27/11/2026): người dùng tự mở từ tab Hướng dẫn. Các trang
+  còn gọi `usePageTour` vẫn chỉ đăng ký tour; phần tự bật một lần tắt bằng cờ `AUTO_START_TOURS` trong
+  `app/composables/useTour.ts`, đổi thành `true` là bật lại.
 - Tour không gọi API và không ghi dữ liệu. Bước nào mở khung nhập thì khi tour kết thúc khung tự
   đóng, không lưu gì.
 
@@ -64,7 +65,7 @@ route dài nhất trong `routes` của phân hệ.
    không báo lỗi.
 6. Hộp ghi "Bước n/tổng", tổng đếm lúc bắt đầu theo `when` của các bước. Số bước khác đi giữa chừng
    (một bước bị bỏ, dữ liệu về làm `when` đổi) thì từ đó hộp chỉ ghi "Bước n", không đổi tổng.
-7. Tour tự hiện (`usePageTour`) chỉ được nhớ "đã xem" khi người dùng bấm **Xong** hoặc **Bỏ qua**
+7. (Khi bật lại `AUTO_START_TOURS`) tour tự hiện (`usePageTour`) chỉ được nhớ "đã xem" khi người dùng bấm **Xong** hoặc **Bỏ qua**
    (cả phím Esc). Đổi trang, tải lại giữa chừng thì lần sau tour hiện lại từ đầu. Tour đó mở bằng tay
    từ tab Hướng dẫn mà bấm Xong hoặc Bỏ qua cũng được nhớ.
 
@@ -169,8 +170,8 @@ useGuideTour('office-room-booking', () =>
 );
 ```
 
-Một trang có thể đăng ký nhiều tour (trang Cài đặt hành chính có hai). Tour nào vừa tự bật cho người
-mới vừa nằm trong danh sách thì đăng ký bằng `usePageTour` thay cho `useGuideTour`, không gọi cả hai.
+Một trang có thể đăng ký nhiều tour (trang Cài đặt hành chính có hai). Hướng dẫn mới đăng ký bằng
+`useGuideTour`; tour tự bật cho người mới đang tắt (xem mục 1), nên không cần `usePageTour`.
 
 ## 6. Thêm hướng dẫn cho một phân hệ: checklist
 
